@@ -33,6 +33,7 @@ const state = {
   canCheckIn: false,
   spinChances: 0,
   spinCostPoints: 30,
+  ads: null,
   totalCheckins: 0,
   minWithdrawGram: 0,
   nextResetAt: 0,
@@ -782,6 +783,7 @@ async function loadUserData({ force = false } = {}) {
   state.withdrawalProgress = Number(data?.withdrawalProgress) || 0;
   state.withdrawalRemainingGram = Number(data?.withdrawalRemainingGram) || 0;
   state.gramUsdPrice = Number(data?.gramUsdPrice) || 0;
+  state.ads = data?.ads || null;
   state.userDataLoadedAt = Date.now();
   if (data?.firstName) state.user = { ...(state.user || {}), first_name: data.firstName };
   updateHeader();
@@ -894,6 +896,7 @@ let historyRequestSequence = 0;
 const LEDGER_TYPE_UI = {
   task: { icon: "✅" },
   checkin: { icon: "📅" },
+  ad_reward: { icon: "📺" },
   spin: { icon: "🎡" },
   referral_bonus: { icon: "👥" },
   referral_initial: { icon: "🎁" },
@@ -1653,6 +1656,86 @@ async function doCheckIn() {
 }
 window.doCheckIn = doCheckIn;
 
+/* ================= ADSGRAM REWARDED AD =================
+ * Placement: "Daily" tab → "Daily Reward Ads" card → "Watch Ad" button.
+ * The ad is shown ONLY after the user taps the button (optional, user-initiated).
+ * No app feature requires watching an ad.
+ */
+let adController = null;
+let adShowing = false;
+function getAdController() {
+  const ads = state.ads;
+  if (!ads || !ads.enabled || !ads.blockId || !window.Adsgram) return null;
+  if (!adController) {
+    try { adController = window.Adsgram.init({ blockId: String(ads.blockId) }); } catch (_) { adController = null; }
+  }
+  return adController;
+}
+
+function renderAdRewardCard() {
+  const ads = state.ads;
+  if (!ads || !ads.enabled) return "";
+  const limitReached = ads.remainingToday <= 0;
+  const waiting = ads.nextAvailableAt && ads.nextAvailableAt > Date.now();
+  const disabled = adShowing || limitReached || waiting;
+  const label = limitReached ? t("ads_limit_reached") : waiting ? t("ads_wait") : `📺 ${t("ads_watch_button")}`;
+  return `
+    <div class="card dailyAdCard" id="dailyAdCard">
+      <div class="cardHeader"><div class="cardTitle">${t("ads_card_title")}</div><span class="tbPill tbPillOrange tbPillSm">${t("ads_badge")}</span></div>
+      <p class="cardSubtitle" style="line-height:1.8;margin-bottom:10px">${t("ads_card_desc", { n: formatPoints(ads.rewardPoints) })}</p>
+      <p class="small" style="font-size:11px;margin:0 0 12px;color:var(--text-muted)">${t("ads_today_progress", { a: formatPoints(ads.watchedToday), b: formatPoints(ads.dailyLimit) })}</p>
+      <button id="watchAdBtn" class="primaryBtn" type="button" ${disabled ? "disabled" : ""} onclick="watchRewardedAd()">${label}</button>
+      <p class="small" style="font-size:10px;margin:10px 0 0;color:var(--text-muted);text-align:center">${t("ads_optional_note")}</p>
+    </div>`;
+}
+
+function refreshAdCard() {
+  const card = $("#dailyAdCard");
+  if (!card) return;
+  const html = renderAdRewardCard();
+  if (!html) { card.remove(); return; }
+  card.outerHTML = html;
+  const ads = state.ads;
+  if (ads && ads.nextAvailableAt && ads.nextAvailableAt > Date.now()) {
+    setTimeout(() => { if (state.activeTab === "daily") refreshAdCard(); }, Math.min(60000, ads.nextAvailableAt - Date.now() + 300));
+  }
+}
+
+async function watchRewardedAd() {
+  if (adShowing) return;
+  const controller = getAdController();
+  if (!controller) { toast(t("ads_not_available"), "warning"); return; }
+  adShowing = true;
+  refreshAdCard();
+  try {
+    await controller.show();
+    // user watched the ad till the end → give reward
+    try {
+      const result = await api("/api/ads/reward", { method: "POST" });
+      if (result?.ads) state.ads = result.ads;
+      if (result?.pending) {
+        setTimeout(async () => { try { await loadUserData({ force: true }); } catch (_) {} if (state.activeTab === "daily") refreshAdCard(); }, 2500);
+        toast(t("ads_reward_pending"), "success");
+      } else {
+        state.points = Number(result.points) || state.points;
+        haptic("success");
+        toast(`+${formatPoints(result.earned)} ${t("points_unit")} 🎉`, "success");
+        updateHeader();
+      }
+    } catch (error) {
+      toast(translateServerMessage(error.code, error.message), "error");
+    }
+  } catch (result) {
+    // skipped, no ad available, or playback error → no reward
+    haptic("error");
+    toast(result && result.done === false && result.state === "load" ? t("ads_not_available") : t("ads_skipped"), "warning");
+  } finally {
+    adShowing = false;
+    refreshAdCard();
+  }
+}
+window.watchRewardedAd = watchRewardedAd;
+
 function renderDaily() {
   const content = $("#content");
   const streakDays = Math.min(state.streak, 7) || 0;
@@ -1667,6 +1750,7 @@ function renderDaily() {
       <div><span class="dailyOverline">${t("daily_title")}</span><h1>${t("streak_label").split("—")[0].trim()}</h1><p>${state.canCheckIn ? t("checkin_button") : t("checkin_done_button")}</p></div>
       <div class="dailyStreakValue"><strong>${formatPoints(state.streak)}</strong><span>${t("streak_label").split("—")[0].trim()}</span></div>
     </section>
+    ${renderAdRewardCard()}
     <div class="card dailySpinCard" style="text-align:center"><div class="cardHeader" style="justify-content:center"><div class="cardTitle">${t("spin_title")}</div></div>
       <div class="wheelOuter"><div class="wheelRingDots">${buildWheelRingDots()}</div><div class="wheelPointer">▼</div><div class="wheelDisc" id="wheelDisc" style="background:${buildWheelGradient()}">${buildWheelLabels()}</div><div class="wheelHub"><span>✦</span></div></div>
       <p style="font-size:11px;margin:14px 0 4px">${t("spin_chances_label")}: <b id="spinChancesValue">${formatPoints(state.spinChances)}</b></p>
@@ -1679,6 +1763,7 @@ function renderDaily() {
       ${!state.canCheckIn ? `<div style="text-align:center;margin-top:10px"><div class="small" style="color:var(--text-muted);font-size:10px">${t("reset_countdown_label")}</div><div id="resetCountdown" style="font-size:20px;font-weight:900;margin-top:4px;letter-spacing:1px">00:00:00</div></div>` : ""}
     </div>`;
   startResetCountdown();
+  refreshAdCard();
 }
 /* ================= WALLET ================= */
 function showWithdraw() {
