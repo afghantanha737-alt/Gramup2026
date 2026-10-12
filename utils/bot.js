@@ -143,6 +143,19 @@ async function markTelegramBlocked(telegramId) {
   }
 }
 
+// رکوردهای قدیمی ممکن است قبل از اضافه‌شدن فیلدهای isBanned و
+// telegramBlockedAt ایجاد شده باشند؛ نبودن این فیلدها نباید کاربر سالم را
+// از پیام‌های همگانی حذف کند.
+function activeTelegramUserFilter() {
+  return {
+    telegramId: { $exists: true, $nin: [null, ''] },
+    $and: [
+      { $or: [{ isBanned: false }, { isBanned: { $exists: false } }] },
+      { $or: [{ telegramBlockedAt: null }, { telegramBlockedAt: { $exists: false } }] }
+    ]
+  };
+}
+
 async function copyMessageSafe(User, telegramId, fromChatId, messageId) {
   try {
     await bot.copyMessage(telegramId, fromChatId, messageId);
@@ -155,7 +168,8 @@ async function copyMessageSafe(User, telegramId, fromChatId, messageId) {
 
 async function broadcastToActiveUsers(User, textOrFn) {
   if (!bot) return;
-  const users = await User.find({ isBanned: false, telegramBlockedAt: null }, 'telegramId language');
+  const users = await User.find(activeTelegramUserFilter(), 'telegramId language');
+  console.log(`📣 Text broadcast started: recipients=${users.length}`);
   const BATCH_SIZE = 20;
   const DELAY_MS = 1100;
   const textFor = typeof textOrFn === 'function' ? textOrFn : () => textOrFn;
@@ -168,7 +182,8 @@ async function broadcastToActiveUsers(User, textOrFn) {
 
 async function broadcastCopyToActiveUsers(User, fromChatId, messageId) {
   if (!bot) return 0;
-  const users = await User.find({ isBanned: false, telegramBlockedAt: null }, 'telegramId');
+  const users = await User.find(activeTelegramUserFilter(), 'telegramId');
+  console.log(`📣 Copy broadcast started: recipients=${users.length}, source=${fromChatId}/${messageId}`);
   const BATCH_SIZE = 20;
   const DELAY_MS = 1100;
   let sent = 0;
@@ -178,7 +193,8 @@ async function broadcastCopyToActiveUsers(User, fromChatId, messageId) {
     sent += results.filter(Boolean).length;
     if (i + BATCH_SIZE < users.length) await new Promise(resolve => setTimeout(resolve, DELAY_MS));
   }
+  console.log(`📣 Copy broadcast finished: sent=${sent} failed=${users.length - sent} total=${users.length}`);
   return sent;
 }
 
-module.exports = { bot, buildTelegramWebhookPayload, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, broadcastToActiveUsers, broadcastCopyToActiveUsers };
+module.exports = { bot, buildTelegramWebhookPayload, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, broadcastToActiveUsers, broadcastCopyToActiveUsers };
