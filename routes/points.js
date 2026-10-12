@@ -152,6 +152,7 @@ const { botText } = require('../utils/botMessages');
 const { synthesizeHistory } = require('../utils/withdrawalStatus');
 const { getLevel } = require('../utils/levels');
 const { withMongoTransaction } = require('../utils/mongoTransaction');
+const { adsStateForUser } = require('../utils/adsgram');
 
 // GET /api/points/me
 router.get('/me', auth, async (req, res) => {
@@ -191,6 +192,7 @@ router.get('/me', auth, async (req, res) => {
     firstName: u.firstName,
     minWithdrawGram,
     nextResetAt: nextResetTimestamp(),
+    ads: adsStateForUser(u),
     language: u.language
   });
 });
