@@ -17,6 +17,12 @@ const userSchema = new mongoose.Schema(
     lastCheckIn: { type: Date, default: null },
     spinChances: { type: Number, default: 0, min: 0 },
 
+    // AdsGram rewarded ads (optional, user-initiated)
+    adViewsDayKey: { type: Number, default: null },
+    adViewsToday: { type: Number, default: 0, min: 0 },
+    lastAdRewardAt: { type: Date, default: null },
+    totalAdViews: { type: Number, default: 0, min: 0 },
+
     referralCode: { type: String, required: true, unique: true, index: true },
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     referralInitialRewardEligible: { type: Boolean, default: false },

@@ -15,6 +15,7 @@ const pointsLedgerSchema = new mongoose.Schema(
       enum: [
         'task',            // پاداش تکمیل تسک
         'checkin',         // پاداش ورود روزانه
+        'ad_reward',       // پاداش تماشای اختیاری تبلیغ AdsGram
         'spin',            // برد پوینت از گردونه شانس
         'referral_bonus',  // پاداش دعوت دوست (وقتی دعوت‌شده به حد نصاب تسک برسد)
         'referral_initial', // پاداش اولیه‌ی اتصال Referral
