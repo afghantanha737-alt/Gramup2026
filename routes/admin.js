@@ -10,7 +10,7 @@ const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { normalizeTonAddress, amountToNanoGram } = require('../utils/tonNativeDepositVerify');
-const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, broadcastToActiveUsers } = require('../utils/bot');
+const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, broadcastToActiveUsers } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { verifyTonTransaction, normalizeTonTxHash, legacyTonTxHashMatcher } = require('../utils/tonVerify');
 const { recordLedgerRequired } = require('../utils/ledger');
@@ -2234,7 +2234,7 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
     return res.status(400).json({ success: false, message: 'متن پیام الزامی است.' });
   }
 
-  const users = await User.find({ isBanned: false, telegramBlockedAt: null }, 'telegramId');
+  const users = await User.find(activeTelegramUserFilter(), 'telegramId');
   let sent = 0;
   let failed = 0;
 
