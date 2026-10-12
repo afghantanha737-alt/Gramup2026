@@ -31,7 +31,8 @@ app.set('trust proxy', 1);
 app.use(startRequest);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  // Telegram Web (web.telegram.org) Mini App را داخل iframe باز می‌کند؛ X-Frame-Options: DENY آن را خراب می‌کرد.
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://telegram.org");
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
@@ -131,6 +132,7 @@ app.use('/api/maintenance', require('./routes/maintenance'));
 app.use('/api/app-info', require('./routes/appInfo'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/points', require('./routes/points'));
+app.use('/api/ads', require('./routes/ads'));
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/mobile-auth', require('./routes/mobileAuth'));
