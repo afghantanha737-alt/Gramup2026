@@ -152,8 +152,7 @@ const { botText } = require('../utils/botMessages');
 const { synthesizeHistory } = require('../utils/withdrawalStatus');
 const { getLevel } = require('../utils/levels');
 const { withMongoTransaction } = require('../utils/mongoTransaction');
-const { adsStateForUser } = require('../utils/adsgram');
-const { postWithdrawalRequested } = require('../utils/payoutChannel');
+const DAILY_CHECKIN_REWARDS = Object.freeze([5, 7, 9, 11, 13, 14, 15]);
 
 // GET /api/points/me
 router.get('/me', auth, async (req, res) => {
@@ -193,7 +192,6 @@ router.get('/me', auth, async (req, res) => {
     firstName: u.firstName,
     minWithdrawGram,
     nextResetAt: nextResetTimestamp(),
-    ads: adsStateForUser(u),
     language: u.language
   });
 });
@@ -214,12 +212,9 @@ router.post('/checkin', auth, async (req, res) => {
       }
 
       const wasYesterday = current.lastCheckIn && utcDayKey(current.lastCheckIn) === todayKey - 1;
-      const newStreak = wasYesterday ? current.streak + 1 : 1;
-      const bonus = Math.min(newStreak, 30) * settings.streakBonusPoints;
-      const earned = settings.dailyCheckInPoints + bonus;
-      const gotSpin = newStreak > 0 && newStreak % 7 === 0;
+      const newStreak = wasYesterday ? (Number(current.streak) >= 7 ? 1 : Number(current.streak) + 1) : 1;
+      const earned = DAILY_CHECKIN_REWARDS[newStreak - 1];
       const inc = { points: earned, totalCheckins: 1 };
-      if (gotSpin) inc.spinChances = 1;
 
       const updated = await User.findOneAndUpdate(
         { _id: current._id, lastCheckIn: current.lastCheckIn || null },
@@ -240,7 +235,7 @@ router.post('/checkin', auth, async (req, res) => {
         sourceId: `checkin:${updated._id}:${todayKey}`,
         session
       });
-      return { updated, earned, gotSpin };
+      return { updated, earned };
     });
   } catch (error) {
     if (error.code === 'ALREADY_CHECKED_IN') return res.status(400).json({ success: false, message: error.message, code: error.code });
@@ -252,8 +247,6 @@ router.post('/checkin', auth, async (req, res) => {
     earned: result.earned,
     points: result.updated.points,
     streak: result.updated.streak,
-    spinChances: result.updated.spinChances,
-    gotSpin: result.gotSpin,
     nextResetAt: nextResetTimestamp()
   });
 });
@@ -474,56 +467,64 @@ router.post('/withdraw', auth, async (req, res) => {
     });
   }
 
-  let updated;
-  let withdrawal;
+  const operationKey = String(req.get('Idempotency-Key') || '').trim();
   try {
-    ({ updated, withdrawal } = await withMongoTransaction(async session => {
-      const nextUser = await User.findOneAndUpdate(
-        { _id: u._id, gramBalance: { $gte: amount } },
-        { $inc: { gramBalance: -amount }, $set: { walletAddress } },
-        { new: true, session }
-      );
-      if (!nextUser) {
-        const error = new Error('موجودی GRAM کافی نیست.');
-        error.code = 'INSUFFICIENT_BALANCE';
-        throw error;
+    const operation = await executeIdempotently({
+      userId: u._id,
+      scope: 'withdraw',
+      key: operationKey,
+      body: { gram: amount, address: walletAddress },
+      execute: async session => {
+        const nextUser = await User.findOneAndUpdate(
+          { _id: u._id, gramBalance: { $gte: amount } },
+          { $inc: { gramBalance: -amount }, $set: { walletAddress } },
+          { new: true, session }
+        );
+        if (!nextUser) {
+          const error = new Error('موجودی GRAM کافی نیست.');
+          error.code = 'INSUFFICIENT_BALANCE';
+          throw error;
+        }
+
+        const nextWithdrawal = await new Withdrawal({
+          user: u._id,
+          pointsSpent: settings.rate > 0 ? Math.round(amount / settings.rate) : 0,
+          cryptoAmount: amount,
+          address: walletAddress,
+          statusHistory: [{ status: 'pending', at: new Date() }]
+        }).save({ session });
+
+        await recordLedgerRequired({
+          user: u._id,
+          type: 'withdraw',
+          currency: 'gram',
+          amount: -amount,
+          description: `درخواست برداشت به ${truncateAddress(walletAddress)}`,
+          balanceAfter: nextUser.gramBalance,
+          sourceId: `withdrawal:${nextWithdrawal._id}`,
+          transactionId: idempotencyTransactionId({ userId: u._id, scope: 'withdraw', key: operationKey, leg: 'debit' }),
+          session
+        });
+        return {
+          body: {
+            success: true,
+            message: 'درخواست برداشت ثبت شد و به‌زودی بررسی می‌شود.',
+            gramBalance: nextUser.gramBalance,
+            withdrawalId: nextWithdrawal._id
+          },
+          resourceId: nextWithdrawal._id
+        };
       }
-
-      const nextWithdrawal = await new Withdrawal({
-        user: u._id,
-        pointsSpent: settings.rate > 0 ? Math.round(amount / settings.rate) : 0,
-        cryptoAmount: amount,
-        address: walletAddress,
-        statusHistory: [{ status: 'pending', at: new Date() }]
-      }).save({ session });
-
-      await recordLedgerRequired({
-        user: u._id,
-        type: 'withdraw',
-        currency: 'gram',
-        amount: -amount,
-        description: `درخواست برداشت به ${truncateAddress(walletAddress)}`,
-        balanceAfter: nextUser.gramBalance,
-        sourceId: `withdrawal:${nextWithdrawal._id}`,
-        session
-      });
-      return { updated: nextUser, withdrawal: nextWithdrawal };
-    }));
+    });
+    res.status(operation.status).json(operation.body);
+    if (!operation.replayed) {
+      notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, 'GRAM')).catch(() => {});
+    }
   } catch (error) {
     if (error.code === 'INSUFFICIENT_BALANCE') return res.status(400).json({ success: false, message: error.message, code: error.code });
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message, code: error.code });
     throw error;
   }
-
-  res.json({
-    success: true,
-    message: 'درخواست برداشت ثبت شد و به‌زودی بررسی می‌شود.',
-    gramBalance: updated.gramBalance,
-    withdrawalId: withdrawal._id
-  });
-
-  // اطلاع‌رسانی فوری ثبت درخواست (جدا از اطلاع‌رسانی تایید/رد که در پنل ادمین است)
-  notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, withdrawal.token || 'GRAM')).catch(() => {});
-  postWithdrawalRequested(u, withdrawal).catch(() => {});
 });
 
 // GET /api/points/withdrawals/:id — جزئیات و Timeline یک برداشت مشخص (فقط برای صاحب همان برداشت)
