@@ -60,7 +60,6 @@ const state = {
   referralMinTasks: 2,
   referralTasks: [],
   tasks: [],
-  taskCategoryFilter: "all",
   completions: [],
   tasksServerOffsetMs: 0,
   userDataLoadedAt: 0,
@@ -1374,14 +1373,15 @@ async function doCheckIn() {
 window.doCheckIn = doCheckIn;
 function renderTasks() {
   const content = $("#content");
-  const activeCategory = state.taskCategoryFilter || "all";
-  const visibleTasks = state.tasks.filter(task => activeCategory === "all" || getTaskCategory(task) === activeCategory);
-  const referralHtml = activeCategory === "all" ? renderReferralRewardTasks() : "";
-  const categoryTabs = renderTaskCategoryTabs(activeCategory);
+  // Tasks are intentionally presented as one continuous list. Category
+  // controls were removed from the UI, so no client-side category filter may
+  // hide an otherwise active task.
+  const visibleTasks = state.tasks;
+  const referralHtml = renderReferralRewardTasks();
   const taskErrorHtml = tasksLoadError ? `<div class="card" role="status"><div class="emptyDesc">${t("tasks_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryTasks()">${t("retry_button")}</button></div>` : "";
 
   if (state.tasks.length === 0 && tasksLoadError) {
-    content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${categoryTabs}${taskErrorHtml}`;
+    content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${taskErrorHtml}`;
     return;
   }
   if (state.tasks.length === 0 || visibleTasks.length === 0) {
@@ -1390,7 +1390,6 @@ function renderTasks() {
     content.innerHTML = `
       <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
       ${renderDailyCheckinCard()}
-      ${categoryTabs}
       ${taskErrorHtml}
       ${referralHtml}
       <div class="card emptyState">
@@ -1407,12 +1406,11 @@ function renderTasks() {
 
   content.innerHTML = `
     <section class="tasksOverview">
-      <div class="tasksOverviewTop"><div><span class="tasksOverline">${t("task_category_label")}</span><h1>${t("tasks_title")}</h1></div><strong>${taskProgress}%</strong></div>
+      <div class="tasksOverviewTop"><div><h1>${t("tasks_title")}</h1></div><strong>${taskProgress}%</strong></div>
       <div class="tasksProgressTrack"><i style="width:${taskProgress}%"></i></div>
       <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(state.tasks.length)} ${t("task_btn_done")}</span><span>${t("tb_points_chip", { n: formatPoints(state.points) })}</span></div>
     </section>
     ${renderDailyCheckinCard()}
-    ${categoryTabs}
     ${taskErrorHtml}
     ${referralHtml}
     <div class="taskList">
@@ -1492,28 +1490,6 @@ function renderTasks() {
   startLatestPostCooldownCountdown();
 }
 
-const TASK_CATEGORY_OPTIONS = ["all", "on-chain", "company", "social", "partners"];
-function getTaskCategory(task) {
-  const explicit = String(task?.category || "").trim().toLowerCase();
-  if (TASK_CATEGORY_OPTIONS.includes(explicit)) return explicit;
-  const text = `${task?.title || ""} ${task?.description || ""} ${task?.type || ""} ${task?.isSponsored ? "sponsor" : ""}`.toLowerCase();
-  if (/on[-\s]?chain|blockchain|ton|gram|wallet/.test(text)) return "on-chain";
-  if (/company|sponsor|sponsored|brand|campaign/.test(text)) return "company";
-  if (/partner|affiliate|partnership/.test(text)) return "partners";
-  return "social";
-}
-function renderTaskCategoryTabs(activeCategory) {
-  return `<nav class="taskCategoryTabs" aria-label="${t("task_category_label")}">
-    ${TASK_CATEGORY_OPTIONS.map(category => `<button type="button" class="taskCategoryTab ${category === activeCategory ? "active" : ""}" aria-pressed="${category === activeCategory}" onclick="setTaskCategoryFilter('${category}')">${t(`task_category_${category === "on-chain" ? "on_chain" : category}`)}</button>`).join("")}
-  </nav>`;
-}
-function setTaskCategoryFilter(category) {
-  const next = TASK_CATEGORY_OPTIONS.includes(category) ? category : "all";
-  state.taskCategoryFilter = next;
-  haptic("selection");
-  renderTasks();
-}
-window.setTaskCategoryFilter = setTaskCategoryFilter;
 async function retryTasks() { await loadTasks({ force: true }); if (state.activeTab === "tasks") renderTasks(); else if (state.activeTab === "home") renderHome(); }
 window.retryTasks = retryTasks;
 
