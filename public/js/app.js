@@ -393,7 +393,7 @@ let navigationSequence = 0;
 async function navigate(tab) {
   const requestId = ++navigationSequence;
   if (tab !== "profile") profileRenderSequence += 1;
-  const validTabs = ["home", "tasks", "daily", "vip", "wallet", "profile"];
+  const validTabs = ["home", "tasks", "vip", "wallet", "profile"];
   if (!validTabs.includes(tab)) tab = "home";
   clearInterval(countdownInterval);
   state.activeTab = tab;
@@ -1037,7 +1037,7 @@ function renderHome() {
         <strong>${t("earn_daily_title")}</strong>
         <span>${state.canCheckIn ? t("earn_daily_sub_available") : t("earn_daily_sub_done")}</span>
       </div>
-      <button class="auroraInlineBtn" type="button" onclick="${state.canCheckIn ? "doCheckIn()" : "navigate('daily')"}">${state.canCheckIn ? t("checkin_button") : t("spin_title")}</button>
+      <button class="auroraInlineBtn" type="button" onclick="${state.canCheckIn ? "doCheckIn()" : "navigate('tasks')"}">${state.canCheckIn ? t("checkin_button") : t("tasks_title")}</button>
     </section>
 
     <div class="card" style="padding:14px 16px">
@@ -1330,6 +1330,48 @@ function startLatestPostCooldownCountdown() {
   latestPostCooldownTimer = setInterval(tick, 1000);
 }
 
+const DAILY_CHECKIN_REWARDS = Object.freeze([5, 7, 9, 11, 13, 14, 15]);
+function renderDailyCheckinCard() {
+  const completedDays = state.streak === 7 ? 7 : Math.min(7, Math.max(0, state.streak));
+  const nextDay = state.streak === 7 ? 1 : Math.min(7, completedDays + 1);
+  const dayCells = DAILY_CHECKIN_REWARDS.map((reward, index) => {
+    const day = index + 1;
+    const completed = day <= completedDays;
+    const current = state.canCheckIn && day === nextDay;
+    return `<div class="dailyCheckDay ${completed ? "is-complete" : ""} ${current ? "is-current" : ""}">
+      <span class="dailyCheckDayNumber">${completed ? "✓" : day}</span>
+      <strong>${t("day_label", { n: day })}</strong>
+      <small>+${formatPoints(reward)} ${t("points_unit")}</small>
+    </div>`;
+  }).join("");
+  return `<section class="card dailyCheckCard" aria-labelledby="dailyCheckTitle">
+    <div class="dailyCheckHeader"><div><span class="tasksOverline">${t("daily_title")}</span><h2 id="dailyCheckTitle">${t("daily_check_title")}</h2></div><span class="tbPill tbPillOrange tbPillSm">${formatPoints(completedDays)} / 7</span></div>
+    <p class="dailyCheckSubtitle">${state.canCheckIn ? t("daily_check_available") : t("daily_check_completed")}</p>
+    <div class="dailyCheckGrid">${dayCells}</div>
+    <div class="dailyCheckFooter"><span>${t("daily_check_today_reward", { n: formatPoints(DAILY_CHECKIN_REWARDS[nextDay - 1]) })}</span><button id="checkinBtn" class="primaryBtn" type="button" ${state.canCheckIn ? "" : "disabled"} onclick="doCheckIn()">${state.canCheckIn ? t("checkin_button") : t("checkin_done_button")}</button></div>
+  </section>`;
+}
+async function doCheckIn() {
+  const button = document.querySelector("#checkinBtn");
+  if (button) { button.disabled = true; button.textContent = t("checkin_processing"); }
+  try {
+    const result = await api("/api/points/checkin", { method: "POST" });
+    state.points = Number(result.points) || state.points;
+    state.streak = Number(result.streak) || state.streak;
+    state.canCheckIn = false;
+    state.totalCheckins += 1;
+    state.nextResetAt = Number(result.nextResetAt) || state.nextResetAt;
+    updateHeader();
+    haptic("success");
+    toast(`+${formatPoints(result.earned)} ${t("points_unit")} 🎉`, "success");
+    renderTasks();
+  } catch (error) {
+    haptic("error");
+    toast(translateServerMessage(error.code, error.message), "error");
+    if (button) { button.disabled = false; button.textContent = t("checkin_button"); }
+  }
+}
+window.doCheckIn = doCheckIn;
 function renderTasks() {
   const content = $("#content");
   const activeCategory = state.taskCategoryFilter || "all";
@@ -1347,6 +1389,7 @@ function renderTasks() {
     latestPostCooldownTimer = null;
     content.innerHTML = `
       <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
+      ${renderDailyCheckinCard()}
       ${categoryTabs}
       ${taskErrorHtml}
       ${referralHtml}
@@ -1368,6 +1411,7 @@ function renderTasks() {
       <div class="tasksProgressTrack"><i style="width:${taskProgress}%"></i></div>
       <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(state.tasks.length)} ${t("task_btn_done")}</span><span>${t("tb_points_chip", { n: formatPoints(state.points) })}</span></div>
     </section>
+    ${renderDailyCheckinCard()}
     ${categoryTabs}
     ${taskErrorHtml}
     ${referralHtml}
@@ -1473,213 +1517,6 @@ window.setTaskCategoryFilter = setTaskCategoryFilter;
 async function retryTasks() { await loadTasks({ force: true }); if (state.activeTab === "tasks") renderTasks(); else if (state.activeTab === "home") renderHome(); }
 window.retryTasks = retryTasks;
 
-/* ================= DAILY + SPIN WHEEL ================= */
-const WHEEL_SIZE = 260;
-const WHEEL_CENTER = WHEEL_SIZE / 2;
-
-const SPIN_SEGMENTS_UI = [
-  { icon: "🪙", value: "20", color1: "#8b5cf6", color2: "#6d28d9" },
-  { icon: "🪙", value: "40", color1: "#a78bfa", color2: "#7c3aed" },
-  { icon: "🪙", value: "60", color1: "#f5c451", color2: "#c98a12" },
-  { icon: "🪙", value: "100", color1: "#22c55e", color2: "#15803d" },
-  { icon: "🪙", value: "0", color1: "#3a3f4d", color2: "#1e2028" },
-  { icon: "🎡", value: "+1", color1: "#38bdf8", color2: "#0284c7" }
-];
-
-let wheelRotation = 0;
-
-function buildWheelGradient() {
-  const step = 360 / SPIN_SEGMENTS_UI.length;
-  const stops = SPIN_SEGMENTS_UI.map((seg, i) => {
-    const mid = i * step + step / 2;
-    return `${seg.color1} ${i * step}deg ${mid}deg, ${seg.color2} ${mid}deg ${(i + 1) * step}deg`;
-  });
-  return `conic-gradient(from 0deg, ${stops.join(", ")})`;
-}
-
-/** برچسب‌ها داخل خودِ دیسک قرار می‌گیرند تا هنگام چرخش، همراه رنگ‌ها بچرخند */
-function buildWheelLabels() {
-  const step = 360 / SPIN_SEGMENTS_UI.length;
-  const radius = WHEEL_CENTER - 46;
-  return SPIN_SEGMENTS_UI.map((seg, i) => {
-    const angleDeg = i * step + step / 2;
-    const angleRad = (angleDeg - 90) * (Math.PI / 180);
-    const x = WHEEL_CENTER + radius * Math.cos(angleRad);
-    const y = WHEEL_CENTER + radius * Math.sin(angleRad);
-    const isSpin = seg.value === "+1";
-    return `
-      <span class="wheelLabel" style="left:${x}px;top:${y}px;transform:translate(-50%,-50%) rotate(${angleDeg}deg)">
-        <span class="wheelLabelInner" style="transform:rotate(${-angleDeg}deg)">
-          <span class="wheelIcon">${seg.icon}</span>
-          <span class="wheelValue">${seg.value}${isSpin ? "" : ""}</span>
-        </span>
-      </span>`;
-  }).join("");
-}
-
-/** نقطه‌های تزئینی نورانی دور کادر گردونه (ثابت، نمی‌چرخند) */
-function buildWheelRingDots() {
-  const count = 12;
-  const radius = WHEEL_CENTER + 6;
-  let dots = "";
-  for (let i = 0; i < count; i++) {
-    const angleRad = (i * (360 / count)) * (Math.PI / 180);
-    const x = WHEEL_CENTER + radius * Math.cos(angleRad);
-    const y = WHEEL_CENTER + radius * Math.sin(angleRad);
-    dots += `<span class="wheelDot" style="left:${x}px;top:${y}px"></span>`;
-  }
-  return dots;
-}
-
-function spinWheelTargetRotation(index) {
-  const step = 360 / SPIN_SEGMENTS_UI.length;
-  const segCenter = index * step + step / 2;
-  const currentMod = wheelRotation % 360;
-  const desiredMod = (360 - segCenter) % 360;
-  let delta = desiredMod - currentMod;
-  if (delta <= 0) delta += 360;
-  wheelRotation += delta + 360 * 4;
-  return wheelRotation;
-}
-
-function refreshSpinButtons(spinning = false) {
-  const free = $("#spinBtn");
-  const paid = $("#paidSpinBtn");
-  if (free) free.disabled = spinning || state.spinChances <= 0;
-  if (paid) paid.disabled = spinning || state.points < state.spinCostPoints;
-}
-
-async function doSpin(paid = false) {
-  paid = paid === true;
-  if (!paid && state.spinChances <= 0) {
-    toast(t("spin_no_chances"), "warning");
-    return;
-  }
-  if (paid && state.points < state.spinCostPoints) {
-    toast(t("spin_paid_not_enough", { n: formatPoints(state.spinCostPoints) }), "warning");
-    return;
-  }
-  refreshSpinButtons(true);
-
-  const idempotencyScope = "spin";
-  try {
-    // هزینه/شانس در سرور کم می‌شود؛ نتیجه‌ی چرخش هم فقط از سرور می‌آید
-    const result = await api("/api/points/spin", {
-      method: "POST",
-      headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) },
-      body: { paid }
-    });
-    clearPendingIdempotencyKey(idempotencyScope);
-    const disc = $("#wheelDisc");
-    const rotation = spinWheelTargetRotation(result.segmentIndex);
-    if (disc) disc.style.transform = `rotate(${rotation}deg)`;
-
-    setTimeout(() => {
-      state.points = Number(result.points) || 0;
-      state.spinChances = Number(result.spinChances) || 0;
-      state.spinCostPoints = Number(result.spinCostPoints) || state.spinCostPoints;
-      updateHeader();
-
-      const chancesEl = $("#spinChancesValue");
-      if (chancesEl) chancesEl.textContent = formatPoints(state.spinChances);
-      refreshSpinButtons(false);
-
-      if (result.type === "points") {
-        haptic("success");
-        toast(t("spin_result_points", { n: formatPoints(result.value) }), "success");
-      } else if (result.type === "spin") {
-        haptic("success");
-        toast(t("spin_result_extra"), "success");
-      } else {
-        haptic("warning");
-        toast(t("spin_result_empty"), "warning");
-      }
-    }, 3600);
-  } catch (error) {
-    clearDefinitiveIdempotencyFailure(idempotencyScope, error);
-    haptic("error");
-    toast(translateServerMessage(error.code, error.message), "error");
-    refreshSpinButtons(false);
-  }
-}
-window.doSpin = doSpin;
-
-function startResetCountdown() {
-  clearInterval(countdownInterval);
-  const el = $("#resetCountdown");
-  if (!el || !state.nextResetAt) return;
-
-  function tick() {
-    const remaining = Math.max(0, state.nextResetAt - Date.now());
-    const h = Math.floor(remaining / 3600000);
-    const m = Math.floor((remaining % 3600000) / 60000);
-    const s = Math.floor((remaining % 60000) / 1000);
-    el.textContent = `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
-    if (remaining <= 0) {
-      clearInterval(countdownInterval);
-      renderCurrentTab();
-    }
-  }
-  tick();
-  countdownInterval = setInterval(tick, 1000);
-}
-
-async function doCheckIn() {
-  const button = $("#checkinBtn");
-  if (button) button.disabled = true;
-
-  try {
-    const result = await api("/api/points/checkin", { method: "POST" });
-    state.points = Number(result.points) || state.points;
-    state.streak = Number(result.streak) || state.streak;
-    state.spinChances = Number(result.spinChances) || state.spinChances;
-    state.canCheckIn = false;
-    state.totalCheckins += 1;
-    state.nextResetAt = Number(result.nextResetAt) || state.nextResetAt;
-
-    haptic("success");
-    toast(`+${formatPoints(result.earned)} ${t("points_unit")} 🎉`, "success");
-    if (result.gotSpin) {
-      setTimeout(() => toast(t("spin_result_extra"), "success"), 1200);
-    }
-
-    updateHeader();
-    renderDaily();
-  } catch (error) {
-    haptic("error");
-    toast(translateServerMessage(error.code, error.message), "error");
-    if (button) button.disabled = false;
-  }
-}
-window.doCheckIn = doCheckIn;
-
-function renderDaily() {
-  const content = $("#content");
-  const streakDays = Math.min(state.streak, 7) || 0;
-  const dayCells = Array.from({ length: 7 }, (_, index) => {
-    const dayNumber = index + 1;
-    const isFilled = dayNumber <= streakDays;
-    const isToday = state.canCheckIn && dayNumber === streakDays + 1;
-    return `<div class="dayCell ${isFilled ? "filled" : ""} ${isToday ? "today" : ""}"><span class="dayNum">${isFilled ? "✓" : dayNumber}</span><span>${t("day_label", { n: dayNumber })}</span></div>`;
-  }).join("");
-  content.innerHTML = `
-    <section class="dailyOverview">
-      <div><span class="dailyOverline">${t("daily_title")}</span><h1>${t("streak_label").split("—")[0].trim()}</h1><p>${state.canCheckIn ? t("checkin_button") : t("checkin_done_button")}</p></div>
-      <div class="dailyStreakValue"><strong>${formatPoints(state.streak)}</strong><span>${t("streak_label").split("—")[0].trim()}</span></div>
-    </section>
-    <div class="card dailySpinCard" style="text-align:center"><div class="cardHeader" style="justify-content:center"><div class="cardTitle">${t("spin_title")}</div></div>
-      <div class="wheelOuter"><div class="wheelRingDots">${buildWheelRingDots()}</div><div class="wheelPointer">▼</div><div class="wheelDisc" id="wheelDisc" style="background:${buildWheelGradient()}">${buildWheelLabels()}</div><div class="wheelHub"><span>✦</span></div></div>
-      <p style="font-size:11px;margin:14px 0 4px">${t("spin_chances_label")}: <b id="spinChancesValue">${formatPoints(state.spinChances)}</b></p>
-      <button id="spinBtn" class="primaryBtn wheelSpinBtn" type="button" ${state.spinChances <= 0 ? "disabled" : ""} onclick="doSpin()">🎡 ${t("spin_button")}</button>
-      <button id="paidSpinBtn" class="secondaryBtn wheelPaidBtn" type="button" ${state.points < state.spinCostPoints ? "disabled" : ""} onclick="doSpin(true)">🪙 ${t("spin_paid_button", { n: formatPoints(state.spinCostPoints) })}</button>
-      <p class="wheelPaidHint">${t("spin_paid_hint", { n: formatPoints(state.spinCostPoints) })}</p>
-    </div>
-    <div class="card dailyCalendarCard"><div class="cardHeader"><div class="cardTitle">${t("daily_calendar_title")}</div><span class="tbPill tbPillOrange tbPillSm">${formatPoints(streakDays)} / 7</span></div><div class="dailyGrid">${dayCells}</div>
-      <button id="checkinBtn" class="primaryBtn" type="button" ${state.canCheckIn ? "" : "disabled"} onclick="doCheckIn()">${state.canCheckIn ? t("checkin_button") : t("checkin_done_button")}</button>
-      ${!state.canCheckIn ? `<div style="text-align:center;margin-top:10px"><div class="small" style="color:var(--text-muted);font-size:10px">${t("reset_countdown_label")}</div><div id="resetCountdown" style="font-size:20px;font-weight:900;margin-top:4px;letter-spacing:1px">00:00:00</div></div>` : ""}
-    </div>`;
-  startResetCountdown();
-}
 /* ================= WALLET ================= */
 function showWithdraw() {
   if (state.gramBalance < state.minWithdrawGram) {
@@ -3333,14 +3170,10 @@ async function renderCurrentTab(requestId = navigationSequence) {
       renderHome();
       void loadReferralData();
     } else if (tab === "tasks") {
-      await loadTasks();
+      await Promise.all([loadTasks(), loadUserData()]);
       if (!isCurrentRender()) return;
       renderTasks();
       void loadReferralData();
-    } else if (tab === "daily") {
-      await loadUserData();
-      if (!isCurrentRender()) return;
-      renderDaily();
     } else if (tab === "vip") {
       await loadUserData();
       if (!isCurrentRender()) return;
