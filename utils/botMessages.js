@@ -50,25 +50,15 @@ const MESSAGES = {
     ps: (name, points, balance) => `🎉 مبارک شه! ${name} اړینې دندې بشپړې کړې او ${points} پوائنټ د بلنې ګټه ستاسو حساب ته اضافه شوه.\nاوسنی بیلانس: ${balance} پوائنټ.`,
     en: (name, points, balance) => `🎉 Congrats! ${name} completed the required tasks and you earned ${points} referral bonus points.\nCurrent balance: ${balance} points.`
   },
-  referralInitial: {
-    fa: (name, points) => `🎉 New Referral\n\nیک کاربر جدید از طریق لینک دعوت شما ثبت‌نام کرد.\n\n👤 کاربر: ${name}\n\n🎁 پاداش شما: ${points} Points\n\nموجودی Points شما به‌روزرسانی شد.`,
-    ps: (name, points) => `🎉 New Referral\n\nیو نوی کاروونکی ستاسو د بلنې له لارې ثبت شو.\n\n👤 کاروونکی: ${name}\n\n🎁 ستاسو پاداش: ${points} Points\n\nستاسو د Points موجودي تازه شوه.`,
-    en: (name, points) => `🎉 New Referral\n\nA new user registered through your referral link.\n\n👤 User: ${name}\n\n🎁 Your reward: ${points} Points\n\nYour Points balance was updated.`
-  },
   dailyReminder: {
-    fa: () => `⏰ یادت نره امروز وارد Gramup بشی و پاداش روزانه‌ت رو بگیری!\nاستریکت رو از دست نده — هر ۷ روز پیوسته یک شانس گردونه‌ی رایگان می‌گیری.`,
+    fa: () => `⏰ یادت نره امروز وارد Gramup بشی و پاداش روزانه‌ت رو بگیری!\nاستریکت رو از دست نده — پاداش‌های هفت‌روزه‌ات را کامل کن.`,
     ps: () => `⏰ مه هېروئ چې نن Gramup ته ننوځئ او خپله ورځنۍ ګټه ترلاسه کړئ!\nخپل پرله‌پسې ورځې مه ورکوئ — هره ۷ ورځې یو وړیا د ګردونې چانس ترلاسه کوئ.`,
-    en: () => `⏰ Don't forget to check in on Gramup today and claim your daily reward!\nKeep your streak alive — every 7 days in a row earns a free spin.`
+    en: () => `⏰ Don't forget to check in on Gramup today and claim your daily reward!\nKeep your streak alive — complete the seven-day reward cycle.`
   },
   leaderboardReward: {
-    fa: (rank, points) => `🏆 Weekly Challenge Reward\n\nتبریک! شما در Weekly Challenge این هفته مقام ${rank} را کسب کردید.\n\n🎁 جایزه شما: ${points} Points\n\nاین جایزه به حساب شما اضافه شد.`,
-    ps: (rank, points) => `🏆 Weekly Challenge Reward\n\nمبارک شه! تاسو په Weekly Challenge کې ${rank} مقام ترلاسه کړ.\n\n🎁 ستاسو پاداش: ${points} Points\n\nدا پاداش ستاسو حساب ته اضافه شو.`,
-    en: (rank, points) => `🏆 Weekly Challenge Reward\n\nCongratulations! You secured ${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : 'rd'} place in this week's Weekly Challenge.\n\n🎁 Your reward: ${points} Points\n\nThis reward was added to your account.`
-  },
-  weeklyChallengeStart: {
-    fa: () => `🎯 Weekly Challenge شروع شد!\n\nچالش هفتگی جدید آغاز شده است.\nهمین حالا وارد شوید و برای کسب رتبه و جایزه تلاش کنید.`,
-    ps: () => `🎯 Weekly Challenge پیل شو!\n\nنوی اوونیزه ننګونه پیل شوې ده.\nهمدا اوس داخل شئ او د مقام او پاداش لپاره هڅه وکړئ.`,
-    en: () => `🎯 Weekly Challenge has started!\n\nA new weekly challenge is now live.\nJoin now and compete for the leaderboard rewards.`
+    fa: (rank, points, week) => `🏆 تبریک! شما رتبه ${rank} لیدربورد هفتگی را کسب کردید.\n\n${points} پوینت جایزه هفته ${week} به حسابتان اضافه شد.`,
+    ps: (rank, points, week) => `🏆 مبارک شه! تاسو د اونیز غوره لیست ${rank} مقام ترلاسه کړ.\n\n${points} پوائنټ د ${week} اونۍ جایزه ستاسو حساب ته اضافه شوه.`,
+    en: (rank, points, week) => `🏆 Congratulations! You finished #${rank} on the weekly leaderboard.\n\n${points} reward points for week ${week} were added to your account.`
   }
 };
 
