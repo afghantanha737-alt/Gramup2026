@@ -153,6 +153,7 @@ const { synthesizeHistory } = require('../utils/withdrawalStatus');
 const { getLevel } = require('../utils/levels');
 const { withMongoTransaction } = require('../utils/mongoTransaction');
 const { adsStateForUser } = require('../utils/adsgram');
+const { postWithdrawalRequested } = require('../utils/payoutChannel');
 
 // GET /api/points/me
 router.get('/me', auth, async (req, res) => {
@@ -522,6 +523,7 @@ router.post('/withdraw', auth, async (req, res) => {
 
   // اطلاع‌رسانی فوری ثبت درخواست (جدا از اطلاع‌رسانی تایید/رد که در پنل ادمین است)
   notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, withdrawal.token || 'GRAM')).catch(() => {});
+  postWithdrawalRequested(u, withdrawal).catch(() => {});
 });
 
 // GET /api/points/withdrawals/:id — جزئیات و Timeline یک برداشت مشخص (فقط برای صاحب همان برداشت)
