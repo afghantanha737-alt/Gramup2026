@@ -50,8 +50,7 @@ function communityUrl() {
     process.env.COMMUNITY_CHANNEL_URL ||
     process.env.PUBLIC_CHANNEL_URL ||
     process.env.COMMUNITY_CHANNEL_USERNAME ||
-    // Backward-compatible fallback when the payout channel itself is public.
-    process.env.PAYOUT_CHANNEL_ID
+    'https://t.me/GramupOfficialChannel'
   );
 }
 
