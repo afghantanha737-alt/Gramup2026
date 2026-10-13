@@ -2381,3 +2381,18 @@ html[data-theme="light"] .profileMenuPanel, html[data-theme="light"] .profileAbo
 html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionBanner { background: radial-gradient(circle at 100% 0%, rgba(245,158,11,.12), transparent 42%), #fffdf7; }
 html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionTitle { color: #5b4210; }
 html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription { color: #786d58; }
+
+/* Daily Check moved into Tasks: isolated styles, preserving the existing theme. */
+.dailyCheckCard{margin:14px 0;padding:16px;border:1px solid rgba(167,139,250,.22);border-radius:22px;background:linear-gradient(145deg,rgba(76,29,149,.2),rgba(17,24,39,.92));}
+.dailyCheckHeader,.dailyCheckFooter{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.dailyCheckHeader h2{margin:3px 0 0;font-size:20px;letter-spacing:-.2px;}
+.dailyCheckSubtitle{margin:10px 0 14px;color:var(--text-muted);font-size:12px;line-height:1.7;}
+.dailyCheckGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}
+.dailyCheckDay{min-width:0;padding:9px 3px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(0,0,0,.14);text-align:center;}
+.dailyCheckDayNumber{display:grid;place-items:center;width:25px;height:25px;margin:0 auto 6px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-muted);font-size:11px;font-weight:900;}
+.dailyCheckDay strong,.dailyCheckDay small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dailyCheckDay strong{font-size:9px;color:var(--text-muted);}.dailyCheckDay small{margin-top:5px;color:var(--text);font-size:9px;font-weight:800;}
+.dailyCheckDay.is-complete{border-color:rgba(52,211,153,.35);background:rgba(16,185,129,.12);}.dailyCheckDay.is-complete .dailyCheckDayNumber{background:#10b981;color:#06140f;}
+.dailyCheckDay.is-current{border-color:rgba(167,139,250,.8);box-shadow:0 0 0 1px rgba(167,139,250,.2);}.dailyCheckDay.is-current .dailyCheckDayNumber{background:#8b5cf6;color:#fff;}
+.dailyCheckFooter{margin-top:15px;color:var(--text-muted);font-size:11px;}.dailyCheckFooter .primaryBtn{margin:0;padding:10px 14px;}
+@media (max-width:420px){.dailyCheckGrid{gap:3px}.dailyCheckDay{padding:8px 2px}.dailyCheckDay small{font-size:8px}.dailyCheckFooter{align-items:stretch;flex-direction:column}.dailyCheckFooter .primaryBtn{width:100%;}}
