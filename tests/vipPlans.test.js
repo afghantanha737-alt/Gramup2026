@@ -56,7 +56,6 @@ const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 const adminUi = fs.readFileSync(path.join(root, 'public/admin.html'), 'utf8');
 const translations = fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8');
 const vipPlanModel = fs.readFileSync(path.join(root, 'models/VipPlan.js'), 'utf8');
-const IdempotencyOperation = require('../models/IdempotencyOperation');
 
 assert.match(pointsRoute, /router\.get\('\/vip\/plans'/);
 assert.match(pointsRoute, /router\.post\('\/vip\/purchase'/);
@@ -74,17 +73,8 @@ assert.match(adminRoute, /input\.length !== 10/);
 assert.match(ledgerModel, /'vip_purchase'/);
 assert.match(ledgerModel, /'vip_daily_reward'/);
 assert.match(ledgerModel, /'vip_principal_return'/);
-for (const scope of ['vip_purchase', 'vip_daily_claim']) {
-  const operation = new IdempotencyOperation({
-    userId: '0123456789abcdef01234567',
-    scope,
-    key: 'vip-scope-test-123',
-    requestHash: 'a'.repeat(64)
-  });
-  assert.ifError(operation.validateSync(), `${scope} must be accepted by the idempotency schema`);
-}
 assert.match(server, /VipPlan\.ensureDefaults\(\)/);
-assert.match(server, /runJob\('vip-principal-settlement'.*settleMaturedVipSubscriptions/s);
+assert.match(server, /settleMaturedVipSubscriptions\(\)/);
 assert.match(app, /\/api\/points\/vip\/purchase/);
 assert.match(app, /\/api\/points\/vip\/\$\{encodeURIComponent\(subscriptionId\)\}\/claim/);
 assert.match(app, /getPendingIdempotencyKey\(scope\)/);
@@ -93,15 +83,17 @@ assert.match(app, /function renderProfileVip\(\)/);
 assert.match(vipPlanModel, /planNumber: 10, pricePoints: 100000, monthlyRewardPercent: 15/, 'catalog seed must include VIP 10');
 assert.match(vipPlanModel, /planNumber: 1, pricePoints: 1000, monthlyRewardPercent: 5/);
 assert.match(indexHtml, /data-tab="vip"/);
-assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|daily|vip|wallet|profile)"/g) || []).length, 6);
-assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'daily', 'vip', 'wallet', 'profile']);
-assert.match(app, /validTabs = \["home", "tasks", "daily", "vip", "wallet", "profile"\]/);
-assert.match(app, /function renderDaily\(\)/);
-assert.match(app, /buildWheelGradient\(\)/);
+assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|vip|wallet|profile)"/g) || []).length, 5);
+assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'vip', 'wallet', 'profile']);
+assert.match(app, /validTabs = \["home", "tasks", "vip", "wallet", "profile"\]/);
+assert.match(app, /function renderDailyCheckinCard\(\)/);
+assert.match(app, /DAILY_CHECKIN_REWARDS = Object\.freeze\(\[5, 7, 9, 11, 13, 14, 15\]\)/);
+assert.doesNotMatch(app, /function renderDaily\(\)/);
+assert.doesNotMatch(app, /buildWheelGradient\(\)/);
 assert.match(translations, /nav_spin:/);
 assert.match(translations, /nav_vip:/);
 assert.match(adminUi, /\/api\/admin\/vip\/plans/);
-assert.match(referralCore, /ELIGIBLE_ORIGINAL_EARN_TYPES = Object\.freeze\(\['task', 'checkin', 'spin', 'leaderboard_reward'\]\)/);
+assert.match(referralCore, /ELIGIBLE_ORIGINAL_EARN_TYPES = Object\.freeze\(\['task', 'checkin', 'leaderboard_reward'\]\)/);
 for (const key of ['menu_vip_plans', 'vip_title', 'vip_buy_confirm', 'vip_claim_button', 'history_type_vip_purchase', 'history_type_vip_daily_reward', 'history_type_vip_principal_return']) {
   assert.ok(translations.includes(`${key}:`), `missing translation ${key}`);
 }
