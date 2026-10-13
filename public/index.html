@@ -25,12 +25,6 @@
 <link rel="icon" type="image/svg+xml" href="img/gramup-logo-new.jpg">
 <link rel="stylesheet" href="css/style.css?v=20261007-uiux-restored">
 
-<style id="bottom-nav-six-items-fix">
-  /* Keep the existing navigation styling while ensuring all six items fit in one row. */
-  .bottomNav {
-    grid-template-columns: repeat(6, 1fr );
-  }
-</style>
 </head>
 <body>
 
@@ -47,7 +41,7 @@
         </div>
       </div>
 
-      <button id="notificationBtn" class="headerIconBtn" type="button" onclick="navigate('daily')" aria-label="اعلان‌ها">
+      <button id="notificationBtn" class="headerIconBtn" type="button" onclick="navigate('tasks')" aria-label="اعلان‌ها">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
         <span class="notificationDot" aria-hidden="true"></span>
       </button>
@@ -76,11 +70,6 @@
     <button type="button" data-tab="tasks" data-i18n-aria="nav_tasks" aria-label="تسک‌ها">
       <span class="tabIcon" aria-hidden="true"><svg class="tabSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17.5" rx="2.5"/><path d="M9 3.5h6v3H9z"/><path d="m9 13 2 2 4-4"/></svg></span>
       <span class="tabLabel">تسک‌ها</span>
-    </button>
-
-    <button type="button" data-tab="daily" data-i18n-aria="nav_daily" aria-label="گردونه">
-      <span class="tabIcon" aria-hidden="true"><svg class="tabSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6 6 18"/></svg></span>
-      <span class="tabLabel">گردونه</span>
     </button>
 
     <button type="button" data-tab="vip" data-i18n-aria="nav_vip" aria-label="VIP">
