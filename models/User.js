@@ -15,7 +15,6 @@ const userSchema = new mongoose.Schema(
     streak: { type: Number, default: 0, min: 0 },
     totalCheckins: { type: Number, default: 0, min: 0 },
     lastCheckIn: { type: Date, default: null },
-    spinChances: { type: Number, default: 0, min: 0 },
 
     // AdsGram rewarded ads (optional, user-initiated)
     adViewsDayKey: { type: Number, default: null },

@@ -10,8 +10,6 @@ const settingsSchema = new mongoose.Schema(
     dailyCheckInPoints: { type: Number, default: 10 },
     streakBonusPoints: { type: Number, default: 2 },
     gramUsdPrice: { type: Number, default: 0, min: 0 },
-    spinCostPoints: { type: Number, default: 30, min: 1 },
-    paidSpinWeights: { type: [Number], default: () => [30, 20, 8, 2, 30, 10] },
     dailyReminderEnabled: { type: Boolean, default: false },
     dailyReminderHourUtc: { type: Number, default: 15, min: 0, max: 23 },
     dailyReminderTimezone: { type: String, default: 'UTC' },

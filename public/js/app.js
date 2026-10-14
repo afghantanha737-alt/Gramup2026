@@ -31,8 +31,6 @@ const state = {
   rate: 0,
   streak: 0,
   canCheckIn: false,
-  spinChances: 0,
-  spinCostPoints: 30,
   totalCheckins: 0,
   minWithdrawGram: 0,
   nextResetAt: 0,
@@ -772,8 +770,6 @@ async function loadUserData({ force = false } = {}) {
   state.rate = Number(data?.rate) || 0;
   state.streak = Number(data?.streak) || 0;
   state.canCheckIn = Boolean(data?.canCheckIn);
-  state.spinChances = Number(data?.spinChances) || 0;
-  state.spinCostPoints = Number(data?.spinCostPoints) || 30;
   state.totalCheckins = Number(data?.totalCheckins) || 0;
   state.minWithdrawGram = Number(data?.minWithdrawGram) || 0;
   state.nextResetAt = Number(data?.nextResetAt) || 0;

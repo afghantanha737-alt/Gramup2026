@@ -90,7 +90,6 @@ assert.match(app, /function renderDailyCheckinCard\(\)/);
 assert.match(app, /DAILY_CHECKIN_REWARDS = Object\.freeze\(\[5, 7, 9, 11, 13, 14, 15\]\)/);
 assert.doesNotMatch(app, /function renderDaily\(\)/);
 assert.doesNotMatch(app, /buildWheelGradient\(\)/);
-assert.match(translations, /nav_spin:/);
 assert.match(translations, /nav_vip:/);
 assert.match(adminUi, /\/api\/admin\/vip\/plans/);
 assert.match(referralCore, /ELIGIBLE_ORIGINAL_EARN_TYPES = Object\.freeze\(\['task', 'checkin', 'leaderboard_reward'\]\)/);

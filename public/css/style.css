@@ -698,61 +698,6 @@ html[data-theme="light"] .progressTrack { background: rgba(20,22,28,.08); }
   .heroTitle { font-size: 21px; }
 }
 
-/* SPIN WHEEL — حلقه‌ی نورانی + برچسب‌های چرخنده + هاب مرکزی */
-.wheelOuter { position: relative; width: 260px; height: 260px; margin: 14px auto 6px; }
-
-.wheelRingDots { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
-.wheelDot {
-  position: absolute; width: 9px; height: 9px; border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle at 35% 30%, #fff, var(--primary-2) 60%, var(--primary) 100%);
-  box-shadow: 0 0 10px 2px rgba(167, 139, 250, .75);
-}
-
-.wheelDisc {
-  position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%;
-  border: 5px solid rgba(167, 139, 250, .55);
-  box-shadow:
-    0 0 0 3px rgba(139, 92, 246, .18),
-    0 0 45px rgba(139, 92, 246, .55),
-    inset 0 0 30px rgba(0, 0, 0, .45);
-  transition: transform 3.8s cubic-bezier(.12, .65, .15, 1);
-  overflow: hidden;
-}
-
-.wheelPointer {
-  position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
-  font-size: 32px; color: var(--gold); z-index: 4;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .6)) drop-shadow(0 0 10px rgba(245, 196, 81, .6));
-}
-
-.wheelLabel { position: absolute; z-index: 1; }
-.wheelLabelInner {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-}
-.wheelIcon { font-size: 21px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .6)); }
-.wheelValue {
-  font-size: 15px; font-weight: 900; color: #fff; line-height: 1;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, .7);
-}
-
-.wheelHub {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 56px; height: 56px; border-radius: 50%; z-index: 3;
-  display: flex; align-items: center; justify-content: center;
-  background:
-    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .35), transparent 60%),
-    linear-gradient(145deg, var(--primary-2), var(--primary));
-  border: 2px solid rgba(255, 255, 255, .35);
-  box-shadow: 0 0 22px rgba(139, 92, 246, .75), inset 0 0 12px rgba(255, 255, 255, .25);
-  font-size: 22px; color: #fff;
-}
-
-.wheelSpinBtn {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  font-size: 15px; margin-top: 6px;
-}
-
 /* LANGUAGE MODAL */
 .langOption {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -962,13 +907,9 @@ html[data-theme="dark"] .gate-error { color: #fbbf24; }
 .gateCheckBtn:active:not(:disabled) { transform: scale(.98); }
 .gateCheckBtn:disabled { opacity: .6; }
 
-/* Spin wheel: spin with points */
-.wheelPaidBtn { width: 100%; margin-top: 10px; min-height: 46px; font-size: 14px; font-weight: 800; border-radius: 999px; }
-.wheelPaidBtn:disabled { opacity: .55; }
-.wheelPaidHint { margin: 8px 6px 0; font-size: 11.5px; line-height: 1.5; color: var(--text-muted); }
 
 /* =========================================================
-   GRAMUP — Turbo-style pages: tasks, daily/wheel, wallet, profile
+   GRAMUP — Turbo-style pages: tasks, daily, wallet, profile
    (same sizes/colors as the home page; uses the same tokens)
 ========================================================= */
 .tbPillOrange { background: rgba(245, 158, 11, .15); color: #b45309; }
@@ -1017,7 +958,7 @@ html[data-theme="dark"] .taskReward { color: #34d399; }
 .taskItem .taskAction[style*="surface-3"] { background: transparent !important; border: 2px solid var(--line-strong); box-shadow: none; }
 .taskHint { border-radius: 16px; font-size: 12.5px; }
 
-/* --- daily + wheel --- */
+/* --- daily --- */
 .dailyGrid { gap: 6px; }
 .dayCell { border: 0; border-radius: 16px; background: rgba(124, 58, 237, .07); font-size: 10.5px; font-weight: 700; }
 .dayCell.filled { background: #10b981; color: #fff; }
@@ -1032,7 +973,6 @@ html[data-theme="dark"] .dayCell.today { background: rgba(167, 139, 250, .14); c
 html[data-theme="dark"] .streakFire { background: rgba(255, 255, 255, .08); }
 .streakValue { font-size: 26px; line-height: 1.1; letter-spacing: -.5px; }
 .streakLabel { font-size: 12px; line-height: 1.5; }
-.wheelSpinBtn { min-height: 46px; }
 
 /* --- wallet --- */
 .tbWalletGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
@@ -1628,11 +1568,6 @@ html[data-theme="dark"] body {
 .dailyGrid { gap: 6px; }
 .dayCell { border-radius: 12px; border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.035); }
 .dayCell.filled, .dayCell.today { border-color: rgba(253,192,107,.32); background: rgba(253,192,107,.12); }
-.wheelOuter { filter: drop-shadow(0 12px 25px rgba(0,0,0,.3)); }
-.wheelDisc { border: 8px solid rgba(255,255,255,.08); box-shadow: 0 0 0 5px rgba(79,140,255,.13), inset 0 0 20px rgba(0,0,0,.25); }
-.wheelHub { box-shadow: 0 0 0 4px rgba(255,255,255,.14), 0 0 18px rgba(0,210,255,.36); }
-.wheelSpinBtn { background: var(--aurora-grad-primary); border-radius: var(--aurora-radius-btn); }
-.wheelPaidBtn { border-radius: var(--aurora-radius-btn); border-color: rgba(253,192,107,.35); color: var(--aurora-accent); background: rgba(253,192,107,.08); }
 
 @media (max-width: 360px) {
   .tbAct { font-size: 9px; }
@@ -1702,7 +1637,6 @@ html[data-theme="light"] .tbCard.tbBalance {
 html[data-theme="light"] .tbBtnPrimary,
 html[data-theme="light"] .primaryBtn,
 html[data-theme="light"] .taskAction,
-html[data-theme="light"] .wheelSpinBtn {
   color: #fff;
   background: linear-gradient(135deg, #5a4bdd, #6c5ce7);
   box-shadow: 0 7px 18px rgba(90, 75, 221, .18);
@@ -2158,7 +2092,7 @@ html[data-theme="light"] .referralDashboard .rf-kpi, html[data-theme="light"] .r
 
 /* =========================================================
    GRAMUP TASKS + DAILY POLISH v1
-   Scoped visual layer. Verification, rewards, streak and spin logic unchanged.
+   Scoped visual layer. Verification, rewards and streak logic unchanged.
 ========================================================= */
 .tasksOverview {
   margin: 1px 0 10px;
@@ -2205,11 +2139,6 @@ html[data-theme="light"] .referralDashboard .rf-kpi, html[data-theme="light"] .r
 .dailyStreakValue { min-width: 75px; padding: 9px 10px; border: 1px solid rgba(245,196,81,.22); border-radius: 14px; background: rgba(245,196,81,.08); text-align: center; }
 .dailyStreakValue strong { display: block; color: #f5c451; font-size: 25px; font-weight: 950; line-height: 1; }
 .dailyStreakValue span { display: block; margin-top: 5px; overflow: hidden; color: #bfaa79; font-size: 8px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-.dailySpinCard { position: relative; overflow: hidden; border-color: rgba(167,139,250,.18); background: radial-gradient(circle at 50% 0%, rgba(139,92,246,.12), transparent 48%), var(--product-surface); }
-.dailySpinCard .cardHeader { position: relative; z-index: 1; margin-bottom: 0; }
-.dailySpinCard .wheelOuter { margin-top: 9px; transform: scale(.94); }
-.dailySpinCard .wheelSpinBtn { min-height: 43px; }
-.dailySpinCard .wheelPaidBtn { min-height: 40px; font-size: 12px; }
 .dailyCalendarCard { border-color: rgba(103,232,249,.14); }
 .dailyCalendarCard .cardHeader { align-items: center; }
 .dailyCalendarCard .dailyGrid { margin-top: 12px; }
@@ -2224,11 +2153,10 @@ html[data-theme="light"] .tasksOverview { background: radial-gradient(circle at 
 html[data-theme="light"] .tasksOverview h1, html[data-theme="light"] .dailyOverview h1 { color: var(--text); }
 html[data-theme="light"] .dailyOverview { background: radial-gradient(circle at 0% 100%, rgba(245,158,11,.10), transparent 43%), #fff; border-color: rgba(245,158,11,.18); }
 html[data-theme="light"] .dailyOverview p { color: var(--text-soft); }
-html[data-theme="light"] .dailySpinCard, html[data-theme="light"] .dailyCalendarCard { background: #fff; }
+html[data-theme="light"] .dailyCalendarCard { background: #fff; }
 @media (max-width: 360px) {
   .tasksOverview, .dailyOverview { padding: 13px; }
   .tasksOverview h1, .dailyOverview h1 { font-size: 16px; }
-  .dailySpinCard .wheelOuter { transform: scale(.82); margin-top: -8px; margin-bottom: -12px; }
   .dayCell { min-height: 55px; }
   .dayCell .dayNum { width: 23px; height: 23px; }
 }

@@ -139,10 +139,6 @@ function getDepositSettingsStatus(settings) {
   return { ready: Boolean(ready), depositWalletAddress, minimumDepositGram };
 }
 
-// چرخ‌گردون: ۶ خانه
-const crypto = require('crypto');
-
-const { SPIN_SEGMENTS, resolveWeights, pickWeightedIndex } = require('../utils/spin');
 const { notifyUser } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { postWithdrawalRequested } = require('../utils/payoutChannel');
@@ -177,13 +173,11 @@ router.get('/me', auth, async (req, res) => {
     withdrawalProgress,
     withdrawalRemainingGram,
     gramUsdPrice: settings.gramUsdPrice || 0,
-    spinCostPoints: settings.spinCostPoints || 30,
     points: u.points,
     gramBalance: u.gramBalance,
     rate: settings.rate,
     streak: u.streak,
     canCheckIn,
-    spinChances: u.spinChances,
     totalCheckins: u.totalCheckins,
     firstName: u.firstName,
     minWithdrawGram,
@@ -211,9 +205,7 @@ router.post('/checkin', auth, async (req, res) => {
       const newStreak = wasYesterday ? current.streak + 1 : 1;
       const bonus = Math.min(newStreak, 30) * settings.streakBonusPoints;
       const earned = settings.dailyCheckInPoints + bonus;
-      const gotSpin = newStreak > 0 && newStreak % 7 === 0;
       const inc = { points: earned, totalCheckins: 1 };
-      if (gotSpin) inc.spinChances = 1;
 
       const updated = await User.findOneAndUpdate(
         { _id: current._id, lastCheckIn: current.lastCheckIn || null },
@@ -234,7 +226,7 @@ router.post('/checkin', auth, async (req, res) => {
         sourceId: `checkin:${updated._id}:${todayKey}`,
         session
       });
-      return { updated, earned, gotSpin };
+      return { updated, earned };
     });
   } catch (error) {
     if (error.code === 'ALREADY_CHECKED_IN') return res.status(400).json({ success: false, message: error.message, code: error.code });
@@ -246,83 +238,8 @@ router.post('/checkin', auth, async (req, res) => {
     earned: result.earned,
     points: result.updated.points,
     streak: result.updated.streak,
-    spinChances: result.updated.spinChances,
-    gotSpin: result.gotSpin,
     nextResetAt: nextResetTimestamp()
   });
-});
-
-// POST /api/points/spin — چرخاندن گردونه شانس
-// body.paid=true → با پوینت (هزینه‌ی spinCostPoints)؛ وگرنه از شانس‌های رایگان استریک
-router.post('/spin', auth, async (req, res) => {
-  const paid = Boolean(req.body && req.body.paid);
-  const settings = await Settings.getGlobal();
-  const cost = Math.max(1, Math.floor(settings.spinCostPoints || 30));
-  const segmentIndex = paid ? pickWeightedIndex(resolveWeights(settings.paidSpinWeights)) : crypto.randomInt(0, SPIN_SEGMENTS.length);
-  const segment = SPIN_SEGMENTS[segmentIndex];
-  let operation;
-  const operationKey = String(req.get('Idempotency-Key') || '').trim();
-  try {
-    operation = await executeIdempotently({
-      userId: req.dbUser._id,
-      scope: 'spin',
-      key: operationKey,
-      body: { paid },
-      execute: async session => {
-      let claimed;
-      if (paid) {
-        claimed = await User.findOneAndUpdate(
-          { _id: req.dbUser._id, points: { $gte: cost } },
-          { $inc: { points: -cost } },
-          { new: true, session }
-        );
-        if (!claimed) {
-          const error = new Error(`برای چرخاندن گردونه حداقل ${cost} پوینت لازم است.`);
-          error.code = 'INSUFFICIENT_BALANCE';
-          throw error;
-        }
-        await recordLedgerRequired({ user: claimed._id, type: 'spin', amount: -cost, description: 'هزینه‌ی چرخاندن گردونه شانس', balanceAfter: claimed.points, sourceId: `spin:${claimed._id}:${operationKey}:cost`, transactionId: idempotencyTransactionId({ userId: claimed._id, scope: 'spin', key: operationKey, leg: 'cost' }), session });
-      } else {
-        claimed = await User.findOneAndUpdate(
-          { _id: req.dbUser._id, spinChances: { $gt: 0 } },
-          { $inc: { spinChances: -1 } },
-          { new: true, session }
-        );
-        if (!claimed) {
-          const error = new Error('شانس چرخ‌گردون نداری.');
-          error.code = 'NO_SPINS';
-          throw error;
-        }
-      }
-
-      let result = claimed;
-      if (segment.type === 'points') {
-        result = await User.findByIdAndUpdate(claimed._id, { $inc: { points: segment.value } }, { new: true, session });
-      } else if (segment.type === 'spin') {
-        result = await User.findByIdAndUpdate(claimed._id, { $inc: { spinChances: 1 } }, { new: true, session });
-      }
-      if (!result) throw new Error('کاربر برای ثبت نتیجه Spin پیدا نشد.');
-      if (segment.type === 'points' && segment.value > 0) {
-        await recordLedgerRequired({ user: result._id, type: 'spin', amount: segment.value, description: 'برد از گردونه شانس', balanceAfter: result.points, sourceId: `spin:${result._id}:${operationKey}:reward`, transactionId: idempotencyTransactionId({ userId: result._id, scope: 'spin', key: operationKey, leg: 'reward' }), session });
-      }
-      return { body: {
-        success: true,
-        paid,
-        segmentIndex,
-        type: segment.type,
-        value: segment.value,
-        points: result.points,
-        spinChances: result.spinChances,
-        spinCostPoints: cost
-      } };
-      }
-    });
-  } catch (error) {
-    if (error.code === 'INSUFFICIENT_BALANCE' || error.code === 'NO_SPINS') return res.status(400).json({ success: false, message: error.message, code: error.code });
-    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message, code: error.code });
-    throw error;
-  }
-  res.status(operation.status).json(operation.body);
 });
 
 const round6 = n => Number(Number(n).toFixed(6));

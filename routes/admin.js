@@ -36,7 +36,6 @@ const { membership, validateChannelRef, normalizeChannelInput } = require('../ut
 const { canTransition, requiresReason, shouldRefund, synthesizeHistory, isTerminal } = require('../utils/withdrawalStatus');
 const { COMMON_TIMEZONES, isValidTimezone, targetUtcHour } = require('../utils/timezones');
 const { sendTestReminder } = require('../utils/dailyReminder');
-const { isValidWeights, resolveWeights, checkSpinSettings, spinModel } = require('../utils/spin');
 const { normalizeSponsorInput, marginInfo, rewardCostUsd } = require('../utils/sponsor');
 const { startOfUtcWeek, endOfUtcWeek, weekKey } = require('../utils/weeklyLeaderboard');
 const { createAdminSession, getAdminSession, revokeAdminSession, SESSION_TTL_MS } = require('../utils/adminSession');
@@ -1990,11 +1989,9 @@ router.get('/settings', async (req, res) => {
     success: true,
     settings: {
       ...settings.toObject(),
-      paidSpinWeights: resolveWeights(settings.paidSpinWeights),
       referralInitialRewardPoints: DEFAULT_REFERRAL_INITIAL_REWARD_POINTS,
       referralLevelRates: safeAdminReferralRates(settings)
     },
-    spinModel: spinModel(),
     timezones: COMMON_TIMEZONES
   });
 });
@@ -2040,7 +2037,6 @@ router.put('/settings', async (req, res) => {
     dailyCheckInPoints: v => v >= 0,
     streakBonusPoints: v => v >= 0,
     gramUsdPrice: v => v >= 0,
-    spinCostPoints: v => v >= 1,
     dailyReminderLocalHour: v => Number.isInteger(v) && v >= 0 && v <= 23
   };
 
@@ -2150,21 +2146,6 @@ router.put('/settings', async (req, res) => {
     changes.dailyReminderHourUtc = targetUtcHour(localHour, timezone);
   }
 
-  if (Object.prototype.hasOwnProperty.call(body, 'paidSpinWeights')) {
-    const weights = Array.isArray(body.paidSpinWeights) ? body.paidSpinWeights.map(Number) : null;
-    if (!isValidWeights(weights)) {
-      return res.status(400).json({ success: false, message: 'وزن شانس گردونه نامعتبر است: ۶ عدد صحیح بین ۰ تا ۱۰۰۰ لازم است و مجموعشان باید بیشتر از صفر باشد.' });
-    }
-    changes.paidSpinWeights = weights;
-  }
-
-  // جلوی سودآور شدن چرخش پولی برای کاربران (تولید بی‌نهایت پوینت) را می‌گیرد
-  if (changes.paidSpinWeights !== undefined || changes.spinCostPoints !== undefined) {
-    const finalCost = changes.spinCostPoints !== undefined ? changes.spinCostPoints : (settings.spinCostPoints || 30);
-    const finalWeights = changes.paidSpinWeights || resolveWeights(settings.paidSpinWeights);
-    const check = checkSpinSettings(finalWeights, finalCost);
-    if (check.error) return res.status(400).json({ success: false, message: check.error });
-  }
 
   Object.assign(settings, changes);
   await settings.save();
@@ -2172,11 +2153,9 @@ router.put('/settings', async (req, res) => {
     success: true,
     settings: {
       ...settings.toObject(),
-      paidSpinWeights: resolveWeights(settings.paidSpinWeights),
       referralInitialRewardPoints: DEFAULT_REFERRAL_INITIAL_REWARD_POINTS,
       referralLevelRates: safeAdminReferralRates(settings)
     },
-    spinModel: spinModel(),
     timezones: COMMON_TIMEZONES
   });
 

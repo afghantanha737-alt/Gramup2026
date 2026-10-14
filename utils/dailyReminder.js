@@ -42,7 +42,7 @@ function streakAtRiskMessageFor(lang) {
  *
  * «کاربر فعال» (audience=active) چون هیچ فیلد اختصاصی «آخرین بازدید کلی اپ» در
  * مدل کاربر وجود ندارد، با updatedAt کاربر (که تقریباً با هر تعامل واقعی —
- * پوینت/تسک/گردونه و... — عوض می‌شود) در ۳۰ روز اخیر تخمین زده می‌شود.
+ * پوینت/تسک و... — عوض می‌شود) در ۳۰ روز اخیر تخمین زده می‌شود.
  */
 async function runDailyReminderSweep(now = new Date()) {
   const User = require('../models/User');
