@@ -293,6 +293,7 @@ async function distributeReferralCommissions(earningEntry, session) {
   const { rates } = await getReferralSettings(session);
   const origin = await sessionQuery(User.findById(earningEntry.user).select('_id referredBy isBanned accountReviewStatus referralRiskBlocked referralRiskScore createdAt'), session);
   if (!origin || !origin.referredBy) return [];
+  // evaluateReferralEligibility(origin, completions) is managed via referralSweep and task submission gates.
   const paid = [];
   const pathUsers = [origin];
   const seen = new Set([String(origin._id)]);

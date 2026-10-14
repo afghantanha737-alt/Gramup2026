@@ -4,7 +4,11 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const { startRequest } = require('./utils/metrics');
-const { ensureVipActivationTasks } = require('./utils/vipActivationTasks');
+const { consumeRateLimit } = require('./utils/sharedRateLimit');
+const { verifyMongoTransactionCapability, getMongoTransactionStatus } = require('./utils/mongoTransaction');
+const { isValidAdminKey } = require('./utils/adminKey');
+const { withDistributedJobLock } = require('./utils/distributedJobLock');
+const { getMaintenanceState, telegramIdFromInitData, isAllowedTelegramId } = require('./utils/maintenance');
 
 const app = express();
 app.disable('x-powered-by');
@@ -23,6 +27,11 @@ if (!process.env.BOT_TOKEN) {
   console.error('❌ BOT_TOKEN is not configured.');
   process.exit(1);
 }
+const WEBHOOK_SECRET_VALID = /^[A-Za-z0-9_-]{1,256}$/.test(String(process.env.TELEGRAM_WEBHOOK_SECRET || ''));
+if (process.env.NODE_ENV === 'production' && !WEBHOOK_SECRET_VALID) {
+  console.error('❌ A valid TELEGRAM_WEBHOOK_SECRET is required in production.');
+  process.exit(1);
+}
 
 /* =========================================================
    SECURITY / MIDDLEWARE
@@ -31,8 +40,7 @@ app.set('trust proxy', 1);
 app.use(startRequest);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  // Telegram Web (web.telegram.org) Mini App را داخل iframe باز می‌کند؛ X-Frame-Options: DENY آن را خراب می‌کرد.
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://telegram.org");
+  res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
@@ -53,6 +61,7 @@ app.use(
       if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error('CORS origin not allowed'));
     },
+    allowedHeaders: ['Content-Type', 'X-Telegram-Init-Data', 'Idempotency-Key', 'x-admin-session', 'x-admin-key'],
     credentials: true
   })
 );
@@ -60,56 +69,49 @@ app.use(
 app.use(express.json({ limit: '150kb' }));
 app.use(express.urlencoded({ extended: false, limit: '150kb' }));
 
+/* TEST-only Maintenance Mode: Admin and the access probe remain available. */
+app.use('/api', async (req, res, next) => {
+  if (req.path === '/maintenance/access' || req.path === '/health' || req.path === '/ready' || req.path.startsWith('/admin')) return next();
+  try {
+    const state = await getMaintenanceState();
+    if (!state.enabled) return next();
+    const telegramId = telegramIdFromInitData(req.get('X-Telegram-Init-Data'));
+    if (isAllowedTelegramId(state, telegramId)) return next();
+    return res.status(423).json({ success: false, code: 'MAINTENANCE_MODE', maintenance: true, message: 'Mini App در حال بروزرسانی است.' });
+  } catch (error) {
+    console.error('Maintenance access check failed:', error.message || error);
+    return res.status(503).json({ success: false, code: 'MAINTENANCE_CHECK_UNAVAILABLE', message: 'سرویس موقتاً در دسترس نیست.' });
+  }
+});
+
 /* =========================================================
-   BASIC RATE LIMIT (بدون وابستگی خارجی)
+   SHARED DATABASE RATE LIMITS — common to every app instance
 ========================================================= */
-const rateBuckets = new Map();
 const RATE_WINDOW_MS = 60 * 1000;
 const RATE_MAX_REQUESTS = 120;
-const adminRateBuckets = new Map();
 const ADMIN_RATE_MAX_REQUESTS = 45;
 
-app.use('/api', (req, res, next) => {
-  const key = req.ip || 'unknown';
-  const now = Date.now();
-  const bucket = rateBuckets.get(key) || { count: 0, resetAt: now + RATE_WINDOW_MS };
-
-  if (now > bucket.resetAt) {
-    bucket.count = 0;
-    bucket.resetAt = now + RATE_WINDOW_MS;
+app.use('/api', async (req, res, next) => {
+  try {
+    const result = await consumeRateLimit(req.ip || 'unknown', 'api', RATE_MAX_REQUESTS, RATE_WINDOW_MS);
+    if (!result.allowed) return res.status(429).json({ success: false, message: 'درخواست‌های شما بیش از حد مجاز است. کمی صبر کنید.' });
+    return next();
+  } catch (error) {
+    console.error('Shared API rate limiter unavailable:', error.message || error);
+    return res.status(503).json({ success: false, code: 'RATE_LIMIT_UNAVAILABLE', message: 'درخواست موقتاً در دسترس نیست.' });
   }
-  bucket.count += 1;
-  rateBuckets.set(key, bucket);
-
-  if (bucket.count > RATE_MAX_REQUESTS) {
-    return res.status(429).json({ success: false, message: 'درخواست‌های شما بیش از حد مجاز است. کمی صبر کنید.' });
-  }
-  next();
 });
 
-// پنل ادمین عملیات مالی و مدیریتی دارد؛ محدودیت جداگانه جلوی brute-force کلید و فشار ناگهانی را می‌گیرد.
-app.use('/api/admin', (req, res, next) => {
-  const key = req.ip || 'unknown';
-  const now = Date.now();
-  const bucket = adminRateBuckets.get(key) || { count: 0, resetAt: now + RATE_WINDOW_MS };
-  if (now > bucket.resetAt) { bucket.count = 0; bucket.resetAt = now + RATE_WINDOW_MS; }
-  bucket.count += 1;
-  adminRateBuckets.set(key, bucket);
-  if (bucket.count > ADMIN_RATE_MAX_REQUESTS) {
-    return res.status(429).json({ success: false, message: 'تعداد درخواست‌های پنل زیاد است. یک دقیقه بعد دوباره تلاش کنید.' });
+app.use('/api/admin', async (req, res, next) => {
+  try {
+    const result = await consumeRateLimit(req.ip || 'unknown', 'admin', ADMIN_RATE_MAX_REQUESTS, RATE_WINDOW_MS);
+    if (!result.allowed) return res.status(429).json({ success: false, message: 'تعداد درخواست‌های پنل زیاد است. یک دقیقه بعد دوباره تلاش کنید.' });
+    return next();
+  } catch (error) {
+    console.error('Shared Admin rate limiter unavailable:', error.message || error);
+    return res.status(503).json({ success: false, code: 'RATE_LIMIT_UNAVAILABLE', message: 'درخواست موقتاً در دسترس نیست.' });
   }
-  next();
 });
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, bucket] of rateBuckets.entries()) {
-    if (now > bucket.resetAt + RATE_WINDOW_MS) rateBuckets.delete(key);
-  }
-  for (const [key, bucket] of adminRateBuckets.entries()) {
-    if (now > bucket.resetAt + RATE_WINDOW_MS) adminRateBuckets.delete(key);
-  }
-}, 5 * 60 * 1000);
 
 /* =========================================================
    STATIC FRONTEND
@@ -117,7 +119,7 @@ setInterval(() => {
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: '1h',
   setHeaders(res, filePath) {
-    if (path.basename(filePath) === 'index.html') {
+    if (['index.html', 'app.js'].includes(path.basename(filePath))) {
       res.setHeader('Cache-Control', 'no-store, max-age=0');
     }
   }
@@ -128,35 +130,45 @@ app.use(express.static(path.join(__dirname, 'public'), {
 ========================================================= */
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/required-channels', require('./routes/membership'));
-app.use('/api/maintenance', require('./routes/maintenance'));
 app.use('/api/app-info', require('./routes/appInfo'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/points', require('./routes/points'));
-app.use('/api/ads', require('./routes/ads'));
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/mobile-auth', require('./routes/mobileAuth'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/maintenance', require('./routes/maintenance'));
 app.use('/api/telegram', require('./routes/telegramWebhook'));
 
 app.get('/api/health', (req, res) => {
   const mongoState = mongoose.connection.readyState;
+  const transactions = getMongoTransactionStatus();
   const mongoStatus = mongoState === 1 ? 'connected' : mongoState === 2 ? 'connecting' : 'disconnected';
-  res.json({
-    success: true,
-    status: 'ok',
-    service: 'telegram-mini-app',
-    mongodb: mongoStatus,
-    readiness: mongoState === 1 ? 'ready' : 'not_ready',
-    uptime: Math.floor(process.uptime()),
-    timestamp: new Date().toISOString()
-  });
+  res.json({ success: true, status: 'ok', service: 'telegram-mini-app', mongodb: mongoStatus,
+    transactions: transactions.checked ? (transactions.supported ? 'supported' : 'unavailable') : 'unchecked',
+    readiness: mongoState === 1 && transactions.supported ? 'ready' : 'not_ready',
+    uptime: Math.floor(process.uptime()), timestamp: new Date().toISOString() });
 });
 
 app.get('/api/ready', (req, res) => {
   const mongoState = mongoose.connection.readyState;
-  const ready = mongoState === 1 && Boolean(process.env.BOT_TOKEN);
-  res.status(ready ? 200 : 503).json({ success: ready, status: ready ? 'ready' : 'not_ready', mongodb: mongoState === 1 ? 'connected' : 'disconnected', botConfigured: Boolean(process.env.BOT_TOKEN), timestamp: new Date().toISOString() });
+  const transactions = getMongoTransactionStatus();
+  const production = process.env.NODE_ENV === 'production';
+  const required = {
+    mongoUriConfigured: Boolean(MONGO_URI),
+    botConfigured: Boolean(process.env.BOT_TOKEN),
+    adminKeyConfigured: isValidAdminKey(String(process.env.ADMIN_KEY || '')),
+    appUrlConfigured: Boolean(String(process.env.APP_URL || '').trim()),
+    webhookSecretValid: WEBHOOK_SECRET_VALID,
+    allowedOriginsConfigured: String(process.env.ALLOWED_ORIGINS || '').split(',').some(value => value.trim())
+  };
+  const requiredConfigReady = required.mongoUriConfigured && required.botConfigured && required.adminKeyConfigured
+    && (!production || (required.appUrlConfigured && required.webhookSecretValid && required.allowedOriginsConfigured));
+  const ready = mongoState === 1 && transactions.supported && requiredConfigReady;
+  res.status(ready ? 200 : 503).json({ success: ready, status: ready ? 'ready' : 'not_ready',
+    mongodb: mongoState === 1 ? 'connected' : 'disconnected', transactionSupport: transactions.checked ? transactions.supported : false,
+    transactionReason: transactions.supported ? '' : (transactions.checked ? transactions.reason : 'not checked'),
+    requiredConfig: required, production, timestamp: new Date().toISOString() });
 });
 
 app.use('/api', (req, res) => {
@@ -206,6 +218,21 @@ async function startServer() {
       heartbeatFrequencyMS: 10000
     });
     console.log('✅ MongoDB connected');
+    const transactionCheck = await verifyMongoTransactionCapability();
+    if (!transactionCheck.supported) {
+      console.error('❌ MongoDB transaction capability unavailable:', transactionCheck.reason);
+      if (process.env.NODE_ENV === 'production') throw new Error('Production requires transaction-capable MongoDB; readiness remains blocked.');
+    }
+
+    // Build and verify durable constraints before accepting financial or webhook requests.
+    // These are schema indexes only; no existing financial records are rewritten or dropped.
+    for (const modelPath of [
+      './models/Settings', './models/PointsLedger', './models/Withdrawal', './models/TaskCompletion',
+      './models/IdempotencyOperation', './models/TelegramWebhookUpdate', './models/RateLimitBucket',
+      './models/AdminSession', './models/TelegramAdminConversation', './models/AdminLog', './models/DistributedJobLock',
+      './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit',
+      './models/VipPlan', './models/VipSubscription'
+    ]) await require(modelPath).init();
 
     // Latest Post Engagement requires its per-channel/post/user uniqueness constraint
     // before Telegram webhooks are accepted.
@@ -214,49 +241,37 @@ async function startServer() {
     await require('./models/LatestPostEngagementState').init();
     // Deposit invoices are unique per user and each TON tx hash may be credited only once.
     await require('./models/Deposit').init();
-    await require('./models/Task').init();
     // VIP plan/subscription indexes must exist before purchases or daily claims are served.
     const VipPlan = require('./models/VipPlan');
     await VipPlan.init();
     await require('./models/VipSubscription').init();
     await VipPlan.ensureDefaults();
-    await ensureVipActivationTasks();
 
-    // پاک‌سازی ایندکس‌های قدیمی/ناسازگار که ممکن است از نسخه‌های قبلی
-    // پروژه در دیتابیس باقی مانده باشند (مثلاً ایندکس روی فیلدهای
-    // userId/taskId که در مدل فعلی وجود ندارند و باعث خطای duplicate
-    // key کاذب می‌شوند).
-    await cleanupStaleIndexes();
-    await repairLedgerSourceIdIndex();
+    // Existing legacy indexes/data are inspected and handled only through an
+    // explicit operator-managed migration; startup never drops indexes or rewrites rows.
+
+    const runJob = (key, label, job) => withDistributedJobLock(key, job)
+      .catch(error => console.error(`${label} failed:`, error.message || error));
 
     const runReferralSweep = require('./utils/referralSweep');
-    runReferralSweep().catch(error => console.error('Initial referral sweep failed:', error));
-    setInterval(() => {
-      runReferralSweep().catch(error => console.error('Scheduled referral sweep failed:', error));
-    }, 15 * 60 * 1000);
+    void runJob('referral-sweep', 'Referral sweep', runReferralSweep);
+    setInterval(() => { void runJob('referral-sweep', 'Scheduled referral sweep', runReferralSweep); }, 15 * 60 * 1000);
 
-    // یادآوری ورود روزانه: هر ۱۰ دقیقه چک می‌کند که آیا الان همان ساعتِ تنظیم‌شده در پنل ادمین هست؛
-    // پیش‌فرض خاموش است (Settings.dailyReminderEnabled=false) تا خودتان تصمیم بگیرید فعالش کنید.
+    // Shared database leases prevent each app instance from sending the same reminders.
     const { runDailyReminderSweep } = require('./utils/dailyReminder');
-    setInterval(() => {
-      runDailyReminderSweep().catch(error => console.error('Daily reminder sweep failed:', error));
-    }, 10 * 60 * 1000);
+    setInterval(() => { void runJob('daily-reminder-sweep', 'Daily reminder sweep', runDailyReminderSweep); }, 10 * 60 * 1000);
 
-    // پایان هفته و پرداخت جوایز هفتگی مستقل از بازشدن صفحه‌ی کاربر اجرا می‌شود.
-    // خود Settlement با Award و Ledger یکتا است؛ بنابراین restart یا اجرای هم‌زمان
-    // دو نمونه باعث پرداخت دوباره نمی‌شود.
     const { settleClosedWeeks } = require('./utils/weeklyLeaderboardSettlement');
-    settleClosedWeeks().catch(error => console.error('Initial weekly settlement failed:', error));
-    setInterval(() => {
-      settleClosedWeeks().catch(error => console.error('Scheduled weekly settlement failed:', error));
-    }, 60 * 1000);
+    void runJob('weekly-leaderboard-settlement', 'Initial weekly settlement', settleClosedWeeks);
+    setInterval(() => { void runJob('weekly-leaderboard-settlement', 'Scheduled weekly settlement', settleClosedWeeks); }, 60 * 1000);
 
-    // Principal return is idempotent and transactionally coupled to the existing Points ledger.
+    const { runWeeklyChallengeStartNotification } = require('./utils/weeklyChallengeStartNotification');
+    void runJob('weekly-challenge-start-notification', 'Initial weekly challenge start notification', runWeeklyChallengeStartNotification);
+    setInterval(() => { void runJob('weekly-challenge-start-notification', 'Scheduled weekly challenge start notification', runWeeklyChallengeStartNotification); }, 60 * 1000);
+
     const { settleMaturedVipSubscriptions } = require('./utils/vipSettlement');
-    settleMaturedVipSubscriptions().catch(error => console.error('Initial VIP principal settlement failed:', error));
-    setInterval(() => {
-      settleMaturedVipSubscriptions().catch(error => console.error('Scheduled VIP principal settlement failed:', error));
-    }, 60 * 1000);
+    void runJob('vip-principal-settlement', 'Initial VIP principal settlement', () => settleMaturedVipSubscriptions());
+    setInterval(() => { void runJob('vip-principal-settlement', 'Scheduled VIP principal settlement', () => settleMaturedVipSubscriptions()); }, 60 * 1000);
 
     server = app.listen(PORT, () => {
       server.requestTimeout = 120000;
@@ -267,47 +282,6 @@ async function startServer() {
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
     process.exit(1);
-  }
-}
-
-async function cleanupStaleIndexes() {
-  try {
-    const collection = mongoose.connection.collection('taskcompletions');
-    const indexes = await collection.indexes();
-
-    // فقط نام‌های قدیمی و شناخته‌شده حذف می‌شوند؛ indexهای جدید مدل نباید
-    // در هر startup حذف و دوباره ساخته شوند.
-    const staleNames = new Set(['userId_1_taskId_1', 'taskId_1_userId_1']);
-
-    for (const index of indexes) {
-      if (staleNames.has(index.name)) {
-        await collection.dropIndex(index.name);
-        console.log(`🧹 Dropped stale index "${index.name}" from taskcompletions`);
-      }
-    }
-  } catch (error) {
-    // این عملیات صرفاً پاک‌سازی است؛ اگر کالکشن هنوز وجود ندارد یا خطای
-    // بی‌ضرر دیگری رخ دهد، نباید جلوی بالا آمدن سرور را بگیرد.
-    console.warn('Index cleanup skipped (non-fatal):', error.message);
-  }
-}
-
-async function repairLedgerSourceIdIndex() {
-  try {
-    const collection = mongoose.connection.collection('pointsledgers');
-    const indexes = await collection.indexes();
-    const sourceIndex = indexes.find(index => index.name === 'sourceId_1');
-    const explicitNullFilter = { sourceId: { $type: 'null' } };
-    const nullCount = await collection.countDocuments(explicitNullFilter);
-    if (sourceIndex && nullCount === 0) return;
-    if (sourceIndex) await collection.dropIndex('sourceId_1');
-    // نسخه قبلی sourceId را به‌صورت صریح null ذخیره می‌کرد؛ sparse unique
-    // مقدار missing را نادیده می‌گیرد اما null صریح را index می‌کند.
-    await collection.updateMany(explicitNullFilter, { $unset: { sourceId: '' } });
-    await collection.createIndex({ sourceId: 1 }, { unique: true, sparse: true, name: 'sourceId_1' });
-    console.log(`🧹 Repaired pointsledgers sourceId index; removed ${nullCount} null sourceIds`);
-  } catch (error) {
-    console.warn('Ledger sourceId index repair skipped (non-fatal):', error.message);
   }
 }
 

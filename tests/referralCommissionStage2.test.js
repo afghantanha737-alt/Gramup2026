@@ -67,28 +67,28 @@ const { recordLedgerRequired } = require('../utils/ledger');
 const { distributeReferralCommissions } = require('../utils/referralSystem');
 
 (async () => {
-  const earning = { user: origin._id, amount: 60, currency: 'points', type: 'spin', sourceId: 'spin-source-60', transactionId: 'spin-tx-60', session: { id: 'tx-1' } };
+  const earning = { user: origin._id, amount: 100, currency: 'points', type: 'task', sourceId: 'task-source-100', transactionId: 'task-tx-100', session: { id: 'tx-1' } };
   await recordLedgerRequired(earning);
   const paid = [...entries.values()]
     .filter(entry => entry.type === 'referral_commission')
     .sort((a, b) => a.referralLevel - b.referralLevel);
-  assert.deepStrictEqual(paid.map(entry => [entry.referralLevel, entry.amount]), [[1, 6], [2, 3], [3, 1], [4, 1]]);
-  assert.deepStrictEqual([parent1, parent2, parent3, parent4].map(user => user.points), [6, 3, 1, 1]);
+  assert.deepStrictEqual(paid.map(entry => [entry.referralLevel, entry.amount]), [[1, 10], [2, 5], [3, 3], [4, 1]]);
+  assert.deepStrictEqual([parent1, parent2, parent3, parent4].map(user => user.points), [10, 5, 3, 1]);
   assert.ok(paid.every(entry => entry.currency === 'points'));
   assert.deepStrictEqual(relationships.map(row => row.level), [1, 2, 3, 4]);
 
   const duplicate = await distributeReferralCommissions(earning, { id: 'tx-2' });
   assert.deepStrictEqual(duplicate, []);
-  assert.deepStrictEqual([parent1, parent2, parent3, parent4].map(user => user.points), [6, 3, 1, 1]);
+  assert.deepStrictEqual([parent1, parent2, parent3, parent4].map(user => user.points), [10, 5, 3, 1]);
 
   const youngOrigin = { ...origin, _id: 'young', referredBy: parent1._id, createdAt: new Date() };
   users.set(youngOrigin._id, youngOrigin);
-  const youngPaid = await distributeReferralCommissions({ ...earning, user: youngOrigin._id, sourceId: 'spin-young-60' }, { id: 'tx-3' });
-  assert.strictEqual(youngPaid[0].amount, 6, 'a new account is not blocked by referral age');
+  const youngPaid = await distributeReferralCommissions({ ...earning, user: youngOrigin._id, sourceId: 'task-young-100' }, { id: 'tx-3' });
+  assert.strictEqual(youngPaid[0].amount, 10, 'a new account is not blocked by referral age');
 
   parent2.referralRiskScore = 50;
-  const blocked = await distributeReferralCommissions({ ...earning, sourceId: 'spin-risk-60' }, { id: 'tx-4' });
-  assert.deepStrictEqual(blocked.map(item => [item.level, item.amount]), [[1, 6]], 'a risky L2 ancestor blocks L2+ without invalidating a clean L1');
+  const blocked = await distributeReferralCommissions({ ...earning, sourceId: 'task-risk-100' }, { id: 'tx-4' });
+  assert.deepStrictEqual(blocked.map(item => [item.level, item.amount]), [[1, 10]], 'a risky L2 ancestor blocks L2+ without invalidating a clean L1');
 
   console.log('ALL PASS — real Spin ledger trigger, immediate L1-L4 commission, young account, anti-abuse and idempotency');
 })().catch(error => {

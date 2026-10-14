@@ -59,6 +59,11 @@ const MESSAGES = {
     fa: (rank, points, week) => `🏆 تبریک! شما رتبه ${rank} لیدربورد هفتگی را کسب کردید.\n\n${points} پوینت جایزه هفته ${week} به حسابتان اضافه شد.`,
     ps: (rank, points, week) => `🏆 مبارک شه! تاسو د اونیز غوره لیست ${rank} مقام ترلاسه کړ.\n\n${points} پوائنټ د ${week} اونۍ جایزه ستاسو حساب ته اضافه شوه.`,
     en: (rank, points, week) => `🏆 Congratulations! You finished #${rank} on the weekly leaderboard.\n\n${points} reward points for week ${week} were added to your account.`
+  },
+  weeklyChallengeStart: {
+    fa: () => '🎯 Weekly Challenge شروع شد!\n\nچالش هفتگی جدید آغاز شده است.\nهمین حالا وارد شوید و برای کسب رتبه و جایزه تلاش کنید.',
+    ps: () => '🎯 Weekly Challenge پیل شو!\n\nنوی اوونیزه ننګونه پیل شوې ده.\nهمدا اوس داخل شئ او د مقام او پاداش لپاره هڅه وکړئ.',
+    en: () => '🎯 Weekly Challenge has started!\n\nA new weekly challenge is now live.\nJoin now and compete for the leaderboard rewards.'
   }
 };
 

@@ -14,6 +14,7 @@ const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { rewardCostUsd } = require('../utils/sponsor');
 const { withMongoTransaction } = require('../utils/mongoTransaction');
+const { taskCapacityFilter } = require('../utils/taskCapacity');
 const { evaluateReferralEligibility, REFERRAL_MIN_TASKS, REFERRAL_MIN_ACTIVE_DAYS, REFERRAL_WAIT_DAYS } = require('../utils/referralEligibility');
 const { SCREENSHOT_MIME_TYPES, isValidScreenshot } = require('../utils/screenshotValidation');
 const {
@@ -184,6 +185,7 @@ router.post('/:id/submission', auth, parseScreenshot, async (req, res) => {
         }
       } else {
         await new TaskCompletion({
+          _id: TaskCompletion.idForUserTask(req.dbUser._id, task._id),
           user: req.dbUser._id,
           task: task._id,
           reward: task.reward,
@@ -326,11 +328,14 @@ router.post('/:id/engagement/check', auth, async (req, res) => {
       const nextAvailableAt = nextLatestPostAvailableAt(transactionNow);
       const costUsd = rewardCostUsd(currentTask.reward, settings.rate, settings.gramUsdPrice);
       const updatedTask = await Task.findOneAndUpdate(
-        { _id: currentTask._id, verifyType: 'latest_post', isActive: true },
+        { ...taskCapacityFilter(currentTask._id, transactionNow), verifyType: 'latest_post' },
         { $inc: { completedCount: 1 } },
         { new: true, session }
       );
-      if (!updatedTask) throw fail('TASK_INACTIVE', 'این Task دیگر فعال نیست.');
+      if (!updatedTask) throw fail('TASK_FULL', 'ظرفیت این Task تکمیل شده یا غیرفعال است.');
+      if (updatedTask.maxCompletions != null && updatedTask.completedCount >= updatedTask.maxCompletions) {
+        await Task.updateOne({ _id: updatedTask._id, completedCount: updatedTask.completedCount }, { $set: { isActive: false } }, { session });
+      }
 
       if (completion) {
         const savedCompletion = await TaskCompletion.findOneAndUpdate(
@@ -353,6 +358,7 @@ router.post('/:id/engagement/check', auth, async (req, res) => {
         if (!savedCompletion) throw fail('TASK_CLAIM_CONFLICT', 'درخواست هم‌زمان تغییر کرد؛ Task را دوباره بارگذاری کنید.');
       } else {
         await new TaskCompletion({
+          _id: TaskCompletion.idForUserTask(user._id, currentTask._id),
           user: user._id,
           task: currentTask._id,
           reward: currentTask.reward,
@@ -486,14 +492,7 @@ router.post('/:id/claim', auth, async (req, res) => {
       }
 
       const reserved = await Task.findOneAndUpdate(
-        {
-          _id: currentTask._id,
-          isActive: true,
-          $and: [
-            { $or: [{ maxCompletions: null }, { $expr: { $lt: ['$completedCount', '$maxCompletions'] } }] },
-            { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] }
-          ]
-        },
+        taskCapacityFilter(currentTask._id, new Date()),
         { $inc: { completedCount: 1 } },
         { new: true, session }
       );
@@ -512,7 +511,15 @@ router.post('/:id/claim', auth, async (req, res) => {
           { new: true, session }
         );
       } else {
-        await new TaskCompletion({ user: u._id, task: currentTask._id, reward: currentTask.reward, status: 'approved', revenueUsd, costUsd }).save({ session });
+      await new TaskCompletion({
+        _id: TaskCompletion.idForUserTask(u._id, currentTask._id),
+        user: u._id,
+        task: currentTask._id,
+        reward: currentTask.reward,
+        status: 'approved',
+        revenueUsd,
+        costUsd
+      }).save({ session });
       }
 
       if (reserved.maxCompletions != null && reserved.completedCount >= reserved.maxCompletions) {
@@ -526,7 +533,7 @@ router.post('/:id/claim', auth, async (req, res) => {
       );
       if (!rewarded) throw new Error('کاربر برای ثبت پاداش پیدا نشد.');
 
-      await recordLedgerRequired({
+      const ledgerResult = await recordLedgerRequired({
         user: u._id,
         type: 'task',
         amount: currentTask.reward,
@@ -535,6 +542,11 @@ router.post('/:id/claim', auth, async (req, res) => {
         sourceId: `task:${currentTask._id}:user:${u._id}`,
         session
       });
+      if (!ledgerResult.created) {
+        const error = new Error('پاداش این تسک قبلاً ثبت شده است.');
+        error.code = 'ALREADY_DONE';
+        throw error;
+      }
       return { points: rewarded.points, reward: currentTask.reward };
     });
 
@@ -553,8 +565,8 @@ router.post('/:id/claim', auth, async (req, res) => {
     });
   } catch (error) {
     console.error(`POST /api/tasks/${req.params.id}/claim failed:`, error);
-    if (error.code === 'ALREADY_DONE' || error.code === 'TASK_FULL') {
-      return res.status(400).json({ success: false, message: error.message, code: error.code });
+    if (error.code === 'ALREADY_DONE' || error.code === 'TASK_FULL' || error?.code === 11000) {
+      return res.status(409).json({ success: false, message: error.message || 'این تسک قبلاً ثبت شده است؛ وضعیت را تازه کنید.', code: error.code === 11000 ? 'ALREADY_DONE' : error.code });
     }
     res.status(500).json({
       success: false,

@@ -10,23 +10,25 @@ const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { normalizeTonAddress, amountToNanoGram } = require('../utils/tonNativeDepositVerify');
-const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, broadcastToActiveUsers } = require('../utils/bot');
+const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, broadcastToActiveUsers } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
-const { postWithdrawalPaid } = require('../utils/payoutChannel');
+const { sendNotificationOnce } = require('../utils/notificationDelivery');
 const { verifyTonTransaction, normalizeTonTxHash, legacyTonTxHashMatcher } = require('../utils/tonVerify');
 const { recordLedgerRequired } = require('../utils/ledger');
-const { recordAdminLog } = require('../utils/adminLog');
+const { recordAdminLog, recordAdminLogRequired } = require('../utils/adminLog');
+const { normalizeTaskUrl } = require('../utils/taskUrl');
 const AdminLog = require('../models/AdminLog');
 const TaskCompletion = require('../models/TaskCompletion');
 const PointsLedger = require('../models/PointsLedger');
 const BalanceAudit = require('../models/BalanceAudit');
 const ReferralRelationship = require('../models/ReferralRelationship');
 const WeeklyLeaderboardAward = require('../models/WeeklyLeaderboardAward');
+const LatestPostEngagementState = require('../models/LatestPostEngagementState');
+const Deposit = require('../models/Deposit');
+const NotificationDelivery = require('../models/NotificationDelivery');
+const IdempotencyOperation = require('../models/IdempotencyOperation');
 const VipPlan = require('../models/VipPlan');
 const VipSubscription = require('../models/VipSubscription');
-const Deposit = require('../models/Deposit');
-const LatestPostEngagementState = require('../models/LatestPostEngagementState');
-const IdempotencyOperation = require('../models/IdempotencyOperation');
 const { isValidAdminKey } = require('../utils/adminKey');
 const RequiredChannel = require('../models/RequiredChannel');
 const { membership, validateChannelRef, normalizeChannelInput } = require('../utils/membership');
@@ -39,16 +41,30 @@ const { startOfUtcWeek, endOfUtcWeek, weekKey } = require('../utils/weeklyLeader
 const { createAdminSession, getAdminSession, revokeAdminSession, SESSION_TTL_MS } = require('../utils/adminSession');
 const { buildDiscrepancy, isDiscrepant } = require('../utils/financialAudit');
 const { snapshot: metricsSnapshot } = require('../utils/metrics');
-const { withMongoTransaction } = require('../utils/mongoTransaction');
+const { withMongoTransaction, getMongoTransactionStatus } = require('../utils/mongoTransaction');
 const { transitionWithdrawalWithRefund } = require('../utils/withdrawalFinance');
 const { normalizeReferralRates, DEFAULT_REFERRAL_LEVEL_RATES, DEFAULT_REFERRAL_INITIAL_REWARD_POINTS } = require('../utils/referralCore');
 const { validateLatestPostConfig } = require('../utils/latestPostEngagement');
 const { getTelegramWebhookMetrics } = require('../utils/telegramWebhookMetrics');
 const { calculateTotalRewardCents } = require('../utils/vipRewards');
+const { toVipAdminRecord } = require('../utils/vipAdminReadModel');
+const { isTestEnvironment, normalizeAllowedTelegramIds } = require('../utils/maintenance');
 
 const MAX_REQUIRED_CHANNELS = 5;
 
 const escapeRegex = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function isTestDeleteEnvironment() {
+  const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
+  const appEnv = String(process.env.APP_ENV || '').trim().toLowerCase();
+  if (appEnv === 'production') return false;
+  if (nodeEnv === 'test' || appEnv === 'test') return true;
+  try {
+    const hostname = new URL(String(process.env.APP_URL || '')).hostname.toLowerCase();
+    return hostname === 'gramup-test.onrender.com' || hostname.endsWith('.gramup-test.onrender.com');
+  } catch {
+    return false;
+  }
+}
 function pageParams(query, defaultLimit = 100, maxLimit = 300) {
   const page = Math.max(1, Math.floor(Number(query.page) || 1));
   const limit = Math.min(maxLimit, Math.max(1, Math.floor(Number(query.limit) || defaultLimit)));
@@ -65,18 +81,21 @@ const upload = multer({
   limits: { fileSize: 8 * 1024 * 1024 }
 });
 
-function requireAdmin(req, res, next) {
-  const session = getAdminSession(req.headers['x-admin-session']);
-  // x-admin-key برای سازگاری با نسخه‌های قدیمی نگه داشته شده، اما پنل جدید
-  // بعد از login فقط session کوتاه‌مدت می‌فرستد و کلید اصلی را تکرار نمی‌کند.
-  const legacyKey = req.headers['x-admin-key'];
-  const legacyAllowed = process.env.ALLOW_LEGACY_ADMIN_KEY === 'true';
-  if (!session && (!legacyAllowed || !isValidAdminKey(typeof legacyKey === 'string' ? legacyKey : ''))) {
-    return res.status(403).json({ success: false, message: 'دسترسی غیرمجاز.' });
+async function requireAdmin(req, res, next) {
+  try {
+    const session = await getAdminSession(req.headers['x-admin-session']);
+    const legacyKey = req.headers['x-admin-key'];
+    const legacyAllowed = process.env.ALLOW_LEGACY_ADMIN_KEY === 'true';
+    if (!session && (!legacyAllowed || !isValidAdminKey(typeof legacyKey === 'string' ? legacyKey : ''))) {
+      return res.status(403).json({ success: false, message: 'دسترسی غیرمجاز.' });
+    }
+    req.adminActor = session?.actor || String(req.headers['x-admin-name'] || '').trim() || 'ادمین';
+    req.adminId = session?.adminId || 'legacy-admin-key';
+    next();
+  } catch (error) {
+    console.error('Admin session lookup failed:', error.message || error);
+    return res.status(503).json({ success: false, message: 'Admin authentication is temporarily unavailable.' });
   }
-  req.adminActor = session?.actor || String(req.headers['x-admin-name'] || '').trim() || 'ادمین';
-  req.adminId = session?.adminId || 'legacy-admin-key';
-  next();
 }
 
 // کلید اصلی فقط یک‌بار در لحظه ورود ارسال می‌شود و بعد از آن session کوتاه‌مدت استفاده می‌شود.
@@ -84,13 +103,13 @@ router.post('/login', async (req, res) => {
   const key = String(req.body?.key || '');
   if (!isValidAdminKey(key)) return res.status(403).json({ success: false, message: 'کلید ادمین نادرست است.' });
   const actor = String(req.body?.name || '').trim() || 'ادمین';
-  const session = createAdminSession(actor);
+  const session = await createAdminSession(actor);
   res.json({ success: true, sessionToken: session.token, expiresAt: session.expiresAt, ttlMs: SESSION_TTL_MS });
 });
 
 router.use(requireAdmin);
-router.post('/logout', (req, res) => {
-  revokeAdminSession(req.headers['x-admin-session']);
+router.post('/logout', async (req, res) => {
+  await revokeAdminSession(req.headers['x-admin-session']);
   res.json({ success: true });
 });
 router.get('/telegram-status', async (req, res) => {
@@ -373,6 +392,8 @@ router.get('/tasks', async (req, res) => {
 router.post('/tasks', async (req, res) => {
   const { title, description, type, verifyType, url, reward, chatId, requiredReaction, cooldownHours, maxCompletions, force, isSpecialOfDay, isActive } = req.body || {};
   const taskTitle = String(title || '').trim();
+  const taskUrl = normalizeTaskUrl(url);
+  if (taskUrl === null) return res.status(400).json({ success: false, code: 'INVALID_TASK_URL', message: 'پیوند تسک باید یک آدرس معتبر HTTP یا HTTPS باشد.' });
   const taskVerifyType = String(verifyType || 'telegram');
   const taskReward = Number(reward === undefined && taskVerifyType === 'latest_post' ? 2 : reward);
   const taskType = String(type || (taskVerifyType === 'manual' || taskVerifyType === 'latest_post' ? 'custom' : 'link'));
@@ -435,7 +456,7 @@ router.post('/tasks', async (req, res) => {
     description: String(description || '').trim(),
     type: taskType,
     verifyType: taskVerifyType,
-    url: String(url || '').trim(),
+    url: taskUrl,
     reward: taskReward,
     chatId: ['telegram', 'latest_post'].includes(taskVerifyType) ? String(chatId).trim() : '',
     requiredReaction: taskVerifyType === 'latest_post' ? String(requiredReaction).trim() : '',
@@ -475,6 +496,10 @@ router.put('/tasks/:id', async (req, res) => {
   const update = {};
   for (const key of allowed) {
     if (Object.prototype.hasOwnProperty.call(body, key)) update[key] = body[key];
+  }
+  if (Object.prototype.hasOwnProperty.call(update, 'url')) {
+    update.url = normalizeTaskUrl(update.url);
+    if (update.url === null) return res.status(400).json({ success: false, code: 'INVALID_TASK_URL', message: 'پیوند تسک باید یک آدرس معتبر HTTP یا HTTPS باشد.' });
   }
 
   if (['verifyType', 'chatId', 'url', 'requiredReaction', 'cooldownHours'].some(key => key in update)) {
@@ -965,7 +990,7 @@ router.post('/weekly-leaderboard/:selectedWeekKey/pay', async (req, res) => {
           { $set: { status: 'paid', paidAt: new Date(), error: '' } },
           { session }
         );
-        return { status: 'paid', user: updatedUser._id };
+        return { status: 'paid', user: updatedUser._id, points };
       });
 
       if (payment.status === 'already_paid') {
@@ -977,7 +1002,13 @@ router.post('/weekly-leaderboard/:selectedWeekKey/pay', async (req, res) => {
         continue;
       }
       if (row.user.telegramId) {
-        notifyUser(row.user.telegramId, botText('leaderboardReward', row.user.language, rank, points, selectedKey)).catch(() => {});
+        sendNotificationOnce({
+          eventKey: `weekly-reward:${selectedKey}:${rank}`,
+          type: 'weekly_reward',
+          user: payment.user,
+          telegramId: row.user.telegramId,
+          text: botText('leaderboardReward', row.user.language, rank, payment.points)
+        }).catch(error => console.error('Weekly reward notification failed:', error.message || error));
       }
       results.push({ rank, status: 'paid', points, user: payment.user });
     } catch (error) {
@@ -1091,23 +1122,24 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
   // (جلوگیری از تایید/رد هم‌زمان با شرط status فعلی)
   let paid;
   try {
-    paid = await Withdrawal.findOneAndUpdate(
-      { _id: withdrawal._id, status: { $in: ['pending', 'approved', 'processing'] } },
-      {
-        $set: {
-          status: 'paid',
-          txHash,
-          txHashNormalized,
-          verified: !verification.requiresManualAmountCheck,
-          verificationNote: verification.reason,
-          fromAddress: verification.fromAddress || '',
-          paidAt: new Date(),
-          adminNote: (req.body && req.body.note) || withdrawal.adminNote
+    paid = await withMongoTransaction(async session => {
+      const now = new Date();
+      const updated = await Withdrawal.findOneAndUpdate(
+        { _id: withdrawal._id, status: { $in: ['pending', 'approved', 'processing'] } },
+        {
+          $set: {
+            status: 'paid', txHash, txHashNormalized,
+            verified: !verification.requiresManualAmountCheck,
+            verificationNote: verification.reason, fromAddress: verification.fromAddress || '',
+            paidAt: now, adminNote: (req.body && req.body.note) || withdrawal.adminNote
+          },
+          $push: { statusHistory: { status: 'paid', at: now, note: (req.body && req.body.note) || '' } }
         },
-        $push: { statusHistory: { status: 'paid', at: new Date(), note: (req.body && req.body.note) || '' } }
-      },
-      { new: true }
-    );
+        { new: true, session }
+      );
+      if (updated) await recordAdminLogRequired({ actor: req.adminActor, action: 'withdrawal_approve', targetType: 'withdrawal', targetId: updated._id, details: `${updated.cryptoAmount} ${updated.token} — TxID: ${txHash}` }, session);
+      return updated;
+    });
   } catch (error) {
     if (error?.code === 11000) {
       return res.status(409).json({ success: false, message: 'این TxID قبلاً برای برداشت دیگری ثبت شده است.', code: 'DUPLICATE_TX' });
@@ -1121,17 +1153,8 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
 
   res.json({ success: true, withdrawal });
 
-  recordAdminLog({
-    actor: req.adminActor,
-    action: 'withdrawal_approve',
-    targetType: 'withdrawal',
-    targetId: withdrawal._id,
-    details: `${withdrawal.cryptoAmount} ${withdrawal.token} — TxID: ${txHash}`
-  });
-
   // اطلاع‌رسانی به خود کاربر که پرداختش انجام شد
-  const payeeUser = await User.findById(withdrawal.user, 'telegramId language username firstName');
-  postWithdrawalPaid(payeeUser, withdrawal).catch(() => {});
+  const payeeUser = await User.findById(withdrawal.user, 'telegramId language');
   if (payeeUser) {
     notifyUser(
       payeeUser.telegramId,
@@ -1157,7 +1180,8 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
       targetStatus: 'rejected',
       reason,
       expectedStatus: existing.status,
-      allowedStatuses: ['pending', 'approved', 'processing']
+      allowedStatuses: ['pending', 'approved', 'processing'],
+      audit: { actor: req.adminActor, action: 'withdrawal_reject', targetType: 'withdrawal', details: `دلیل: ${reason}` }
     }));
   } catch (error) {
     const status = error.code === 'WITHDRAWAL_NOT_FOUND' ? 404 : error.code === 'WITHDRAWAL_CONFLICT' ? 409 : 400;
@@ -1165,14 +1189,6 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
   }
 
   res.json({ success: true, withdrawal });
-
-  recordAdminLog({
-    actor: req.adminActor,
-    action: 'withdrawal_reject',
-    targetType: 'withdrawal',
-    targetId: withdrawal._id,
-    details: `دلیل: ${reason}`
-  });
 
   // اطلاع‌رسانی رد شدن درخواست به کاربر (GRAM قبلاً در بالا برگردانده شده)
   const requesterUser = await User.findById(withdrawal.user, 'telegramId language');
@@ -1214,7 +1230,8 @@ router.post('/withdrawals/:id/status', async (req, res) => {
         targetStatus,
         reason,
         expectedStatus: existing.status,
-        allowedStatuses: [existing.status]
+        allowedStatuses: [existing.status],
+        audit: { actor: req.adminActor, action: `withdrawal_status_${targetStatus}`, targetType: 'withdrawal', details: reason ? `دلیل: ${reason}` : '' }
       }));
     } catch (error) {
       const status = error.code === 'WITHDRAWAL_NOT_FOUND' ? 404 : error.code === 'WITHDRAWAL_CONFLICT' ? 409 : 400;
@@ -1222,25 +1239,21 @@ router.post('/withdrawals/:id/status', async (req, res) => {
     }
   } else {
     // تغییر وضعیت غیرمالی همچنان با شرط وضعیت قبلی atomic است.
-    withdrawal = await Withdrawal.findOneAndUpdate(
-      { _id: existing._id, status: existing.status },
-      { $set: { status: targetStatus }, $push: { statusHistory: { status: targetStatus, at: new Date(), note: reason } } },
-      { new: true }
-    );
+    withdrawal = await withMongoTransaction(async session => {
+      const updated = await Withdrawal.findOneAndUpdate(
+        { _id: existing._id, status: existing.status },
+        { $set: { status: targetStatus }, $push: { statusHistory: { status: targetStatus, at: new Date(), note: reason } } },
+        { new: true, session }
+      );
+      if (updated) await recordAdminLogRequired({ actor: req.adminActor, action: `withdrawal_status_${targetStatus}`, targetType: 'withdrawal', targetId: updated._id, details: reason ? `دلیل: ${reason}` : '' }, session);
+      return updated;
+    });
     if (!withdrawal) {
       return res.status(400).json({ success: false, message: 'وضعیت این درخواست هم‌زمان توسط جای دیگری تغییر کرده؛ صفحه را رفرش کنید.' });
     }
   }
 
   res.json({ success: true, withdrawal: { ...withdrawal.toObject(), timeline: synthesizeHistory(withdrawal) } });
-
-  recordAdminLog({
-    actor: req.adminActor,
-    action: `withdrawal_status_${targetStatus}`,
-    targetType: 'withdrawal',
-    targetId: withdrawal._id,
-    details: reason ? `دلیل: ${reason}` : ''
-  });
 
   const amountLabel = `${withdrawal.cryptoAmount} ${withdrawal.token}`;
   const notifiedUser = await User.findById(withdrawal.user, 'telegramId language');
@@ -1278,72 +1291,6 @@ router.get('/users', async (req, res) => {
     User.countDocuments(filter)
   ]);
   res.json({ success: true, users, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
-});
-
-// حذف کامل کاربر و داده‌های وابسته؛ فقط از پنل Admin و پس از تأیید دو مرحله‌ای Frontend قابل فراخوانی است.
-// همه حذف‌ها در یک Transaction انجام می‌شوند تا حذف ناقص و رکوردهای orphaned ایجاد نشود.
-router.delete('/users/:id', async (req, res) => {
-  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-    return res.status(400).json({ success: false, message: 'شناسه کاربر نامعتبر است.' });
-  }
-  const userId = new mongoose.Types.ObjectId(req.params.id);
-  const outcome = await withMongoTransaction(async session => {
-    const user = await User.findById(userId).session(session);
-    if (!user) return { missing: true };
-
-    await User.updateMany(
-      { referredBy: userId },
-      { $set: { referredBy: null }, $pull: { activeReferralIds: userId } },
-      { session }
-    );
-    await User.updateMany({ activeReferralIds: userId }, { $pull: { activeReferralIds: userId } }, { session });
-    await Promise.all([
-      ReferralRelationship.deleteMany({ $or: [{ referrerId: userId }, { referredUserId: userId }] }, { session }),
-      PointsLedger.deleteMany({ $or: [{ user: userId }, { sourceUserId: userId }, { recipientUserId: userId }] }, { session }),
-      Withdrawal.deleteMany({ user: userId }, { session }),
-      TaskCompletion.deleteMany({ user: userId }, { session }),
-      WeeklyLeaderboardAward.deleteMany({ user: userId }, { session }),
-      VipSubscription.deleteMany({ user: userId }, { session }),
-      Deposit.deleteMany({ user: userId }, { session }),
-      LatestPostEngagementState.deleteMany({ user: userId }, { session }),
-      BalanceAudit.deleteMany({ userId }, { session }),
-      IdempotencyOperation.deleteMany({ userId }, { session }),
-      User.deleteOne({ _id: userId }, { session })
-    ]);
-    return {
-      telegramId: user.telegramId,
-      displayName: user.firstName || user.username || user.telegramId
-    };
-  });
-  if (outcome.missing) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
-  recordAdminLog({
-    actor: req.adminActor,
-    action: 'user_delete',
-    targetType: 'user',
-    targetId: req.params.id,
-    details: `${outcome.displayName} / Telegram ${outcome.telegramId} و داده‌های وابسته حذف شد`
-  });
-  res.json({ success: true, message: 'User و داده‌های وابسته آن از محیط حذف شدند.' });
-});
-
-// ارسال پیام آزمایشی Weekly Reward بدون پرداخت Points یا ایجاد Ledger.
-router.post('/users/:id/test-weekly-reward-notification', async (req, res) => {
-  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-    return res.status(400).json({ success: false, message: 'شناسه کاربر نامعتبر است.' });
-  }
-  const rank = Number(req.body?.rank);
-  const reward = Number(req.body?.reward);
-  if (!Number.isInteger(rank) || rank < 1 || rank > 3 || !Number.isSafeInteger(reward) || reward <= 0) {
-    return res.status(400).json({ success: false, message: 'مقام باید بین ۱ تا ۳ و Reward باید عدد صحیح مثبت باشد.' });
-  }
-  const user = await User.findById(req.params.id).select('telegramId language');
-  if (!user) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
-  if (!bot) return res.status(503).json({ success: false, message: 'BOT_TOKEN در این سرور تنظیم نشده است.' });
-  const message = `🧪 TEST — ${botText('leaderboardReward', user.language, rank, reward, 'TEST')}`;
-  const sent = await notifyUser(user.telegramId, message);
-  if (!sent) return res.status(400).json({ success: false, message: 'ارسال پیام ناموفق بود؛ مطمئن شوید کاربر قبلاً /start را به ربات زده و ربات را بلاک نکرده است.' });
-  recordAdminLog({ actor: req.adminActor, action: 'test_weekly_reward_notification', targetType: 'user', targetId: req.params.id, details: `rank=${rank}; reward=${reward}` });
-  res.json({ success: true, message: 'پیام آزمایشی Weekly Reward با موفقیت ارسال شد.' });
 });
 
 function balanceField(currency) { return currency === 'gram' ? 'gramBalance' : 'points'; }
@@ -1435,11 +1382,11 @@ router.post('/users/:id/balance', async (req, res) => {
       transactionId
     });
     await audit.save({ session });
+    await recordAdminLogRequired({ actor: req.adminActor, action: `balance_${action}`, targetType: 'user', targetId: updated._id, details: `${currency}; ${cleanReason}; actionId=${actionId}` }, session);
     return { updated, audit, duplicate: false };
   });
   if (outcome.missing) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
   if (outcome.insufficient) return res.status(409).json({ success: false, message: 'کسر موجودی باعث منفی‌شدن موجودی می‌شود.' });
-  if (!outcome.duplicate) recordAdminLog({ actor: req.adminActor, action: `balance_${action}`, targetType: 'user', targetId: req.params.id, details: `${currency}; ${cleanReason}; actionId=${actionId}` });
   res.json({ success: true, duplicate: outcome.duplicate, user: outcome.updated || null, audit: outcome.audit });
 });
 
@@ -1482,9 +1429,11 @@ router.post('/users/bulk-balance', async (req, res) => {
       await audit.save({ session });
       results.push({ userId: id, duplicate: false, before, change, after });
     }
+    if (results.some(result => !result.duplicate)) {
+      await recordAdminLogRequired({ actor: req.adminActor, action: `bulk_balance_${action}`, targetType: 'user_batch', targetId: batchId, details: `${userIds.length} users; ${currency}; ${cleanReason}` }, session);
+    }
     return results;
   });
-  recordAdminLog({ actor: req.adminActor, action: `bulk_balance_${action}`, targetType: 'user_batch', targetId: batchId, details: `${userIds.length} users; ${currency}; ${cleanReason}` });
   res.json({ success: true, batchId, results: outcome });
 });
 
@@ -1508,10 +1457,10 @@ router.post('/users/:id/review-status', async (req, res) => {
       userId: user._id, action: 'account_status', currency: 'account', statusBefore: before, statusAfter: status, reason
     });
     await audit.save({ session });
+    await recordAdminLogRequired({ actor: req.adminActor, action: 'user_review_status', targetType: 'user', targetId: user._id, details: `${before} -> ${status}; ${reason}` }, session);
     return { duplicate: false, user, audit };
   });
   if (outcome.missing) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
-  if (!outcome.duplicate) recordAdminLog({ actor: req.adminActor, action: 'user_review_status', targetType: 'user', targetId: req.params.id, details: `${outcome.audit.statusBefore} -> ${status}; ${reason}` });
   res.json({ success: true, duplicate: outcome.duplicate, user: outcome.user || null, audit: outcome.audit });
 });
 
@@ -1539,6 +1488,137 @@ router.post('/users/:id/unban', async (req, res) => {
     targetId: req.params.id,
     details: user ? (user.firstName || user.username || user.telegramId) : ''
   });
+});
+
+router.delete('/users/:id', async (req, res) => {
+  if (!isTestDeleteEnvironment()) {
+    return res.status(403).json({ success: false, code: 'TEST_ONLY', message: 'حذف User فقط در محیط TEST مجاز است.' });
+  }
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ success: false, message: 'شناسه کاربر نامعتبر است.' });
+  }
+
+  const transactionStatus = getMongoTransactionStatus();
+  if (!transactionStatus.checked || !transactionStatus.supported) {
+    return res.status(503).json({
+      success: false,
+      code: 'TRANSACTIONS_UNAVAILABLE',
+      message: 'حذف انجام نشد؛ MongoDB Transaction در محیط TEST در دسترس نیست.',
+      reason: transactionStatus.reason || 'Transaction capability was not confirmed.'
+    });
+  }
+
+  try {
+    const outcome = await withMongoTransaction(async session => {
+      const user = await User.findById(req.params.id).session(session);
+      if (!user) return { missing: true };
+
+      const dependentCount = await User.countDocuments({ referredBy: user._id }).session(session);
+      if (dependentCount > 0) return { hasDependents: true, dependentCount };
+
+      const referrer = user.referredBy
+        ? await User.findById(user.referredBy).session(session)
+        : null;
+
+      await ReferralRelationship.deleteMany({
+        $or: [{ referrerId: user._id }, { referredUserId: user._id }]
+      }).session(session);
+      await PointsLedger.deleteMany({
+        $or: [
+          { user: user._id },
+          { sourceUserId: user._id },
+          { recipientUserId: user._id }
+        ]
+      }).session(session);
+      await TaskCompletion.deleteMany({ user: user._id }).session(session);
+      await LatestPostEngagementState.deleteMany({ user: user._id }).session(session);
+      await Withdrawal.deleteMany({ user: user._id }).session(session);
+      await Deposit.deleteMany({ user: user._id }).session(session);
+      await VipSubscription.deleteMany({ user: user._id }).session(session);
+      await WeeklyLeaderboardAward.deleteMany({ user: user._id }).session(session);
+      await NotificationDelivery.deleteMany({
+        $or: [
+          { user: user._id },
+          { eventKey: `referral-initial:${user._id}` }
+        ]
+      }).session(session);
+      await IdempotencyOperation.deleteMany({ userId: user._id }).session(session);
+      await BalanceAudit.deleteMany({ userId: user._id }).session(session);
+      await User.deleteOne({ _id: user._id }).session(session);
+
+      if (referrer) {
+        const remainingInvitedCount = await User.countDocuments({ referredBy: referrer._id }).session(session);
+        const activeReferralIds = Array.isArray(referrer.activeReferralIds)
+          ? referrer.activeReferralIds.filter(id => String(id) !== String(user._id))
+          : [];
+        await User.updateOne(
+          { _id: referrer._id },
+          {
+            $set: {
+              invitedCount: remainingInvitedCount,
+              activeInvitedCount: activeReferralIds.length,
+              activeReferralIds
+            }
+          },
+          { session }
+        );
+      }
+
+      return { deleted: true };
+    });
+
+    if (outcome.missing) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
+    if (outcome.hasDependents) {
+      return res.status(409).json({
+        success: false,
+        code: 'REFERRAL_DEPENDENCIES_EXIST',
+        message: `حذف انجام نشد؛ این User هنوز Referrer ${outcome.dependentCount} کاربر دیگر است.`
+      });
+    }
+    return res.json({ success: true, message: 'User و داده‌های وابسته‌ی او از محیط TEST حذف شدند.' });
+  } catch (error) {
+    if (error?.code === 'TRANSACTIONS_UNAVAILABLE') {
+      return res.status(503).json({ success: false, code: error.code, message: 'حذف انجام نشد؛ MongoDB Transaction در دسترس نیست.' });
+    }
+    throw error;
+  }
+});
+
+router.post('/users/:id/test-weekly-reward-notification', async (req, res) => {
+  if (!isTestEnvironment()) {
+    return res.status(403).json({ success: false, code: 'TEST_ONLY', message: 'تست Notification فقط در محیط TEST مجاز است.' });
+  }
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ success: false, message: 'شناسه کاربر نامعتبر است.' });
+  }
+
+  const rank = Number(req.body?.rank);
+  const reward = Number(req.body?.reward);
+  if (!Number.isInteger(rank) || rank < 1 || rank > 3) {
+    return res.status(400).json({ success: false, message: 'مقام باید عدد صحیح بین ۱ تا ۳ باشد.' });
+  }
+  if (!Number.isSafeInteger(reward) || reward <= 0) {
+    return res.status(400).json({ success: false, message: 'مقدار Reward باید یک عدد صحیح مثبت باشد.' });
+  }
+
+  const user = await User.findById(req.params.id).select('_id telegramId language').lean();
+  if (!user) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
+  const telegramId = String(user.telegramId || '').trim();
+  if (!/^\d{1,20}$/.test(telegramId)) {
+    return res.status(422).json({ success: false, message: 'کاربر Telegram ID معتبر ندارد.' });
+  }
+
+  const delivery = await sendNotificationOnce({
+    eventKey: `weekly-reward-test:${user._id}:${crypto.randomUUID()}`,
+    type: 'weekly_reward',
+    user: user._id,
+    telegramId,
+    text: botText('leaderboardReward', user.language, rank, reward)
+  });
+  if (delivery.status !== 'sent') {
+    return res.status(502).json({ success: false, code: 'TELEGRAM_NOTIFICATION_FAILED', status: delivery.status, message: `ارسال پیام آزمایشی Telegram تأیید نشد (delivery: ${delivery.status}).` });
+  }
+  return res.json({ success: true, status: delivery.status, message: 'پیام آزمایشی Weekly Reward با موفقیت ارسال شد.' });
 });
 
 /* -------------------- REQUIRED CHANNELS (عضویت اجباری) -------------------- */
@@ -1707,124 +1787,143 @@ router.post('/required-channels/:id/test', async (req, res) => {
 });
 
 /* -------------------- SETTINGS -------------------- */
-router.get('/maintenance', async (req, res) => {
-  const settings = await Settings.getGlobal();
-  res.json({
-    success: true,
-    enabled: settings.maintenanceEnabled === true,
-    allowedTelegramIds: Array.isArray(settings.maintenanceAllowedTelegramIds)
-      ? settings.maintenanceAllowedTelegramIds.map(String)
-      : []
-  });
-});
-
-router.put('/maintenance', async (req, res) => {
-  const settings = await Settings.getGlobal();
-  const enabled = req.body?.enabled === true || req.body?.enabled === 'true';
-  const rawIds = Array.isArray(req.body?.allowedTelegramIds) ? req.body.allowedTelegramIds : [];
-  const allowedTelegramIds = [...new Set(rawIds.map(value => String(value).trim()))];
-  if (allowedTelegramIds.length > 500 || allowedTelegramIds.some(id => !/^\d{1,20}$/.test(id))) {
-    return res.status(400).json({ success: false, message: 'Allowed Userها باید آیدی عددی معتبر و حداکثر ۵۰۰ مورد باشند.' });
-  }
-  settings.maintenanceEnabled = enabled;
-  settings.maintenanceAllowedTelegramIds = allowedTelegramIds;
-  await settings.save();
-  recordAdminLog({
-    actor: req.adminActor,
-    action: 'maintenance_update',
-    targetType: 'settings',
-    details: `${enabled ? 'enabled' : 'disabled'}; allowed=${allowedTelegramIds.length}`
-  });
-  res.json({ success: true, enabled, allowedTelegramIds });
-});
-
-function vipAdminStatus(subscription, now = new Date()) {
-  if (subscription.status === 'cancelled') return 'cancelled';
-  if (subscription.status === 'completed' || new Date(subscription.endAt) <= now) return 'expired';
-  return 'active';
-}
-
-function vipAdminRecord(subscription, now = new Date()) {
-  const totalExpected = Number(subscription.totalRewardPoints || 0);
-  const earnedToDate = Number(subscription.claimedRewardPoints || 0);
-  const status = vipAdminStatus(subscription, now);
-  const user = subscription.user || {};
-  return {
-    id: String(subscription._id),
-    userId: String(user._id || subscription.user || ''),
-    username: user.username || '',
-    name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.firstName || '',
-    planNumber: subscription.planNumber,
-    purchaseDate: subscription.createdAt,
-    startDate: subscription.startAt,
-    expiryDate: subscription.endAt,
-    durationDays: subscription.durationDays,
-    purchaseAmountPoints: Number(subscription.pricePoints || 0),
-    dailyEarningPoints: Number(subscription.dailyRewardAveragePoints || 0),
-    totalExpectedEarningPoints: totalExpected,
-    earnedToDatePoints: earnedToDate,
-    remainingEarningPoints: Math.max(0, totalExpected - earnedToDate),
-    claimsCompleted: Number(subscription.claimsCompleted || 0),
-    totalClaims: Number(subscription.durationDays || 0),
-    remainingDays: status === 'active' ? Math.max(0, Math.ceil((new Date(subscription.endAt).getTime() - now.getTime()) / 86400000)) : 0,
-    status
-  };
-}
-
 router.get('/vip/summary', async (req, res) => {
   const now = new Date();
-  const [totalVipPurchases, activeVips, expiredVips, revenue, daily, users] = await Promise.all([
-    VipSubscription.countDocuments({}),
-    VipSubscription.countDocuments({ status: 'active', endAt: { $gt: now } }),
-    VipSubscription.countDocuments({ $or: [{ status: 'completed' }, { status: 'active', endAt: { $lte: now } }] }),
-    VipSubscription.aggregate([{ $group: { _id: null, total: { $sum: '$pricePoints' } } }]),
-    VipSubscription.aggregate([{ $group: { _id: null, total: { $sum: '$dailyRewardAveragePoints' } } }]),
-    VipSubscription.distinct('user')
+  const activeExpression = { $and: [{ $eq: ['$status', 'active'] }, { $gt: ['$endAt', now] }] };
+  const expiredExpression = { $or: [
+    { $eq: ['$status', 'completed'] },
+    { $and: [{ $eq: ['$status', 'active'] }, { $lte: ['$endAt', now] }] }
+  ] };
+  const [rows, uniqueUsers] = await Promise.all([
+    VipSubscription.aggregate([{ $group: {
+      _id: null,
+      totalVipPurchases: { $sum: 1 },
+      activeVips: { $sum: { $cond: [activeExpression, 1, 0] } },
+      expiredVips: { $sum: { $cond: [expiredExpression, 1, 0] } },
+      cancelledVips: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+      totalVipRevenuePoints: { $sum: { $ifNull: ['$pricePoints', 0] } },
+      totalDailyVipEarningsPoints: { $sum: { $cond: [activeExpression, { $ifNull: ['$dailyRewardAveragePoints', 0] }, 0] } }
+    } }]),
+    VipSubscription.distinct('user', { user: { $type: 'objectId' } })
   ]);
-  res.json({
+  const summary = rows[0] || {};
+  return res.json({
     success: true,
-    totalVipPurchases,
-    activeVips,
-    expiredVips,
-    totalVipRevenuePoints: revenue[0]?.total || 0,
-    totalDailyVipEarningsPoints: daily[0]?.total || 0,
-    totalVipUsers: users.length
+    asOf: now.toISOString(),
+    totalVipPurchases: Number(summary.totalVipPurchases) || 0,
+    activeVips: Number(summary.activeVips) || 0,
+    expiredVips: Number(summary.expiredVips) || 0,
+    cancelledVips: Number(summary.cancelledVips) || 0,
+    totalVipRevenuePoints: Number(summary.totalVipRevenuePoints) || 0,
+    totalDailyVipEarningsPoints: Number(summary.totalDailyVipEarningsPoints) || 0,
+    totalVipUsers: uniqueUsers.length
   });
 });
 
 router.get('/vip/subscriptions', async (req, res) => {
   const { page, limit, skip } = pageParams(req.query, 25, 100);
   const now = new Date();
-  const filter = {};
-  const search = String(req.query.search || '').trim();
-  const planNumber = Number(req.query.planNumber);
-  const selectedStatus = String(req.query.status || '').trim();
-  if (Number.isInteger(planNumber) && planNumber >= 1 && planNumber <= 10) filter.planNumber = planNumber;
-  if (selectedStatus === 'active') filter.$and = [{ status: 'active' }, { endAt: { $gt: now } }];
-  if (selectedStatus === 'cancelled') filter.status = 'cancelled';
-  if (selectedStatus === 'expired') filter.$or = [{ status: 'completed' }, { status: 'active', endAt: { $lte: now } }];
-  if (req.query.dateFrom || req.query.dateTo) {
-    filter.createdAt = {};
-    if (req.query.dateFrom) filter.createdAt.$gte = new Date(`${String(req.query.dateFrom)}T00:00:00.000Z`);
-    if (req.query.dateTo) filter.createdAt.$lte = new Date(`${String(req.query.dateTo)}T23:59:59.999Z`);
+  const match = {};
+
+  if (req.query.planNumber != null && String(req.query.planNumber).trim()) {
+    const planNumber = Number(req.query.planNumber);
+    if (!Number.isInteger(planNumber) || planNumber < 1 || planNumber > 10) {
+      return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'پلن VIP نامعتبر است.' });
+    }
+    match.planNumber = planNumber;
   }
-  if (search) {
-    const regex = new RegExp(escapeRegex(search), 'i');
-    const userIds = await User.find({ $or: [{ telegramId: regex }, { username: regex }, { firstName: regex }, { lastName: regex }] }).distinct('_id');
-    filter.user = { $in: userIds };
+
+  const requestedStatus = String(req.query.status || '').trim().toLowerCase();
+  if (requestedStatus && !['active', 'expired', 'cancelled'].includes(requestedStatus)) {
+    return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'وضعیت VIP نامعتبر است.' });
   }
-  const [records, total] = await Promise.all([
-    VipSubscription.find(filter).populate('user', 'telegramId username firstName lastName').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-    VipSubscription.countDocuments(filter)
-  ]);
-  res.json({ success: true, subscriptions: records.map(item => vipAdminRecord(item, now)), total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) });
+  if (requestedStatus) match.adminDisplayStatus = requestedStatus;
+
+  const dateFilter = {};
+  const dateFrom = String(req.query.dateFrom || '').trim();
+  const dateTo = String(req.query.dateTo || '').trim();
+  const parseDate = (value, endOfDay = false) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const date = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`);
+    return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : date;
+  };
+  if (dateFrom) {
+    const parsed = parseDate(dateFrom);
+    if (!parsed) return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'تاریخ شروع نامعتبر است.' });
+    dateFilter.$gte = parsed;
+  }
+  if (dateTo) {
+    const parsed = parseDate(dateTo, true);
+    if (!parsed) return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'تاریخ پایان نامعتبر است.' });
+    dateFilter.$lte = parsed;
+  }
+  if (dateFilter.$gte && dateFilter.$lte && dateFilter.$gte > dateFilter.$lte) {
+    return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'محدوده تاریخ نامعتبر است.' });
+  }
+  if (Object.keys(dateFilter).length) match.createdAt = dateFilter;
+
+  const search = String(req.query.search || '').trim().slice(0, 100);
+  const pipeline = [
+    { $lookup: { from: User.collection.name, localField: 'user', foreignField: '_id', as: 'vipUser' } },
+    { $unwind: { path: '$vipUser', preserveNullAndEmptyArrays: true } },
+    { $addFields: { adminDisplayStatus: { $switch: { branches: [
+      { case: { $eq: ['$status', 'cancelled'] }, then: 'cancelled' },
+      { case: { $eq: ['$status', 'completed'] }, then: 'expired' },
+      { case: { $and: [{ $eq: ['$status', 'active'] }, { $lte: ['$endAt', now] }] }, then: 'expired' },
+      { case: { $and: [{ $eq: ['$status', 'active'] }, { $gt: ['$endAt', now] }] }, then: 'active' }
+    ], default: 'unknown' } } } },
+    { $match: {
+      ...match,
+      ...(search ? { $or: [
+        { 'vipUser.telegramId': new RegExp(escapeRegex(search), 'i') },
+        { 'vipUser.username': new RegExp(escapeRegex(search), 'i') },
+        { 'vipUser.firstName': new RegExp(escapeRegex(search), 'i') },
+        { 'vipUser.lastName': new RegExp(escapeRegex(search), 'i') },
+        ...(mongoose.isValidObjectId(search) ? [{ 'vipUser._id': new mongoose.Types.ObjectId(search) }] : [])
+      ] } : {})
+    } },
+    { $facet: {
+      items: [
+        { $sort: { createdAt: -1, _id: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        { $project: {
+          _id: 1,
+          user: { _id: '$vipUser._id', telegramId: '$vipUser.telegramId', username: '$vipUser.username', firstName: '$vipUser.firstName', lastName: '$vipUser.lastName' },
+          planNumber: 1,
+          pricePoints: 1,
+          monthlyRewardPercent: 1,
+          durationDays: 1,
+          totalRewardPoints: 1,
+          dailyRewardAveragePoints: 1,
+          claimedRewardPoints: 1,
+          claimsCompleted: 1,
+          startAt: 1,
+          endAt: 1,
+          createdAt: 1,
+          status: 1,
+          displayStatus: '$adminDisplayStatus'
+        } }
+      ],
+      metadata: [{ $count: 'total' }]
+    } }
+  ];
+
+  const [result] = await VipSubscription.aggregate(pipeline);
+  const total = Number(result?.metadata?.[0]?.total) || 0;
+  const subscriptions = (result?.items || []).map(item => toVipAdminRecord(item, now));
+  return res.json({ success: true, subscriptions, page, limit, total, totalPages: Math.ceil(total / limit), asOf: now.toISOString() });
 });
 
 router.get('/vip/subscriptions/:id', async (req, res) => {
-  if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, message: 'شناسه اشتراک VIP نامعتبر است.' });
-  const subscription = await VipSubscription.findById(req.params.id).populate('user', 'telegramId username firstName lastName').lean();
-  if (!subscription) return res.status(404).json({ success: false, message: 'اشتراک VIP پیدا نشد.' });
-  res.json({ success: true, subscription: vipAdminRecord(subscription) });
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ success: false, code: 'VIP_SUBSCRIPTION_INVALID', message: 'شناسه اشتراک VIP نامعتبر است.' });
+  }
+  const subscription = await VipSubscription.findById(req.params.id)
+    .populate('user', 'telegramId username firstName lastName')
+    .lean();
+  if (!subscription) return res.status(404).json({ success: false, code: 'VIP_SUBSCRIPTION_NOT_FOUND', message: 'اشتراک VIP پیدا نشد.' });
+  return res.json({ success: true, subscription: toVipAdminRecord(subscription) });
 });
 
 router.get('/vip/plans', async (req, res) => {
@@ -1895,6 +1994,39 @@ router.get('/settings', async (req, res) => {
     spinModel: spinModel(),
     timezones: COMMON_TIMEZONES
   });
+});
+
+router.get('/maintenance', async (req, res) => {
+  if (!isTestEnvironment()) return res.status(403).json({ success: false, code: 'TEST_ONLY', message: 'Maintenance Mode فقط در محیط TEST مجاز است.' });
+  const settings = await Settings.getGlobal();
+  res.json({
+    success: true,
+    enabled: settings.maintenanceMode === true,
+    allowedTelegramIds: normalizeAllowedTelegramIds(settings.maintenanceAllowedTelegramIds || []) || []
+  });
+});
+
+router.put('/maintenance', async (req, res) => {
+  if (!isTestEnvironment()) return res.status(403).json({ success: false, code: 'TEST_ONLY', message: 'Maintenance Mode فقط در محیط TEST مجاز است.' });
+  const body = req.body || {};
+  const allowedTelegramIds = normalizeAllowedTelegramIds(body.allowedTelegramIds);
+  if (allowedTelegramIds === null) {
+    return res.status(400).json({ success: false, code: 'INVALID_ALLOWED_USERS', message: 'Allowed Users باید حداکثر ۱۰۰ Telegram User ID عددی باشد.' });
+  }
+  if (typeof body.enabled !== 'boolean') {
+    return res.status(400).json({ success: false, code: 'INVALID_MAINTENANCE_STATE', message: 'وضعیت Maintenance باید boolean باشد.' });
+  }
+  const settings = await Settings.getGlobal();
+  settings.maintenanceMode = body.enabled;
+  settings.maintenanceAllowedTelegramIds = allowedTelegramIds;
+  await settings.save();
+  recordAdminLog({
+    actor: req.adminActor,
+    action: 'maintenance_mode_update',
+    targetType: 'settings',
+    details: `${body.enabled ? 'enabled' : 'disabled'}; allowed=${allowedTelegramIds.length}`
+  });
+  res.json({ success: true, enabled: settings.maintenanceMode === true, allowedTelegramIds });
 });
 
 router.put('/settings', async (req, res) => {
@@ -2236,7 +2368,7 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
     return res.status(400).json({ success: false, message: 'متن پیام الزامی است.' });
   }
 
-  const users = await User.find(activeTelegramUserFilter(), 'telegramId');
+  const users = await User.find({ isBanned: false, telegramBlockedAt: null }, 'telegramId');
   let sent = 0;
   let failed = 0;
 

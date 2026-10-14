@@ -16,6 +16,7 @@ const Task = require('../models/Task');
 const TaskCompletion = require('../models/TaskCompletion');
 const { vipActivationTaskDefinition } = require('../utils/vipActivationTasks');
 const { idempotencyTransactionId, executeIdempotently } = require('../utils/idempotency');
+const { utcDayKey, wasUtcYesterday } = require('../utils/utcDay');
 const {
   DAY_MS,
   calculateTotalRewardCents,
@@ -117,11 +118,6 @@ function sendVipError(res, error) {
  * کافی است "روز" را بر مبنای نیمه‌شب UTC حساب کنیم — این خودش دقیقاً
  * همان ریست ساعت 4:30 صبح افغانستان است.
  */
-function utcDayKey(date) {
-  const d = new Date(date);
-  return Math.floor(d.getTime() / 86400000); // تعداد روزهای کامل از epoch (بر مبنای UTC)
-}
-
 function nextResetTimestamp() {
   const currentDayKey = utcDayKey(new Date());
   return (currentDayKey + 1) * 86400000; // شروع روز UTC بعدی، به میلی‌ثانیه
@@ -152,7 +148,6 @@ const { botText } = require('../utils/botMessages');
 const { synthesizeHistory } = require('../utils/withdrawalStatus');
 const { getLevel } = require('../utils/levels');
 const { withMongoTransaction } = require('../utils/mongoTransaction');
-const DAILY_CHECKIN_REWARDS = Object.freeze([5, 7, 9, 11, 13, 14, 15]);
 
 // GET /api/points/me
 router.get('/me', auth, async (req, res) => {
@@ -211,10 +206,13 @@ router.post('/checkin', auth, async (req, res) => {
         throw error;
       }
 
-      const wasYesterday = current.lastCheckIn && utcDayKey(current.lastCheckIn) === todayKey - 1;
-      const newStreak = wasYesterday ? (Number(current.streak) >= 7 ? 1 : Number(current.streak) + 1) : 1;
-      const earned = DAILY_CHECKIN_REWARDS[newStreak - 1];
+      const wasYesterday = current.lastCheckIn && wasUtcYesterday(current.lastCheckIn, todayKey * DAY_MS);
+      const newStreak = wasYesterday ? current.streak + 1 : 1;
+      const bonus = Math.min(newStreak, 30) * settings.streakBonusPoints;
+      const earned = settings.dailyCheckInPoints + bonus;
+      const gotSpin = newStreak > 0 && newStreak % 7 === 0;
       const inc = { points: earned, totalCheckins: 1 };
+      if (gotSpin) inc.spinChances = 1;
 
       const updated = await User.findOneAndUpdate(
         { _id: current._id, lastCheckIn: current.lastCheckIn || null },
@@ -235,7 +233,7 @@ router.post('/checkin', auth, async (req, res) => {
         sourceId: `checkin:${updated._id}:${todayKey}`,
         session
       });
-      return { updated, earned };
+      return { updated, earned, gotSpin };
     });
   } catch (error) {
     if (error.code === 'ALREADY_CHECKED_IN') return res.status(400).json({ success: false, message: error.message, code: error.code });
@@ -247,6 +245,8 @@ router.post('/checkin', auth, async (req, res) => {
     earned: result.earned,
     points: result.updated.points,
     streak: result.updated.streak,
+    spinChances: result.updated.spinChances,
+    gotSpin: result.gotSpin,
     nextResetAt: nextResetTimestamp()
   });
 });
@@ -467,13 +467,14 @@ router.post('/withdraw', auth, async (req, res) => {
     });
   }
 
+  let operation;
   const operationKey = String(req.get('Idempotency-Key') || '').trim();
   try {
-    const operation = await executeIdempotently({
+    operation = await executeIdempotently({
       userId: u._id,
       scope: 'withdraw',
       key: operationKey,
-      body: { gram: amount, address: walletAddress },
+      body: { amount, address: walletAddress },
       execute: async session => {
         const nextUser = await User.findOneAndUpdate(
           { _id: u._id, gramBalance: { $gte: amount } },
@@ -494,7 +495,7 @@ router.post('/withdraw', auth, async (req, res) => {
           statusHistory: [{ status: 'pending', at: new Date() }]
         }).save({ session });
 
-        await recordLedgerRequired({
+        const ledger = await recordLedgerRequired({
           user: u._id,
           type: 'withdraw',
           currency: 'gram',
@@ -505,25 +506,25 @@ router.post('/withdraw', auth, async (req, res) => {
           transactionId: idempotencyTransactionId({ userId: u._id, scope: 'withdraw', key: operationKey, leg: 'debit' }),
           session
         });
-        return {
-          body: {
-            success: true,
-            message: 'درخواست برداشت ثبت شد و به‌زودی بررسی می‌شود.',
-            gramBalance: nextUser.gramBalance,
-            withdrawalId: nextWithdrawal._id
-          },
-          resourceId: nextWithdrawal._id
-        };
+        if (!ledger.created) throw new Error('Withdrawal ledger entry already exists; transaction aborted.');
+
+        return { status: 201, resourceId: nextWithdrawal._id, body: {
+          success: true,
+          message: 'درخواست برداشت ثبت شد و به‌زودی بررسی می‌شود.',
+          gramBalance: nextUser.gramBalance,
+          withdrawalId: String(nextWithdrawal._id)
+        } };
       }
     });
-    res.status(operation.status).json(operation.body);
-    if (!operation.replayed) {
-      notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, 'GRAM')).catch(() => {});
-    }
   } catch (error) {
     if (error.code === 'INSUFFICIENT_BALANCE') return res.status(400).json({ success: false, message: error.message, code: error.code });
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message, code: error.code });
     throw error;
+  }
+
+  res.status(operation.status).json(operation.body);
+  if (!operation.replayed) {
+    notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, 'GRAM')).catch(() => {});
   }
 });
 
@@ -898,9 +899,6 @@ router.post('/vip/purchase', auth, async (req, res) => {
             session
           });
           if (!taskLedger.created) throw vipError('VIP_TASK_LEDGER_DUPLICATE', 'پاداش Task این خرید قبلاً ثبت شده است.', 409);
-          await Task.updateOne({ _id: vipTask._id }, { $inc: { completedCount: 1 } }, { session });
-          user.points = rewarded.points;
-          void taskCompletion;
         }
 
         const ledger = await recordLedgerRequired({
@@ -1013,28 +1011,42 @@ router.post('/vip/:subscriptionId/claim', auth, async (req, res) => {
 });
 
 /**
- * GET /api/points/history — تاریخچه‌ی شخصی کاربر: هر رویدادی که پوینت یا
- * GRAM او را تغییر داده (تسک، ورود روزانه، گردونه، پاداش رفرال، تبدیل، برداشت...).
- * صفحه‌بندی با cursor: برای گرفتن صفحه‌ی بعد، createdAt آخرین آیتم دریافتی
- * را به‌عنوان ?before=... بفرست.
+ * GET /api/points/history — stable descending cursor on (createdAt, _id).
+ * `before` remains supported for already-open legacy clients.
  */
 router.get('/history', auth, async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 50);
-  const filter = { user: req.dbUser._id };
-
-  const before = req.query.before ? new Date(req.query.before) : null;
-  if (before && !Number.isNaN(before.getTime())) {
-    filter.createdAt = { $lt: before };
+  let cursor = null;
+  if (req.query.cursor) {
+    try {
+      const encoded = String(req.query.cursor);
+      if (encoded.length > 512) throw new Error('cursor too long');
+      const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+      const createdAt = new Date(parsed?.createdAt);
+      if (!createdAt || Number.isNaN(createdAt.getTime()) || !mongoose.isValidObjectId(parsed?._id)) throw new Error('invalid cursor');
+      cursor = { createdAt, _id: new mongoose.Types.ObjectId(parsed._id) };
+    } catch {
+      return res.status(400).json({ success: false, code: 'INVALID_HISTORY_CURSOR', message: 'Cursor تاریخچه نامعتبر است.' });
+    }
   }
+  const before = !cursor && req.query.before ? new Date(req.query.before) : null;
+  const timeFilter = cursor
+    ? { $or: [
+      { createdAt: { $lt: cursor.createdAt } },
+      { createdAt: cursor.createdAt, _id: { $lt: cursor._id } }
+    ] }
+    : before && !Number.isNaN(before.getTime()) ? { createdAt: { $lt: before } } : {};
+  const ledgerFilter = { user: req.dbUser._id, ...timeFilter };
+  const depositFilter = {
+    user: req.dbUser._id,
+    assetType: 'native_gram',
+    status: { $in: ['pending', 'rejected', 'confirmed'] },
+    ...timeFilter
+  };
 
   const [ledgerItems, depositItems] = await Promise.all([
-    PointsLedger.find(filter).sort({ createdAt: -1 }).limit(limit + 1).lean(),
-    Deposit.find({
-      user: req.dbUser._id,
-      assetType: 'native_gram',
-      status: { $in: ['pending', 'rejected', 'confirmed'] },
-      ...(filter.createdAt ? { createdAt: filter.createdAt } : {})
-    }).sort({ createdAt: -1 }).limit(limit + 1)
+    PointsLedger.find(ledgerFilter).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).lean(),
+    Deposit.find(depositFilter).sort({ createdAt: -1, _id: -1 }).limit(limit + 1)
       .select('assetType amount submittedTxHash txHash status createdAt verifiedAt creditedAt')
       .lean()
   ]);
@@ -1048,17 +1060,10 @@ router.get('/history', auth, async (req, res) => {
   for (const item of depositItems) {
     if (item.status === 'confirmed') continue;
     history.push({
-      _id: item._id,
-      type: 'deposit',
-      currency: 'gram',
-      amount: item.amount,
-      transactionId: item.txHash || item.submittedTxHash || '',
-      status: item.status,
-      description: '',
-      createdAt: item.createdAt,
-      transactionAt: item.verifiedAt || item.createdAt,
-      verifiedAt: item.verifiedAt,
-      creditedAt: item.creditedAt
+      _id: item._id, type: 'deposit', currency: 'gram', amount: item.amount,
+      transactionId: item.txHash || item.submittedTxHash || '', status: item.status,
+      description: '', createdAt: item.createdAt, transactionAt: item.verifiedAt || item.createdAt,
+      verifiedAt: item.verifiedAt, creditedAt: item.creditedAt
     });
   }
   history.sort((a, b) => {
@@ -1066,12 +1071,13 @@ router.get('/history', auth, async (req, res) => {
     return timeDiff || String(b._id).localeCompare(String(a._id));
   });
   const page = history.slice(0, limit);
+  const hasMore = history.length > limit || ledgerItems.length > limit || depositItems.length > limit;
+  const last = page[page.length - 1];
+  const nextCursor = hasMore && last?._id && last?.createdAt
+    ? Buffer.from(JSON.stringify({ createdAt: new Date(last.createdAt).toISOString(), _id: String(last._id) })).toString('base64url')
+    : null;
 
-  res.json({
-    success: true,
-    history: page,
-    hasMore: history.length > limit || ledgerItems.length > limit || depositItems.length > limit
-  });
+  res.json({ success: true, history: page, hasMore, nextCursor });
 });
 
 /**

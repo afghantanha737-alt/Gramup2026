@@ -142,7 +142,7 @@ html[data-theme="light"] #appHeader {
   position: fixed; left: 50%; bottom: 0; z-index: 200; width: min(100%, 720px);
   height: calc(var(--nav-height) + env(safe-area-inset-bottom));
   transform: translateX(-50%); padding: 7px 8px env(safe-area-inset-bottom);
-  display: grid; grid-template-columns: repeat(6, 1fr); align-items: start;
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start;
   background: rgba(9, 10, 14, .91); border-top: 1px solid var(--line);
   backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
 }

@@ -11,6 +11,7 @@ const TaskReactionState = require('../models/TaskReactionState');
 const Withdrawal = require('../models/Withdrawal');
 const { generateReferralCode } = require('../utils/telegramAuth');
 const { isAdminTelegramId, createAdminSessionStore } = require('../utils/telegramAdmin');
+const { claimWebhookUpdate, finishWebhookUpdate } = require('../utils/webhookDedup');
 const { linkReferralByCode } = require('../utils/referralSystem');
 const { extractReactionEmojis, extractAddedReactionEmojis } = require('../utils/latestPostEngagement');
 const { parseTelegramStart, handleTelegramStart } = require('../utils/telegramStart');
@@ -208,49 +209,57 @@ async function handleMessageReaction(update) {
   }
 }
 
-// POST /api/telegram/webhook — دریافت آپدیت از تلگرام
+// POST /api/telegram/webhook — secret verification fails closed, then update_id is durably claimed.
 router.post('/webhook', async (req, res) => {
-  if (WEBHOOK_SECRET) {
-    const headerSecret = req.headers['x-telegram-bot-api-secret-token'];
-    if (headerSecret !== WEBHOOK_SECRET) {
-      recordWebhookSecretRejection();
-      return res.sendStatus(401);
-    }
+  const configuredSecret = String(WEBHOOK_SECRET || '');
+  if (!/^[A-Za-z0-9_-]{1,256}$/.test(configuredSecret)) {
+    recordWebhookSecretRejection();
+    return res.status(503).json({ success: false, code: 'WEBHOOK_SECRET_UNAVAILABLE' });
+  }
+  const suppliedSecret = req.get('X-Telegram-Bot-Api-Secret-Token') || '';
+  const expectedBuffer = Buffer.from(configuredSecret, 'utf8');
+  const suppliedBuffer = Buffer.from(String(suppliedSecret), 'utf8');
+  if (expectedBuffer.length !== suppliedBuffer.length || !require('crypto').timingSafeEqual(expectedBuffer, suppliedBuffer)) {
+    recordWebhookSecretRejection();
+    return res.sendStatus(401);
   }
 
-  // Mobile login normalizes the /start message before the regular handler;
-  // this must be mutable or the webhook crashes on every new mobile challenge.
-  let update = req.body;
+  const update = req.body;
+  const updateId = Number(update?.update_id);
+  if (!Number.isSafeInteger(updateId) || updateId < 0) {
+    return res.status(400).json({ success: false, code: 'INVALID_UPDATE_ID' });
+  }
   const updateType = update?.channel_post ? 'channel_post'
     : update?.message_reaction ? 'message_reaction'
       : update?.callback_query ? 'callback_query'
         : parseTelegramStart(update?.message?.text) ? 'start'
           : update?.message ? 'message' : 'other';
+
+  let claim;
+  try {
+    claim = await claimWebhookUpdate(updateId, updateType);
+  } catch (error) {
+    recordWebhookProcessingFailure();
+    console.error('Telegram webhook deduplication could not be persisted:', error.message || error);
+    return res.sendStatus(503);
+  }
+  if (claim.duplicate) return res.sendStatus(200);
+  if (!claim.claimed) return res.status(400).json({ success: false, code: 'INVALID_UPDATE_ID' });
   recordWebhookUpdate(updateType);
 
-  if (update?.channel_post || update?.message_reaction) {
-    try {
-      if (update.channel_post) await handleLatestChannelPost(update);
-      if (update.message_reaction) await handleMessageReaction(update);
-      return res.sendStatus(200);
-    } catch (error) {
-      recordWebhookProcessingFailure();
-      console.error('Telegram engagement update processing failed; requesting retry:', error.message || error);
-      return res.sendStatus(500);
-    }
-  }
+  try {
+    if (update?.channel_post) await handleLatestChannelPost(update);
+    if (update?.message_reaction) await handleMessageReaction(update);
 
-  // Acknowledge /start only after user creation/referral handling and sendMessage succeed.
-  // This makes Telegram retry transient failures instead of silently losing the Welcome.
-  if (bot && update?.message && updateType === 'start') {
-    try {
+    if (bot && update?.message && updateType === 'start') {
       const startCommand = parseTelegramStart(update.message.text);
-      const mobilePayload = startCommand?.payload && String(startCommand.payload).startsWith('mobile_')
-        ? String(startCommand.payload)
-        : '';
-      // Complete the normal /start flow first. This guarantees that a newly
-      // verified mobile user exists before /consume tries to create a session.
-      if (mobilePayload) update = { ...update, message: { ...update.message, text: '/start' } };
+      if (startCommand?.payload && String(startCommand.payload).startsWith('mobile_')) {
+        const verified = await verifyMobileChallenge(startCommand.payload, update.message.from?.id);
+        if (verified) {
+          await bot.sendMessage(update.message.chat.id, '✅ هویت شما برای اپ Gramup تأیید شد. حالا به اپلیکیشن برگردید.');
+        }
+        update.message.text = '/start';
+      }
       const result = await handleTelegramStart({
         message: update.message,
         bot,
@@ -260,77 +269,44 @@ router.post('/webhook', async (req, res) => {
         linkReferralByCode,
         botText
       });
-      if (mobilePayload) {
-        const verified = await verifyMobileChallenge(mobilePayload, update.message.from?.id);
-        if (verified) await bot.sendMessage(update.message.chat.id, '✅ هویت شما برای اپ Gramup تأیید شد. حالا به اپلیکیشن برگردید.');
-      }
       if (result?.welcomeSent) recordStartWelcomeSent();
       console.info('Telegram /start handled', {
-        updateId: update.update_id,
+        updateId,
         isNewUser: Boolean(result?.isNewUser),
         referralPayloadReceived: Boolean(result?.hadReferralPayload),
         welcomeSent: Boolean(result?.welcomeSent)
       });
-      return res.sendStatus(200);
-    } catch (error) {
-      recordStartHandlerFailure();
-      console.error('Telegram /start failed; requesting retry:', {
-        updateId: update.update_id,
-        error: error.message || String(error)
-      });
-      return res.sendStatus(500);
-    }
-  }
-
-  res.sendStatus(200);
-  try {
-    if (bot && update && update.callback_query) {
+    } else if (bot && update?.callback_query) {
       await handleCallbackQuery(update.callback_query);
-      return;
-    }
-
-    const message = update && update.message;
-    if (!bot || !message) return;
-
-    const chatId = message.chat.id;
-    const senderId = message.from && String(message.from.id);
-    const text = (message.text || '').trim();
-
-    // ---- جریان «/admin» در خود تلگرام (فقط برای آیدی‌های داخل ADMIN_TELEGRAM_IDS) ----
-    if (text === '/admin') {
-      if (isAdminTelegramId(senderId)) {
-        await sendAdminMenu(chatId);
-      } else {
-        await bot.sendMessage(
-          chatId,
-          `آیدی عددی شما: ${senderId}
-
-برای دسترسی مدیریتی از تلگرام، این عدد را به متغیر محیطی ADMIN_TELEGRAM_IDS در تنظیمات سرور اضافه کنید.`
-        );
+    } else if (bot && update?.message) {
+      const message = update.message;
+      const chatId = message.chat.id;
+      const senderId = message.from && String(message.from.id);
+      const text = (message.text || '').trim();
+      if (text === '/admin') {
+        if (isAdminTelegramId(senderId)) await sendAdminMenu(chatId);
+        else await bot.sendMessage(chatId, `آیدی عددی شما: ${senderId}\n\nبرای دسترسی مدیریتی از تلگرام، این عدد را به متغیر محیطی ADMIN_TELEGRAM_IDS در تنظیمات سرور اضافه کنید.`);
+      } else if (isAdminTelegramId(senderId) && text === '/cancel' && (await adminSessions.isAwaitingContent(senderId))) {
+        await adminSessions.clearAwaitingContent(senderId);
+        await bot.sendMessage(chatId, 'ارسال پیام همگانی لغو شد.');
+      } else if (isAdminTelegramId(senderId) && (await adminSessions.isAwaitingContent(senderId))) {
+        await handleBroadcastContent(senderId, chatId, message);
       }
-      return;
     }
 
-    if (isAdminTelegramId(senderId) && text === '/cancel' && adminSessions.isAwaitingContent(senderId)) {
-      adminSessions.clearAwaitingContent(senderId);
-      await bot.sendMessage(chatId, 'ارسال پیام همگانی لغو شد.');
-      return;
-    }
-
-    // پیام (متن/عکس/فوروارد) که ادمین بعد از زدن «📢 ارسال پیام همگانی» می‌فرستد
-    if (isAdminTelegramId(senderId) && adminSessions.isAwaitingContent(senderId)) {
-      await handleBroadcastContent(senderId, chatId, message);
-      return;
-    }
-
-    if (!text) return;
+    await finishWebhookUpdate(updateId, 'completed');
+    return res.sendStatus(200);
   } catch (error) {
     recordWebhookProcessingFailure();
-    console.error('Webhook handling error:', error);
+    if (updateType === 'start') recordStartHandlerFailure();
+    await finishWebhookUpdate(updateId, 'failed', error?.code || 'PROCESSING_FAILED').catch(logError => {
+      console.error('Could not persist failed Telegram update status:', logError.message || logError);
+    });
+    console.error('Telegram webhook update processing failed:', { updateId, updateType, error: error.message || String(error) });
+    return res.sendStatus(500);
   }
 });
 
-// GET /api/telegram/set-webhook — یک‌بار برای تنظیم وبهوک صدا بزنید
 router.get('/set-webhook', async (req, res) => {
   const adminKey = req.headers['x-admin-key'] || req.query.key;
   if (!isValidAdminKey(typeof adminKey === 'string' ? adminKey : '')) {
