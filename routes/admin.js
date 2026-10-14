@@ -12,6 +12,7 @@ const Settings = require('../models/Settings');
 const { normalizeTonAddress, amountToNanoGram } = require('../utils/tonNativeDepositVerify');
 const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, broadcastToActiveUsers } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
+const { postWithdrawalPaid } = require('../utils/payoutChannel');
 const { sendNotificationOnce } = require('../utils/notificationDelivery');
 const { verifyTonTransaction, normalizeTonTxHash, legacyTonTxHashMatcher } = require('../utils/tonVerify');
 const { recordLedgerRequired } = require('../utils/ledger');
@@ -1154,7 +1155,9 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
   res.json({ success: true, withdrawal });
 
   // اطلاع‌رسانی به خود کاربر که پرداختش انجام شد
-  const payeeUser = await User.findById(withdrawal.user, 'telegramId language');
+  const payeeUser = await User.findById(withdrawal.user, 'telegramId language username firstName');
+  postWithdrawalPaid(payeeUser, withdrawal)
+    .catch(error => console.error('[withdrawal] payout paid notification failed:', error.message || error));
   if (payeeUser) {
     notifyUser(
       payeeUser.telegramId,

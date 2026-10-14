@@ -145,6 +145,7 @@ const crypto = require('crypto');
 const { SPIN_SEGMENTS, resolveWeights, pickWeightedIndex } = require('../utils/spin');
 const { notifyUser } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
+const { postWithdrawalRequested } = require('../utils/payoutChannel');
 const { synthesizeHistory } = require('../utils/withdrawalStatus');
 const { getLevel } = require('../utils/levels');
 const { withMongoTransaction } = require('../utils/mongoTransaction');
@@ -525,6 +526,12 @@ router.post('/withdraw', auth, async (req, res) => {
   res.status(operation.status).json(operation.body);
   if (!operation.replayed) {
     notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, 'GRAM')).catch(() => {});
+    Withdrawal.findById(operation.body.withdrawalId).lean()
+      .then(createdWithdrawal => {
+        if (createdWithdrawal) return postWithdrawalRequested(u, createdWithdrawal);
+        throw new Error('Created withdrawal record was not found for payout notification.');
+      })
+      .catch(error => console.error('[withdrawal] payout request notification failed:', error.message || error));
   }
 });
 
