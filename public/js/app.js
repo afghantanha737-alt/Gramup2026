@@ -83,6 +83,7 @@ const state = {
 };
 window.state = state;
 const latestPostOpenedTaskIds = new Set();
+const latestPostOpenedAt = new Map();
 const latestPostOpeningTaskIds = new Set();
 
 /* ================= DOM HELPERS ================= */
@@ -868,8 +869,9 @@ async function loadTasks({ force = false } = {}) {
     state.tasks = Array.isArray(data?.tasks) ? data.tasks : [];
     state.completions = Array.isArray(data?.completions) ? data.completions : [];
     latestPostOpenedTaskIds.clear();
+    latestPostOpenedAt.clear();
     (Array.isArray(data?.latestPostStates) ? data.latestPostStates : []).forEach(item => {
-      if (item?.task && item.openedAt) latestPostOpenedTaskIds.add(String(item.task));
+      if (item?.task && item.openedAt) { latestPostOpenedTaskIds.add(String(item.task)); latestPostOpenedAt.set(String(item.task), Date.parse(item.openedAt)); }
     });
     const serverNow = Number(data?.serverNow);
     state.tasksServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
@@ -1084,7 +1086,7 @@ function renderHome() {
       <div class="auroraTaskPreviewList">
         ${state.tasks.slice(0, 2).map(task => {
           const status = completionStatus(task._id);
-          const icon = TASK_ICONS[task.type] || "🎁";
+          const icon = taskIconMarkup(task);
           return `<button type="button" class="auroraPreviewTask" onclick="navigate('tasks')">
             <span class="auroraPreviewTaskIcon">${icon}</span>
             <span class="auroraPreviewTaskCopy"><strong>${escapeHTML(task.title)}</strong><small>+${formatPoints(task.reward)} ${t("points_unit")}</small></span>
@@ -1098,7 +1100,11 @@ function renderHome() {
 }
 
 /* ================= TASKS ================= */
-const TASK_ICONS = { channel: "📢", group: "👥", link: "🔗", custom: "🎁" };
+function taskIconMarkup(task) {
+  const telegramTask = task?.verifyType === "telegram" || task?.type === "channel" || task?.type === "group";
+  if (telegramTask) return `<span class="taskBrandIcon taskBrandTelegram" aria-label="Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.4 4.6 18.2 20c-.2 1.1-.8 1.4-1.7.9l-4.8-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.4-4.9 8.9-8c.4-.4-.1-.6-.6-.2L7 13.6l-4.7-1.5c-1-.3-1-1 .2-1.5L20.8 4c.8-.3 1.5.2.6.6Z"/></svg></span>`;
+  return `<span class="taskBrandIcon taskBrandWeb" aria-label="Web"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.8 12h16.4M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5S9.7 5.9 12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span>`;
+}
 
 function safeTaskHttpUrl(value) {
   const text = String(value ?? "").trim();
@@ -1134,6 +1140,7 @@ async function openLatestPostTask(url, taskId) {
   try {
     const result = await openRequest;
     latestPostOpenedTaskIds.add(id);
+    latestPostOpenedAt.set(id, Date.now() + Number(state.tasksServerOffsetMs || 0));
     delete taskHints[id];
     const serverNow = Number(result.serverNow);
     if (Number.isFinite(serverNow)) state.tasksServerOffsetMs = serverNow - Date.now();
@@ -1141,6 +1148,7 @@ async function openLatestPostTask(url, taskId) {
     if (state.activeTab === "tasks") renderTasks();
   } catch (error) {
     latestPostOpenedTaskIds.delete(id);
+    latestPostOpenedAt.delete(id);
     taskHints[id] = { type: "error", message: translateServerMessage(error.code, error.message) };
     haptic("error");
     toast(taskHints[id].message, error.code === "TASK_COOLDOWN_ACTIVE" ? "warning" : "error");
@@ -1264,6 +1272,7 @@ async function verifyLatestPostTask(taskId) {
   try {
     const result = await api(`/api/tasks/${encodeURIComponent(taskId)}/engagement/check`, { method: "POST" });
     latestPostOpenedTaskIds.delete(String(taskId));
+    latestPostOpenedAt.delete(String(taskId));
     delete taskHints[taskId];
     state.points = Number(result.points) || state.points;
     const serverNow = Number(result.serverNow);
@@ -1295,21 +1304,25 @@ function formatCountdown(milliseconds) {
 
 function startLatestPostCooldownCountdown() {
   clearInterval(latestPostCooldownTimer);
-  const buttons = Array.from(document.querySelectorAll("[data-latest-post-cooldown]"));
+  const buttons = Array.from(document.querySelectorAll("[data-latest-post-cooldown], [data-latest-post-wait]"));
   if (!buttons.length) return;
 
   const tick = () => {
     const now = Date.now() + state.tasksServerOffsetMs;
     let refreshAfterCooldown = false;
     buttons.forEach(button => {
-      const remaining = Date.parse(button.dataset.until || "") - now;
+      const remaining = button.dataset.latestPostWait === "true"
+        ? Number(button.dataset.openedAt || 0) + 15000 - now
+        : Date.parse(button.dataset.until || "") - now;
       if (remaining > 0) {
-        button.textContent = t("task_latest_post_available_in", { time: formatCountdown(remaining) });
+        button.textContent = button.dataset.latestPostWait === "true"
+          ? t("task_latest_post_check_in", { time: formatCountdown(remaining) })
+          : t("task_latest_post_available_in", { time: formatCountdown(remaining) });
         return;
       }
       button.disabled = true;
       button.dataset.taskState = "AVAILABLE";
-      button.textContent = t("task_action_open_task");
+      button.textContent = button.dataset.latestPostWait === "true" ? t("task_action_check") : t("task_action_open_task");
       if (button.dataset.refreshed !== "true") {
         button.dataset.refreshed = "true";
         refreshAfterCooldown = true;
@@ -1416,7 +1429,7 @@ function renderTasks() {
     <div class="taskList">
       ${visibleTasks.map(task => {
         const status = completionStatus(task._id);
-        const icon = TASK_ICONS[task.type] || "🎁";
+        const icon = taskIconMarkup(task);
         const safeUrl = safeTaskHttpUrl(task.url).replaceAll("'", "\\'");
         let actionHtml;
 
@@ -1431,7 +1444,9 @@ function renderTasks() {
             ? nextAvailableAt.getTime() - (Date.now() + state.tasksServerOffsetMs)
             : 0;
           const latestPostUrlArgument = escapeHTML(JSON.stringify(safeTaskHttpUrl(task.url)).replaceAll("<", "\\u003c"));
-          const waitingForCheck = latestPostOpenedTaskIds.has(String(task._id)) && remaining <= 0;
+          const openedAtMs = latestPostOpenedAt.get(String(task._id));
+          const openWaitRemaining = openedAtMs ? openedAtMs + 15000 - (Date.now() + state.tasksServerOffsetMs) : 0;
+          const waitingForCheck = latestPostOpenedTaskIds.has(String(task._id)) && openWaitRemaining <= 0;
           const openButton = !waitingForCheck && remaining <= 0 && safeUrl
             ? `<button class="taskAction" data-latest-post-open="${escapeHTML(task._id)}" style="background:var(--surface-3);color:var(--text)" onclick="openLatestPostTask(${latestPostUrlArgument}, '${escapeHTML(task._id)}')">${t("task_action_open_task")}</button>`
             : "";
@@ -1442,6 +1457,8 @@ function renderTasks() {
             actionButton = `<button class="taskAction pending" data-task-state="COOLDOWN" data-latest-post-cooldown data-task-id="${escapeHTML(task._id)}" data-until="${escapeHTML(nextAvailableAt.toISOString())}" disabled>${t("task_latest_post_available_in", { time: formatCountdown(remaining) })}</button>`;
           } else if (waitingForCheck) {
             actionButton = `<button class="taskAction" data-task-state="WAITING_FOR_CHECK" data-latest-post-check="${escapeHTML(task._id)}" onclick="verifyLatestPostTask('${escapeHTML(task._id)}')">${t("task_action_check")}</button>`;
+          } else if (latestPostOpenedTaskIds.has(String(task._id)) && openWaitRemaining > 0) {
+            actionButton = `<button class="taskAction pending" data-latest-post-wait="true" data-opened-at="${escapeHTML(String(openedAtMs))}" disabled>${t("task_latest_post_check_in", { time: formatCountdown(openWaitRemaining) })}</button>`;
           } else {
             actionButton = openButton;
           }

@@ -18,6 +18,7 @@ const {
   isFreshRequiredReaction,
   buildRecurringTaskSourceId,
   LATEST_POST_COOLDOWN_HOURS,
+  LATEST_POST_OPEN_WAIT_SECONDS,
   isLatestPostCooldownActive,
   isLatestPostOpenValid,
   nextLatestPostAvailableAt
@@ -106,12 +107,15 @@ assert.strictEqual(buildRecurringTaskSourceId('task1', 'user1', 1), 'task:task1:
 assert.notStrictEqual(buildRecurringTaskSourceId('task1', 'user1', 1), buildRecurringTaskSourceId('task1', 'user1', 2));
 assert.throws(() => buildRecurringTaskSourceId('task1', 'user1', 0), TypeError);
 assert.strictEqual(LATEST_POST_COOLDOWN_HOURS, 3);
+assert.strictEqual(LATEST_POST_OPEN_WAIT_SECONDS, 15);
 const completedAt = new Date('2026-10-03T10:15:00.000Z');
 const nextAt = nextLatestPostAvailableAt(completedAt);
 assert.strictEqual(nextAt.toISOString(), '2026-10-03T13:15:00.000Z');
 assert.strictEqual(isLatestPostCooldownActive(nextAt, completedAt), true);
 assert.strictEqual(isLatestPostCooldownActive(nextAt, nextAt), false);
-assert.strictEqual(isLatestPostOpenValid({ openedAt: completedAt, lastCompletedAt: null, now: completedAt }), true);
+assert.strictEqual(isLatestPostOpenValid({ openedAt: completedAt, lastCompletedAt: null, now: completedAt }), false);
+assert.strictEqual(isLatestPostOpenValid({ openedAt: completedAt, lastCompletedAt: null, now: new Date(completedAt.getTime() + 14999) }), false);
+assert.strictEqual(isLatestPostOpenValid({ openedAt: completedAt, lastCompletedAt: null, now: new Date(completedAt.getTime() + 15000) }), true);
 assert.strictEqual(isLatestPostOpenValid({ openedAt: completedAt, lastCompletedAt: completedAt, now: nextAt }), false);
 assert.strictEqual(isLatestPostOpenValid({ openedAt: nextAt, lastCompletedAt: null, now: completedAt }), false);
 assert.strictEqual(isLatestPostOpenValid({ openedAt: null, lastCompletedAt: null, now: completedAt }), false);

@@ -3,6 +3,8 @@
 const MAX_TELEGRAM_CHAT_ID = (1n << 52n) - 1n;
 const LATEST_POST_COOLDOWN_HOURS = 3;
 const LATEST_POST_COOLDOWN_MS = LATEST_POST_COOLDOWN_HOURS * 60 * 60 * 1000;
+const LATEST_POST_OPEN_WAIT_SECONDS = 15;
+const LATEST_POST_OPEN_WAIT_MS = LATEST_POST_OPEN_WAIT_SECONDS * 1000;
 
 function dateMilliseconds(value) {
   if (value == null) return NaN;
@@ -21,7 +23,8 @@ function isLatestPostOpenValid({ openedAt, lastCompletedAt, now = new Date() }) 
   const nowTime = dateMilliseconds(now);
   if (!Number.isFinite(openedTime) || !Number.isFinite(nowTime) || openedTime > nowTime) return false;
   const completedTime = dateMilliseconds(lastCompletedAt);
-  return !Number.isFinite(completedTime) || openedTime > completedTime;
+  if (Number.isFinite(completedTime) && openedTime <= completedTime) return false;
+  return nowTime - openedTime >= LATEST_POST_OPEN_WAIT_MS;
 }
 
 function nextLatestPostAvailableAt(now = new Date()) {
@@ -122,6 +125,7 @@ function buildRecurringTaskSourceId(taskId, userId, cycle) {
 
 module.exports = {
   LATEST_POST_COOLDOWN_HOURS,
+  LATEST_POST_OPEN_WAIT_SECONDS,
   isLatestPostCooldownActive,
   isLatestPostOpenValid,
   nextLatestPostAvailableAt,

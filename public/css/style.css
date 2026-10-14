@@ -2445,3 +2445,12 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
   .bottomNav button { border-radius: 14px; }
   .tabLabel { font-size: 9.5px; }
 }
+
+/* GramUp Tasks — platform icons and Open → Check countdown */
+.taskBrandIcon { width: 100%; height: 100%; display: grid; place-items: center; border-radius: inherit; }
+.taskBrandIcon svg { width: 23px; height: 23px; display: block; }
+.taskBrandTelegram { color: #fff; background: linear-gradient(145deg, #35b9f3, #2389d7); box-shadow: 0 7px 16px rgba(35,137,215,.28); }
+.taskBrandWeb { color: #fff; background: linear-gradient(145deg, #c06bea, #8541c9); box-shadow: 0 7px 16px rgba(133,65,201,.25); }
+.taskItem .taskBrandIcon { border-radius: 12px; }
+.taskAction.pending[data-latest-post-wait="true"] { min-width: 104px; color: #aeb8c9; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.16); box-shadow: none; font-variant-numeric: tabular-nums; }
+.taskAction[data-latest-post-check] { background: linear-gradient(135deg,#22c879,#0ca66d); color: #fff; box-shadow: 0 7px 15px rgba(16,185,129,.25); }
