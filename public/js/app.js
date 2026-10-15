@@ -1312,6 +1312,12 @@ function openProofPage() {
 }
 window.openProofPage = openProofPage;
 
+function openPayoutChannel() {
+  haptic("selection");
+  openTaskLinkOnly("https://t.me/GramUpPayouts");
+}
+window.openPayoutChannel = openPayoutChannel;
+
 /**
  * راهنمای پایدار زیر هر تسک، بعد از تلاش ناموفق برای تایید — کلید taskId.
  * بر خلاف toast (که بعد از ۲.۸ ثانیه محو می‌شود)، این راهنما تا اقدام بعدی
@@ -2154,6 +2160,7 @@ function renderWallet() {
         <div class="loading" style="height:60px"></div>
       </div>
       <button type="button" class="secondaryBtn" style="width:100%;margin-top:12px" onclick="openProofPage()">${t("wallet_proof_button")}</button>
+      <button type="button" class="secondaryBtn" style="width:100%;margin-top:8px;border-color:rgba(124,58,237,0.4);background:rgba(124,58,237,0.08);" onclick="openPayoutChannel()">${t("wallet_proof_channel_button")}</button>
     </div>
   `;
 
