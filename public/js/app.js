@@ -1316,9 +1316,10 @@ function startLatestPostCooldownCountdown() {
   const tick = () => {
     const now = Date.now() + state.tasksServerOffsetMs;
     let refreshAfterCooldown = false;
+    let refreshAfterWait = false;
     buttons.forEach(button => {
       const remaining = button.dataset.latestPostWait === "true"
-        ? Number(button.dataset.openedAt || 0) + 15000 - now
+        ? Number(button.dataset.openedAt || 0) + 10000 - now
         : Date.parse(button.dataset.until || "") - now;
       if (remaining > 0) {
         button.textContent = button.dataset.latestPostWait === "true"
@@ -1327,16 +1328,22 @@ function startLatestPostCooldownCountdown() {
         return;
       }
       const waitingForCheck = button.dataset.latestPostWait === "true";
-      // The same control becomes actionable again when its countdown ends:
-      // Check after the 15-second wait, or Open/Start after the 3-hour cycle.
       button.disabled = false;
       button.dataset.taskState = "AVAILABLE";
       button.textContent = waitingForCheck ? t("task_action_claim") : t("task_action_start");
-      if (!waitingForCheck && button.dataset.refreshed !== "true") {
+      if (waitingForCheck) {
+        // Re-render the same task immediately so the button gets the Claim
+        // click handler and data attribute; no page/tab refresh is required.
+        refreshAfterWait = true;
+      } else if (button.dataset.refreshed !== "true") {
         button.dataset.refreshed = "true";
         refreshAfterCooldown = true;
       }
     });
+    if (refreshAfterWait && state.activeTab === "tasks") {
+      renderTasks();
+      return;
+    }
     if (refreshAfterCooldown) {
       loadTasks({ force: true }).then(() => {
         if (state.activeTab === "tasks") renderTasks();
