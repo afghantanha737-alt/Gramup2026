@@ -932,6 +932,46 @@ async function showRewardedAd() {
     if (state.activeTab === "tasks") renderTasks();
   }
 }
+
+async function watchAdsgramBoost() {
+  if (state.miningBoostLoading) return;
+  if (!state.ads?.enabled || !state.adsController) {
+    toast(t("ads_not_available"), "warning");
+    return;
+  }
+  const now = Date.now();
+  const currentExpiry = state.miningBoostExpiresAt ? Date.parse(state.miningBoostExpiresAt) : 0;
+  if (currentExpiry > now) {
+    toast(t("mining_boost_cooldown"), "info");
+    return;
+  }
+
+  state.miningBoostLoading = true;
+  const btn = document.querySelector("#miningBoostWatchBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = t("ads_wait");
+  }
+
+  try {
+    await state.adsController.show();
+    const result = await api("/api/ads/mining-boost", { method: "POST" });
+    if (result?.boostExpiresAt) {
+      state.miningBoostExpiresAt = result.boostExpiresAt;
+    }
+    haptic("success");
+    toast(t("mining_boost_success"), "success");
+    if (state.activeTab === "vip") renderVipTab();
+  } catch (error) {
+    haptic("warning");
+    toast(t("ads_skipped"), "warning");
+  } finally {
+    state.miningBoostLoading = false;
+    if (state.activeTab === "vip") renderVipTab();
+  }
+}
+window.watchAdsgramBoost = watchAdsgramBoost;
+
 window.showRewardedAd = showRewardedAd;
 
 function renderAdsgramCard() {
@@ -1510,7 +1550,7 @@ function renderTasks() {
   const sectionTabs = `
     <div class="taskCategoryTabs taskSectionTabs" role="tablist" aria-label="${escapeHTML(t("tasks_title"))}">
       <button type="button" role="tab" aria-selected="${taskSection === "daily"}" class="taskCategoryTab ${taskSection === "daily" ? "active" : ""}" onclick="setTaskSection('daily')">☀️ ${t("daily_title")}</button>
-      <button type="button" role="tab" aria-selected="${taskSection === "vip"}" class="taskCategoryTab ${taskSection === "vip" ? "active" : ""}" onclick="setTaskSection('vip')">💎 ${t("vip_title")}</button>
+      <button type="button" role="tab" aria-selected="${taskSection === "vip"}" class="taskCategoryTab ${taskSection === "vip" ? "active" : ""}" onclick="setTaskSection('vip')">💎 ${t("mining_rig_store_title")}</button>
       <button type="button" role="tab" aria-selected="${taskSection === "invite"}" class="taskCategoryTab ${taskSection === "invite" ? "active" : ""}" onclick="setTaskSection('invite')">👥 ${t("menu_referral")}</button>
     </div>`;
 
@@ -2982,6 +3022,7 @@ async function loadVipPlans() {
     const data = await api("/api/points/vip/plans");
     state.vipPlans = Array.isArray(data?.plans) ? data.plans : [];
     state.vipSubscriptions = Array.isArray(data?.subscriptions) ? data.subscriptions : [];
+    if (data?.miningBoostExpiresAt != null) state.miningBoostExpiresAt = data.miningBoostExpiresAt;
     if (data?.points != null) state.points = Number(data.points) || 0;
     const serverNow = Date.parse(data?.serverNow || "");
     state.vipServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
@@ -3126,15 +3167,45 @@ function renderProfileVip() {
     <div class="vipRedesign">
     <div class="sectionHeader">
       <button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button>
-      <h2 class="sectionTitle">${t("vip_title")}</h2><span></span>
+      <h2 class="sectionTitle">${t("mining_rig_store_title")}</h2><span></span>
     </div>
     <div class="vipHero vipHeroReference">
       <div class="vipHeroBrand"><img src="img/gramup-logo-new.jpg" alt="Gramup"><div><strong>Gram<span>up</span></strong><small>${state.user?.id ? `ID ${escapeHTML(state.user.id)}` : t("vip_title")}</small></div></div>
       <div class="vipHeroRows"><div><span>${t("vip_current_balance")}</span><b>${formatPoints(state.points)} Points</b></div><div><span>${t("vip_daily_reward_summary")}</span><b>${formatPoints(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0))} Points</b></div></div>
       <button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanCard')?.scrollIntoView({behavior:'smooth',block:'start'})">${t("vip_buy")}</button>
     </div>
-    ${subscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t("vip_active_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
-    <h3 class="sectionTitle" style="margin:18px 4px 8px">${t("vip_title")}</h3>
+    <div class="miningBoostCard" style="margin:14px 0 18px;padding:16px;border:1px solid rgba(139,92,246,0.35);border-radius:20px;background:linear-gradient(145deg,rgba(76,29,149,0.22),rgba(17,14,32,0.95));box-shadow:0 12px 28px rgba(0,0,0,0.3);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;background:rgba(234,179,8,0.2);color:#fde047;font-size:18px;">⚡</span>
+          <div>
+            <div style="font-size:14px;font-weight:900;color:#fff;">${t("mining_boost_title")}</div>
+            <div style="font-size:11px;color:var(--vip-muted);">${t("mining_boost_desc")}</div>
+          </div>
+        </div>
+        ${(() => {
+          const now = Date.now();
+          const boostExp = state.miningBoostExpiresAt ? Date.parse(state.miningBoostExpiresAt) : 0;
+          const isBoostActive = boostExp > now;
+          if (isBoostActive) {
+            const remSec = Math.max(0, Math.floor((boostExp - now) / 1000));
+            const m = Math.floor(remSec / 60);
+            const s = remSec % 60;
+            const timeStr = `${m}:${s < 10 ? "0" : ""}${s}`;
+            return `<span class="badge success" style="font-size:11px;">🚀 2x (${timeStr})</span>`;
+          }
+          return `<span class="badge info" style="font-size:11px;">1x Standard</span>`;
+        })()}
+      </div>
+      <div style="margin-top:12px;">
+        <button id="miningBoostWatchBtn" type="button" class="vipPlanButton vipPlanButton--primary" style="margin:0;min-height:42px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;" onclick="watchAdsgramBoost()">
+          <span>🎬</span>
+          <span>${t("mining_boost_watch")}</span>
+        </button>
+      </div>
+    </div>
+    ${subscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t("mining_rig_active_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
+    <h3 class="sectionTitle" style="margin:18px 4px 8px">${t("mining_rig_store_title")}</h3>
     ${planCards || `<div class="card"><div class="emptyDesc">${t("vip_empty_plans")}</div></div>`}
     </div>
   `;
