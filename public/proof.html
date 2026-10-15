@@ -39,6 +39,20 @@
       <p class="proofHeroDesc" data-i18n="desc">This page lists completed Gramup payment records. Wallet addresses are shortened for privacy, and a TON explorer link is shown when a transaction hash is available.</p>
     </div>
 
+    <!-- Official Payout Channel Banner (Complies with Adsgram Clause 11) -->
+    <div class="proofChannelCard" style="margin-bottom:18px;padding:16px 18px;border-radius:20px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:24px;">📢</span>
+        <div>
+          <h3 style="margin:0;font-size:15px;font-weight:800;color:var(--text);" data-i18n="channelBannerTitle">Official Payout Channel</h3>
+          <p style="margin:3px 0 0;font-size:12.5px;color:var(--text-soft);line-height:1.5;" data-i18n="channelBannerDesc">All real user withdrawals and TON transaction proofs are posted live in our verified channel.</p>
+        </div>
+      </div>
+      <a id="payoutChannelLink" href="https://t.me/GramUpPayouts" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 20px;border-radius:12px;background:#7c3aed;color:#fff;font-size:13.5px;font-weight:700;text-decoration:none;margin-top:4px;">
+        <span data-i18n="channelBtn">Join @GramUpPayouts ↗</span>
+      </a>
+    </div>
+
     <div class="proofStats" id="proofStats">
       <div class="proofStat"><div class="proofStatValue proofSkeleton" id="statTotal">—</div><div class="proofStatLabel" data-i18n="statTotal">Total paid out</div></div>
       <div class="proofStat"><div class="proofStatValue proofSkeleton" id="statCount">—</div><div class="proofStatLabel" data-i18n="statCount">Payments shown</div></div>
@@ -63,6 +77,9 @@ const I18N = {
   en: {
     badge: "Completed payment records", title: "Completed Payment Records",
     desc: "This page lists completed Gramup payment records. Wallet addresses are shortened for privacy, and a TON explorer link is shown when a transaction hash is available.",
+    channelBannerTitle: "Official Payout Channel",
+    channelBannerDesc: "All real user withdrawals and TON transaction proofs are posted live in our verified channel.",
+    channelBtn: "Join @GramUpPayouts ↗",
     statTotal: "Total in records", statCount: "Records shown", statVerified: "With transaction hash",
     listTitle: "Recent payments", loading: "Loading…", cta: "Open Gramup",
     note: "Full wallet addresses are withheld to protect users' privacy. When a transaction hash is available, it links directly to a public TON explorer for independent review.",
@@ -74,6 +91,9 @@ const I18N = {
   fa: {
     badge: "سوابق پرداخت تکمیل‌شده", title: "سوابق عمومی پرداخت‌ها",
     desc: "این صفحه سوابق پرداخت‌های تکمیل‌شده Gramup را نشان می‌دهد. آدرس کیف‌پول‌ها برای حفظ حریم خصوصی کوتاه شده‌اند و هر زمان هش تراکنش موجود باشد، لینک explorer نمایش داده می‌شود.",
+    channelBannerTitle: "کانال رسمی پرداخت‌ها",
+    channelBannerDesc: "تمام برداشت‌های کاربران و لینک‌های تراکنش بلاک‌چین TON در کانال عمومی منتشر می‌شوند.",
+    channelBtn: "عضویت در @GramUpPayouts ↗",
     statTotal: "مجموع ثبت‌شده", statCount: "سوابق نمایش‌داده‌شده", statVerified: "دارای هش تراکنش",
     listTitle: "پرداخت‌های اخیر", loading: "در حال بارگذاری...", cta: "باز کردن Gramup",
     note: "آدرس کامل کیف‌پول‌ها برای حفظ حریم خصوصی نمایش داده نمی‌شود. وقتی هش تراکنش در دسترس باشد، لینک مستقیم explorer برای بررسی عمومی نشان داده می‌شود.",
@@ -200,6 +220,13 @@ async function loadAppInfo() {
     const link = document.getElementById("openAppLink");
     if (data.botLink) link.href = data.botLink;
     else link.style.display = "none";
+
+    if (data.payoutChannelUrl) {
+      const channelLink = document.getElementById("payoutChannelLink");
+      if (channelLink) {
+        channelLink.href = data.payoutChannelUrl;
+      }
+    }
   } catch (error) { /* دکمه‌ی باز کردن اپ بدون این هم مشکلی برای بقیه‌ی صفحه ایجاد نمی‌کند */ }
 }
 
