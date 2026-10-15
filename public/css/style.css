@@ -1732,6 +1732,8 @@ html[data-theme="light"] .referralMilestonesList .referralTaskItem { background:
   background: var(--aurora-grad-primary, linear-gradient(135deg, #4f8cff, #6c5ce7));
   box-shadow: var(--aurora-shadow-glow, 0 0 18px rgba(108,92,231,.28));
 }
+.taskSectionTabs { position: relative; top: auto; margin: 0 0 14px; padding: 4px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; border: 1px solid var(--line); border-radius: 16px; background: rgba(17,19,26,.78); }
+.taskSectionTabs .taskCategoryTab { min-width: 0; min-height: 38px; padding: 0 7px; font-size: 10px; }
 
 
 /* =========================================================

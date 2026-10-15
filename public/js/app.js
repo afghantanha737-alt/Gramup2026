@@ -57,6 +57,7 @@ const state = {
   invited: [],
   referralMinTasks: 2,
   referralTasks: [],
+  taskSection: "daily",
   tasks: [],
   completions: [],
   tasksServerOffsetMs: 0,
@@ -853,6 +854,14 @@ async function claimReferralTask(taskId) {
 }
 window.claimReferralTask = claimReferralTask;
 
+function setTaskSection(section) {
+  const next = ["daily", "vip", "invite"].includes(String(section)) ? String(section) : "daily";
+  state.taskSection = next;
+  if (next === "invite" && !state.referralDataLoaded && !state.referralLoading) void loadReferralData();
+  renderTasks();
+}
+window.setTaskSection = setTaskSection;
+
 let tasksRequestSequence = 0;
 let tasksLoadError = null;
 async function loadTasks({ force = false } = {}) {
@@ -1386,23 +1395,33 @@ async function doCheckIn() {
 window.doCheckIn = doCheckIn;
 function renderTasks() {
   const content = $("#content");
-  // Tasks are intentionally presented as one continuous list. Category
-  // controls were removed from the UI, so no client-side category filter may
-  // hide an otherwise active task.
-  const visibleTasks = state.tasks;
-  const referralHtml = renderReferralRewardTasks();
+  const taskSection = ["daily", "vip", "invite"].includes(state.taskSection) ? state.taskSection : "daily";
+  const isInviteSection = taskSection === "invite";
+  const visibleTasks = isInviteSection
+    ? []
+    : state.tasks.filter(task => taskSection === "vip" ? task.taskKind === "vip_activation" : task.taskKind !== "vip_activation");
+  const referralHtml = isInviteSection ? renderReferralRewardTasks() : "";
+  const dailyCheckinHtml = taskSection === "daily" ? renderDailyCheckinCard() : "";
   const taskErrorHtml = tasksLoadError ? `<div class="card" role="status"><div class="emptyDesc">${t("tasks_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryTasks()">${t("retry_button")}</button></div>` : "";
+  const sectionTabs = `
+    <div class="taskCategoryTabs taskSectionTabs" role="tablist" aria-label="${escapeHTML(t("tasks_title"))}">
+      <button type="button" role="tab" aria-selected="${taskSection === "daily"}" class="taskCategoryTab ${taskSection === "daily" ? "active" : ""}" onclick="setTaskSection('daily')">☀️ ${t("daily_title")}</button>
+      <button type="button" role="tab" aria-selected="${taskSection === "vip"}" class="taskCategoryTab ${taskSection === "vip" ? "active" : ""}" onclick="setTaskSection('vip')">💎 ${t("vip_title")}</button>
+      <button type="button" role="tab" aria-selected="${taskSection === "invite"}" class="taskCategoryTab ${taskSection === "invite" ? "active" : ""}" onclick="setTaskSection('invite')">👥 ${t("menu_referral")}</button>
+    </div>`;
 
-  if (state.tasks.length === 0 && tasksLoadError) {
-    content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${taskErrorHtml}`;
+  if (!state.tasks.length && tasksLoadError && !isInviteSection) {
+    content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}${taskErrorHtml}`;
     return;
   }
-  if (state.tasks.length === 0 || visibleTasks.length === 0) {
+  const inviteHasContent = isInviteSection && state.referralTasks.length > 0;
+  if ((!isInviteSection && visibleTasks.length === 0) || (isInviteSection && !inviteHasContent)) {
     clearInterval(latestPostCooldownTimer);
     latestPostCooldownTimer = null;
     content.innerHTML = `
       <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
-      ${renderDailyCheckinCard()}
+      ${sectionTabs}
+      ${dailyCheckinHtml}
       ${taskErrorHtml}
       ${referralHtml}
       <div class="card emptyState">
@@ -1414,16 +1433,28 @@ function renderTasks() {
     return;
   }
 
+  if (isInviteSection) {
+    clearInterval(latestPostCooldownTimer);
+    latestPostCooldownTimer = null;
+    content.innerHTML = `
+      <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
+      ${sectionTabs}
+      ${referralHtml}
+    `;
+    return;
+  }
+
   const doneCount = visibleTasks.filter(task => completionStatus(task._id) === "approved").length;
-  const taskProgress = state.tasks.length ? Math.round((doneCount / state.tasks.length) * 100) : 0;
+  const taskProgress = visibleTasks.length ? Math.round((doneCount / visibleTasks.length) * 100) : 0;
 
   content.innerHTML = `
     <section class="tasksOverview">
       <div class="tasksOverviewTop"><div><h1>${t("tasks_title")}</h1></div><strong>${taskProgress}%</strong></div>
       <div class="tasksProgressTrack"><i style="width:${taskProgress}%"></i></div>
-      <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(state.tasks.length)} ${t("task_btn_done")}</span><span>${t("tb_points_chip", { n: formatPoints(state.points) })}</span></div>
+      <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(visibleTasks.length)} ${t("task_btn_done")}</span><span>${t("tb_points_chip", { n: formatPoints(state.points) })}</span></div>
     </section>
-    ${renderDailyCheckinCard()}
+    ${sectionTabs}
+    ${dailyCheckinHtml}
     ${taskErrorHtml}
     ${referralHtml}
     <div class="taskList">
