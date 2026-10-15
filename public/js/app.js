@@ -60,7 +60,6 @@ const state = {
   taskSection: "daily",
   ads: { enabled: false, rewardPoints: 5, dailyLimit: 10, watchedToday: 0, remainingToday: 10, cooldownSeconds: 30, nextAvailableAt: 0, serverRewardMode: false },
   adsController: null,
-  miningAdsController: null,
   adsLoading: false,
   tasks: [],
   completions: [],
@@ -74,12 +73,12 @@ const state = {
   weeklyMyPoints: 0,
   weeklyLeaderboardMeta: null,
   weeklyServerOffsetMs: 0,
-  mining: null,
-  miningLoading: false,
-  miningError: "",
-  miningClaiming: false,
-  miningUpgrading: false,
-  miningBoostLoading: false,
+  vipPlans: [],
+  vipSubscriptions: [],
+  vipDataLoaded: false,
+  vipLoading: false,
+  vipError: "",
+  vipServerOffsetMs: 0,
   captchaA: 0,
   captchaB: 0,
   initialized: false
@@ -376,33 +375,28 @@ let navigationListenersInstalled = false;
 
 function setupNavigation() {
   if (navigationListenersInstalled) return;
-  const tabbar = $("#tabbar");
-  if (!tabbar) return;
-  tabbar.addEventListener("click", event => {
-    const button = event.target?.closest?.("button[data-tab]");
-    if (!button || !tabbar.contains(button)) return;
-    const tab = button.dataset.tab;
-    if (!tab) return;
-    haptic("selection");
-    void navigate(tab);
+  $$("#tabbar [data-tab]").forEach(button => {
+    button.addEventListener("click", () => {
+      const tab = button.dataset.tab;
+      if (!tab) return;
+      haptic("selection");
+      navigate(tab);
+    });
   });
   navigationListenersInstalled = true;
   setupReferralTelegramBackButton();
 }
 function updateNavigation() {
   $$("#tabbar [data-tab]").forEach(button => {
-    const bTab = button.dataset.tab;
-    const isActive = bTab === state.activeTab || (state.activeTab === "mining" && (bTab === "mining" || bTab === "vip"));
-    button.classList.toggle("active", isActive);
+    button.classList.toggle("active", button.dataset.tab === state.activeTab);
   });
 }
 let navigationSequence = 0;
 async function navigate(tab) {
   const requestId = ++navigationSequence;
   if (tab !== "profile") profileRenderSequence += 1;
-  const validTabs = ["home", "tasks", "mining", "vip", "wallet", "profile"];
+  const validTabs = ["home", "tasks", "vip", "wallet", "profile"];
   if (!validTabs.includes(tab)) tab = "home";
-  if (tab === "vip") tab = "mining";
   clearInterval(countdownInterval);
   state.activeTab = tab;
   syncReferralTelegramBackButton();
@@ -864,7 +858,7 @@ async function claimReferralTask(taskId) {
 window.claimReferralTask = claimReferralTask;
 
 function setTaskSection(section) {
-  const next = ["daily", "invite"].includes(String(section)) ? String(section) : "daily";
+  const next = ["daily", "vip", "invite"].includes(String(section)) ? String(section) : "daily";
   state.taskSection = next;
   if (next === "invite" && !state.referralDataLoaded && !state.referralLoading) void loadReferralData();
   renderTasks();
@@ -879,19 +873,11 @@ async function loadAdsConfig({ force = false } = {}) {
     if (requestId !== adsConfigRequestSequence) return state.ads;
     state.ads = { ...state.ads, ...(data?.ads || {}) };
     state.adsController = null;
-    state.miningAdsController = null;
     if (state.ads.enabled && state.ads.blockId && window.Adsgram?.init) {
       try {
         state.adsController = window.Adsgram.init({ blockId: String(state.ads.blockId) });
       } catch (error) {
         console.warn("AdsGram initialization failed:", error);
-      }
-    }
-    if (state.ads.miningEnabled && state.ads.miningBlockId && window.Adsgram?.init) {
-      try {
-        state.miningAdsController = window.Adsgram.init({ blockId: String(state.ads.miningBlockId) });
-      } catch (error) {
-        console.warn("Mining AdsGram initialization failed:", error);
       }
     }
     return state.ads;
@@ -924,7 +910,6 @@ async function showRewardedAd() {
   }
 
   state.adsLoading = true;
-  const watchedBefore = Number(state.ads.watchedToday) || 0;
   if (button) {
     button.disabled = true;
     button.textContent = t("ads_wait");
@@ -934,25 +919,8 @@ async function showRewardedAd() {
     await state.adsController.show();
     const result = await api("/api/ads/reward", { method: "POST" });
     if (result?.ads) state.ads = { ...state.ads, ...result.ads };
-    if (result?.pending) {
-      let verified = false;
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 500 : 1000));
-        await loadAdsConfig({ force: true });
-        if ((Number(state.ads.watchedToday) || 0) > watchedBefore) {
-          verified = true;
-          break;
-        }
-      }
-      if (!verified) {
-        toast(t("ads_reward_pending") || "پاداش پس از تأیید AdsGram ثبت می‌شود.", "info");
-        return;
-      }
-      await loadUserData();
-      haptic("success");
-      toast(`+${formatPoints(Number(state.ads.rewardPoints) || 5)} ${t("points_unit")} 🎉`, "success");
-      return;
-    }
+    // In Reward URL mode, AdsGram calls the server independently; reload user data
+    // so the UI does not invent a balance before the server confirms the ledger entry.
     await loadUserData();
     haptic("success");
     toast(`+${formatPoints(Number(result?.earned || state.ads.rewardPoints || 5))} ${t("points_unit")} 🎉`, "success");
@@ -964,12 +932,6 @@ async function showRewardedAd() {
     if (state.activeTab === "tasks") renderTasks();
   }
 }
-
-async function watchAdsgramBoost() {
-  return watchMiningAdsgramBoost();
-}
-window.watchAdsgramBoost = watchAdsgramBoost;
-
 window.showRewardedAd = showRewardedAd;
 
 function renderAdsgramCard() {
@@ -992,11 +954,9 @@ function adsControllerAvailable() { return Boolean(state.ads?.enabled && state.a
 
 let tasksRequestSequence = 0;
 let tasksLoadError = null;
-let tasksLoading = false;
 async function loadTasks({ force = false } = {}) {
   const requestId = ++tasksRequestSequence;
   if (!force && state.tasksLoadedAt && Date.now() - state.tasksLoadedAt < CLIENT_DATA_TTL_MS) return state.tasks;
-  tasksLoading = true;
   try {
     await loadAdsConfig({ force });
     const data = await api("/api/tasks");
@@ -1017,8 +977,6 @@ async function loadTasks({ force = false } = {}) {
     console.warn("Tasks failed:", error);
     if (requestId === tasksRequestSequence) tasksLoadError = error;
     return state.tasks;
-  } finally {
-    if (requestId === tasksRequestSequence) tasksLoading = false;
   }
 }
 
@@ -1042,8 +1000,6 @@ const LEDGER_TYPE_UI = {
   exchange_in: { icon: "⇄" },
   withdraw: { icon: "➤" },
   deposit: { icon: "💎" },
-  mining_claim: { icon: "⛏️" },
-  mining_upgrade: { icon: "⚡" },
   vip_purchase: { icon: "💎" },
   vip_daily_reward: { icon: "🎁" },
   vip_principal_return: { icon: "↩️" },
@@ -1543,29 +1499,23 @@ async function doCheckIn() {
 window.doCheckIn = doCheckIn;
 function renderTasks() {
   const content = $("#content");
-  const taskSection = ["daily", "invite"].includes(state.taskSection) ? state.taskSection : "daily";
+  const taskSection = ["daily", "vip", "invite"].includes(state.taskSection) ? state.taskSection : "daily";
   const isInviteSection = taskSection === "invite";
-  const visibleTasks = isInviteSection ? [] : state.tasks.filter(task => task.taskKind !== "vip_activation");
+  const visibleTasks = isInviteSection
+    ? []
+    : state.tasks.filter(task => taskSection === "vip" ? task.taskKind === "vip_activation" : task.taskKind !== "vip_activation");
   const referralHtml = isInviteSection ? renderReferralRewardTasks() : "";
   const dailyCheckinHtml = taskSection === "daily" ? renderDailyCheckinCard() : "";
   const taskErrorHtml = tasksLoadError ? `<div class="card" role="status"><div class="emptyDesc">${t("tasks_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryTasks()">${t("retry_button")}</button></div>` : "";
   const sectionTabs = `
     <div class="taskCategoryTabs taskSectionTabs" role="tablist" aria-label="${escapeHTML(t("tasks_title"))}">
       <button type="button" role="tab" aria-selected="${taskSection === "daily"}" class="taskCategoryTab ${taskSection === "daily" ? "active" : ""}" onclick="setTaskSection('daily')">☀️ ${t("daily_title")}</button>
+      <button type="button" role="tab" aria-selected="${taskSection === "vip"}" class="taskCategoryTab ${taskSection === "vip" ? "active" : ""}" onclick="setTaskSection('vip')">💎 ${t("vip_title")}</button>
       <button type="button" role="tab" aria-selected="${taskSection === "invite"}" class="taskCategoryTab ${taskSection === "invite" ? "active" : ""}" onclick="setTaskSection('invite')">👥 ${t("menu_referral")}</button>
     </div>`;
 
   if (!state.tasks.length && tasksLoadError && !isInviteSection) {
     content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}${taskErrorHtml}`;
-    return;
-  }
-  if (!state.tasks.length && tasksLoading && !isInviteSection) {
-    content.innerHTML = `
-      <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
-      ${sectionTabs}
-      ${dailyCheckinHtml}
-      <div class="loading" role="status" aria-label="${escapeHTML(t("loading"))}" style="height:150px;margin:12px 0"></div>
-    `;
     return;
   }
   const inviteHasContent = isInviteSection && state.referralTasks.length > 0;
@@ -3024,414 +2974,288 @@ function renderProfileHistory() {
   `;
 }
 
-/* ================= MINING HUB (REPLACING VIP) ================= */
-let miningTicker = null;
-let miningLocalAccumulated = 0;
-
-function stopMiningTicker() {
-  if (miningTicker) {
-    clearInterval(miningTicker);
-    miningTicker = null;
-  }
-}
-
-function startMiningTicker() {
-  stopMiningTicker();
-  if (state.activeTab !== "mining" && state.activeTab !== "vip") return;
-
-  miningTicker = setInterval(() => {
-    if (state.activeTab !== "mining" && state.activeTab !== "vip") {
-      stopMiningTicker();
-      return;
-    }
-    if (!state.mining) return;
-
-    const ratePerSec = (Number(state.mining.effectiveRatePerHour) || 20) / 3600;
-    const maxPts = Number(state.mining.maxStoragePoints) || 60;
-
-    if (miningLocalAccumulated < maxPts) {
-      miningLocalAccumulated = Math.min(maxPts, miningLocalAccumulated + ratePerSec);
-      const liveEl = document.getElementById("miningLivePoints");
-      if (liveEl) {
-        liveEl.textContent = formatNumber(miningLocalAccumulated, 2);
-      }
-      const claimBtn = document.getElementById("miningClaimBtn");
-      if (claimBtn && !state.miningClaiming) {
-        if (miningLocalAccumulated >= 1) {
-          claimBtn.disabled = false;
-          claimBtn.innerHTML = `<span>⛏️</span> <span>${t("mining_rig_claim_btn", { n: formatPoints(Math.floor(miningLocalAccumulated)) }) || `انتقال ${formatPoints(Math.floor(miningLocalAccumulated))} پوینت به حساب اصلی`}</span>`;
-        }
-      }
-      const fillBar = document.getElementById("miningStorageFill");
-      if (fillBar) {
-        const pct = Math.min(100, Math.floor((miningLocalAccumulated / maxPts) * 100));
-        fillBar.style.width = `${pct}%`;
-        if (pct >= 100) fillBar.classList.add("full");
-      }
-    }
-
-    // Boost timer countdown
-    const boostTimerEl = document.getElementById("miningBoostTimer");
-    if (boostTimerEl && state.mining.boostExpiresAt) {
-      const now = Date.now();
-      const exp = Date.parse(state.mining.boostExpiresAt);
-      if (exp > now) {
-        const remSec = Math.max(0, Math.floor((exp - now) / 1000));
-        const m = Math.floor(remSec / 60);
-        const s = remSec % 60;
-        boostTimerEl.textContent = `${m}:${s < 10 ? "0" : ""}${s}`;
-      } else {
-        boostTimerEl.textContent = "";
-        state.mining.isBoosted = false;
-        state.mining.effectiveRatePerHour = state.mining.baseRatePerHour;
-        void loadMiningStatus();
-      }
-    }
-  }, 1000);
-}
-
-async function loadMiningStatus() {
-  if (state.miningLoading) return;
-  state.miningLoading = true;
-  state.miningError = "";
+async function loadVipPlans() {
+  if (state.vipLoading) return false;
+  state.vipLoading = true;
+  state.vipError = "";
   try {
-    const res = await api("/api/mining/status");
-    if (res?.mining) {
-      state.mining = res.mining;
-      miningLocalAccumulated = Number(res.mining.accumulatedPoints) || 0;
-      if (res.mining.userPoints != null) state.points = res.mining.userPoints;
-      if (res.mining.boostExpiresAt) state.miningBoostExpiresAt = res.mining.boostExpiresAt;
-    }
-  } catch (err) {
-    console.warn("Mining status load failed:", err);
-    state.miningError = err.message || t("error_generic");
-  } finally {
-    state.miningLoading = false;
-  }
-}
-
-async function claimMiningPoints() {
-  if (state.miningClaiming) return;
-  if (!state.mining || miningLocalAccumulated < 1) {
-    toast(t("mining_no_points_yet") || "هنوز پوینتی برای برداشت انباشته نشده است.", "info");
-    return;
-  }
-  state.miningClaiming = true;
-  const btn = document.querySelector("#miningClaimBtn");
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = t("loading") || "در حال انتقال...";
-  }
-  try {
-    const res = await api("/api/mining/claim", { method: "POST" });
-    if (res?.success) {
-      if (res.newBalance != null) state.points = res.newBalance;
-      if (res.mining) {
-        state.mining = res.mining;
-        miningLocalAccumulated = Number(res.mining.accumulatedPoints) || 0;
-      } else {
-        miningLocalAccumulated = 0;
-      }
-      haptic("success");
-      toast(t("mining_claim_success", { n: formatPoints(res.claimedPoints) }) || `${formatPoints(res.claimedPoints)} پوینت استخراج‌شده با موفقیت واریز شد!`, "success");
-      updateHeader();
-      await renderMiningTab();
-    }
-  } catch (err) {
-    haptic("warning");
-    toast(err.message || t("error_generic"), "warning");
-  } finally {
-    state.miningClaiming = false;
-  }
-}
-window.claimMiningPoints = claimMiningPoints;
-
-async function upgradeMining(type) {
-  if (state.miningUpgrading) return;
-  state.miningUpgrading = true;
-  try {
-    const res = await api("/api/mining/upgrade", {
-      method: "POST",
-      body: JSON.stringify({ type })
-    });
-    if (res?.success) {
-      if (res.newBalance != null) state.points = res.newBalance;
-      if (res.mining) {
-        state.mining = res.mining;
-        miningLocalAccumulated = Number(res.mining.accumulatedPoints) || 0;
-      }
-      haptic("success");
-      toast(res.message || "ارتقاء با موفقیت انجام شد!", "success");
-      updateHeader();
-      await renderMiningTab();
-    }
-  } catch (err) {
-    haptic("warning");
-    toast(err.message || t("error_generic"), "warning");
-  } finally {
-    state.miningUpgrading = false;
-  }
-}
-window.upgradeMining = upgradeMining;
-
-async function watchMiningAdsgramBoost() {
-  if (state.miningBoostLoading) return;
-  if (!state.ads?.miningEnabled || !state.miningAdsController) {
-    toast(t("ads_not_available") || "تبلیغات در حال حاضر در دسترس نیست.", "warning");
-    return;
-  }
-  if (!state.ads.serverRewardMode) {
-    toast(t("mining_boost_server_unavailable") || "تأیید سروری پاداش AdsGram تنظیم نشده است.", "info");
-    return;
-  }
-  const now = Date.now();
-  const currentExpiry = state.mining?.boostExpiresAt ? Date.parse(state.mining.boostExpiresAt) : 0;
-  if (currentExpiry > now) {
-    toast(t("mining_boost_cooldown") || "بوست ۲ برابری در حال حاضر فعال است.", "info");
-    return;
-  }
-
-  state.miningBoostLoading = true;
-  const btn = document.querySelector("#miningBoostBtn");
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = t("ads_wait") || "در حال آماده‌سازی ویدیو...";
-  }
-
-  try {
-    await state.miningAdsController.show();
-    const previousExpiry = currentExpiry;
-    let verified = false;
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 500 : 1000));
-      await loadMiningStatus();
-      const nextExpiry = state.mining?.boostExpiresAt ? Date.parse(state.mining.boostExpiresAt) : 0;
-      if (nextExpiry > Date.now() && nextExpiry > previousExpiry) {
-        state.miningBoostExpiresAt = state.mining.boostExpiresAt;
-        verified = true;
-        break;
-      }
-    }
-    if (!verified) {
-      toast(t("mining_boost_pending") || "پاداش هنوز از طرف AdsGram تأیید نشده است.", "info");
-      return;
-    }
-    haptic("success");
-    toast(t("mining_boost_success") || "بوست ۲ برابری ماینینگ به مدت ۳۰ دقیقه فعال شد! 🚀", "success");
-    await loadMiningStatus();
+    const data = await api("/api/points/vip/plans");
+    state.vipPlans = Array.isArray(data?.plans) ? data.plans : [];
+    state.vipSubscriptions = Array.isArray(data?.subscriptions) ? data.subscriptions : [];
+    if (data?.points != null) state.points = Number(data.points) || 0;
+    const serverNow = Date.parse(data?.serverNow || "");
+    state.vipServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
+    state.vipDataLoaded = true;
+    return true;
   } catch (error) {
-    haptic("warning");
-    toast(t("ads_skipped") || "تماشای تبلیغ کامل نشد.", "warning");
+    console.warn("VIP plans failed:", error);
+    state.vipError = translateServerMessage(error.code, error.message) || t("vip_error");
+    state.vipDataLoaded = false;
+    return false;
   } finally {
-    state.miningBoostLoading = false;
-    await renderMiningTab();
+    state.vipLoading = false;
   }
 }
-window.watchMiningAdsgramBoost = watchMiningAdsgramBoost;
 
-async function renderMiningTab() {
-  const renderRequestId = navigationSequence;
-  if (!state.mining && !state.miningLoading) {
-    $("#content").innerHTML = `<div class="loading" style="height:300px"></div>`;
-    await loadMiningStatus();
+function formatVipCountdown(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return days > 0
+    ? `${days}d ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+let vipCountdownTimer = null;
+let vipCountdownRefreshPending = false;
+const vipClaimingIds = new Set();
+const vipPurchasingPlanNumbers = new Set();
+
+function stopVipCountdown() {
+  if (vipCountdownTimer) clearInterval(vipCountdownTimer);
+  vipCountdownTimer = null;
+  vipCountdownRefreshPending = false;
+}
+
+async function tickVipCountdowns() {
+  if ((state.activeTab !== "profile" && state.activeTab !== "vip") || (state.activeTab === "profile" && profileView !== "vip")) return;
+  let shouldRefresh = false;
+  document.querySelectorAll("[data-vip-countdown]").forEach(element => {
+    const target = Date.parse(element.dataset.vipCountdown || "");
+    if (!Number.isFinite(target)) return;
+    const remaining = target - (Date.now() + Number(state.vipServerOffsetMs || 0));
+    if (remaining <= 0) {
+      element.textContent = "00:00:00";
+      shouldRefresh = true;
+    } else {
+      element.textContent = formatVipCountdown(remaining);
+    }
+  });
+  if (!shouldRefresh || vipCountdownRefreshPending) return;
+  vipCountdownRefreshPending = true;
+  const loaded = await loadVipPlans();
+  vipCountdownRefreshPending = false;
+  if (loaded && ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip")) {
+    const content = $("#content");
+    if (content) content.innerHTML = renderProfileVip();
+    startVipCountdown();
   }
-  if (renderRequestId !== navigationSequence || (state.activeTab !== "mining" && state.activeTab !== "vip")) return;
+}
 
-  const m = state.mining || {
-    level: 1,
-    storageLevel: 1,
-    rigName: "Basic CPU Miner",
-    storageName: "Standard Battery (3h)",
-    baseRatePerHour: 20,
-    effectiveRatePerHour: 20,
-    maxStorageHours: 3,
-    maxStoragePoints: 60,
-    accumulatedPoints: 0,
-    isStorageFull: false,
-    isBoosted: false,
-    boostExpiresAt: null,
-    nextRigUpgrade: { level: 2, name: "Dual-Core Rig", ratePerHour: 45, cost: 150 },
-    nextStorageUpgrade: { level: 2, name: "Extended Pack (6h)", maxHours: 6, cost: 100 }
-  };
+function startVipCountdown() {
+  stopVipCountdown();
+  if ((state.activeTab !== "profile" && state.activeTab !== "vip") || (state.activeTab === "profile" && profileView !== "vip")) return;
+  void tickVipCountdowns();
+  vipCountdownTimer = setInterval(tickVipCountdowns, 1000);
+}
 
-  const accumulated = miningLocalAccumulated;
-  const fillPct = Math.min(100, Math.floor((accumulated / (m.maxStoragePoints || 1)) * 100));
-  const isBoosted = m.isBoosted && m.boostExpiresAt && Date.parse(m.boostExpiresAt) > Date.now();
-
-  let boostTimerText = "";
-  if (isBoosted) {
-    const remSec = Math.max(0, Math.floor((Date.parse(m.boostExpiresAt) - Date.now()) / 1000));
-    const mins = Math.floor(remSec / 60);
-    const secs = remSec % 60;
-    boostTimerText = `${mins}:${secs < 10 ? "0" : ""}${secs}`;
-  }
-
-  const userPts = Number(state.points) || 0;
-  const canAffordRig = m.nextRigUpgrade && userPts >= m.nextRigUpgrade.cost;
-  const canAffordStorage = m.nextStorageUpgrade && userPts >= m.nextStorageUpgrade.cost;
-
-  const content = $("#content");
-  content.innerHTML = `
-    <div class="miningHub">
-      <div class="miningHeroIntro">
-        <div class="miningHeroTopline">
-          <button class="miningBackButton" type="button" onclick="navigate('home')" aria-label="${t("referral_back")}">‹</button>
-          <span class="miningHeroKicker"><i></i>${t("mining_hero_kicker") || "GRAMUP MINING WORKSHOP"}</span>
-          <span class="miningBalanceChip">◆ ${formatPoints(state.points)}</span>
+function renderProfileVip() {
+  const plans = state.vipPlans || [];
+  const subscriptions = state.vipSubscriptions || [];
+  const planCards = plans.map(plan => {
+    const available = plan.enabled === true && plan.comingSoon !== true;
+    const statusKey = plan.comingSoon ? "vip_status_coming_soon" : available ? "vip_status_active" : "vip_status_inactive";
+    const canAfford = Number(state.points) >= Number(plan.pricePoints);
+    const buttonLabel = plan.comingSoon ? t("vip_status_coming_soon") : available ? (canAfford ? t("vip_buy") : t("vip_insufficient_points")) : t("vip_status_inactive");
+    const planNumber = Number(plan.planNumber);
+    const theme = planNumber === 1 ? "bronze" : planNumber === 2 ? "silver" : planNumber === 3 ? "gold" : "future";
+    return `
+      <article class="vipPlanCard vipPlanCard--${theme}">
+        <div class="vipPlanGlow" aria-hidden="true"></div>
+        <div class="vipPlanTopline">
+          <div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">${theme === "bronze" ? "◈" : theme === "silver" ? "✦" : theme === "gold" ? "♛" : "◇"}</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</div></div>
+          <span class="badge ${available ? "success" : "info"}">${t(statusKey)}</span>
         </div>
-        <h2 class="miningHeroTitle">${t("mining_hub_title") || "Mining Hub"}</h2>
-        <p class="miningHeroDescription">${t("mining_hero_desc") || "Upgrade your virtual rig, fill its storage, and claim points to your main balance."}</p>
-      </div>
+        ${`
+          <div class="vipPlanStats">
+            <div class="vipPlanStat"><span>${t("vip_price", { n: formatPoints(plan.pricePoints) })}</span><b>${formatPoints(plan.pricePoints)}</b></div>
+            <div class="vipPlanStat"><span>${t("vip_rate", { n: formatNumber(plan.monthlyRewardPercent, 2) })}</span><b>${formatNumber(plan.monthlyRewardPercent, 2)}%</b></div>
+            <div class="vipPlanStat"><span>${t("vip_duration", { n: formatPoints(plan.durationDays) })}</span><b>${formatPoints(plan.durationDays)}</b></div>
+          </div>
+          <div class="vipPlanReward"><span>${t("vip_total_reward", { n: formatPoints(plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100)) })}</span><b>${formatPoints(plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100))}</b></div>
+          <div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays))) })}</div>`}
+        <button type="button" class="vipPlanButton ${available ? "vipPlanButton--primary" : "vipPlanButton--secondary"}" ${available && canAfford && !vipPurchasingPlanNumbers.has(Number(plan.planNumber)) ? "" : "disabled"} onclick="purchaseVipPlan(${Number(plan.planNumber)})">${vipPurchasingPlanNumbers.has(Number(plan.planNumber)) ? t("vip_buying") : buttonLabel}</button>
+        ${available && !canAfford ? `<div class="vipPlanBalance">${t("vip_balance", { n: formatPoints(state.points) })}</div>` : ""}
+      </article>`;
+  }).join("");
 
-      <!-- Core Miner Card -->
-      <div class="miningCoreCard">
-        <div class="miningVisualCore">
-          <div class="miningVisualIcon">⛏️</div>
+  const subscriptionCards = subscriptions.map(subscription => {
+    const isActive = subscription.status === "active";
+    const isCancelled = subscription.status === "cancelled";
+    const statusText = isActive ? t("vip_status_active") : isCancelled ? t("vip_status_cancelled") : t("vip_status_completed");
+    const nextReward = formatPoints(subscription.nextRewardPoints || 0);
+    let claimMarkup = "";
+    if (isActive && subscription.canClaim) {
+      const claiming = vipClaimingIds.has(subscription.id);
+      claimMarkup = `<button type="button" class="primary" ${claiming ? "disabled" : ""} onclick="claimVipReward('${escapeHTML(subscription.id)}')">${claiming ? t("vip_loading") : t("vip_claim_button", { n: nextReward })}</button>`;
+    } else if (isActive && subscription.nextClaimAt) {
+      const claimTime = Date.parse(subscription.nextClaimAt);
+      const serverNow = Date.now() + Number(state.vipServerOffsetMs || 0);
+      const hasClaimed = Number(subscription.claimsCompleted) > 0;
+      const label = hasClaimed ? `<div class="cardSubtitle">${t("vip_claimed_today")}</div>` : "";
+      claimMarkup = `${label}${claimTime > serverNow ? `<div class="cardSubtitle">${t("vip_claim_next", { time: `<span data-vip-countdown="${escapeHTML(subscription.nextClaimAt)}">${formatVipCountdown(claimTime - serverNow)}</span>` })}</div>` : ""}`;
+    }
+    return `
+      <article class="vipSubscriptionCard">
+        <div class="vipPlanTopline"><div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">◌</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</div></div><span class="badge ${isActive ? "success" : "info"}">${statusText}</span></div>
+        <div class="vipSubscriptionGrid">
+          <div>${t("vip_days_progress", { done: formatPoints(subscription.daysCompleted), total: formatPoints(subscription.durationDays) })}</div>
+          <div>${t("vip_days_remaining", { n: formatPoints(subscription.daysRemaining) })}</div>
+          <div>${t("vip_claim_progress", { claimed: formatPoints(subscription.claimsCompleted), total: formatPoints(subscription.totalClaims) })}</div>
+          ${isActive ? `<div>${t("vip_todays_reward", { n: nextReward })}</div>` : ""}
+          <div>${t("vip_total_earned", { n: formatPoints(subscription.claimedRewardPoints) })}</div>
+          <div>${t("vip_total_reward", { n: formatPoints(subscription.totalRewardPoints) })}</div>
+          ${isActive ? `<div>${t("vip_principal_note", { n: formatPoints(subscription.pricePoints) })}</div>` : isCancelled ? "" : `<div>${t("vip_status_completed")}</div>`}
         </div>
-        <div class="miningLiveBadge">
-          <span class="miningLiveDot"></span>
-          <span>ONLINE • ${escapeHTML(m.rigName)}</span>
-        </div>
+        ${claimMarkup}
+      </article>`;
+  }).join("");
 
-        <div class="miningUnclaimedLabel">${t("mining_unclaimed_label") || "استخراج‌شده آماده انتقال"}</div>
-        <div class="miningUnclaimedValue" id="miningLivePoints">${formatNumber(accumulated, 2)}</div>
-
-        <div class="miningStatsGrid">
-          <div class="miningStatBox">
-            <div class="miningStatTitle">${t("mining_hourly_rate") || "سرعت استخراج"}</div>
-            <div class="miningStatValue" style="color:#a78bfa;">
-              ⚡ ${m.effectiveRatePerHour} Pts/h
-              ${isBoosted ? '<span style="font-size:10px;color:#fde047;background:rgba(234,179,8,0.2);padding:2px 6px;border-radius:6px;">2x</span>' : ''}
-            </div>
-          </div>
-          <div class="miningStatBox">
-            <div class="miningStatTitle">${t("mining_storage_runtime") || "ظرفیت باتری"}</div>
-            <div class="miningStatValue" style="color:#38bdf8;">
-              🔋 ${m.maxStorageHours}h (${m.maxStoragePoints} max)
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;margin-bottom:4px;">
-            <span>${t("mining_capacity_label") || "شارژ باتری"}</span>
-            <span>${fillPct}% ${fillPct >= 100 ? `(${t("mining_full_ready") || "پر شد"})` : ''}</span>
-          </div>
-          <div class="miningProgressBarBg">
-            <div id="miningStorageFill" class="miningProgressBarFill ${fillPct >= 100 ? 'full' : ''}" style="width:${fillPct}%;"></div>
-          </div>
-        </div>
-
-        <button id="miningClaimBtn" type="button" class="miningClaimButton" onclick="claimMiningPoints()" ${accumulated < 1 ? 'disabled' : ''} style="margin-top:14px;">
-          <span>⛏️</span>
-          <span>${accumulated >= 1 ? (t("mining_rig_claim_btn", { n: formatPoints(Math.floor(accumulated)) }) || `انتقال ${formatPoints(Math.floor(accumulated))} پوینت به حساب اصلی`) : (t("mining_accumulating") || "در حال استخراج...")}</span>
-        </button>
-      </div>
-
-      <!-- Adsgram Rewarded 2x Boost Card -->
-      <div class="miningBoostCard">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span class="miningBoostIcon">⚡</span>
-            <div>
-              <div class="miningBoostTitle">${t("mining_boost_title")}</div>
-              <div class="miningBoostDescription">${t("mining_boost_desc")}</div>
-            </div>
-          </div>
-        </div>
-        <button id="miningBoostBtn" type="button" class="miningBoostButton ${isBoosted ? 'active' : ''}" onclick="watchMiningAdsgramBoost()" ${isBoosted ? 'disabled' : ''}>
-          ${isBoosted ? `🚀 ${t("mining_boost_active", { time: `<span id="miningBoostTimer">${boostTimerText}</span>` }) || `بوست ۲ برابری فعال است (<span id="miningBoostTimer">${boostTimerText}</span>)`}` : `🎬 ${t("mining_boost_watch")}`}
-        </button>
-      </div>
-
-      <!-- Upgrades Section -->
-      <div class="sectionHeader" style="margin-top:6px;">
-        <h3 class="sectionTitle" style="font-size:15px;">🛠️ ${t("mining_rig_store_title") || "فروشگاه و ارتقاء تجهیزات"}</h3>
-      </div>
-
-      <div class="miningUpgradeGrid">
-        <!-- Rig Upgrade Card -->
-        <div class="miningUpgradeCard">
-          <div class="miningUpgradeHeader">
-            <div class="miningUpgradeTitle">
-              <span>⚡</span>
-              <span>${t("mining_rig_hardware") || "دستگاه ماینر (Rig)"}</span>
-            </div>
-            <span class="miningUpgradeLevel">${t("mining_level_label", { n: m.level }) || `سطح ${m.level}`}</span>
-          </div>
-          <div class="miningUpgradeDetails">
-            <div>
-              <div style="color:#f8fafc;font-weight:700;">${escapeHTML(m.rigName)}</div>
-              <div style="font-size:11px;color:#a78bfa;">⚡ ${m.baseRatePerHour} Pts / hr</div>
-            </div>
-            ${m.nextRigUpgrade ? `
-              <div style="text-align:right;">
-                <div style="font-size:11px;color:#4ade80;">+${m.nextRigUpgrade.ratePerHour - m.baseRatePerHour} Pts/hr</div>
-                <div style="font-size:11px;color:#94a3b8;">${formatPoints(m.nextRigUpgrade.cost)} Pts</div>
-              </div>
-            ` : `<span class="badge info">${t("mining_max_level") || "حداکثر"}</span>`}
-          </div>
-          ${m.nextRigUpgrade ? `
-            <button type="button" class="miningUpgradeBtn" onclick="upgradeMining('rig')" ${!canAffordRig ? 'disabled' : ''}>
-              <span>⚡</span>
-              <span>${t("mining_upgrade_btn", { n: m.nextRigUpgrade.level, cost: formatPoints(m.nextRigUpgrade.cost) }) || `ارتقاء به سطح ${m.nextRigUpgrade.level} (${formatPoints(m.nextRigUpgrade.cost)} پوینت)`}</span>
-            </button>
-          ` : ''}
-        </div>
-
-        <!-- Storage Upgrade Card -->
-        <div class="miningUpgradeCard">
-          <div class="miningUpgradeHeader">
-            <div class="miningUpgradeTitle">
-              <span>🔋</span>
-              <span>${t("mining_battery_capacity") || "باتری و حافظه (Storage)"}</span>
-            </div>
-            <span class="miningUpgradeLevel">${t("mining_level_label", { n: m.storageLevel }) || `سطح ${m.storageLevel}`}</span>
-          </div>
-          <div class="miningUpgradeDetails">
-            <div>
-              <div style="color:#f8fafc;font-weight:700;">${escapeHTML(m.storageName)}</div>
-              <div style="font-size:11px;color:#38bdf8;">🔋 ${m.maxStorageHours} ساعت نگهداری</div>
-            </div>
-            ${m.nextStorageUpgrade ? `
-              <div style="text-align:right;">
-                <div style="font-size:11px;color:#4ade80;">+${m.nextStorageUpgrade.maxHours - m.maxStorageHours} ساعت</div>
-                <div style="font-size:11px;color:#94a3b8;">${formatPoints(m.nextStorageUpgrade.cost)} Pts</div>
-              </div>
-            ` : `<span class="badge info">${t("mining_max_level") || "حداکثر"}</span>`}
-          </div>
-          ${m.nextStorageUpgrade ? `
-            <button type="button" class="miningUpgradeBtn" onclick="upgradeMining('storage')" ${!canAffordStorage ? 'disabled' : ''}>
-              <span>🔋</span>
-              <span>${t("mining_upgrade_btn", { n: m.nextStorageUpgrade.level, cost: formatPoints(m.nextStorageUpgrade.cost) }) || `ارتقاء به سطح ${m.nextStorageUpgrade.level} (${formatPoints(m.nextStorageUpgrade.cost)} پوینت)`}</span>
-            </button>
-          ` : ''}
-        </div>
-      </div>
-
-      <!-- Proof & Withdraw Notice -->
-      <div class="card" style="margin-top:8px;padding:14px;border-radius:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);text-align:center;">
-        <div style="font-size:12px;color:#cbd5e1;line-height:1.5;margin-bottom:8px;">
-          ${t("mining_proofs_note") || "تمامی پوینت‌های استخراج‌شده در بخش کیف پول قابل تبدیل به ارز GRAM و برداشت مستقیم به شبکه TON هستند."}
-        </div>
-        <button type="button" class="secondaryBtn" style="font-size:12px;padding:6px 14px;border-radius:10px;height:auto;" onclick="window.open('https://t.me/GramUpPayouts', '_blank')">
-          📢 ${t("mining_view_proofs") || "مشاهده اثبات واریزی‌ها در تلگرام"}
-        </button>
-      </div>
+  return `
+    <style>
+      .vipRedesign{--vip-ink:#f7f5ff;--vip-muted:#a8a5b8;--vip-line:rgba(255,255,255,.1);margin:0 -2px;padding:4px 0 24px;background:radial-gradient(circle at 86% 0%,rgba(124,58,237,.2),transparent 35%),linear-gradient(180deg,rgba(11,8,22,.24),transparent 70%);color:var(--vip-ink)}
+      .vipRedesign .sectionHeader{margin-bottom:14px}.vipRedesign .sectionTitle{letter-spacing:-.2px}.vipRedesign .sectionMore{color:#c4b5fd}
+      .vipHero{padding:18px;border:1px solid rgba(167,139,250,.2);border-radius:24px;background:linear-gradient(145deg,rgba(76,29,149,.28),rgba(16,13,29,.84));box-shadow:0 18px 42px rgba(30,16,70,.25);margin-bottom:18px}.vipHero .cardSubtitle{color:var(--vip-muted);line-height:1.8}
+      .vipPlanCard,.vipSubscriptionCard{position:relative;isolation:isolate;overflow:hidden;margin:12px 0;padding:17px;border:1px solid var(--vip-line);border-radius:24px;background:linear-gradient(145deg,rgba(255,255,255,.09),rgba(17,15,28,.9) 58%);box-shadow:0 15px 35px rgba(0,0,0,.22)}.vipPlanGlow{position:absolute;z-index:-1;width:160px;height:160px;right:-75px;top:-90px;border-radius:50%;filter:blur(3px);opacity:.7}.vipPlanCard--bronze{border-color:rgba(205,127,50,.38)}.vipPlanCard--bronze .vipPlanGlow{background:rgba(180,83,9,.35)}.vipPlanCard--silver{border-color:rgba(203,213,225,.35)}.vipPlanCard--silver .vipPlanGlow{background:rgba(148,163,184,.28)}.vipPlanCard--gold{border-color:rgba(250,204,21,.45);background:linear-gradient(145deg,rgba(120,72,12,.25),rgba(25,19,24,.92) 62%)}.vipPlanCard--gold .vipPlanGlow{background:rgba(234,179,8,.4)}.vipPlanCard--future{opacity:.9}
+      .vipPlanTopline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}.vipPlanTitleWrap{display:flex;align-items:center;gap:9px;min-width:0}.vipPlanMark{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:12px;color:#e9d5ff;background:rgba(139,92,246,.18);font-size:20px}.vipPlanCard--bronze .vipPlanMark{color:#fdba74;background:rgba(180,83,9,.2)}.vipPlanCard--silver .vipPlanMark{color:#e2e8f0;background:rgba(148,163,184,.2)}.vipPlanCard--gold .vipPlanMark{color:#fde68a;background:rgba(234,179,8,.2)}.vipPlanTitle{font-size:16px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vipPlanCard .badge,.vipSubscriptionCard .badge{flex:0 0 auto}
+      .vipPlanStats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}.vipPlanStat{min-width:0;padding:10px 8px;border:1px solid rgba(255,255,255,.07);border-radius:15px;background:rgba(0,0,0,.16);text-align:center}.vipPlanStat span{display:block;min-height:28px;color:var(--vip-muted);font-size:9px;line-height:1.5}.vipPlanStat b{display:block;margin-top:3px;font-size:13px;color:#fff;direction:ltr}.vipPlanReward{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;border-radius:15px;background:rgba(139,92,246,.11);color:var(--vip-muted);font-size:10px}.vipPlanReward b{color:#ddd6fe;font-size:14px}.vipPlanDaily,.vipPlanBalance{margin-top:9px;color:var(--vip-muted);font-size:10px}.vipPlanButton{width:100%;min-height:44px;margin-top:14px;padding:11px 14px;border-radius:14px;font-size:12px;font-weight:900;transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease}.vipPlanButton:active{transform:scale(.98)}.vipPlanButton--primary{color:#fff;background:linear-gradient(135deg,#a78bfa,#7c3aed);box-shadow:0 9px 22px rgba(124,58,237,.28)}.vipPlanButton--secondary{color:#c4b5fd;background:rgba(139,92,246,.1);border:1px solid rgba(167,139,250,.25)}.vipPlanButton:disabled{opacity:.48;box-shadow:none}.vipSubscriptionGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.vipSubscriptionGrid>div{padding:9px;border-radius:12px;background:rgba(0,0,0,.14);color:var(--vip-muted);font-size:10px;line-height:1.6}.vipSubscriptionCard button{width:100%;margin-top:12px}
+      @media (max-width:420px){.vipPlanCard,.vipSubscriptionCard{padding:14px;border-radius:20px}.vipPlanStats{gap:5px}.vipPlanStat{padding:8px 4px}.vipPlanStat span{font-size:8px}.vipPlanStat b{font-size:12px}.vipPlanTitle{font-size:14px}.vipPlanTopline{gap:6px}.vipSubscriptionGrid{gap:6px}}
+    </style>
+    <div class="vipRedesign">
+    <div class="sectionHeader">
+      <button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button>
+      <h2 class="sectionTitle">${t("vip_title")}</h2><span></span>
+    </div>
+    <div class="vipHero vipHeroReference">
+      <div class="vipHeroBrand"><img src="img/gramup-logo-new.jpg" alt="Gramup"><div><strong>Gram<span>up</span></strong><small>${state.user?.id ? `ID ${escapeHTML(state.user.id)}` : t("vip_title")}</small></div></div>
+      <div class="vipHeroRows"><div><span>${t("vip_current_balance")}</span><b>${formatPoints(state.points)} Points</b></div><div><span>${t("vip_daily_reward_summary")}</span><b>${formatPoints(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0))} Points</b></div></div>
+      <button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanCard')?.scrollIntoView({behavior:'smooth',block:'start'})">${t("vip_buy")}</button>
+    </div>
+    ${subscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t("vip_active_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
+    <h3 class="sectionTitle" style="margin:18px 4px 8px">${t("vip_title")}</h3>
+    ${planCards || `<div class="card"><div class="emptyDesc">${t("vip_empty_plans")}</div></div>`}
     </div>
   `;
-
-  startMiningTicker();
 }
-window.renderMiningTab = renderMiningTab;
-window.renderVipTab = renderMiningTab;
 
+function retryVipPlans() {
+  state.vipDataLoaded = false;
+  state.vipError = "";
+  void (state.activeTab === "vip" ? renderVipTab() : renderProfile());
+}
+window.retryVipPlans = retryVipPlans;
+
+function confirmVipPurchase(message) {
+  if (tg && typeof tg.showConfirm === "function") {
+    return new Promise(resolve => tg.showConfirm(message, resolve));
+  }
+  return Promise.resolve(window.confirm(message));
+}
+
+async function purchaseVipPlan(planNumber) {
+  const plan = state.vipPlans.find(item => Number(item.planNumber) === Number(planNumber));
+  if (!plan || plan.enabled !== true || plan.comingSoon === true) return;
+  if (vipPurchasingPlanNumbers.has(Number(plan.planNumber))) return;
+  if (Number(state.points) < Number(plan.pricePoints)) return toast(t("vip_balance", { n: formatPoints(state.points) }), "error");
+  vipPurchasingPlanNumbers.add(Number(plan.planNumber));
+  if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") {
+    const content = $("#content");
+    if (content) content.innerHTML = renderProfileVip();
+  }
+  const scope = `vip_purchase_${plan.planNumber}`;
+  try {
+    const confirmed = await confirmVipPurchase(t("vip_buy_confirm", { n: formatPoints(plan.planNumber), price: formatPoints(plan.pricePoints) }));
+    if (!confirmed) return;
+    const result = await api("/api/points/vip/purchase", {
+      method: "POST",
+      headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) },
+      body: { planNumber: Number(plan.planNumber) }
+    });
+    clearPendingIdempotencyKey(scope);
+    state.points = Number(result.points) || state.points;
+    updateHeader();
+    state.vipDataLoaded = false;
+    await loadVipPlans();
+    await renderProfile();
+    toast(t("vip_buy_success"), "success");
+  } catch (error) {
+    clearDefinitiveIdempotencyFailure(scope, error);
+    toast(translateServerMessage(error.code, error.message), "error");
+  } finally {
+    vipPurchasingPlanNumbers.delete(Number(plan.planNumber));
+    if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") await renderProfile();
+  }
+}
+window.purchaseVipPlan = purchaseVipPlan;
+
+async function claimVipReward(subscriptionId) {
+  if (!subscriptionId || vipClaimingIds.has(subscriptionId)) return;
+  vipClaimingIds.add(subscriptionId);
+  const scope = `vip_claim_${subscriptionId}`;
+  if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") {
+    const content = $("#content");
+    if (content) content.innerHTML = renderProfileVip();
+  }
+  try {
+    const result = await api(`/api/points/vip/${encodeURIComponent(subscriptionId)}/claim`, {
+      method: "POST",
+      headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) },
+      body: JSON.stringify({})
+    });
+    clearPendingIdempotencyKey(scope);
+    state.points = Number(result.points) || state.points;
+    updateHeader();
+    state.vipDataLoaded = false;
+    await loadVipPlans();
+    if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") await renderProfile();
+    toast(t("vip_claim_success", { n: formatPoints(result.rewardPoints) }), "success");
+  } catch (error) {
+    clearDefinitiveIdempotencyFailure(scope, error);
+    toast(translateServerMessage(error.code, error.message), "error");
+    state.vipDataLoaded = false;
+    await loadVipPlans();
+    if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") await renderProfile();
+  } finally {
+    vipClaimingIds.delete(subscriptionId);
+    if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") startVipCountdown();
+  }
+}
+window.claimVipReward = claimVipReward;
+
+let profileRenderSequence = 0;
 async function renderProfile() {
+  const renderRequestId = ++profileRenderSequence;
+  const isCurrentProfileRender = () => renderRequestId === profileRenderSequence
+    && (state.activeTab === "profile" || (state.activeTab === "vip" && profileView === "vip"));
   const content = $("#content");
+  if (profileView !== "leaderboard" || leaderboardMode !== "weekly") stopWeeklyCompetitionCountdown();
+  if (profileView !== "vip") stopVipCountdown();
+  if (profileView === "leaderboard" && state.leaderboard.length === 0) {
+    content.innerHTML = `<div class="loading" style="height:300px"></div>`;
+    await loadLeaderboard();
+    if (!isCurrentProfileRender()) return;
+  }
+  if (profileView === "leaderboard" && leaderboardMode === "weekly" && !state.weeklyLeaderboardMeta) {
+    content.innerHTML = `<div class="loading" style="height:300px"></div>`;
+    await loadWeeklyLeaderboard();
+    if (!isCurrentProfileRender()) return;
+  }
+  if (profileView === "history" && historyList.length === 0 && !historyLoading) {
+    content.innerHTML = `<div class="loading" style="height:300px"></div>`;
+    await loadHistory(true);
+    if (!isCurrentProfileRender()) return;
+  }
+  if (profileView === "vip" && !state.vipDataLoaded && !state.vipLoading) {
+    content.innerHTML = `<div class="loading" style="height:300px"></div>`;
+    await loadVipPlans();
+    if (!isCurrentProfileRender()) return;
+  }
   if (profileView === "referral") {
     content.innerHTML = renderProfileReferral();
-    if (referralEntryTransitionPending) {
-      applyReferralEntryTransition();
+    if (referralEntryTransitionPending && !state.referralLoading) {
+      content.querySelector(".referralPage")?.classList.add("referralPageEntering");
       referralEntryTransitionPending = false;
     }
   } else if (profileView === "leaderboard") {
@@ -3442,10 +3266,27 @@ async function renderProfile() {
   } else if (profileView === "history") {
     content.innerHTML = renderProfileHistory();
   } else if (profileView === "vip") {
-    navigate("mining");
+    content.innerHTML = state.vipError
+      ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondary" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
+      : renderProfileVip();
+    startVipCountdown();
   } else {
     content.innerHTML = renderProfileMenu();
   }
+}
+
+async function renderVipTab() {
+  const renderRequestId = navigationSequence;
+  profileView = "vip";
+  if (!state.vipDataLoaded && !state.vipLoading) {
+    $("#content").innerHTML = `<div class="loading" style="height:300px"></div>`;
+    await loadVipPlans();
+  }
+  if (renderRequestId !== navigationSequence || state.activeTab !== "vip") return;
+  $("#content").innerHTML = state.vipError
+    ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondary" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
+    : renderProfileVip();
+  startVipCountdown();
 }
 
 /* ================= TAB DISPATCH ================= */
@@ -3455,27 +3296,19 @@ async function renderCurrentTab(requestId = navigationSequence) {
   showLoading();
   try {
     if (tab === "home") {
-      const tasksPromise = loadTasks();
-      await loadUserData();
+      await Promise.all([loadUserData(), loadTasks()]);
       if (!isCurrentRender()) return;
       renderHome();
-      void tasksPromise.then(() => {
-        if (isCurrentRender()) renderHome();
-      }).catch(error => console.warn("Background task refresh failed:", error));
       void loadReferralData();
     } else if (tab === "tasks") {
-      await loadUserData();
+      await Promise.all([loadTasks(), loadUserData()]);
       if (!isCurrentRender()) return;
-      const tasksPromise = loadTasks();
       renderTasks();
-      void tasksPromise.then(() => {
-        if (isCurrentRender()) renderTasks();
-      }).catch(error => console.warn("Background task refresh failed:", error));
       void loadReferralData();
-    } else if (tab === "vip" || tab === "mining") {
+    } else if (tab === "vip") {
       await loadUserData();
       if (!isCurrentRender()) return;
-      await renderMiningTab();
+      await renderVipTab();
     } else if (tab === "wallet") {
       await loadUserData();
       if (!isCurrentRender()) return;
