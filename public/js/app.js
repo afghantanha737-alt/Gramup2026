@@ -58,6 +58,9 @@ const state = {
   referralMinTasks: 2,
   referralTasks: [],
   taskSection: "daily",
+  ads: { enabled: false, rewardPoints: 5, dailyLimit: 10, watchedToday: 0, remainingToday: 10, cooldownSeconds: 30, nextAvailableAt: 0, serverRewardMode: false },
+  adsController: null,
+  adsLoading: false,
   tasks: [],
   completions: [],
   tasksServerOffsetMs: 0,
@@ -862,12 +865,100 @@ function setTaskSection(section) {
 }
 window.setTaskSection = setTaskSection;
 
+let adsConfigRequestSequence = 0;
+async function loadAdsConfig({ force = false } = {}) {
+  const requestId = ++adsConfigRequestSequence;
+  try {
+    const data = await api("/api/ads/config");
+    if (requestId !== adsConfigRequestSequence) return state.ads;
+    state.ads = { ...state.ads, ...(data?.ads || {}) };
+    state.adsController = null;
+    if (state.ads.enabled && state.ads.blockId && window.Adsgram?.init) {
+      try {
+        state.adsController = window.Adsgram.init({ blockId: String(state.ads.blockId) });
+      } catch (error) {
+        console.warn("AdsGram initialization failed:", error);
+      }
+    }
+    return state.ads;
+  } catch (error) {
+    console.warn("Ads config failed:", error);
+    return state.ads;
+  }
+}
+
+function formatAdNextAvailable() {
+  const remaining = Number(state.ads?.nextAvailableAt || 0) - (Date.now() + Number(state.tasksServerOffsetMs || 0));
+  return remaining > 0 ? formatCountdown(remaining) : "";
+}
+
+async function showRewardedAd() {
+  const button = document.querySelector("#adsgramWatchButton");
+  if (state.adsLoading) return;
+  if (!state.ads?.enabled || !state.adsController) {
+    toast(t("ads_not_available"), "warning");
+    return;
+  }
+  if (Number(state.ads.remainingToday) <= 0) {
+    toast(t("ads_limit_reached"), "warning");
+    return;
+  }
+  const nextAvailableAt = Number(state.ads.nextAvailableAt || 0);
+  if (nextAvailableAt > Date.now() + Number(state.tasksServerOffsetMs || 0)) {
+    toast(t("ads_wait"), "warning");
+    return;
+  }
+
+  state.adsLoading = true;
+  if (button) {
+    button.disabled = true;
+    button.textContent = t("ads_wait");
+  }
+  try {
+    // AdsGram resolves Rewarded only after the user watched the ad to the end.
+    await state.adsController.show();
+    const result = await api("/api/ads/reward", { method: "POST" });
+    if (result?.ads) state.ads = { ...state.ads, ...result.ads };
+    // In Reward URL mode, AdsGram calls the server independently; reload user data
+    // so the UI does not invent a balance before the server confirms the ledger entry.
+    await loadUserData();
+    haptic("success");
+    toast(`+${formatPoints(Number(result?.earned || state.ads.rewardPoints || 5))} ${t("points_unit")} 🎉`, "success");
+  } catch (error) {
+    haptic("warning");
+    toast(error?.code === "ADS_DAILY_LIMIT" ? t("ads_limit_reached") : t("ads_skipped"), "warning");
+  } finally {
+    state.adsLoading = false;
+    if (state.activeTab === "tasks") renderTasks();
+  }
+}
+window.showRewardedAd = showRewardedAd;
+
+function renderAdsgramCard() {
+  const ads = state.ads || {};
+  const watched = Number(ads.watchedToday) || 0;
+  const limit = Number(ads.dailyLimit) || 10;
+  const remaining = Math.max(0, Number(ads.remainingToday ?? limit - watched));
+  const next = formatAdNextAvailable();
+  const unavailable = !ads.enabled || !adsControllerAvailable();
+  const disabled = state.adsLoading || remaining <= 0 || Boolean(next) || unavailable;
+  const buttonText = remaining <= 0 ? t("ads_limit_reached") : next ? `${t("ads_wait")} ${next}` : t("ads_watch_button");
+  return `<section class="adsRewardCard" aria-labelledby="adsRewardTitle">
+    <div class="adsRewardTop"><div class="adsRewardIcon">▶</div><div><span class="adsRewardEyebrow">${t("ads_badge")}</span><h2 id="adsRewardTitle">${t("ads_card_title")}</h2></div><span class="adsRewardPoints">+${formatPoints(Number(ads.rewardPoints) || 5)}</span></div>
+    <p class="adsRewardDesc">${t("ads_card_desc", { n: formatPoints(Number(ads.rewardPoints) || 5) })}</p>
+    <div class="adsRewardMeta"><span>${t("ads_today_progress", { a: watched, b: limit })}</span><span>${t("ads_optional_note")}</span></div>
+    <button id="adsgramWatchButton" class="adsRewardButton" type="button" ${disabled ? "disabled" : ""} onclick="showRewardedAd()">${buttonText}</button>
+  </section>`;
+}
+function adsControllerAvailable() { return Boolean(state.ads?.enabled && state.adsController); }
+
 let tasksRequestSequence = 0;
 let tasksLoadError = null;
 async function loadTasks({ force = false } = {}) {
   const requestId = ++tasksRequestSequence;
   if (!force && state.tasksLoadedAt && Date.now() - state.tasksLoadedAt < CLIENT_DATA_TTL_MS) return state.tasks;
   try {
+    await loadAdsConfig({ force });
     const data = await api("/api/tasks");
     if (requestId !== tasksRequestSequence) return state.tasks;
     tasksLoadError = null;
@@ -1429,6 +1520,7 @@ function renderTasks() {
       <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
       ${sectionTabs}
       ${dailyCheckinHtml}
+      ${taskSection === "daily" ? renderAdsgramCard() : ""}
       ${taskErrorHtml}
       ${referralHtml}
       <div class="card emptyState">
@@ -1462,6 +1554,7 @@ function renderTasks() {
     </section>
     ${sectionTabs}
     ${dailyCheckinHtml}
+    ${taskSection === "daily" ? renderAdsgramCard() : ""}
     ${taskErrorHtml}
     ${referralHtml}
     <div class="taskList">
