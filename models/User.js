@@ -21,12 +21,6 @@ const userSchema = new mongoose.Schema(
     adViewsToday: { type: Number, default: 0, min: 0 },
     lastAdRewardAt: { type: Date, default: null },
     totalAdViews: { type: Number, default: 0, min: 0 },
-    miningBoostExpiresAt: { type: Date, default: null },
-    miningLevel: { type: Number, default: 1, min: 1 },
-    miningStorageLevel: { type: Number, default: 1, min: 1 },
-    miningLastClaimAt: { type: Date, default: null },
-    totalMinedPoints: { type: Number, default: 0, min: 0 },
-    miningSavedPoints: { type: Number, default: 0, min: 0 },
 
     referralCode: { type: String, required: true, unique: true, index: true },
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

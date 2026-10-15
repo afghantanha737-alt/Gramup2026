@@ -28,9 +28,7 @@ const pointsLedgerSchema = new mongoose.Schema(
         'vip_purchase',    // خرید اشتراک VIP با پوینت
         'vip_daily_reward', // پاداش روزانه‌ی دوره VIP
         'vip_principal_return', // بازگشت اصل پوینت پس از پایان دوره VIP
-        'admin_adjust',    // اصلاح دستی توسط ادمین (مثلاً بازگشت وجه بعد از رد برداشت)
-        'mining_claim',    // پاداش استخراج پوینت از ماینر
-        'mining_upgrade'   // کسر پوینت برای ارتقاء ماینر یا باتری
+        'admin_adjust'     // اصلاح دستی توسط ادمین (مثلاً بازگشت وجه بعد از رد برداشت)
       ],
       required: true
     },
