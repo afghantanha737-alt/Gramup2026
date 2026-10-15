@@ -727,12 +727,13 @@ router.get('/vip/plans', auth, async (req, res) => {
   const [plans, subscriptions, user] = await Promise.all([
     VipPlan.find({}).sort({ planNumber: 1 }).lean(),
     VipSubscription.find({ user: req.dbUser._id }).sort({ createdAt: -1 }).limit(30).lean(),
-    User.findById(req.dbUser._id).select('points').lean()
+    User.findById(req.dbUser._id).select('points miningBoostExpiresAt').lean()
   ]);
   res.json({
     success: true,
     serverNow: now.toISOString(),
     points: user?.points ?? req.dbUser.points,
+    miningBoostExpiresAt: user?.miningBoostExpiresAt || null,
     plans: plans.map(publicVipPlan),
     subscriptions: subscriptions.map(subscription => publicVipSubscription(subscription, now))
   });
