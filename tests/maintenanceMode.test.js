@@ -7,7 +7,7 @@ const path = require('path');
 const project = path.join(__dirname, '..');
 const settingsPath = require.resolve('../models/Settings');
 const authPath = require.resolve('../utils/telegramAuth');
-let settings = { maintenanceMode: false, maintenanceAllowedTelegramIds: [] };
+let settings = { maintenanceEnabled: false, maintenanceAllowedTelegramIds: [] };
 require.cache[settingsPath] = {
   id: settingsPath,
   filename: settingsPath,
@@ -34,10 +34,10 @@ function restoreEnv() {
 (async () => {
   process.env.APP_ENV = 'test';
   delete process.env.NODE_ENV;
-  settings = { maintenanceMode: false, maintenanceAllowedTelegramIds: [] };
+  settings = { maintenanceEnabled: false, maintenanceAllowedTelegramIds: [] };
   assert.strictEqual((await maintenance.getMaintenanceState()).enabled, false, 'OFF allows normal app mode');
 
-  settings = { maintenanceMode: true, maintenanceAllowedTelegramIds: ['123456789'] };
+  settings = { maintenanceEnabled: true, maintenanceAllowedTelegramIds: ['123456789'] };
   const onState = await maintenance.getMaintenanceState();
   assert.strictEqual(onState.enabled, true, 'TEST maintenance turns on');
   assert.strictEqual(maintenance.isAllowedTelegramId(onState, maintenance.telegramIdFromInitData('valid-init')), true, 'allowed Telegram user passes');

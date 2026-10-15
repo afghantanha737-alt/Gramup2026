@@ -6,6 +6,7 @@ const { verifyInitData } = require('./telegramAuth');
 function isTestEnvironment() {
   const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
   const appEnv = String(process.env.APP_ENV || '').trim().toLowerCase();
+  const explicitTestMaintenance = String(process.env.ALLOW_TEST_MAINTENANCE || '').trim().toLowerCase() === 'true';
   let hostname = '';
   try {
     hostname = new URL(String(process.env.APP_URL || '')).hostname.toLowerCase();
@@ -14,6 +15,7 @@ function isTestEnvironment() {
   }
   // Render TEST may expose NODE_ENV/APP_ENV as production-like values. The
   // server-owned TEST hostname is the stronger environment marker here.
+  if (explicitTestMaintenance) return true;
   if (hostname === 'gramup-test.onrender.com' || hostname.endsWith('.gramup-test.onrender.com')) return true;
   if (appEnv === 'production' || nodeEnv === 'production') return false;
   return appEnv === 'test' || nodeEnv === 'test';
@@ -33,9 +35,10 @@ function normalizeAllowedTelegramIds(values) {
 async function getMaintenanceState() {
   const settings = await Settings.getGlobal();
   const allowedTelegramIds = normalizeAllowedTelegramIds(settings.maintenanceAllowedTelegramIds || []) || [];
+  const configured = settings.maintenanceEnabled === true;
   return {
-    enabled: isTestEnvironment() && settings.maintenanceMode === true,
-    configured: settings.maintenanceMode === true,
+    enabled: isTestEnvironment() && configured,
+    configured,
     allowedTelegramIds
   };
 }

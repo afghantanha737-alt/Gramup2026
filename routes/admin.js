@@ -2001,7 +2001,7 @@ router.get('/maintenance', async (req, res) => {
   const settings = await Settings.getGlobal();
   res.json({
     success: true,
-    enabled: settings.maintenanceMode === true,
+    enabled: settings.maintenanceEnabled === true,
     allowedTelegramIds: normalizeAllowedTelegramIds(settings.maintenanceAllowedTelegramIds || []) || []
   });
 });
@@ -2017,7 +2017,7 @@ router.put('/maintenance', async (req, res) => {
     return res.status(400).json({ success: false, code: 'INVALID_MAINTENANCE_STATE', message: 'وضعیت Maintenance باید boolean باشد.' });
   }
   const settings = await Settings.getGlobal();
-  settings.maintenanceMode = body.enabled;
+  settings.maintenanceEnabled = body.enabled;
   settings.maintenanceAllowedTelegramIds = allowedTelegramIds;
   await settings.save();
   recordAdminLog({
@@ -2026,7 +2026,7 @@ router.put('/maintenance', async (req, res) => {
     targetType: 'settings',
     details: `${body.enabled ? 'enabled' : 'disabled'}; allowed=${allowedTelegramIds.length}`
   });
-  res.json({ success: true, enabled: settings.maintenanceMode === true, allowedTelegramIds });
+  res.json({ success: true, enabled: settings.maintenanceEnabled === true, allowedTelegramIds });
 });
 
 router.put('/settings', async (req, res) => {
