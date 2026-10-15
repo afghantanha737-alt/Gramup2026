@@ -20,6 +20,35 @@ router.post('/reward', auth, async (req, res) => {
   if (config.rewardSecret) {
     // در حالت Reward URL، پاداش را خود سرور AdsGram تایید می‌کند؛ کلاینت فقط موجودی را تازه می‌کند.
     return res.json({ success: true, pending: true, ads: adsStateForUser(req.dbUser) });
+
+// POST /api/ads/mining-boost — فعال‌سازی بوست ۲ برابری ماینینگ به مدت ۳۰ دقیقه بعد از تماشای تبلیغ Adsgram
+router.post('/mining-boost', auth, async (req, res) => {
+  try {
+    // اعطای پاداش تماشای تبلیغ به عنوان شمارش استاندارد
+    const user = await User.findById(req.dbUser._id);
+    if (!user) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
+
+    const now = new Date();
+    const BOOST_DURATION_MS = 30 * 60 * 1000; // ۳۰ دقیقه
+    const currentExpiry = user.miningBoostExpiresAt ? new Date(user.miningBoostExpiresAt).getTime() : 0;
+    const baseTime = currentExpiry > now.getTime() ? currentExpiry : now.getTime();
+    const newExpiresAt = new Date(baseTime + BOOST_DURATION_MS);
+
+    user.miningBoostExpiresAt = newExpiresAt;
+    user.totalAdViews = (Number(user.totalAdViews) || 0) + 1;
+    await user.save();
+
+    return res.json({
+      success: true,
+      boostExpiresAt: newExpiresAt.toISOString(),
+      message: 'بوست ۲ برابری ماینینگ به مدت ۳۰ دقیقه با موفقیت فعال شد.'
+    });
+  } catch (error) {
+    console.error('Mining boost failed:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
   }
   try {
     const result = await grantAdReward(req.dbUser._id, 'client');
