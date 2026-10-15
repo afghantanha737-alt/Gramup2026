@@ -60,6 +60,7 @@ const state = {
   taskSection: "daily",
   ads: { enabled: false, rewardPoints: 5, dailyLimit: 10, watchedToday: 0, remainingToday: 10, cooldownSeconds: 30, nextAvailableAt: 0, serverRewardMode: false },
   adsController: null,
+  miningAdsController: null,
   adsLoading: false,
   tasks: [],
   completions: [],
@@ -876,11 +877,19 @@ async function loadAdsConfig({ force = false } = {}) {
     if (requestId !== adsConfigRequestSequence) return state.ads;
     state.ads = { ...state.ads, ...(data?.ads || {}) };
     state.adsController = null;
+    state.miningAdsController = null;
     if (state.ads.enabled && state.ads.blockId && window.Adsgram?.init) {
       try {
         state.adsController = window.Adsgram.init({ blockId: String(state.ads.blockId) });
       } catch (error) {
         console.warn("AdsGram initialization failed:", error);
+      }
+    }
+    if (state.ads.miningEnabled && state.ads.miningBlockId && window.Adsgram?.init) {
+      try {
+        state.miningAdsController = window.Adsgram.init({ blockId: String(state.ads.miningBlockId) });
+      } catch (error) {
+        console.warn("Mining AdsGram initialization failed:", error);
       }
     }
     return state.ads;
@@ -913,6 +922,7 @@ async function showRewardedAd() {
   }
 
   state.adsLoading = true;
+  const watchedBefore = Number(state.ads.watchedToday) || 0;
   if (button) {
     button.disabled = true;
     button.textContent = t("ads_wait");
@@ -922,8 +932,25 @@ async function showRewardedAd() {
     await state.adsController.show();
     const result = await api("/api/ads/reward", { method: "POST" });
     if (result?.ads) state.ads = { ...state.ads, ...result.ads };
-    // In Reward URL mode, AdsGram calls the server independently; reload user data
-    // so the UI does not invent a balance before the server confirms the ledger entry.
+    if (result?.pending) {
+      let verified = false;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 500 : 1000));
+        await loadAdsConfig({ force: true });
+        if ((Number(state.ads.watchedToday) || 0) > watchedBefore) {
+          verified = true;
+          break;
+        }
+      }
+      if (!verified) {
+        toast(t("ads_reward_pending") || "پاداش پس از تأیید AdsGram ثبت می‌شود.", "info");
+        return;
+      }
+      await loadUserData();
+      haptic("success");
+      toast(`+${formatPoints(Number(state.ads.rewardPoints) || 5)} ${t("points_unit")} 🎉`, "success");
+      return;
+    }
     await loadUserData();
     haptic("success");
     toast(`+${formatPoints(Number(result?.earned || state.ads.rewardPoints || 5))} ${t("points_unit")} 🎉`, "success");
@@ -937,41 +964,7 @@ async function showRewardedAd() {
 }
 
 async function watchAdsgramBoost() {
-  if (state.miningBoostLoading) return;
-  if (!state.ads?.enabled || !state.adsController) {
-    toast(t("ads_not_available"), "warning");
-    return;
-  }
-  const now = Date.now();
-  const currentExpiry = state.miningBoostExpiresAt ? Date.parse(state.miningBoostExpiresAt) : 0;
-  if (currentExpiry > now) {
-    toast(t("mining_boost_cooldown"), "info");
-    return;
-  }
-
-  state.miningBoostLoading = true;
-  const btn = document.querySelector("#miningBoostWatchBtn");
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = t("ads_wait");
-  }
-
-  try {
-    await state.adsController.show();
-    const result = await api("/api/ads/mining-boost", { method: "POST" });
-    if (result?.boostExpiresAt) {
-      state.miningBoostExpiresAt = result.boostExpiresAt;
-    }
-    haptic("success");
-    toast(t("mining_boost_success"), "success");
-    if (state.activeTab === "vip") renderVipTab();
-  } catch (error) {
-    haptic("warning");
-    toast(t("ads_skipped"), "warning");
-  } finally {
-    state.miningBoostLoading = false;
-    if (state.activeTab === "vip") renderVipTab();
-  }
+  return watchMiningAdsgramBoost();
 }
 window.watchAdsgramBoost = watchAdsgramBoost;
 
@@ -3168,8 +3161,12 @@ window.upgradeMining = upgradeMining;
 
 async function watchMiningAdsgramBoost() {
   if (state.miningBoostLoading) return;
-  if (!state.ads?.enabled || !state.adsController) {
+  if (!state.ads?.miningEnabled || !state.miningAdsController) {
     toast(t("ads_not_available") || "تبلیغات در حال حاضر در دسترس نیست.", "warning");
+    return;
+  }
+  if (!state.ads.serverRewardMode) {
+    toast(t("mining_boost_server_unavailable") || "تأیید سروری پاداش AdsGram تنظیم نشده است.", "info");
     return;
   }
   const now = Date.now();
@@ -3187,15 +3184,22 @@ async function watchMiningAdsgramBoost() {
   }
 
   try {
-    await state.adsController.show();
-    const result = await api("/api/ads/mining-boost", { method: "POST" });
-    if (result?.boostExpiresAt) {
-      if (state.mining) {
-        state.mining.boostExpiresAt = result.boostExpiresAt;
-        state.mining.isBoosted = true;
-        state.mining.effectiveRatePerHour = state.mining.baseRatePerHour * 2;
+    await state.miningAdsController.show();
+    const previousExpiry = currentExpiry;
+    let verified = false;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 500 : 1000));
+      await loadMiningStatus();
+      const nextExpiry = state.mining?.boostExpiresAt ? Date.parse(state.mining.boostExpiresAt) : 0;
+      if (nextExpiry > Date.now() && nextExpiry > previousExpiry) {
+        state.miningBoostExpiresAt = state.mining.boostExpiresAt;
+        verified = true;
+        break;
       }
-      state.miningBoostExpiresAt = result.boostExpiresAt;
+    }
+    if (!verified) {
+      toast(t("mining_boost_pending") || "پاداش هنوز از طرف AdsGram تأیید نشده است.", "info");
+      return;
     }
     haptic("success");
     toast(t("mining_boost_success") || "بوست ۲ برابری ماینینگ به مدت ۳۰ دقیقه فعال شد! 🚀", "success");
@@ -3254,12 +3258,14 @@ async function renderMiningTab() {
   const content = $("#content");
   content.innerHTML = `
     <div class="miningHub">
-      <div class="sectionHeader">
-        <button class="sectionMore" type="button" onclick="navigate('home')">${t("referral_back")}</button>
-        <h2 class="sectionTitle">⛏️ ${t("mining_hub_title") || "Mining Hub"}</h2>
-        <div class="badge" style="background:rgba(124,58,237,0.2);color:#c4b5fd;font-weight:700;">
-          ${formatPoints(state.points)} Points
+      <div class="miningHeroIntro">
+        <div class="miningHeroTopline">
+          <button class="miningBackButton" type="button" onclick="navigate('home')" aria-label="${t("referral_back")}">‹</button>
+          <span class="miningHeroKicker"><i></i>${t("mining_hero_kicker") || "GRAMUP MINING WORKSHOP"}</span>
+          <span class="miningBalanceChip">◆ ${formatPoints(state.points)}</span>
         </div>
+        <h2 class="miningHeroTitle">${t("mining_hub_title") || "Mining Hub"}</h2>
+        <p class="miningHeroDescription">${t("mining_hero_desc") || "Upgrade your virtual rig, fill its storage, and claim points to your main balance."}</p>
       </div>
 
       <!-- Core Miner Card -->
@@ -3308,17 +3314,17 @@ async function renderMiningTab() {
       </div>
 
       <!-- Adsgram Rewarded 2x Boost Card -->
-      <div class="miningBoostCard" style="padding:16px;border-radius:20px;border:1px solid rgba(234,179,8,0.35);background:linear-gradient(145deg,rgba(40,30,10,0.6),rgba(20,18,30,0.95));box-shadow:0 8px 25px rgba(0,0,0,0.3);">
+      <div class="miningBoostCard">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
           <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:26px;">⚡</span>
+            <span class="miningBoostIcon">⚡</span>
             <div>
-              <div style="font-size:14px;font-weight:800;color:#fef08a;">${t("mining_boost_title")}</div>
-              <div style="font-size:11px;color:#cbd5e1;line-height:1.4;">${t("mining_boost_desc")}</div>
+              <div class="miningBoostTitle">${t("mining_boost_title")}</div>
+              <div class="miningBoostDescription">${t("mining_boost_desc")}</div>
             </div>
           </div>
         </div>
-        <button id="miningBoostBtn" type="button" style="width:100%;height:44px;margin-top:12px;border-radius:14px;font-weight:800;font-size:13px;cursor:pointer;transition:all 0.2s ease;background:${isBoosted ? 'rgba(34,197,94,0.15)' : 'linear-gradient(135deg,#eab308,#ca8a04)'};color:${isBoosted ? '#4ade80' : '#1e1b4b'};border:${isBoosted ? '1px solid #22c55e' : 'none'};" onclick="watchMiningAdsgramBoost()" ${isBoosted ? 'disabled' : ''}>
+        <button id="miningBoostBtn" type="button" class="miningBoostButton ${isBoosted ? 'active' : ''}" onclick="watchMiningAdsgramBoost()" ${isBoosted ? 'disabled' : ''}>
           ${isBoosted ? `🚀 ${t("mining_boost_active", { time: `<span id="miningBoostTimer">${boostTimerText}</span>` }) || `بوست ۲ برابری فعال است (<span id="miningBoostTimer">${boostTimerText}</span>)`}` : `🎬 ${t("mining_boost_watch")}`}
         </button>
       </div>

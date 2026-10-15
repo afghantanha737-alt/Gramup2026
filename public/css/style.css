@@ -2631,3 +2631,59 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
   cursor: not-allowed;
   border-color: rgba(255, 255, 255, 0.05);
 }
+
+
+/* Mining workshop refresh: luminous, game-like and tuned for narrow Telegram screens. */
+.miningHub { gap: 13px; }
+.miningHeroIntro {
+  position: relative; overflow: hidden; padding: 16px 16px 15px; border-radius: 22px;
+  border: 1px solid rgba(103,232,249,.17);
+  background: radial-gradient(ellipse at 8% 0%, rgba(34,211,238,.15), transparent 45%),
+              radial-gradient(ellipse at 95% 95%, rgba(139,92,246,.18), transparent 42%),
+              linear-gradient(135deg, #111b2b 0%, #111321 72%, #171329 100%);
+  box-shadow: 0 14px 34px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.07);
+}
+.miningHeroIntro::after { content:""; position:absolute; width:130px; height:130px; inset-inline-end:-55px; top:-70px; border:1px solid rgba(103,232,249,.15); border-radius:50%; box-shadow:0 0 0 14px rgba(103,232,249,.025),0 0 0 30px rgba(103,232,249,.02); pointer-events:none; }
+.miningHeroTopline { position:relative; z-index:1; display:flex; align-items:center; gap:8px; }
+.miningBackButton { width:30px; height:30px; flex:0 0 30px; border-radius:10px; border:1px solid rgba(255,255,255,.12); color:#dbeafe; background:rgba(255,255,255,.05); font-size:22px; line-height:1; }
+.miningHeroKicker { display:inline-flex; align-items:center; gap:6px; color:#83e8f3; font-size:9px; font-weight:900; letter-spacing:.07em; }
+.miningHeroKicker i { width:6px; height:6px; border-radius:50%; background:#67e8f9; box-shadow:0 0 10px #67e8f9; }
+.miningBalanceChip { margin-inline-start:auto; padding:6px 9px; border:1px solid rgba(167,139,250,.22); border-radius:999px; color:#ddd6fe; background:rgba(139,92,246,.11); font-size:10px; font-weight:900; white-space:nowrap; }
+.miningHeroTitle { position:relative; z-index:1; margin:14px 0 4px; color:#f8fafc; font-size:22px; line-height:1.18; font-weight:950; letter-spacing:-.03em; }
+.miningHeroDescription { position:relative; z-index:1; max-width:390px; margin:0; color:#9baac0; font-size:11px; line-height:1.7; }
+.miningCoreCard { padding:20px 16px 17px; border-color:rgba(103,232,249,.19); background:radial-gradient(ellipse at 50% -10%,rgba(99,102,241,.25),transparent 54%),linear-gradient(155deg,#151b34,#101725 64%,#121524); box-shadow:0 18px 38px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.08); }
+.miningCoreCard::before { top:-74px; width:240px; height:210px; background:radial-gradient(circle,rgba(34,211,238,.18),rgba(139,92,246,.1) 42%,transparent 72%); }
+.miningVisualCore { width:82px; height:82px; margin-bottom:11px; border-color:rgba(103,232,249,.4); background:radial-gradient(circle,rgba(34,211,238,.18),rgba(99,102,241,.11) 55%,rgba(15,23,42,.72)); box-shadow:0 0 0 8px rgba(103,232,249,.035),0 0 35px rgba(34,211,238,.22),inset 0 0 18px rgba(167,139,250,.15); }
+.miningVisualIcon { filter:drop-shadow(0 4px 12px rgba(103,232,249,.32)); }
+.miningLiveBadge { padding:5px 10px; border-color:rgba(52,211,153,.26); color:#86efac; background:rgba(16,185,129,.09); font-size:9px; }
+.miningUnclaimedLabel { margin-top:13px; color:#aab7cb; font-size:11px; }
+.miningUnclaimedValue { font-size:clamp(38px, 11vw, 50px); letter-spacing:-.045em; text-shadow:0 0 28px rgba(103,232,249,.1); }
+.miningStatsGrid { gap:8px; margin-bottom:12px; }
+.miningStatBox { border-color:rgba(255,255,255,.07); background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.025)); }
+.miningStatTitle { font-size:9px; letter-spacing:.02em; }
+.miningStatValue { font-size:12px; }
+.miningProgressBarBg { height:10px; border:1px solid rgba(255,255,255,.06); background:rgba(3,7,18,.55); }
+.miningProgressBarFill { background:linear-gradient(90deg,#22d3ee,#818cf8 56%,#c084fc); box-shadow:0 0 13px rgba(34,211,238,.32); }
+.miningProgressBarFill.full { background:linear-gradient(90deg,#34d399,#a3e635); box-shadow:0 0 14px rgba(52,211,153,.3); }
+.miningClaimButton { min-height:50px; height:auto; border:1px solid rgba(255,255,255,.17); background:linear-gradient(110deg,#06b6d4,#6366f1 54%,#8b5cf6); box-shadow:0 10px 26px rgba(79,70,229,.24),inset 0 1px rgba(255,255,255,.18); }
+.miningBoostCard { position:relative; overflow:hidden; padding:14px; border:1px solid rgba(250,204,21,.2); border-radius:20px; background:radial-gradient(ellipse at 95% 0%,rgba(250,204,21,.13),transparent 48%),linear-gradient(145deg,#211d18,#15151d 72%); box-shadow:0 10px 25px rgba(0,0,0,.19),inset 0 1px rgba(255,255,255,.06); }
+.miningBoostIcon { width:39px; height:39px; flex:0 0 39px; display:grid; place-items:center; border:1px solid rgba(250,204,21,.22); border-radius:13px; background:linear-gradient(145deg,rgba(250,204,21,.2),rgba(249,115,22,.12)); font-size:21px; }
+.miningBoostTitle { color:#fef3c7; font-size:13px; font-weight:900; }
+.miningBoostDescription { margin-top:3px; color:#b7b6bd; font-size:10px; line-height:1.55; }
+.miningBoostButton { width:100%; min-height:40px; margin-top:12px; padding:8px 12px; border:1px solid rgba(250,204,21,.34); border-radius:13px; color:#211a08; background:linear-gradient(110deg,#fde047,#f59e0b); box-shadow:0 7px 18px rgba(245,158,11,.17); font-size:11px; font-weight:950; cursor:pointer; transition:transform .18s ease,filter .18s ease; }
+.miningBoostButton:not(:disabled):active { transform:scale(.985); filter:brightness(.95); }
+.miningBoostButton.active { border-color:rgba(52,211,153,.3); color:#a7f3d0; background:rgba(16,185,129,.1); box-shadow:none; }
+.miningBoostButton:disabled { opacity:.8; cursor:default; }
+.miningUpgradeCard { position:relative; overflow:hidden; border-color:rgba(148,163,184,.1); background:linear-gradient(145deg,rgba(25,33,49,.92),rgba(15,19,30,.96)); box-shadow:0 8px 22px rgba(0,0,0,.13),inset 0 1px rgba(255,255,255,.04); }
+.miningUpgradeLevel { border:1px solid rgba(139,92,246,.16); }
+.miningUpgradeBtn:not(:disabled) { border-color:rgba(103,232,249,.19); background:linear-gradient(100deg,rgba(34,211,238,.09),rgba(139,92,246,.13)); }
+@media (max-width:360px) {
+  .miningHeroIntro { padding:14px 12px; }
+  .miningHeroKicker { font-size:8px; }
+  .miningHeroTitle { font-size:19px; }
+  .miningCoreCard { padding-inline:12px; }
+  .miningStatBox { padding:9px 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .miningVisualIcon,.miningLiveDot { animation:none !important; }
+}

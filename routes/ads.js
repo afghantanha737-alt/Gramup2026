@@ -5,7 +5,7 @@ require('../utils/asyncHandler').wrapRouter(router);
 const { requireUnifiedAuth } = require('../utils/unifiedAuth');
 const { withMembership } = require('../utils/membership');
 const User = require('../models/User');
-const { getAdsConfig, adsStateForUser, grantAdReward, safeEqual } = require('../utils/adsgram');
+const { getAdsConfig, adsStateForUser, grantAdReward, grantMiningBoost, safeEqual } = require('../utils/adsgram');
 
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
 
@@ -32,35 +32,17 @@ router.post('/reward', auth, async (req, res) => {
   }
 });
 
-// POST /api/ads/mining-boost — فعال‌سازی بوست ۲ برابری ماینینگ به مدت ۳۰ دقیقه بعد از تماشای تبلیغ Adsgram
+// Client calls cannot prove that an ad was watched. Boosts are granted only by the authenticated AdsGram Reward URL below.
 router.post('/mining-boost', auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.dbUser._id);
-    if (!user) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
-
-    const now = new Date();
-    const BOOST_DURATION_MS = 30 * 60 * 1000; // ۳۰ دقیقه
-    const currentExpiry = user.miningBoostExpiresAt ? new Date(user.miningBoostExpiresAt).getTime() : 0;
-    const baseTime = currentExpiry > now.getTime() ? currentExpiry : now.getTime();
-    const newExpiresAt = new Date(baseTime + BOOST_DURATION_MS);
-
-    user.miningBoostExpiresAt = newExpiresAt;
-    user.totalAdViews = (Number(user.totalAdViews) || 0) + 1;
-    await user.save();
-
-    return res.json({
-      success: true,
-      boostExpiresAt: newExpiresAt.toISOString(),
-      message: 'بوست ۲ برابری ماینینگ به مدت ۳۰ دقیقه با موفقیت فعال شد.'
-    });
-  } catch (error) {
-    console.error('Mining boost failed:', error);
-    return res.status(500).json({ success: false, message: error.message });
-  }
+  return res.status(409).json({
+    success: false,
+    code: 'ADS_REWARD_CALLBACK_REQUIRED',
+    message: 'بوست فقط پس از تأیید پاداش از سرور AdsGram فعال می‌شود.'
+  });
 });
 
 /**
- * GET /api/ads/adsgram-reward?userid=[userId]&secret=YOUR_SECRET
+ * GET /api/ads/adsgram-reward?userid=[userId]&secret=YOUR_SECRET[&reward=mining_boost]
  * آدرس «Reward URL» در تنظیمات بلاک AdsGram (اختیاری). AdsGram [userId] را با Telegram ID کاربر جایگزین می‌کند.
  */
 router.get('/adsgram-reward', async (req, res) => {
@@ -73,6 +55,10 @@ router.get('/adsgram-reward', async (req, res) => {
   const user = await User.findOne({ telegramId }).select('_id');
   if (!user) return res.status(404).json({ success: false, message: 'user not found' });
   try {
+    if (String(req.query.reward || '') === 'mining_boost') {
+      const result = await grantMiningBoost(user._id, 'adsgram');
+      return res.json({ success: true, reward: 'mining_boost', boostExpiresAt: result.boostExpiresAt.toISOString() });
+    }
     const result = await grantAdReward(user._id, 'adsgram');
     return res.json({ success: true, earned: result.earned });
   } catch (error) {
