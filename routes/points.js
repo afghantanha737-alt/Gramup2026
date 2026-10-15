@@ -721,33 +721,223 @@ router.post('/deposits/:id/verify', auth, async (req, res) => {
 // VIP catalog and user subscription state. Plan values are always read from
 // the server-side catalog; no price, duration, or reward amount is accepted
 // from the client.
-// VIP system is completely deprecated and removed in favor of Mining Hub
 router.get('/vip/plans', auth, async (req, res) => {
+  const now = new Date();
+  await settleMaturedVipSubscriptions({ userId: req.dbUser._id, now });
+  const [plans, subscriptions, user] = await Promise.all([
+    VipPlan.find({}).sort({ planNumber: 1 }).lean(),
+    VipSubscription.find({ user: req.dbUser._id }).sort({ createdAt: -1 }).limit(30).lean(),
+    User.findById(req.dbUser._id).select('points').lean()
+  ]);
   res.json({
     success: true,
-    deprecated: true,
-    message: 'سیستم VIP حذف شده و بخش ماینینگ جایگزین شده است.',
-    plans: [],
-    subscriptions: []
+    serverNow: now.toISOString(),
+    points: user?.points ?? req.dbUser.points,
+    plans: plans.map(publicVipPlan),
+    subscriptions: subscriptions.map(subscription => publicVipSubscription(subscription, now))
   });
 });
 
 router.post('/vip/purchase', auth, async (req, res) => {
-  return res.status(410).json({
-    success: false,
-    code: 'VIP_REMOVED',
-    message: 'سیستم VIP بازنشسته شده است. لطفاً از بخش ماینینگ استفاده نمایید.'
-  });
+  const planNumber = Number(req.body?.planNumber);
+  if (!Number.isInteger(planNumber) || planNumber < 1 || planNumber > 10) {
+    return res.status(400).json({ success: false, code: 'VIP_PLAN_INVALID', message: 'پلن VIP نامعتبر است.' });
+  }
+
+  let operation;
+  try {
+    operation = await executeIdempotently({
+      userId: req.dbUser._id,
+      scope: 'vip_purchase',
+      key: req.get('Idempotency-Key'),
+      body: { planNumber },
+      execute: async session => {
+        const plan = await VipPlan.findOne({ planNumber }).session(session);
+        if (!plan || plan.enabled !== true || plan.comingSoon === true) {
+          throw vipError('VIP_PLAN_UNAVAILABLE', 'این پلن VIP در حال حاضر برای خرید فعال نیست.', 409);
+        }
+        const pricePoints = Number(plan.pricePoints);
+        const totalRewardCents = calculateTotalRewardCents(pricePoints, plan.monthlyRewardPercent, plan.durationDays);
+        if (!Number.isInteger(pricePoints) || pricePoints < 1 || totalRewardCents == null || totalRewardCents < plan.durationDays) {
+          throw vipError('VIP_PLAN_INVALID', 'تنظیمات پاداش این پلن معتبر نیست؛ با مدیریت تماس بگیرید.', 409);
+        }
+
+        const user = await User.findOneAndUpdate(
+          { _id: req.dbUser._id, points: { $gte: pricePoints } },
+          { $inc: { points: -pricePoints } },
+          { new: true, session }
+        );
+        if (!user) throw vipError('VIP_INSUFFICIENT_POINTS', 'موجودی Points برای خرید این پلن کافی نیست.', 400);
+
+        const startAt = new Date();
+        const endAt = new Date(startAt.getTime() + Number(plan.durationDays) * DAY_MS);
+        const totalRewardPoints = pointsFromCents(totalRewardCents);
+        const subscription = new VipSubscription({
+          user: user._id,
+          planNumber: plan.planNumber,
+          pricePoints,
+          monthlyRewardPercent: plan.monthlyRewardPercent,
+          durationDays: plan.durationDays,
+          totalRewardCents,
+          totalRewardPoints,
+          dailyRewardAveragePoints: Number((totalRewardPoints / plan.durationDays).toFixed(2)),
+          startAt,
+          endAt,
+          status: 'active'
+        });
+        await subscription.save({ session });
+
+        // A successful, paid VIP subscription completes its matching one-time task.
+        // This is deliberately inside the same transaction as the debit and purchase ledger.
+        const taskDefinition = vipActivationTaskDefinition(planNumber);
+        const vipTask = await Task.findOneAndUpdate(
+          { taskKind: 'vip_activation', vipPlanNumber: planNumber },
+          { $setOnInsert: taskDefinition },
+          { upsert: true, new: true, session, setDefaultsOnInsert: true }
+        );
+        const existingVipCompletion = await TaskCompletion.findOne({ user: user._id, task: vipTask._id }).session(session);
+        if (!existingVipCompletion) {
+          const taskCompletion = await new TaskCompletion({
+            user: user._id,
+            task: vipTask._id,
+            reward: vipTask.reward,
+            status: 'approved',
+            reviewedAt: startAt,
+            reviewedBy: 'vip-purchase-system'
+          }).save({ session });
+          const rewarded = await User.findByIdAndUpdate(
+            user._id,
+            { $inc: { points: vipTask.reward } },
+            { new: true, session }
+          );
+          if (!rewarded) throw vipError('VIP_TASK_USER_NOT_FOUND', 'کاربر برای ثبت پاداش Task پیدا نشد.', 500);
+          const taskLedger = await recordLedgerRequired({
+            user: user._id,
+            type: 'task',
+            currency: 'points',
+            amount: vipTask.reward,
+            description: vipTask.title,
+            balanceAfter: rewarded.points,
+            sourceId: `vip-task:${vipTask._id}:user:${user._id}`,
+            transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_purchase', key: req.get('Idempotency-Key'), leg: `activation-task-${planNumber}` }),
+            session
+          });
+          if (!taskLedger.created) throw vipError('VIP_TASK_LEDGER_DUPLICATE', 'پاداش Task این خرید قبلاً ثبت شده است.', 409);
+        }
+
+        const ledger = await recordLedgerRequired({
+          user: user._id,
+          type: 'vip_purchase',
+          currency: 'points',
+          amount: -pricePoints,
+          description: '',
+          balanceAfter: user.points,
+          sourceId: `vip:${subscription._id}:purchase`,
+          transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_purchase', key: req.get('Idempotency-Key'), leg: `plan-${planNumber}` }),
+          session
+        });
+        if (!ledger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'این خرید قبلاً ثبت شده است.', 409);
+
+        return { body: {
+          success: true,
+          points: user.points,
+          subscription: publicVipSubscription(subscription, startAt)
+        } };
+      }
+    });
+  } catch (error) {
+    return sendVipError(res, error);
+  }
+  return res.status(operation.status).json(operation.body);
 });
 
 router.post('/vip/:subscriptionId/claim', auth, async (req, res) => {
-  return res.status(410).json({
-    success: false,
-    code: 'VIP_REMOVED',
-    message: 'سیستم VIP بازنشسته شده است.'
-  });
+  if (!mongoose.isValidObjectId(req.params.subscriptionId)) {
+    return res.status(400).json({ success: false, code: 'VIP_SUBSCRIPTION_INVALID', message: 'شناسه اشتراک VIP نامعتبر است.' });
+  }
+
+  let operation;
+  try {
+    operation = await executeIdempotently({
+      userId: req.dbUser._id,
+      scope: 'vip_daily_claim',
+      key: req.get('Idempotency-Key'),
+      body: { subscriptionId: String(req.params.subscriptionId) },
+      execute: async session => {
+        const now = new Date();
+        const subscription = await VipSubscription.findOne({ _id: req.params.subscriptionId, user: req.dbUser._id }).session(session);
+        if (!subscription) throw vipError('VIP_SUBSCRIPTION_NOT_FOUND', 'اشتراک VIP پیدا نشد.', 404);
+        if (subscription.status !== 'active' || now >= subscription.endAt) {
+          throw vipError('VIP_PLAN_COMPLETED', 'دوره این پلن به پایان رسیده است.', 409);
+        }
+        const claimIndex = Number(subscription.claimsCompleted || 0);
+        if (claimIndex >= subscription.durationDays) throw vipError('VIP_REWARDS_COMPLETE', 'پاداش روزانه این پلن کامل شده است.', 409);
+        const nextClaimAt = subscription.lastClaimAt
+          ? new Date(subscription.lastClaimAt.getTime() + DAY_MS)
+          : new Date(subscription.startAt);
+        if (now < nextClaimAt) {
+          throw vipError('VIP_CLAIM_NOT_READY', 'پاداش بعدی پس از گذشت ۲۴ ساعت قابل دریافت است.', 409, { retryAt: nextClaimAt });
+        }
+
+        const rewardCents = dailyRewardCents(subscription.totalRewardCents, subscription.durationDays, claimIndex);
+        const rewardPoints = pointsFromCents(rewardCents);
+        if (!rewardCents || rewardPoints == null) throw vipError('VIP_REWARD_INVALID', 'مقدار پاداش روزانه معتبر نیست.', 409);
+        const claimedRewardPoints = pointsFromCents(
+          Math.round((Number(subscription.claimedRewardPoints || 0) * 100) + 1e-8) + rewardCents
+        );
+        const updatedSubscription = await VipSubscription.findOneAndUpdate(
+          {
+            _id: subscription._id,
+            user: req.dbUser._id,
+            status: 'active',
+            endAt: { $gt: now },
+            claimsCompleted: claimIndex,
+            lastClaimAt: subscription.lastClaimAt || null
+          },
+          { $set: { claimsCompleted: claimIndex + 1, claimedRewardPoints, lastClaimAt: now } },
+          { new: true, session }
+        );
+        if (!updatedSubscription) throw vipError('VIP_CLAIM_CONFLICT', 'این پاداش هم‌زمان در درخواست دیگری ثبت شده است؛ وضعیت را تازه‌سازی کنید.', 409);
+
+        const user = await User.findOneAndUpdate(
+          { _id: req.dbUser._id },
+          { $inc: { points: rewardPoints } },
+          { new: true, session }
+        );
+        if (!user) throw new Error('VIP subscriber no longer exists.');
+
+        const sourceId = `vip:${subscription._id}:claim:${claimIndex + 1}`;
+        const ledger = await recordLedgerRequired({
+          user: user._id,
+          type: 'vip_daily_reward',
+          currency: 'points',
+          amount: rewardPoints,
+          description: '',
+          balanceAfter: user.points,
+          sourceId,
+          transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_daily_claim', key: req.get('Idempotency-Key'), leg: `${subscription._id}-claim-${claimIndex + 1}` }),
+          session
+        });
+        if (!ledger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'این پاداش قبلاً ثبت شده است.', 409);
+
+        return { body: {
+          success: true,
+          rewardPoints,
+          points: user.points,
+          subscription: publicVipSubscription(updatedSubscription, now)
+        } };
+      }
+    });
+  } catch (error) {
+    return sendVipError(res, error);
+  }
+  return res.status(operation.status).json(operation.body);
 });
 
+/**
+ * GET /api/points/history — stable descending cursor on (createdAt, _id).
+ * `before` remains supported for already-open legacy clients.
+ */
 router.get('/history', auth, async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 50);
   let cursor = null;

@@ -5,7 +5,7 @@ require('../utils/asyncHandler').wrapRouter(router);
 const { requireUnifiedAuth } = require('../utils/unifiedAuth');
 const { withMembership } = require('../utils/membership');
 const User = require('../models/User');
-const { getAdsConfig, adsStateForUser, grantAdReward, grantMiningBoost, safeEqual } = require('../utils/adsgram');
+const { getAdsConfig, adsStateForUser, grantAdReward, safeEqual } = require('../utils/adsgram');
 
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
 
@@ -32,17 +32,8 @@ router.post('/reward', auth, async (req, res) => {
   }
 });
 
-// Client calls cannot prove that an ad was watched. Boosts are granted only by the authenticated AdsGram Reward URL below.
-router.post('/mining-boost', auth, async (req, res) => {
-  return res.status(409).json({
-    success: false,
-    code: 'ADS_REWARD_CALLBACK_REQUIRED',
-    message: 'بوست فقط پس از تأیید پاداش از سرور AdsGram فعال می‌شود.'
-  });
-});
-
 /**
- * GET /api/ads/adsgram-reward?userid=[userId]&secret=YOUR_SECRET[&reward=mining_boost]
+ * GET /api/ads/adsgram-reward?userid=[userId]&secret=YOUR_SECRET
  * آدرس «Reward URL» در تنظیمات بلاک AdsGram (اختیاری). AdsGram [userId] را با Telegram ID کاربر جایگزین می‌کند.
  */
 router.get('/adsgram-reward', async (req, res) => {
@@ -55,10 +46,6 @@ router.get('/adsgram-reward', async (req, res) => {
   const user = await User.findOne({ telegramId }).select('_id');
   if (!user) return res.status(404).json({ success: false, message: 'user not found' });
   try {
-    if (String(req.query.reward || '') === 'mining_boost') {
-      const result = await grantMiningBoost(user._id, 'adsgram');
-      return res.json({ success: true, reward: 'mining_boost', boostExpiresAt: result.boostExpiresAt.toISOString() });
-    }
     const result = await grantAdReward(user._id, 'adsgram');
     return res.json({ success: true, earned: result.earned });
   } catch (error) {
