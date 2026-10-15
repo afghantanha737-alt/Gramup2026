@@ -1097,7 +1097,8 @@ function renderHome() {
 
 /* ================= TASKS ================= */
 function taskIconMarkup(task) {
-  const telegramTask = task?.verifyType === "telegram" || task?.type === "channel" || task?.type === "group";
+  // Latest-post reaction tasks also target Telegram channel posts.
+  const telegramTask = task?.verifyType === "telegram" || task?.verifyType === "latest_post" || task?.type === "channel" || task?.type === "group";
   if (telegramTask) return `<span class="taskBrandIcon taskBrandTelegram" aria-label="Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.4 4.6 18.2 20c-.2 1.1-.8 1.4-1.7.9l-4.8-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.4-4.9 8.9-8c.4-.4-.1-.6-.6-.2L7 13.6l-4.7-1.5c-1-.3-1-1 .2-1.5L20.8 4c.8-.3 1.5.2.6.6Z"/></svg></span>`;
   return `<span class="taskBrandIcon taskBrandWeb" aria-label="Web"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.8 12h16.4M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5S9.7 5.9 12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span>`;
 }
@@ -1316,10 +1317,13 @@ function startLatestPostCooldownCountdown() {
           : t("task_latest_post_available_in", { time: formatCountdown(remaining) });
         return;
       }
-      button.disabled = true;
+      const waitingForCheck = button.dataset.latestPostWait === "true";
+      // The same control becomes actionable again when its countdown ends:
+      // Check after the 15-second wait, or Open/Start after the 3-hour cycle.
+      button.disabled = false;
       button.dataset.taskState = "AVAILABLE";
-      button.textContent = button.dataset.latestPostWait === "true" ? t("task_action_check") : t("task_action_open_task");
-      if (button.dataset.refreshed !== "true") {
+      button.textContent = waitingForCheck ? t("task_action_check") : t("task_action_open_task");
+      if (!waitingForCheck && button.dataset.refreshed !== "true") {
         button.dataset.refreshed = "true";
         refreshAfterCooldown = true;
       }
@@ -1329,7 +1333,7 @@ function startLatestPostCooldownCountdown() {
         if (state.activeTab === "tasks") renderTasks();
       });
     }
-    if (!document.querySelector("[data-latest-post-cooldown]")) {
+    if (!document.querySelector("[data-latest-post-cooldown], [data-latest-post-wait]")) {
       clearInterval(latestPostCooldownTimer);
       latestPostCooldownTimer = null;
     }
@@ -1447,9 +1451,7 @@ function renderTasks() {
             ? `<button class="taskAction" data-latest-post-open="${escapeHTML(task._id)}" style="background:var(--surface-3);color:var(--text)" onclick="openLatestPostTask(${latestPostUrlArgument}, '${escapeHTML(task._id)}')">${t("task_action_open_task")}</button>`
             : "";
           let actionButton = "";
-          let completedLabel = "";
           if (remaining > 0) {
-            completedLabel = `<div class="taskAction done" style="text-align:center;cursor:default">${t("task_latest_post_completed", { n: formatPoints(completion?.reward ?? task.reward) })}</div>`;
             actionButton = `<button class="taskAction pending" data-task-state="COOLDOWN" data-latest-post-cooldown data-task-id="${escapeHTML(task._id)}" data-until="${escapeHTML(nextAvailableAt.toISOString())}" disabled>${t("task_latest_post_available_in", { time: formatCountdown(remaining) })}</button>`;
           } else if (waitingForCheck) {
             actionButton = `<button class="taskAction" data-task-state="WAITING_FOR_CHECK" data-latest-post-check="${escapeHTML(task._id)}" onclick="verifyLatestPostTask('${escapeHTML(task._id)}')">${t("task_action_check")}</button>`;
@@ -1458,7 +1460,9 @@ function renderTasks() {
           } else {
             actionButton = openButton;
           }
-          actionHtml = `<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">${completedLabel}${actionButton}</div>`;
+          // One compact control: Open/Start becomes the 15-second wait,
+          // then Check, and later the recurring cooldown countdown.
+          actionHtml = `<div class="taskActionSlot">${actionButton}</div>`;
         } else if (status === "approved") {
           actionHtml = `<button class="taskAction done" disabled>${t("task_btn_done")}</button>`;
         } else if (status === "pending") {

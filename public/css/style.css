@@ -2380,5 +2380,8 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .taskBrandTelegram { color: #fff; background: linear-gradient(145deg, #35b9f3, #2389d7); box-shadow: 0 7px 16px rgba(35,137,215,.28); }
 .taskBrandWeb { color: #fff; background: linear-gradient(145deg, #c06bea, #8541c9); box-shadow: 0 7px 16px rgba(133,65,201,.25); }
 .taskItem .taskBrandIcon { border-radius: 12px; }
-.taskAction.pending[data-latest-post-wait="true"] { min-width: 104px; color: #aeb8c9; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.16); box-shadow: none; font-variant-numeric: tabular-nums; }
+.taskActionSlot { flex: 0 0 auto; display: flex; align-items: center; min-width: 104px; }
+.taskActionSlot .taskAction { width: 100%; }
+.taskAction.pending[data-latest-post-wait="true"],
+.taskAction.pending[data-latest-post-cooldown] { min-width: 104px; color: #aeb8c9; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.16); box-shadow: none; font-variant-numeric: tabular-nums; }
 .taskAction[data-latest-post-check] { background: linear-gradient(135deg,#22c879,#0ca66d); color: #fff; box-shadow: 0 7px 15px rgba(16,185,129,.25); }
