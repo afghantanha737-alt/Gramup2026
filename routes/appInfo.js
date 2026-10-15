@@ -12,11 +12,24 @@ router.get('/', (req, res) => {
   const botUsername = process.env.BOT_USERNAME || '';
   const shortName = process.env.MINI_APP_SHORT_NAME || '';
   const botLink = botUsername
-    ? (shortName ? `https://t.me/${botUsername}/${shortName}` : `https://t.me/${botUsername}`)
+    ? (shortName ? 'https://t.me/' + botUsername + '/' + shortName : 'https://t.me/' + botUsername)
     : '';
 
+  const payoutChannel = (process.env.PAYOUT_CHANNEL_ID || '@GramUpPayouts').trim();
+  const cleanUsername = payoutChannel.replace(/^@/, '');
+  const payoutChannelUrl = payoutChannel.startsWith('http')
+    ? payoutChannel
+    : 'https://t.me/' + cleanUsername;
+
   res.set('Cache-Control', 'public, max-age=300');
-  res.json({ success: true, appName: 'Gramup', botLink, botConfigured: Boolean(botLink) });
+  res.json({
+    success: true,
+    appName: 'Gramup',
+    botLink,
+    botConfigured: Boolean(botLink),
+    payoutChannelUrl,
+    payoutChannelUsername: '@' + cleanUsername
+  });
 });
 
 module.exports = router;
