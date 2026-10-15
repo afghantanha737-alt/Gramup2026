@@ -66,7 +66,7 @@ function payoutKeyboard() {
 }
 
 async function post(text) {
-  const chatId = process.env.PAYOUT_CHANNEL_ID;
+  const chatId = process.env.PAYOUT_CHANNEL_ID || '@GramUpPayouts';
   if (!bot || !chatId) return;
   try {
     const reply_markup = payoutKeyboard();
