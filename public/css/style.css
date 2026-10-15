@@ -2400,3 +2400,234 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .adsRewardMeta { display:flex; justify-content:space-between; gap:8px; color:var(--text-muted); font-size:9px; line-height:1.5; }
 .adsRewardButton { width:100%; min-height:36px; margin-top:10px; border:0; border-radius:11px; color:#071017; background:linear-gradient(135deg,#67e8f9,#a78bfa); font-size:11px; font-weight:900; }
 .adsRewardButton:disabled { color:#9aa4b5; background:rgba(148,163,184,.14); border:1px solid rgba(148,163,184,.16); }
+
+/* =========================================================
+   MINING HUB STYLES (Cyberpunk / Modern Web3 Rig Interface)
+========================================================= */
+.miningHub {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+.miningCoreCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  padding: 22px 18px;
+  background: linear-gradient(160deg, rgba(30, 27, 75, 0.75), rgba(15, 23, 42, 0.95));
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+.miningCoreCard::before {
+  content: '';
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.3), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.miningVisualCore {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  margin: 0 auto 14px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.25), rgba(15, 23, 42, 0.8));
+  border: 2px solid rgba(167, 139, 250, 0.4);
+  box-shadow: 0 0 30px rgba(124, 58, 237, 0.35);
+}
+.miningVisualIcon {
+  font-size: 38px;
+  animation: minerFloat 2.6s ease-in-out infinite alternate;
+}
+@keyframes minerFloat {
+  0% { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(-6px) rotate(8deg); }
+}
+.miningLiveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #4ade80;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.miningLiveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  animation: liveDotPulse 1.4s infinite;
+}
+@keyframes liveDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+.miningUnclaimedLabel {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 10px;
+  font-weight: 600;
+}
+.miningUnclaimedValue {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1.15;
+  margin: 4px 0 12px;
+  background: linear-gradient(135deg, #ffffff 20%, #c4b5fd 60%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  direction: ltr;
+  display: inline-block;
+}
+.miningStatsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.miningStatBox {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.miningStatTitle {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+.miningStatValue {
+  font-size: 14px;
+  font-weight: 800;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.miningProgressBarBg {
+  width: 100%;
+  height: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.miningProgressBarFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8b5cf6, #38bdf8);
+  transition: width 0.4s ease;
+}
+.miningProgressBarFill.full {
+  background: linear-gradient(90deg, #eab308, #22c55e);
+}
+.miningClaimButton {
+  width: 100%;
+  height: 52px;
+  border-radius: 16px;
+  border: none;
+  font-size: 15px;
+  font-weight: 900;
+  color: #ffffff;
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.miningClaimButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  background: #334155;
+  color: #94a3b8;
+}
+.miningClaimButton:not(:disabled):active {
+  transform: scale(0.98);
+}
+.miningUpgradeGrid {
+  display: grid;
+  gap: 12px;
+}
+.miningUpgradeCard {
+  background: rgba(17, 24, 39, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.miningUpgradeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.miningUpgradeTitle {
+  font-size: 14px;
+  font-weight: 800;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.miningUpgradeLevel {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+}
+.miningUpgradeDetails {
+  font-size: 12px;
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.miningUpgradeBtn {
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  background: rgba(139, 92, 246, 0.15);
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.miningUpgradeBtn:not(:disabled):active {
+  background: rgba(139, 92, 246, 0.35);
+  transform: scale(0.99);
+}
+.miningUpgradeBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.05);
+}

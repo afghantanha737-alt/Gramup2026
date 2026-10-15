@@ -134,6 +134,7 @@ app.use('/api/app-info', require('./routes/appInfo'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/points', require('./routes/points'));
 app.use('/api/ads', require('./routes/ads'));
+app.use('/api/mining', require('./routes/mining'));
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/mobile-auth', require('./routes/mobileAuth'));
