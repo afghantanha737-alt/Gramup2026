@@ -376,13 +376,15 @@ let navigationListenersInstalled = false;
 
 function setupNavigation() {
   if (navigationListenersInstalled) return;
-  $$("#tabbar [data-tab]").forEach(button => {
-    button.addEventListener("click", () => {
-      const tab = button.dataset.tab;
-      if (!tab) return;
-      haptic("selection");
-      navigate(tab);
-    });
+  const tabbar = $("#tabbar");
+  if (!tabbar) return;
+  tabbar.addEventListener("click", event => {
+    const button = event.target?.closest?.("button[data-tab]");
+    if (!button || !tabbar.contains(button)) return;
+    const tab = button.dataset.tab;
+    if (!tab) return;
+    haptic("selection");
+    void navigate(tab);
   });
   navigationListenersInstalled = true;
   setupReferralTelegramBackButton();
@@ -990,9 +992,11 @@ function adsControllerAvailable() { return Boolean(state.ads?.enabled && state.a
 
 let tasksRequestSequence = 0;
 let tasksLoadError = null;
+let tasksLoading = false;
 async function loadTasks({ force = false } = {}) {
   const requestId = ++tasksRequestSequence;
   if (!force && state.tasksLoadedAt && Date.now() - state.tasksLoadedAt < CLIENT_DATA_TTL_MS) return state.tasks;
+  tasksLoading = true;
   try {
     await loadAdsConfig({ force });
     const data = await api("/api/tasks");
@@ -1013,6 +1017,8 @@ async function loadTasks({ force = false } = {}) {
     console.warn("Tasks failed:", error);
     if (requestId === tasksRequestSequence) tasksLoadError = error;
     return state.tasks;
+  } finally {
+    if (requestId === tasksRequestSequence) tasksLoading = false;
   }
 }
 
@@ -1551,6 +1557,15 @@ function renderTasks() {
 
   if (!state.tasks.length && tasksLoadError && !isInviteSection) {
     content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}${taskErrorHtml}`;
+    return;
+  }
+  if (!state.tasks.length && tasksLoading && !isInviteSection) {
+    content.innerHTML = `
+      <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
+      ${sectionTabs}
+      ${dailyCheckinHtml}
+      <div class="loading" role="status" aria-label="${escapeHTML(t("loading"))}" style="height:150px;margin:12px 0"></div>
+    `;
     return;
   }
   const inviteHasContent = isInviteSection && state.referralTasks.length > 0;
@@ -3440,14 +3455,22 @@ async function renderCurrentTab(requestId = navigationSequence) {
   showLoading();
   try {
     if (tab === "home") {
-      await Promise.all([loadUserData(), loadTasks()]);
+      const tasksPromise = loadTasks();
+      await loadUserData();
       if (!isCurrentRender()) return;
       renderHome();
+      void tasksPromise.then(() => {
+        if (isCurrentRender()) renderHome();
+      }).catch(error => console.warn("Background task refresh failed:", error));
       void loadReferralData();
     } else if (tab === "tasks") {
-      await Promise.all([loadTasks(), loadUserData()]);
+      await loadUserData();
       if (!isCurrentRender()) return;
+      const tasksPromise = loadTasks();
       renderTasks();
+      void tasksPromise.then(() => {
+        if (isCurrentRender()) renderTasks();
+      }).catch(error => console.warn("Background task refresh failed:", error));
       void loadReferralData();
     } else if (tab === "vip" || tab === "mining") {
       await loadUserData();
