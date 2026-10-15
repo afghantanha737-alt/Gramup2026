@@ -1331,7 +1331,7 @@ function startLatestPostCooldownCountdown() {
       // Check after the 15-second wait, or Open/Start after the 3-hour cycle.
       button.disabled = false;
       button.dataset.taskState = "AVAILABLE";
-      button.textContent = waitingForCheck ? t("task_action_check") : t("task_action_open_task");
+      button.textContent = waitingForCheck ? t("task_action_claim") : t("task_action_start");
       if (!waitingForCheck && button.dataset.refreshed !== "true") {
         button.dataset.refreshed = "true";
         refreshAfterCooldown = true;
@@ -1476,22 +1476,22 @@ function renderTasks() {
             : 0;
           const latestPostUrlArgument = escapeHTML(JSON.stringify(safeTaskHttpUrl(task.url)).replaceAll("<", "\\u003c"));
           const openedAtMs = latestPostOpenedAt.get(String(task._id));
-          const openWaitRemaining = openedAtMs ? openedAtMs + 15000 - (Date.now() + state.tasksServerOffsetMs) : 0;
+          const openWaitRemaining = openedAtMs ? openedAtMs + 10000 - (Date.now() + state.tasksServerOffsetMs) : 0;
           const waitingForCheck = latestPostOpenedTaskIds.has(String(task._id)) && openWaitRemaining <= 0;
           const openButton = !waitingForCheck && remaining <= 0 && safeUrl
-            ? `<button class="taskAction" data-latest-post-open="${escapeHTML(task._id)}" style="background:var(--surface-3);color:var(--text)" onclick="openLatestPostTask(${latestPostUrlArgument}, '${escapeHTML(task._id)}')">${t("task_action_open_task")}</button>`
+            ? `<button class="taskAction" data-latest-post-open="${escapeHTML(task._id)}" style="background:var(--surface-3);color:var(--text)" onclick="openLatestPostTask(${latestPostUrlArgument}, '${escapeHTML(task._id)}')">${t("task_action_start")}</button>`
             : "";
           let actionButton = "";
           if (remaining > 0) {
             actionButton = `<button class="taskAction pending" data-task-state="COOLDOWN" data-latest-post-cooldown data-task-id="${escapeHTML(task._id)}" data-until="${escapeHTML(nextAvailableAt.toISOString())}" disabled>${t("task_latest_post_available_in", { time: formatCountdown(remaining) })}</button>`;
           } else if (waitingForCheck) {
-            actionButton = `<button class="taskAction" data-task-state="WAITING_FOR_CHECK" data-latest-post-check="${escapeHTML(task._id)}" onclick="verifyLatestPostTask('${escapeHTML(task._id)}')">${t("task_action_check")}</button>`;
+            actionButton = `<button class="taskAction" data-task-state="WAITING_FOR_CHECK" data-latest-post-check="${escapeHTML(task._id)}" onclick="verifyLatestPostTask('${escapeHTML(task._id)}')">${t("task_action_claim")}</button>`;
           } else if (latestPostOpenedTaskIds.has(String(task._id)) && openWaitRemaining > 0) {
             actionButton = `<button class="taskAction pending" data-latest-post-wait="true" data-opened-at="${escapeHTML(String(openedAtMs))}" disabled>${t("task_latest_post_check_in", { time: formatCountdown(openWaitRemaining) })}</button>`;
           } else {
             actionButton = openButton;
           }
-          // One compact control: Open/Start becomes the 15-second wait,
+          // One compact control: Start becomes the 10-second wait,
           // then Check, and later the recurring cooldown countdown.
           actionHtml = `<div class="taskActionSlot">${actionButton}</div>`;
         } else if (status === "approved") {
