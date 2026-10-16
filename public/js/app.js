@@ -100,15 +100,19 @@ function getTelegramUser() {
 /* ================= LOCAL STORAGE / THEME ================= */
 const THEME_KEY = "miniAppTheme";
 
+const VALID_THEMES = Object.freeze(["midnight", "aurora", "pearl"]);
 function getTheme() {
-  return "dark";
+  const saved = localStorage.getItem(THEME_KEY);
+  return VALID_THEMES.includes(saved) ? saved : "midnight";
 }
 function applyTheme(theme) {
-  const finalTheme = "dark";
-  document.documentElement.dataset.theme = finalTheme;
-  localStorage.removeItem(THEME_KEY);
+  const selected = VALID_THEMES.includes(theme) ? theme : "midnight";
+  // Keep the existing light selectors compatible with Pearl Light.
+  document.documentElement.dataset.theme = selected === "pearl" ? "light" : selected;
+  document.documentElement.dataset.themeName = selected;
+  localStorage.setItem(THEME_KEY, selected);
   try {
-    const chrome = "#050609";
+    const chrome = selected === "pearl" ? "#f8fafc" : selected === "aurora" ? "#06151b" : "#050609";
     if (tg && tg.setHeaderColor) tg.setHeaderColor(chrome);
     if (tg && tg.setBackgroundColor) tg.setBackgroundColor(chrome);
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -116,20 +120,34 @@ function applyTheme(theme) {
   } catch (e) { /* ignore */ }
   updateThemeUI();
 }
+function selectTheme(theme) {
+  if (!VALID_THEMES.includes(theme)) return;
+  applyTheme(theme);
+  haptic("selection");
+  if (state.activeTab === "profile" && profileView === "menu") renderProfile();
+}
 function toggleTheme() {
-  applyTheme("dark");
+  const current = getTheme();
+  selectTheme(current === "midnight" ? "pearl" : "midnight");
 }
 function updateThemeUI() {
   const icon = $("#themeIcon");
   const label = $("#themeLabel");
   const toggle = $("#themeToggle");
   const theme = getTheme();
-  if (icon) icon.textContent = theme === "dark" ? "🌙" : "☀️";
-  if (label) label.textContent = theme === "dark" ? t("theme_dark") : t("theme_light");
-  if (toggle) toggle.setAttribute("aria-checked", theme === "light" ? "true" : "false");
+  const names = { midnight: t("theme_midnight"), aurora: t("theme_aurora"), pearl: t("theme_pearl") };
+  if (icon) icon.textContent = theme === "pearl" ? "☀️" : theme === "aurora" ? "🌌" : "🌙";
+  if (label) label.textContent = names[theme];
+  if (toggle) toggle.setAttribute("aria-checked", theme === "pearl" ? "true" : "false");
+  $$("[data-theme-choice]").forEach(button => {
+    const active = button.dataset.themeChoice === theme;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-checked", active ? "true" : "false");
+  });
 }
 applyTheme(getTheme());
 window.toggleTheme = toggleTheme;
+window.selectTheme = selectTheme;
 
 /* ================= HAPTIC ================= */
 function haptic(type = "light") {
@@ -2404,6 +2422,14 @@ function renderProfileMenu() {
           <div class="profileIcon">🌐</div>
           <div class="profileText">${t("menu_language")} — ${langNames[state.language]}</div>
           <div class="profileChevron">‹</div>
+        </div>
+        <div class="profileThemePicker" role="group" aria-label="${escapeHTML(t("theme_title"))}">
+          <div class="profileThemeHeading"><span class="profileIcon">🎨</span><strong>${t("theme_title")}</strong></div>
+          <div class="profileThemeChoices">
+            <button type="button" class="themeChoice themeChoiceMidnight" data-theme-choice="midnight" aria-checked="false" onclick="selectTheme('midnight')"><span>🌙</span>${t("theme_midnight")}</button>
+            <button type="button" class="themeChoice themeChoiceAurora" data-theme-choice="aurora" aria-checked="false" onclick="selectTheme('aurora')"><span>🌌</span>${t("theme_aurora")}</button>
+            <button type="button" class="themeChoice themeChoicePearl" data-theme-choice="pearl" aria-checked="false" onclick="selectTheme('pearl')"><span>☀️</span>${t("theme_pearl")}</button>
+          </div>
         </div>
       </div>
     </div>

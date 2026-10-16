@@ -1,0 +1,101 @@
+/* GramUp selectable themes — loaded inline by the main stylesheet build step. */
+
+html[data-theme="aurora"] {
+  --bg: #061116;
+  --bg-soft: #0a1c22;
+  --surface: rgba(10, 28, 35, .92);
+  --surface-2: #10262e;
+  --surface-3: #14323b;
+  --text: #f4ffff;
+  --text-soft: #b5d4d9;
+  --text-muted: #7ea6ad;
+  --line: rgba(103, 232, 249, .16);
+  --line-strong: rgba(103, 232, 249, .28);
+  --primary: #06b6d4;
+  --primary-2: #67e8f9;
+  --primary-soft: rgba(6, 182, 212, .16);
+  --info: #67e8f9;
+  --info-soft: rgba(103, 232, 249, .15);
+  --shadow: 0 18px 55px rgba(0, 20, 26, .42);
+  --shadow-soft: 0 8px 28px rgba(0, 20, 26, .32);
+}
+html[data-theme="aurora"] body {
+  background:
+    radial-gradient(circle at 90% -10%, rgba(34, 211, 238, .20), transparent 34%),
+    radial-gradient(circle at -10% 35%, rgba(14, 165, 233, .14), transparent 30%),
+    var(--bg);
+}
+html[data-theme="aurora"] #appHeader {
+  background: linear-gradient(to bottom, rgba(6, 17, 22, .96), rgba(6, 17, 22, .82));
+}
+html[data-theme="aurora"] .bottomNav { background: rgba(7, 24, 30, .94); }
+html[data-theme="aurora"] .hero,
+html[data-theme="aurora"] .heroPremium {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(103, 232, 249, .24), transparent 38%),
+    radial-gradient(circle at 8% 92%, rgba(6, 182, 212, .20), transparent 42%),
+    linear-gradient(145deg, #12343e, #08171d 72%);
+  border-color: rgba(103, 232, 249, .28);
+}
+html[data-theme="aurora"] .primaryBtn,
+html[data-theme="aurora"] .heroRingBtn {
+  color: #03252d;
+  background: linear-gradient(135deg, #67e8f9, #06b6d4);
+}
+
+/* Pearl Light: explicit high-contrast overrides for controls that were designed for dark mode. */
+html[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-soft: #eef2f7;
+  --surface: rgba(255, 255, 255, .98);
+  --surface-2: #ffffff;
+  --surface-3: #f1f5f9;
+  --text: #111827;
+  --text-soft: #334155;
+  --text-muted: #64748b;
+  --line: rgba(15, 23, 42, .12);
+  --line-strong: rgba(15, 23, 42, .20);
+  --primary: #6d28d9;
+  --primary-2: #7c3aed;
+  --primary-soft: rgba(109, 40, 217, .10);
+  --shadow: 0 18px 55px rgba(15, 23, 42, .10);
+  --shadow-soft: 0 8px 28px rgba(15, 23, 42, .08);
+}
+html[data-theme="light"] body {
+  background:
+    radial-gradient(circle at 90% -10%, rgba(124, 58, 237, .10), transparent 34%),
+    radial-gradient(circle at -10% 30%, rgba(14, 165, 233, .08), transparent 28%),
+    var(--bg);
+}
+html[data-theme="light"] .primaryBtn,
+html[data-theme="light"] .heroRingBtn {
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+}
+html[data-theme="light"] .heroAction,
+html[data-theme="light"] .heroActionPurple { color: var(--text); background: #f1f5f9; border-color: var(--line-strong); }
+html[data-theme="light"] .taskAction,
+html[data-theme="light"] .secondaryBtn { color: var(--text); background: #fff; border-color: var(--line-strong); }
+html[data-theme="light"] .disabled,
+html[data-theme="light"] button:disabled { color: #64748b; }
+
+/* Profile theme picker */
+.profileThemePicker { padding: 14px 16px 16px; border-top: 1px solid var(--line); }
+.profileThemeHeading { display: flex; align-items: center; gap: 9px; color: var(--text); font-size: 13px; }
+.profileThemeHeading .profileIcon { margin: 0; }
+.profileThemeChoices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 11px; }
+.themeChoice {
+  min-height: 62px; padding: 8px 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border: 1px solid var(--line-strong); border-radius: 13px; color: var(--text-soft); background: var(--surface-3);
+  font-size: 9px; font-weight: 800; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.themeChoice span { font-size: 18px; line-height: 1; }
+.themeChoice:active { transform: scale(.97); }
+.themeChoice.is-active { color: var(--text); border-color: var(--primary-2); box-shadow: 0 0 0 3px var(--primary-soft); }
+.themeChoiceMidnight { background: linear-gradient(145deg, #171a2a, #08090f); color: #d9d7ff; }
+.themeChoiceAurora { background: linear-gradient(145deg, #143b45, #071a20); color: #a5f3fc; }
+.themeChoicePearl { background: linear-gradient(145deg, #fff, #e8edf5); color: #1e293b; }
+@media (max-width: 370px) {
+  .profileThemeChoices { gap: 5px; }
+  .themeChoice { font-size: 8px; }
+}
