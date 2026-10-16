@@ -31,8 +31,6 @@ const state = {
   rate: 0,
   streak: 0,
   canCheckIn: false,
-  canClaimDailyChest: false,
-  dailyChestRewardPoints: 0,
   totalCheckins: 0,
   minWithdrawGram: 0,
   nextResetAt: 0,
@@ -1388,36 +1386,6 @@ function renderDailyCheckinCard() {
     <div class="dailyCheckFooter"><span>${t("daily_check_today_reward", { n: formatPoints(DAILY_CHECKIN_REWARDS[nextDay - 1]) })}</span><button id="checkinBtn" class="primaryBtn" type="button" ${state.canCheckIn ? "" : "disabled"} onclick="doCheckIn()">${state.canCheckIn ? t("checkin_button") : t("checkin_done_button")}</button></div>
   </section>`;
 }
-function renderDailyChestCard() {
-  const unlocked = state.canClaimDailyChest;
-  const claimed = !unlocked && !state.canCheckIn && state.dailyChestRewardPoints > 0;
-  const reward = state.dailyChestRewardPoints || (10 + Math.min(Number(state.streak) || 0, 15));
-  const label = unlocked ? t("daily_chest_button", { n: formatPoints(reward) }) : claimed ? t("daily_chest_done") : t("daily_chest_locked");
-  return `<section class="dailyChestCard" aria-labelledby="dailyChestTitle">
-    <div class="dailyChestIcon" aria-hidden="true">🎁</div>
-    <div class="dailyChestBody"><span class="tasksOverline">${t("daily_title")}</span><h3 id="dailyChestTitle">${t("daily_chest_title")}</h3><p>${t("daily_chest_desc")}</p></div>
-    <button id="dailyChestBtn" class="dailyChestButton ${unlocked ? "is-ready" : ""}" type="button" ${unlocked ? "" : "disabled"} onclick="claimDailyChest()">${label}</button>
-  </section>`;
-}
-async function claimDailyChest() {
-  const button = document.querySelector("#dailyChestBtn");
-  if (!state.canClaimDailyChest || !button) return;
-  button.disabled = true; button.textContent = t("daily_chest_processing");
-  try {
-    const result = await api("/api/points/daily-chest", { method: "POST" });
-    state.points = Number(result.points) || state.points;
-    state.canClaimDailyChest = false;
-    updateHeader();
-    haptic("success");
-    toast(`+${formatPoints(result.earned)} ${t("points_unit")} 🎁`, "success");
-    renderTasks();
-  } catch (error) {
-    haptic("error");
-    toast(translateServerMessage(error.code, error.message), "error");
-    button.disabled = false; button.textContent = t("daily_chest_button", { n: formatPoints(state.dailyChestRewardPoints) });
-  }
-}
-window.claimDailyChest = claimDailyChest;
 async function doCheckIn() {
   const button = document.querySelector("#checkinBtn");
   if (button) { button.disabled = true; button.textContent = t("checkin_processing"); }
@@ -1426,8 +1394,6 @@ async function doCheckIn() {
     state.points = Number(result.points) || state.points;
     state.streak = Number(result.streak) || state.streak;
     state.canCheckIn = false;
-    state.canClaimDailyChest = Boolean(result.canClaimDailyChest ?? true);
-    state.dailyChestRewardPoints = Number(result.dailyChestRewardPoints) || (10 + Math.min(Number(state.streak) || 0, 15));
     state.totalCheckins += 1;
     state.nextResetAt = Number(result.nextResetAt) || state.nextResetAt;
     updateHeader();
@@ -1450,7 +1416,6 @@ function renderTasks() {
     : state.tasks.filter(task => taskSection === "vip" ? task.taskKind === "vip_activation" : task.taskKind !== "vip_activation");
   const referralHtml = isInviteSection ? renderReferralRewardTasks() : "";
   const dailyCheckinHtml = taskSection === "daily" ? renderDailyCheckinCard() : "";
-  const dailyChestHtml = taskSection === "daily" ? renderDailyChestCard() : "";
   const taskErrorHtml = tasksLoadError ? `<div class="card" role="status"><div class="emptyDesc">${t("tasks_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryTasks()">${t("retry_button")}</button></div>` : "";
   const sectionTabs = `
     <div class="taskCategoryTabs taskSectionTabs" role="tablist" aria-label="${escapeHTML(t("tasks_title"))}">
@@ -1471,7 +1436,6 @@ function renderTasks() {
       <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
       ${sectionTabs}
       ${dailyCheckinHtml}
-      ${dailyChestHtml}
       ${taskErrorHtml}
       ${referralHtml}
       <div class="card emptyState">
@@ -1505,7 +1469,6 @@ function renderTasks() {
     </section>
     ${sectionTabs}
     ${dailyCheckinHtml}
-    ${dailyChestHtml}
     ${taskErrorHtml}
     ${referralHtml}
     <div class="taskList">

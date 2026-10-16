@@ -2387,9 +2387,3 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .taskAction.pending[data-latest-post-wait="true"],
 .taskAction.pending[data-latest-post-cooldown] { min-width: 104px; color: #aeb8c9; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.16); box-shadow: none; font-variant-numeric: tabular-nums; }
 .taskAction[data-latest-post-check] { background: linear-gradient(135deg,#22c879,#0ca66d); color: #fff; box-shadow: 0 7px 15px rgba(16,185,129,.25); }
-
-/* Daily Bonus Chest — controlled replacement for retired advertising rewards. */
-.dailyChestCard{display:flex;align-items:center;gap:12px;margin:12px 0 16px;padding:14px;border:1px solid rgba(52,211,153,.22);border-radius:20px;background:linear-gradient(135deg,rgba(6,78,59,.28),rgba(17,24,39,.92));}
-.dailyChestIcon{display:grid;place-items:center;width:44px;height:44px;flex:0 0 44px;border-radius:14px;background:rgba(16,185,129,.16);font-size:24px;}
-.dailyChestBody{min-width:0;flex:1}.dailyChestBody h3{margin:3px 0;font-size:15px}.dailyChestBody p{margin:0;color:var(--text-muted);font-size:11px;line-height:1.5}.dailyChestButton{min-height:40px;padding:0 11px;border:1px solid rgba(148,163,184,.2);border-radius:12px;background:rgba(148,163,184,.12);color:var(--text-muted);font-size:11px;font-weight:800;white-space:nowrap}.dailyChestButton.is-ready{border-color:rgba(52,211,153,.35);background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 7px 16px rgba(16,185,129,.2)}
-@media (max-width:420px){.dailyChestCard{align-items:flex-start}.dailyChestButton{align-self:center;padding-inline:9px;font-size:10px}}
