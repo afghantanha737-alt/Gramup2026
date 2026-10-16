@@ -151,7 +151,11 @@ router.get('/me', auth, async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
 
-  const canCheckIn = !u.lastCheckIn || utcDayKey(u.lastCheckIn) < utcDayKey(new Date());
+  const todayKey = utcDayKey(new Date());
+  const canCheckIn = !u.lastCheckIn || utcDayKey(u.lastCheckIn) < todayKey;
+  const dailyChestSourceId = `daily-chest:${u._id}:${todayKey}`;
+  const dailyChestClaim = await PointsLedger.findOne({ sourceId: dailyChestSourceId }).select('_id').lean();
+  const canClaimDailyChest = Boolean(u.lastCheckIn && utcDayKey(u.lastCheckIn) === todayKey && !dailyChestClaim);
   const minWithdrawGram = Number((settings.minWithdrawPoints * settings.rate).toFixed(6));
 
   // مجموع پوینتی که کاربر تا امروز «کسب» کرده (بدون احتساب تبدیل GRAM→پوینت و اصلاح دستی ادمین)
@@ -178,6 +182,8 @@ router.get('/me', auth, async (req, res) => {
     rate: settings.rate,
     streak: u.streak,
     canCheckIn,
+    canClaimDailyChest,
+    dailyChestRewardPoints: 10 + Math.min(Number(u.streak) || 0, 15),
     totalCheckins: u.totalCheckins,
     firstName: u.firstName,
     minWithdrawGram,
@@ -186,6 +192,45 @@ router.get('/me', auth, async (req, res) => {
   });
 });
 
+// POST /api/points/daily-chest — صندوق روزانه پس از ثبت Check-in
+router.post('/daily-chest', auth, async (req, res) => {
+  const todayKey = utcDayKey(new Date());
+  const sourceId = `daily-chest:${req.dbUser._id}:${todayKey}`;
+  let result;
+  try {
+    result = await withMongoTransaction(async session => {
+      const current = await User.findById(req.dbUser._id).session(session);
+      if (!current) throw Object.assign(new Error('کاربر پیدا نشد.'), { code: 'USER_NOT_FOUND' });
+      if (!current.lastCheckIn || utcDayKey(current.lastCheckIn) !== todayKey) {
+        throw Object.assign(new Error('ابتدا پاداش ورود روزانه را دریافت کنید.'), { code: 'CHEST_LOCKED' });
+      }
+      const alreadyClaimed = await PointsLedger.findOne({ sourceId }).session(session).select('_id').lean();
+      if (alreadyClaimed) throw Object.assign(new Error('صندوق امروز قبلاً دریافت شده است.'), { code: 'CHEST_ALREADY_CLAIMED' });
+      const reward = 10 + Math.min(Number(current.streak) || 0, 15);
+      const updated = await User.findOneAndUpdate(
+        { _id: current._id },
+        { $inc: { points: reward } },
+        { new: true, session }
+      );
+      await recordLedgerRequired({
+        user: updated._id,
+        type: 'daily_chest',
+        amount: reward,
+        description: `صندوق پاداش روزانه (استریک ${updated.streak || 0})`,
+        balanceAfter: updated.points,
+        sourceId,
+        session
+      });
+      return { points: updated.points, reward };
+    });
+  } catch (error) {
+    if (['CHEST_LOCKED', 'CHEST_ALREADY_CLAIMED', 'USER_NOT_FOUND'].includes(error.code)) {
+      return res.status(error.code === 'USER_NOT_FOUND' ? 404 : 400).json({ success: false, message: error.message, code: error.code });
+    }
+    throw error;
+  }
+  res.json({ success: true, points: result.points, earned: result.reward, canClaimDailyChest: false });
+});
 // POST /api/points/checkin
 router.post('/checkin', auth, async (req, res) => {
   const settings = await Settings.getGlobal();
@@ -238,7 +283,9 @@ router.post('/checkin', auth, async (req, res) => {
     earned: result.earned,
     points: result.updated.points,
     streak: result.updated.streak,
-    nextResetAt: nextResetTimestamp()
+    nextResetAt: nextResetTimestamp(),
+    canClaimDailyChest: true,
+    dailyChestRewardPoints: 10 + Math.min(Number(result.updated.streak) || 0, 15)
   });
 });
 
