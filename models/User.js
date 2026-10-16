@@ -16,11 +16,6 @@ const userSchema = new mongoose.Schema(
     totalCheckins: { type: Number, default: 0, min: 0 },
     lastCheckIn: { type: Date, default: null },
 
-    // AdsGram rewarded ads (optional, user-initiated)
-    adViewsDayKey: { type: Number, default: null },
-    adViewsToday: { type: Number, default: 0, min: 0 },
-    lastAdRewardAt: { type: Date, default: null },
-    totalAdViews: { type: Number, default: 0, min: 0 },
 
     referralCode: { type: String, required: true, unique: true, index: true },
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

@@ -11,7 +11,6 @@ for (const [name, prefix] of [
   ['app info', '/api/app-info'],
   ['tasks', '/api/tasks'],
   ['points', '/api/points'],
-  ['ads', '/api/ads'],
   ['referral', '/api/referral'],
   ['leaderboard', '/api/leaderboard'],
   ['mobile auth', '/api/mobile-auth'],

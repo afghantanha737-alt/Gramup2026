@@ -1,6 +1,6 @@
 'use strict';
 
-// ارسال خودکار پست برداشت‌ها در کانال عمومی پرداخت‌ها (مدرک پرداخت برای AdsGram بند ۸)
+// ارسال خودکار پست برداشت‌ها در کانال عمومی پرداخت‌ها
 // ENV: PAYOUT_CHANNEL_ID=@YourPayoutChannel  (ربات باید ادمین کانال باشد)
 // Optional public links: COMMUNITY_CHANNEL_URL or COMMUNITY_CHANNEL_USERNAME.
 const { bot } = require('./bot');

@@ -2387,16 +2387,3 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .taskAction.pending[data-latest-post-wait="true"],
 .taskAction.pending[data-latest-post-cooldown] { min-width: 104px; color: #aeb8c9; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.16); box-shadow: none; font-variant-numeric: tabular-nums; }
 .taskAction[data-latest-post-check] { background: linear-gradient(135deg,#22c879,#0ca66d); color: #fff; box-shadow: 0 7px 15px rgba(16,185,129,.25); }
-
-
-/* AdsGram rewarded card — optional, scoped to Tasks only */
-.adsRewardCard { margin: 0 0 12px; padding: 14px; border: 1px solid rgba(103,232,249,.18); border-radius: 18px; background: radial-gradient(circle at 100% 0%, rgba(103,232,249,.14), transparent 45%), linear-gradient(145deg, #171a27, #11131a 72%); box-shadow: 0 8px 22px rgba(0,0,0,.14); }
-.adsRewardTop { display:flex; align-items:center; gap:10px; }
-.adsRewardIcon { width:36px; height:36px; flex:0 0 36px; display:grid; place-items:center; border-radius:12px; color:#061018; background:linear-gradient(135deg,#67e8f9,#a78bfa); font-size:16px; font-weight:950; }
-.adsRewardTop h2 { margin:3px 0 0; color:var(--text); font-size:14px; font-weight:900; }
-.adsRewardEyebrow { color:#67e8f9; font-size:8px; font-weight:900; letter-spacing:.13em; text-transform:uppercase; }
-.adsRewardPoints { margin-inline-start:auto; padding:5px 8px; border-radius:8px; color:#86efac; background:rgba(134,239,172,.10); font-size:11px; font-weight:900; white-space:nowrap; }
-.adsRewardDesc { margin:10px 0 8px; color:var(--text-muted); font-size:10px; line-height:1.6; }
-.adsRewardMeta { display:flex; justify-content:space-between; gap:8px; color:var(--text-muted); font-size:9px; line-height:1.5; }
-.adsRewardButton { width:100%; min-height:36px; margin-top:10px; border:0; border-radius:11px; color:#071017; background:linear-gradient(135deg,#67e8f9,#a78bfa); font-size:11px; font-weight:900; }
-.adsRewardButton:disabled { color:#9aa4b5; background:rgba(148,163,184,.14); border:1px solid rgba(148,163,184,.16); }
