@@ -100,23 +100,33 @@ function getTelegramUser() {
 /* ================= LOCAL STORAGE / THEME ================= */
 const THEME_KEY = "miniAppTheme";
 
-const VALID_THEMES = Object.freeze(["midnight", "aurora", "pearl"]);
+/*
+ * Theme registry: add future themes here first. The renderer, persistence,
+ * Telegram chrome color and Profile picker all derive from this single list.
+ * Palette-specific CSS remains in css/theme-selector.css.
+ */
+const THEME_REGISTRY = Object.freeze({
+  midnight: Object.freeze({ labelKey: "theme_midnight", icon: "🌙", chrome: "#050609", cssTheme: "midnight" }),
+  aurora: Object.freeze({ labelKey: "theme_aurora", icon: "🌌", chrome: "#06151b", cssTheme: "aurora" }),
+  pearl: Object.freeze({ labelKey: "theme_pearl", icon: "☀️", chrome: "#f8fafc", cssTheme: "light" })
+});
+const VALID_THEMES = Object.freeze(Object.keys(THEME_REGISTRY));
 function getTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   return VALID_THEMES.includes(saved) ? saved : "midnight";
 }
 function applyTheme(theme) {
   const selected = VALID_THEMES.includes(theme) ? theme : "midnight";
+  const definition = THEME_REGISTRY[selected];
   // Keep the existing light selectors compatible with Pearl Light.
-  document.documentElement.dataset.theme = selected === "pearl" ? "light" : selected;
+  document.documentElement.dataset.theme = definition.cssTheme;
   document.documentElement.dataset.themeName = selected;
   localStorage.setItem(THEME_KEY, selected);
   try {
-    const chrome = selected === "pearl" ? "#f8fafc" : selected === "aurora" ? "#06151b" : "#050609";
-    if (tg && tg.setHeaderColor) tg.setHeaderColor(chrome);
-    if (tg && tg.setBackgroundColor) tg.setBackgroundColor(chrome);
+    if (tg && tg.setHeaderColor) tg.setHeaderColor(definition.chrome);
+    if (tg && tg.setBackgroundColor) tg.setBackgroundColor(definition.chrome);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", chrome);
+    if (meta) meta.setAttribute("content", definition.chrome);
   } catch (e) { /* ignore */ }
   updateThemeUI();
 }
@@ -135,9 +145,9 @@ function updateThemeUI() {
   const label = $("#themeLabel");
   const toggle = $("#themeToggle");
   const theme = getTheme();
-  const names = { midnight: t("theme_midnight"), aurora: t("theme_aurora"), pearl: t("theme_pearl") };
-  if (icon) icon.textContent = theme === "pearl" ? "☀️" : theme === "aurora" ? "🌌" : "🌙";
-  if (label) label.textContent = names[theme];
+  const definition = THEME_REGISTRY[theme];
+  if (icon) icon.textContent = definition.icon;
+  if (label) label.textContent = t(definition.labelKey);
   if (toggle) toggle.setAttribute("aria-checked", theme === "pearl" ? "true" : "false");
   $$("[data-theme-choice]").forEach(button => {
     const active = button.dataset.themeChoice === theme;
@@ -2426,9 +2436,7 @@ function renderProfileMenu() {
         <div class="profileThemePicker" role="group" aria-label="${escapeHTML(t("theme_title"))}">
           <div class="profileThemeHeading"><span class="profileIcon">🎨</span><strong>${t("theme_title")}</strong></div>
           <div class="profileThemeChoices">
-            <button type="button" class="themeChoice themeChoiceMidnight" data-theme-choice="midnight" aria-checked="false" onclick="selectTheme('midnight')"><span>🌙</span>${t("theme_midnight")}</button>
-            <button type="button" class="themeChoice themeChoiceAurora" data-theme-choice="aurora" aria-checked="false" onclick="selectTheme('aurora')"><span>🌌</span>${t("theme_aurora")}</button>
-            <button type="button" class="themeChoice themeChoicePearl" data-theme-choice="pearl" aria-checked="false" onclick="selectTheme('pearl')"><span>☀️</span>${t("theme_pearl")}</button>
+            ${Object.entries(THEME_REGISTRY).map(([id, definition]) => `<button type="button" class="themeChoice" data-theme-choice="${id}" aria-checked="false" onclick="selectTheme('${id}')"><span>${definition.icon}</span>${t(definition.labelKey)}</button>`).join("")}
           </div>
         </div>
       </div>

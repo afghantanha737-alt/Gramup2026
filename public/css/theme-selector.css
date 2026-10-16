@@ -1,4 +1,4 @@
-/* GramUp selectable themes — loaded inline by the main stylesheet build step. */
+/* GramUp selectable themes — loaded as a separate stylesheet from index.html. */
 
 html[data-theme="aurora"] {
   --bg: #061116;
@@ -92,9 +92,9 @@ html[data-theme="light"] button:disabled { color: #64748b; }
 .themeChoice span { font-size: 18px; line-height: 1; }
 .themeChoice:active { transform: scale(.97); }
 .themeChoice.is-active { color: var(--text); border-color: var(--primary-2); box-shadow: 0 0 0 3px var(--primary-soft); }
-.themeChoiceMidnight { background: linear-gradient(145deg, #171a2a, #08090f); color: #d9d7ff; }
-.themeChoiceAurora { background: linear-gradient(145deg, #143b45, #071a20); color: #a5f3fc; }
-.themeChoicePearl { background: linear-gradient(145deg, #fff, #e8edf5); color: #1e293b; }
+.themeChoice[data-theme-choice="midnight"] { background: linear-gradient(145deg, #171a2a, #08090f); color: #d9d7ff; }
+.themeChoice[data-theme-choice="aurora"] { background: linear-gradient(145deg, #143b45, #071a20); color: #a5f3fc; }
+.themeChoice[data-theme-choice="pearl"] { background: linear-gradient(145deg, #fff, #e8edf5); color: #1e293b; }
 @media (max-width: 370px) {
   .profileThemeChoices { gap: 5px; }
   .themeChoice { font-size: 8px; }
