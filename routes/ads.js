@@ -14,22 +14,13 @@ router.get('/config', auth, async (req, res) => {
   res.json({ success: true, ads: adsStateForUser(req.dbUser) });
 });
 
-// POST /api/ads/reward — بعد از اینکه AdController.show() با موفقیت (تماشا تا انتها) تمام شد
+// POST /api/ads/reward — کلاینت حق صدور پاداش ندارد؛ پاداش فقط از Reward URL معتبر AdsGram می‌آید.
 router.post('/reward', auth, async (req, res) => {
-  const config = getAdsConfig();
-  if (config.rewardSecret) {
-    // در حالت Reward URL، پاداش را خود سرور AdsGram تایید می‌کند؛ کلاینت فقط موجودی را تازه می‌کند.
-    return res.json({ success: true, pending: true, ads: adsStateForUser(req.dbUser) });
-  }
-  try {
-    const result = await grantAdReward(req.dbUser._id, 'client');
-    return res.json({ success: true, earned: result.earned, points: result.user.points, ads: adsStateForUser(result.user) });
-  } catch (error) {
-    if (error.code && error.code.startsWith('ADS_')) {
-      return res.status(error.statusCode || 400).json({ success: false, code: error.code, message: error.message });
-    }
-    throw error;
-  }
+  return res.status(403).json({
+    success: false,
+    code: 'ADS_REWARD_CALLBACK_REQUIRED',
+    message: 'پاداش تبلیغ فقط پس از تأیید Callback رسمی AdsGram ثبت می‌شود.'
+  });
 });
 
 /**

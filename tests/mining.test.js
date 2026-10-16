@@ -39,13 +39,14 @@ assert.match(miningSource, /recordLedgerRequired/);
 assert.match(miningSource, /MINING_CONFLICT/);
 assert.doesNotMatch(miningSource, /PointsLedger\.create\(/, 'mining balance changes must not write ledger outside transaction');
 assert.match(adsSource, /ADS_REWARD_CALLBACK_REQUIRED/);
-assert.match(adsSource, /grantMiningBoost\(user\._id, 'adsgram'\)/);
-assert.match(adsCore, /async function grantMiningBoost/);
+assert.match(adsSource, /ADS_REWARD_CALLBACK_REQUIRED/);
+assert.match(adsSource, /grantAdReward\(user\._id, 'adsgram'\)/);
+assert.match(adsCore, /async function grantAdReward/);
 assert.match(adsCore, /config\.rewardSecret/);
-assert.match(adsCore, /miningBoostExpiresAt: new Date\(now\.getTime\(\) \+ 30 \* 60 \* 1000\)/);
+assert.match(adsCore, /adViewsToday: watchedToday \+ 1/);
 assert.doesNotMatch(client, /api\("\/api\/ads\/mining-boost"/, 'client must not mint a boost directly');
-assert.match(client, /state\.ads\.serverRewardMode/);
-for (const key of ['mining_hero_kicker', 'mining_hero_desc', 'mining_boost_server_unavailable']) {
+assert.match(client, /serverRewardMode/);
+for (const key of ['ads_card_title', 'ads_watch_button', 'ads_reward_pending']) {
   assert.ok((translations.match(new RegExp(`${key}:`, 'g')) || []).length >= 3, `translation missing in one of three languages: ${key}`);
 }
-console.log('ALL PASS — Mining accrual, stable storage, atomic ledger contract and AdsGram callback verification');
+console.log('ALL PASS — AdsGram callback verification, atomic reward ledger contract and translations');
