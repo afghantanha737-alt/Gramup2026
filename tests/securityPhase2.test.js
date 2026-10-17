@@ -1,7 +1,9 @@
 'use strict';
 const assert = require('assert');
 const crypto = require('crypto');
-const { hashNetworkIdentifier, assessReferralRisk } = require('../utils/referralRisk');
+const fs = require('fs');
+const path = require('path');
+const { hashNetworkIdentifier, hashDeviceIdentifier, assessReferralRisk } = require('../utils/referralRisk');
 const AdminSession = require('../models/AdminSession');
 const { createAdminSession, getAdminSession, revokeAdminSession } = require('../utils/adminSession');
 const { createAdminSessionStore } = require('../utils/telegramAdmin');
@@ -16,6 +18,12 @@ assert.strictEqual(tokenHashIndexes[0][1].unique, true, 'tokenHash remains uniqu
   assert.notStrictEqual(ipHashA, hashNetworkIdentifier('203.0.113.11'));
   assert.strictEqual(assessReferralRisk({ referrer: { signupIpHash: ipHashA }, signupIpHash: ipHashA }).score, 50);
   assert.ok(assessReferralRisk({ referrer: { isBanned: true }, signupIpHash: '' }).blocked);
+  const deviceHashA = hashDeviceIdentifier('GramUp-Test-Device');
+  assert.strictEqual(deviceHashA, hashDeviceIdentifier('GramUp-Test-Device'));
+  assert.notStrictEqual(deviceHashA, hashDeviceIdentifier('GramUp-Other-Device'));
+  assert.strictEqual(assessReferralRisk({ referrer: { signupDeviceHash: deviceHashA }, signupDeviceHash: deviceHashA }).score, 20);
+  assert.strictEqual(assessReferralRisk({ referrer: { signupDeviceHash: deviceHashA }, signupDeviceHash: deviceHashA }).blocked, false);
+  assert.ok(fs.readFileSync(path.join(__dirname, '../routes/points.js'), 'utf8').includes('timeline: synthesizeHistory(withdrawal)'));
 
   const records = new Map();
   const original = { create: AdminSession.create, findOneAndUpdate: AdminSession.findOneAndUpdate, deleteOne: AdminSession.deleteOne };

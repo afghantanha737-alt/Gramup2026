@@ -21,8 +21,9 @@ const userSchema = new mongoose.Schema(
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     referralInitialRewardEligible: { type: Boolean, default: false },
     accountReviewStatus: { type: String, enum: ['normal', 'under_review', 'restricted', 'fraud_review'], default: 'normal', index: true },
-    // فقط HMAC هش شبکه ذخیره می‌شود؛ IP خام هرگز در دیتابیس ثبت نمی‌شود.
+    // فقط HMAC هش شبکه و Device ذخیره می‌شود؛ IP/User-Agent خام هرگز در دیتابیس ثبت نمی‌شود.
     signupIpHash: { type: String, default: '' },
+    signupDeviceHash: { type: String, default: '' },
     referralRiskScore: { type: Number, default: 0, min: 0 },
     referralRiskFlags: { type: [String], default: [] },
     referralRiskBlocked: { type: Boolean, default: false },

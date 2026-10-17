@@ -483,7 +483,7 @@ router.get('/withdrawals/:id', auth, async (req, res) => {
 // GET /api/points/withdrawals
 router.get('/withdrawals', auth, async (req, res) => {
   const list = await Withdrawal.find({ user: req.dbUser._id }).sort({ createdAt: -1 }).limit(30);
-  res.json({ success: true, withdrawals: list });
+  res.json({ success: true, withdrawals: list.map(withdrawal => ({ ...withdrawal.toObject(), timeline: synthesizeHistory(withdrawal) })) });
 });
 
 // Native GRAM deposits use one project-controlled TON Mainnet wallet and a unique invoice comment.

@@ -4,7 +4,7 @@ const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
 const { requireTelegramAuth, generateReferralCode } = require('../utils/telegramAuth');
 const User = require('../models/User');
-const { hashNetworkIdentifier, assessReferralRisk } = require('../utils/referralRisk');
+const { hashNetworkIdentifier, hashDeviceIdentifier, assessReferralRisk } = require('../utils/referralRisk');
 const { linkReferral } = require('../utils/referralSystem');
 const { referralIdentifierQuery } = require('../utils/referralCore');
 const Settings = require('../models/Settings');
@@ -22,11 +22,11 @@ router.get('/me', auth, async (req, res) => {
   const isFreshAccount = u.createdAt && Date.now() - new Date(u.createdAt).getTime() < 24 * 60 * 60 * 1000;
 
   if (!u.referredBy && referralQuery && isFreshAccount) {
-    const referrer = await User.findOne(referralQuery).select('_id telegramId isBanned signupIpHash');
+    const referrer = await User.findOne(referralQuery).select('_id telegramId isBanned signupIpHash signupDeviceHash');
     // جلوگیری از خودارجاعی و دور رفرال (A دعوت‌کننده‌ی B و B دعوت‌کننده‌ی A)
     const isCycle = referrer && referrer.referredBy && String(referrer.referredBy) === String(u._id);
     if (referrer && !referrer.isBanned && String(referrer._id) !== String(u._id) && !isCycle) {
-      const risk = assessReferralRisk({ referrer, signupIpHash: hashNetworkIdentifier(req.ip) });
+      const risk = assessReferralRisk({ referrer, signupIpHash: hashNetworkIdentifier(req.ip), signupDeviceHash: hashDeviceIdentifier(req.get('user-agent') || '') });
       await linkReferral({ referredUserId: u._id, referrerId: referrer._id, riskScore: risk.score, riskFlags: risk.flags, source: 'signup' });
       u = await User.findById(u._id);
     }

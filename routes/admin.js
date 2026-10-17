@@ -1039,6 +1039,70 @@ router.get('/financial-audit', async (req, res) => {
   res.json({ success: true, checkedUsers: users.length, discrepancyCount: discrepancies.length, discrepancies, generatedAt: new Date().toISOString() });
 });
 
+// خلاصه‌ی فقط‌خواندنی تعهدات مالی؛ هیچ موجودی یا رکوردی را تغییر نمی‌دهد.
+// ذخیره‌ی واقعی فقط وقتی گزارش می‌شود که صراحتاً در تنظیمات پروژه ثبت شده باشد.
+router.get('/liability-summary', async (req, res) => {
+  const [userBalances, ledgerTotals, withdrawalTotals, depositTotals] = await Promise.all([
+    User.aggregate([{ $group: {
+      _id: null,
+      users: { $sum: 1 },
+      currentPoints: { $sum: { $ifNull: ['$points', 0] } },
+      currentGram: { $sum: { $ifNull: ['$gramBalance', 0] } }
+    } }]),
+    PointsLedger.aggregate([{ $group: {
+      _id: { currency: '$currency', direction: { $cond: [{ $gt: ['$amount', 0] }, 'positive', 'negative'] } },
+      absoluteTotal: { $sum: { $abs: '$amount' } },
+      transactions: { $sum: 1 }
+    } }]),
+    Withdrawal.aggregate([{ $group: {
+      _id: '$status',
+      amount: { $sum: { $ifNull: ['$cryptoAmount', 0] } },
+      count: { $sum: 1 }
+    } }]),
+    Deposit.aggregate([{ $group: {
+      _id: '$status',
+      amount: { $sum: { $ifNull: ['$amount', 0] } },
+      count: { $sum: 1 }
+    } }])
+  ]);
+  const balances = userBalances[0] || {};
+  const ledger = {};
+  for (const row of ledgerTotals) {
+    const currency = String(row._id?.currency || 'unknown');
+    const direction = String(row._id?.direction || 'unknown');
+    if (!ledger[currency]) ledger[currency] = { positive: 0, negative: 0, transactions: 0 };
+    ledger[currency][direction] = Number(row.absoluteTotal) || 0;
+    ledger[currency].transactions += Number(row.transactions) || 0;
+  }
+  const withdrawals = Object.fromEntries(withdrawalTotals.map(row => [row._id, { amount: Number(row.amount) || 0, count: Number(row.count) || 0 }]));
+  const deposits = Object.fromEntries(depositTotals.map(row => [row._id, { amount: Number(row.amount) || 0, count: Number(row.count) || 0 }]));
+  res.json({
+    success: true,
+    generatedAt: new Date().toISOString(),
+    users: Number(balances.users) || 0,
+    points: {
+      currentUserLiability: Number(balances.currentPoints) || 0,
+      ledgerPositive: Number(ledger.points?.positive) || 0,
+      ledgerNegative: Number(ledger.points?.negative) || 0,
+      ledgerTransactions: Number(ledger.points?.transactions) || 0
+    },
+    gram: {
+      currentUserLiability: Number(balances.currentGram) || 0,
+      ledgerPositive: Number(ledger.gram?.positive) || 0,
+      ledgerNegative: Number(ledger.gram?.negative) || 0,
+      ledgerTransactions: Number(ledger.gram?.transactions) || 0
+    },
+    withdrawals,
+    deposits,
+    reserve: {
+      configured: false,
+      amount: null,
+      currency: 'GRAM',
+      note: 'ذخیره واقعی در تنظیمات پروژه ثبت نشده است؛ برای جلوگیری از گزارش ساختگی نمایش داده نمی‌شود.'
+    }
+  });
+});
+
 router.get('/ops-metrics', (req, res) => {
   res.json({ success: true, metrics: metricsSnapshot(), node: process.version, environment: process.env.NODE_ENV || 'production', timestamp: new Date().toISOString() });
 });

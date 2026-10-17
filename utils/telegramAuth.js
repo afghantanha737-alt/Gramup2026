@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const User = require('../models/User');
-const { hashNetworkIdentifier, assessReferralRisk } = require('./referralRisk');
+const { hashNetworkIdentifier, hashDeviceIdentifier, assessReferralRisk } = require('./referralRisk');
 const { linkReferral } = require('./referralSystem');
 const { referralIdentifierQuery } = require('./referralCore');
 
@@ -62,21 +62,22 @@ function generateReferralCode(telegramId) {
   return `R${telegramId}${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
 }
 
-async function getOrCreateUser(tgUser, startParam, requestIp = '') {
+async function getOrCreateUser(tgUser, startParam, requestIp = '', requestUserAgent = '') {
   if (!tgUser || !tgUser.id) return null;
   const telegramId = String(tgUser.id);
   let dbUser = await User.findOne({ telegramId });
   const referralQuery = referralIdentifierQuery(startParam);
   let referrer = referralQuery
-    ? await User.findOne(referralQuery).select('_id telegramId isBanned signupIpHash')
+    ? await User.findOne(referralQuery).select('_id telegramId isBanned signupIpHash signupDeviceHash')
     : null;
   if (referrer && (referrer.isBanned || String(referrer.telegramId) === telegramId)) referrer = null;
   const referralRisk = referrer
-    ? assessReferralRisk({ referrer, signupIpHash: hashNetworkIdentifier(requestIp) })
+    ? assessReferralRisk({ referrer, signupIpHash: hashNetworkIdentifier(requestIp), signupDeviceHash: hashDeviceIdentifier(requestUserAgent) })
     : { score: 0, flags: [] };
 
   if (!dbUser) {
     const signupIpHash = hashNetworkIdentifier(requestIp);
+    const signupDeviceHash = hashDeviceIdentifier(requestUserAgent);
     dbUser = await User.create({
       telegramId,
       username: tgUser.username || '',
@@ -85,6 +86,7 @@ async function getOrCreateUser(tgUser, startParam, requestIp = '') {
       photoUrl: tgUser.photo_url || '',
       referralCode: generateReferralCode(telegramId),
       signupIpHash,
+      signupDeviceHash,
       referralRiskScore: 0,
       referralRiskFlags: []
     });
@@ -140,7 +142,7 @@ function requireTelegramAuth(botToken) {
         return res.status(401).json({ success: false, message: 'احراز هویت تلگرام نامعتبر است.' });
       }
 
-      const dbUser = await getOrCreateUser(verified.user, verified.startParam, req.ip);
+      const dbUser = await getOrCreateUser(verified.user, verified.startParam, req.ip, req.get('user-agent') || '');
       if (!dbUser) {
         return res.status(401).json({ success: false, message: 'کاربر شناسایی نشد.' });
       }

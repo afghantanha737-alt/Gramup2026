@@ -162,6 +162,11 @@
         <b>تسک‌های تکمیل‌شده — ۷ روز اخیر</b>
         <div id="chartTasksDone" style="margin-top:12px"></div>
       </div>
+      <div class="card">
+        <div class="flexBetween"><b>کنترل تعهدات مالی</b><button class="secondary" type="button" onclick="loadLiabilitySummary()">به‌روزرسانی</button></div>
+        <p class="small">گزارش فقط‌خواندنی بر اساس موجودی فعلی کاربران، Ledger، Deposit و برداشت‌ها. ذخیره واقعی تا زمان ثبت مقدار معتبر، عمداً گزارش نمی‌شود.</p>
+        <div id="liabilitySummary"><div class="empty">در حال بارگذاری...</div></div>
+      </div>
     </div>
 
     <!-- TASKS -->
@@ -738,7 +743,7 @@ function switchTab(tab) {
   document.querySelectorAll(".tabContent").forEach(el => el.classList.add("hidden"));
   document.querySelectorAll(".tabs button").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tab));
   document.getElementById("tab-" + tab).classList.remove("hidden");
-  if (tab === "stats") loadStats();
+  if (tab === "stats") { loadStats(); loadLiabilitySummary(); }
   if (tab === "tasks") { loadTasks(); loadScreenshotSubmissions(); }
   if (tab === "withdrawals") loadWithdrawals();
   if (tab === "users") loadUsers();
@@ -819,6 +824,29 @@ async function loadStats() {
     document.getElementById("chartTasksDone").innerHTML = renderBarChart(s.tasksTrend, "var(--success, #22c55e)");
   } catch (error) {
     grid.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function loadLiabilitySummary() {
+  const container = document.getElementById("liabilitySummary");
+  if (!container) return;
+  container.innerHTML = '<div class="empty">در حال بارگذاری...</div>';
+  try {
+    const data = await api("/api/admin/liability-summary");
+    const n = value => (Number(value) || 0).toLocaleString("fa-IR", { maximumFractionDigits: 6 });
+    const pending = Number(data.withdrawals?.pending?.amount || 0);
+    const processing = Number(data.withdrawals?.approved?.amount || 0) + Number(data.withdrawals?.processing?.amount || 0);
+    const paid = Number(data.withdrawals?.paid?.amount || 0);
+    const confirmedDeposits = Number(data.deposits?.confirmed?.amount || 0);
+    container.innerHTML = `<div class="statsGrid" style="margin-top:12px">
+      <div class="card" style="margin-bottom:0"><div class="small">تعهد Points فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.points?.currentUserLiability)}</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">تعهد GRAM فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.gram?.currentUserLiability)} GRAM</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">برداشت در انتظار/پردازش</div><div style="font-size:20px;font-weight:800">${n(pending + processing)} GRAM</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">برداشت پرداخت‌شده</div><div style="font-size:20px;font-weight:800">${n(paid)} GRAM</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">Deposit تأییدشده</div><div style="font-size:20px;font-weight:800">${n(confirmedDeposits)} GRAM</div></div>
+    </div><div class="small" style="margin-top:12px">کاربران بررسی‌شده: ${n(data.users)} · ذخیره واقعی: گزارش‌نشده تا ثبت مقدار معتبر · آخرین بررسی: ${new Date(data.generatedAt).toLocaleString("fa-IR")}</div>`;
+  } catch (error) {
+    container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
 }
 
