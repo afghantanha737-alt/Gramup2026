@@ -653,7 +653,9 @@ const ONBOARDING_STEP_COUNT = 3;
 let onboardingStep = 0;
 
 function onboardingSeen() {
-  return localStorage.getItem("onboardingSeen") === "1";
+  const userId = state.user?.telegramId || state.user?.id || getTelegramUser()?.id;
+  const key = userId ? `onboardingSeen:${String(userId)}` : "onboardingSeen";
+  return localStorage.getItem(key) === "1";
 }
 
 function maybeShowOnboarding() {
@@ -688,13 +690,21 @@ window.onboardingNext = onboardingNext;
 function finishOnboarding() {
   const overlay = $("#onboardingOverlay");
   if (overlay) overlay.style.display = "none";
-  localStorage.setItem("onboardingSeen", "1");
+  const userId = state.user?.telegramId || state.user?.id || getTelegramUser()?.id;
+  const key = userId ? `onboardingSeen:${String(userId)}` : "onboardingSeen";
+  localStorage.setItem(key, "1");
 }
 
 function skipOnboarding() {
   finishOnboarding();
 }
 window.skipOnboarding = skipOnboarding;
+window.showOnboarding = () => {
+  onboardingStep = 0;
+  const overlay = $("#onboardingOverlay");
+  if (overlay) overlay.style.display = "flex";
+  renderOnboardingStep();
+};
 
 /* ================= CAPTCHA ================= */
 function captchaPassed() {
@@ -780,7 +790,8 @@ async function bootstrapAuth() {
   try {
     const data = await api(url);
     state.language = localStorage.getItem("appLanguage") || data.language || "fa";
-    if (data.firstName) state.user = { ...(state.user || {}), first_name: data.firstName };
+    state.user = { ...(state.user || {}), id: data.telegramId, telegramId: data.telegramId };
+    if (data.firstName) state.user.first_name = data.firstName;
   } catch (error) {
     console.warn("Bootstrap auth failed:", error);
     state.language = localStorage.getItem("appLanguage") || "fa";
@@ -2426,6 +2437,11 @@ function renderProfileMenu() {
         <div class="profileItem" onclick="showPrivacy()">
           <div class="profileIcon">🔒</div>
           <div class="profileText">${t("menu_privacy")}</div>
+          <div class="profileChevron">‹</div>
+        </div>
+        <div class="profileItem" onclick="showOnboarding()">
+          <div class="profileIcon">✨</div>
+          <div class="profileText">${t("menu_onboarding")}</div>
           <div class="profileChevron">‹</div>
         </div>
         <div class="profileItem" onclick="showLanguageOverlay()">
