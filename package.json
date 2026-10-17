@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "for f in tests/*.test.js; do node \"$f\" || exit 1; done",
-    "migrate:referral-v2": "node scripts/migrate-referral-v2.js"
+    "migrate:referral-v2": "node scripts/migrate-referral-v2.js",
+    "verify:production": "node scripts/verify-production.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
