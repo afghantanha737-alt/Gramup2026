@@ -24,7 +24,7 @@ const parent4 = { _id: 'l4', referredBy: null, isBanned: false, accountReviewSta
 const parent3 = { _id: 'l3', referredBy: 'l4', isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0 };
 const parent2 = { _id: 'l2', referredBy: 'l3', isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0 };
 const parent1 = { _id: 'l1', referredBy: 'l2', isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0 };
-const origin = { _id: 'origin', referredBy: 'l1', isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0, createdAt: new Date() };
+const origin = { _id: 'origin', referredBy: 'l1', isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0, createdAt: new Date('2026-09-01T00:00:00Z'), referralEligibilityStatus: 'eligible', referralEligibleAt: new Date('2026-09-08T00:00:00Z') };
 const users = new Map([parent4, parent3, parent2, parent1, origin].map(user => [user._id, user]));
 const entries = new Map();
 const relationships = [];
@@ -81,10 +81,10 @@ const { distributeReferralCommissions } = require('../utils/referralSystem');
   assert.deepStrictEqual(duplicate, []);
   assert.deepStrictEqual([parent1, parent2, parent3, parent4].map(user => user.points), [10, 5, 3, 1]);
 
-  const youngOrigin = { ...origin, _id: 'young', referredBy: parent1._id, createdAt: new Date() };
+  const youngOrigin = { ...origin, _id: 'young', referredBy: parent1._id, createdAt: new Date(), referralEligibilityStatus: 'pending', referralEligibleAt: null };
   users.set(youngOrigin._id, youngOrigin);
   const youngPaid = await distributeReferralCommissions({ ...earning, user: youngOrigin._id, sourceId: 'task-young-100' }, { id: 'tx-3' });
-  assert.strictEqual(youngPaid[0].amount, 10, 'a new account is not blocked by referral age');
+  assert.deepStrictEqual(youngPaid, [], 'a non-active account must not generate referral commissions');
 
   parent2.referralRiskScore = 50;
   const blocked = await distributeReferralCommissions({ ...earning, sourceId: 'task-risk-100' }, { id: 'tx-4' });

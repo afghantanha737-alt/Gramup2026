@@ -188,7 +188,8 @@ async function main() {
   assert.ok(source('routes/points.js').includes("scope: 'withdraw'"));
   assert.ok(source('routes/points.js').includes('nextCursor'));
   assert.ok(source('routes/tasks.js').includes('taskCapacityFilter'));
-  assert.ok(source('utils/referralSystem.js').includes('evaluateReferralEligibility(origin, completions'));
+  assert.ok(source('utils/referralSystem.js').includes("origin.referralEligibilityStatus === 'eligible'"));
+  assert.ok(source('utils/referralSystem.js').includes('originEligible'));
   assert.ok(source('routes/telegramWebhook.js').includes('claimWebhookUpdate'));
   assert.ok(source('server.js').includes('verifyMongoTransactionCapability'));
   assert.ok(source('server.js').includes('withDistributedJobLock'));

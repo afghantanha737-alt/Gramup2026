@@ -291,9 +291,11 @@ async function distributeReferralCommissions(earningEntry, session) {
   if (!earningEntry.sourceId) throw new Error('Qualifying original earnings must have a stable sourceId for referral idempotency.');
 
   const { rates } = await getReferralSettings(session);
-  const origin = await sessionQuery(User.findById(earningEntry.user).select('_id referredBy isBanned accountReviewStatus referralRiskBlocked referralRiskScore createdAt'), session);
+  const origin = await sessionQuery(User.findById(earningEntry.user).select('_id referredBy isBanned accountReviewStatus referralRiskBlocked referralRiskScore createdAt referralEligibilityStatus referralEligibleAt'), session);
   if (!origin || !origin.referredBy) return [];
-  // evaluateReferralEligibility(origin, completions) is managed via referralSweep and task submission gates.
+  // The persisted eligibility flag is the payout gate. It is updated by the
+  // task gate and the periodic sweep; a missing/stale flag must fail closed.
+  const originEligible = origin.referralEligibilityStatus === 'eligible' && Boolean(origin.referralEligibleAt);
   const paid = [];
   const pathUsers = [origin];
   const seen = new Set([String(origin._id)]);
@@ -304,7 +306,7 @@ async function distributeReferralCommissions(earningEntry, session) {
     seen.add(String(ancestor._id));
     pathUsers.push(ancestor);
 
-    const status = relationStatus(pathUsers);
+    const status = relationStatus(pathUsers) === 'active' && originEligible ? 'active' : 'under_review';
     await createOrUpdateRelationship({
       referrerId: ancestor._id,
       referredUserId: origin._id,
