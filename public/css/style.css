@@ -2215,6 +2215,12 @@ html[data-theme="light"] .dailyCalendarCard { background: #fff; }
 .appContent .vipRedesign > h3.sectionTitle { margin-inline: 3px !important; color: #dfeaff; font-size: 15px; }
 .appContent .vipRedesign .card { border-radius: 17px; }
 html[data-theme="light"] .walletOverview { border-color: rgba(90,75,221,.16); background: radial-gradient(circle at 100% 0%, rgba(90,75,221,.12), transparent 40%), #fff; }
+.walletConnectCard { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; padding:14px; border:1px solid rgba(103,232,249,.18); border-radius:18px; background:linear-gradient(135deg, rgba(103,232,249,.08), rgba(124,58,237,.08)); }
+.walletConnectTitle { color:var(--text); font-size:13px; font-weight:900; }
+.walletConnectHint { margin-top:4px; color:var(--text-soft); font-size:10px; direction:ltr; text-align:left; }
+.walletConnectButton, .walletDisconnectButton { border:0; border-radius:11px; padding:10px 13px; color:#07131e; background:var(--product-cyan); font-weight:900; font-size:11px; cursor:pointer; }
+.walletDisconnectButton { color:var(--text); background:rgba(255,255,255,.08); border:1px solid var(--product-border); }
+.walletStatusDot { display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; background:#86efac; box-shadow:0 0 0 4px rgba(134,239,172,.12); }
 html[data-theme="light"] .walletOverview h1, html[data-theme="light"] .walletOverviewValue strong { color: var(--text); }
 html[data-theme="light"] .walletOverviewBottom { border-top-color: rgba(17,24,39,.08); }
 html[data-theme="light"] .appContent .vipRedesign .vipHero { background: radial-gradient(circle at 100% 0%, rgba(90,75,221,.12), transparent 40%), #fff; }

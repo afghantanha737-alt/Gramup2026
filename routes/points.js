@@ -129,6 +129,67 @@ function truncateAddress(address) {
   return `${s.slice(0, 6)}…${s.slice(-6)}`;
 }
 
+function publicConnectedWallet(user) {
+  const wallet = user?.connectedWallet || {};
+  return {
+    connected: Boolean(wallet.address),
+    address: wallet.address || '',
+    canonicalAddress: wallet.canonicalAddress || '',
+    network: wallet.network || '',
+    walletApp: wallet.walletApp || '',
+    connectedAt: wallet.connectedAt || null,
+    lastSeenAt: wallet.lastSeenAt || null
+  };
+}
+
+// TON Connect performs the wallet handshake in the client. This endpoint only
+// records the selected address for the authenticated GramUp account.
+router.get('/wallet/connection', auth, async (req, res) => {
+  res.json({ success: true, wallet: publicConnectedWallet(req.dbUser) });
+});
+
+router.post('/wallet/connection', auth, async (req, res) => {
+  const address = String(req.body?.address || '').trim();
+  const canonicalAddress = normalizeTonAddress(address);
+  const network = String(req.body?.network || '').trim();
+  if (!canonicalAddress || network !== '-239') {
+    return res.status(400).json({ success: false, code: 'INVALID_CONNECTED_WALLET', message: 'Wallet باید یک آدرس معتبر TON Mainnet باشد.' });
+  }
+
+  const current = req.dbUser.connectedWallet || {};
+  const now = new Date();
+  const connectedAt = current.address === address ? (current.connectedAt || now) : now;
+  const updated = await User.findOneAndUpdate(
+    { _id: req.dbUser._id },
+    { $set: {
+      walletAddress: address,
+      connectedWallet: {
+        address,
+        canonicalAddress,
+        network,
+        publicKey: String(req.body?.publicKey || '').trim().slice(0, 128),
+        walletApp: String(req.body?.walletApp || '').trim().slice(0, 80),
+        connectedAt,
+        lastSeenAt: now
+      }
+    } },
+    { new: true }
+  );
+  res.json({ success: true, wallet: publicConnectedWallet(updated) });
+});
+
+router.delete('/wallet/connection', auth, async (req, res) => {
+  const updated = await User.findOneAndUpdate(
+    { _id: req.dbUser._id },
+    { $set: {
+      walletAddress: '',
+      connectedWallet: { address: '', canonicalAddress: '', network: '', publicKey: '', walletApp: '', connectedAt: null, lastSeenAt: null }
+    } },
+    { new: true }
+  );
+  res.json({ success: true, wallet: publicConnectedWallet(updated) });
+});
+
 function getDepositSettingsStatus(settings) {
   const depositWalletAddress = String(settings?.depositWalletAddress || '').trim();
   const minimumDepositGram = Number(settings?.minimumDepositGram);
@@ -381,6 +442,10 @@ router.post('/withdraw', auth, async (req, res) => {
   }
   if (!/^[A-Za-z0-9_\-:+/=.]{6,120}$/.test(walletAddress)) {
     return res.status(400).json({ success: false, message: 'آدرس کیف پول نامعتبر است.', code: 'INVALID_ADDRESS' });
+  }
+  const connectedAddress = String(u.connectedWallet?.address || '').trim();
+  if (connectedAddress && walletAddress !== connectedAddress) {
+    return res.status(409).json({ success: false, message: 'آدرس برداشت باید با Wallet متصل‌شده یکسان باشد.', code: 'WALLET_ADDRESS_MISMATCH' });
   }
   if (amount < minWithdrawGram) {
     return res.status(400).json({

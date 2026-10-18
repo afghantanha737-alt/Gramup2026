@@ -315,6 +315,7 @@ async function api(url, options = {}) {
   }
   return data;
 }
+window.gramupApi = api;
 
 /** Multipart upload helper with header-based Telegram authentication and cancellation timeout. */
 async function apiUpload(url, formData) {
@@ -1600,12 +1601,17 @@ function showWithdraw() {
     toast(t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawGram, 6) }), "warning");
     return;
   }
+  if (!window.gramupWallet?.isConnected()) {
+    toast("ابتدا Wallet خود را متصل کنید.", "warning");
+    void window.gramupWallet?.connect();
+    return;
+  }
   const overlay = $("#withdrawOverlay");
   const pointsInput = $("#withdrawPoints");
   const addressInput = $("#withdrawAddress");
   const error = $("#withdrawError");
   if (pointsInput) pointsInput.value = "";
-  if (addressInput) addressInput.value = "";
+  if (addressInput) addressInput.value = window.gramupWallet.getAddress();
   if (error) error.textContent = "";
   if (overlay) overlay.style.display = "flex";
 }
@@ -1624,13 +1630,13 @@ async function submitWithdraw() {
   const button = $("#submitWithdraw");
 
   const gram = Number(gramInput?.value);
-  const address = String(addressInput?.value || "").trim();
+  const address = String(window.gramupWallet?.getAddress?.() || addressInput?.value || "").trim();
 
   if (!gram || gram <= 0) {
     if (error) error.textContent = t("error_generic");
     return;
   }
-  if (address.length < 6) {
+  if (!window.gramupWallet?.isConnected() || address.length < 6) {
     if (error) error.textContent = t("error_generic");
     return;
   }
@@ -2058,6 +2064,7 @@ function renderWallet() {
       <div class="walletOverviewValue"><strong>${formatNumber(state.gramBalance, 6)}</strong><span>GRAM</span></div>
       <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.gramUsdPrice > 0 ? `≈ $${formatFixed(state.gramBalance * state.gramUsdPrice, 3)}` : "—"}</b></div>
     </section>
+    <div id="tonWalletConnection" aria-live="polite"></div>
 
     <div class="tbWalletGrid">
       <div class="tbWalletCard">
@@ -2110,6 +2117,8 @@ function renderWallet() {
       <button type="button" class="secondaryBtn" style="width:100%;margin-top:8px;border-color:rgba(124,58,237,0.4);background:rgba(124,58,237,0.08);" onclick="openPayoutChannel()">${t("wallet_proof_channel_button")}</button>
     </div>
   `;
+
+  window.gramupWallet?.mount("tonWalletConnection");
 
   loadWalletHistory().then(() => {
     if (renderRequestId !== walletRenderSequence || state.activeTab !== "wallet") return;
@@ -3308,6 +3317,7 @@ async function boot() {
   }
 
   await bootstrapAuth();
+  if (typeof window.initGramupWalletConnect === "function") await window.initGramupWalletConnect();
   applyStaticTranslations();
 
   if (!termsAccepted()) {

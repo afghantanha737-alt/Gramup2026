@@ -43,6 +43,16 @@ const userSchema = new mongoose.Schema(
     referralRewardClaims: { type: [referralRewardClaimSchema], default: [] },
 
     walletAddress: { type: String, default: '' },
+    // Wallet selected through TON Connect; each withdrawal keeps its own immutable address snapshot.
+    connectedWallet: {
+      address: { type: String, default: '' },
+      canonicalAddress: { type: String, default: '' },
+      network: { type: String, default: '' },
+      publicKey: { type: String, default: '' },
+      walletApp: { type: String, default: '' },
+      connectedAt: { type: Date, default: null },
+      lastSeenAt: { type: Date, default: null }
+    },
     language: { type: String, enum: ['fa', 'ps', 'en'], default: 'fa' },
     isBanned: { type: Boolean, default: false },
     // اگر تلگرام 403 بدهد (ربات بلاک شده یا حساب غیرفعال است)، از ارسال‌های بعدی حذف می‌شود.

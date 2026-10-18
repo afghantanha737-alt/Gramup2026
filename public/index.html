@@ -199,8 +199,9 @@
     <div class="withdrawBody">
       <label class="fieldLabel" data-i18n="exchange_gram_label">مقدار GRAM</label>
       <input id="withdrawPoints" type="number" inputmode="decimal" step="0.000001" placeholder="مثلاً 0.5" data-i18n-ph="withdraw_amount_ph">
-      <label class="fieldLabel" data-i18n="withdraw_address_label">آدرس کیف پول</label>
-      <input id="withdrawAddress" type="text" placeholder="آدرس کیف پول خود را وارد کن" data-i18n-ph="withdraw_address_ph">
+      <label class="fieldLabel" data-i18n="withdraw_address_label">Wallet متصل‌شده</label>
+      <input id="withdrawAddress" type="text" placeholder="ابتدا Wallet خود را متصل کنید" data-i18n-ph="withdraw_address_ph" readonly aria-readonly="true">
+      <p class="walletConnectHint" style="margin:8px 0 0" data-i18n="wallet_connected_withdraw_hint">برداشت فقط به Wallet متصل‌شده ارسال می‌شود.</p>
       <p id="withdrawError" class="captchaErr" role="alert"></p>
       <button type="button" class="primaryBtn" id="submitWithdraw" onclick="submitWithdraw()" data-i18n="withdraw_submit">ثبت درخواست</button>
     </div>
@@ -308,5 +309,7 @@
 <script src="js/maintenanceGate.js?v=20261006-maintenance"></script>
 <script src="js/i18n.js?v=20261015-task-labels"></script>
 <script src="js/app.js?v=20261010-vip-activation-tasks"></script>
+<script src="https://unpkg.com/@tonconnect/ui@5.0.1/dist/tonconnect-ui.min.js"></script>
+<script src="js/walletConnect.js?v=20261018-wallet-connect-phase1"></script>
 </body>
 </html>
