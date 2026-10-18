@@ -923,7 +923,11 @@ router.post('/weekly-leaderboard/:selectedWeekKey/pay', async (req, res) => {
   const start = new Date(`${selectedKey}T00:00:00.000Z`);
   const end = new Date(start.getTime() + 7 * 86400000);
   if (Number.isNaN(start.getTime())) return res.status(400).json({ success: false, message: 'هفته نامعتبر است.' });
-  if (end > new Date() && req.body?.force !== true) return res.status(409).json({ success: false, message: 'پرداخت جایزه تا پایان هفته امکان‌پذیر نیست؛ برای تست force=true ارسال کنید.' });
+  const forceRequested = req.body?.force === true;
+  if (forceRequested && !isTestEnvironment()) {
+    return res.status(403).json({ success: false, code: 'FORCE_SETTLEMENT_DISABLED', message: 'force settlement فقط در محیط تست مجاز است.' });
+  }
+  if (end > new Date() && !forceRequested) return res.status(409).json({ success: false, message: 'پرداخت جایزه تا پایان هفته امکان‌پذیر نیست؛ force فقط در محیط تست مجاز است.' });
 
   const settings = await Settings.getGlobal();
   const prizes = (settings.weeklyLeaderboardPrizes || []).map(Number);

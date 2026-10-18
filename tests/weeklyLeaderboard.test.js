@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const WeeklyLeaderboardAward = require('../models/WeeklyLeaderboardAward');
 const {
   parseWeekKey,
@@ -27,5 +29,9 @@ assert(awardPaths.processingAt && awardPaths.finalizedAt && awardPaths.attempts)
 assert.strictEqual(WeeklyLeaderboardAward.schema.indexes().some(([fields, options]) => (
   fields.weekKey === 1 && fields.rank === 1 && options.unique === true
 )), true);
+
+const adminSource = fs.readFileSync(path.join(__dirname, '..', 'routes/admin.js'), 'utf8');
+assert.ok(adminSource.includes("code: 'FORCE_SETTLEMENT_DISABLED'"), 'production must reject forced settlement');
+assert.ok(adminSource.includes('forceRequested && !isTestEnvironment()'), 'force settlement must be test-only');
 
 console.log('ALL PASS — weekly settlement contract and UTC windows');
