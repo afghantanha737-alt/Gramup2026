@@ -204,7 +204,7 @@ async function main() {
   assert.strictEqual(safeTaskHttpUrl('tg://resolve?domain=gramup'), '');
   assert.strictEqual(safeTaskHttpUrl('https://user:pass@example.com'), '');
   assert.ok(/app\.js\?v=/.test(source('public/index.html')));
-  assert.ok(source('server.js').includes("['index.html', 'app.js'].includes(path.basename(filePath))"));
+  assert.ok(source('server.js').includes("['index.html', 'admin.html', 'app.js'].includes(path.basename(filePath))"));
   assert.ok(source('public/js/app.js').includes('X-Telegram-Init-Data'));
   assert.ok(source('public/js/app.js').includes('getPendingIdempotencyKey("withdraw")'));
   assert.ok(!source('public/js/app.js').includes('idempotencyKeyFor("withdraw")'));
