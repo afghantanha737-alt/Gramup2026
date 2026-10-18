@@ -231,7 +231,7 @@ async function startServer() {
       './models/IdempotencyOperation', './models/TelegramWebhookUpdate', './models/RateLimitBucket',
       './models/AdminSession', './models/TelegramAdminConversation', './models/AdminLog', './models/DistributedJobLock',
       './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit',
-      './models/VipPlan', './models/VipSubscription'
+      './models/VipPlan', './models/VipSubscription', './models/BroadcastJob'
     ]) await require(modelPath).init();
 
     // Latest Post Engagement requires its per-channel/post/user uniqueness constraint

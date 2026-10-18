@@ -1760,11 +1760,29 @@ async function sendBroadcast() {
   try {
     const result = await apiUpload("/api/admin/broadcast", formData);
     msgEl.textContent = result.message || "ارسال آغاز شد.";
+    if (result.broadcastId) pollBroadcastStatus(result.broadcastId, msgEl);
     document.getElementById("broadcastText").value = "";
     fileInput.value = "";
   } catch (error) {
     msgEl.textContent = error.message;
   }
+}
+
+async function pollBroadcastStatus(id, msgEl) {
+  const startedAt = Date.now();
+  const poll = async () => {
+    try {
+      const result = await api(`/api/admin/broadcast/${encodeURIComponent(id)}`);
+      const job = result.job || {};
+      const state = job.status === "completed" ? "تکمیل شد" : job.status === "failed" ? "با خطا متوقف شد" : "در حال ارسال";
+      msgEl.textContent = `Broadcast ${state}: موفق ${job.sent || 0} · ناموفق ${job.failed || 0} · باقی‌مانده ${job.pending || 0}`;
+      if (job.status === "running" && Date.now() - startedAt < 30 * 60 * 1000) setTimeout(poll, 2000);
+      else if (job.status === "failed" && job.lastError) msgEl.textContent += ` — ${job.lastError}`;
+    } catch (error) {
+      msgEl.textContent = `Broadcast در حال اجراست؛ دریافت وضعیت ناموفق بود: ${error.message}`;
+    }
+  };
+  await poll();
 }
 
 /* ---------- SETTINGS ---------- */

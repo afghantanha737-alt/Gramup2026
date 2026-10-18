@@ -27,6 +27,7 @@ const WeeklyLeaderboardAward = require('../models/WeeklyLeaderboardAward');
 const LatestPostEngagementState = require('../models/LatestPostEngagementState');
 const Deposit = require('../models/Deposit');
 const NotificationDelivery = require('../models/NotificationDelivery');
+const BroadcastJob = require('../models/BroadcastJob');
 const IdempotencyOperation = require('../models/IdempotencyOperation');
 const VipPlan = require('../models/VipPlan');
 const VipSubscription = require('../models/VipSubscription');
@@ -2409,6 +2410,25 @@ router.get('/logs', async (req, res) => {
 });
 
 /* -------------------- BROADCAST (پیام همگانی) -------------------- */
+router.get('/broadcast/:id', async (req, res) => {
+  const job = await BroadcastJob.findById(req.params.id).lean();
+  if (!job) return res.status(404).json({ success: false, message: 'Broadcast پیدا نشد.' });
+  res.json({
+    success: true,
+    job: {
+      id: String(job._id),
+      status: job.status,
+      totalRecipients: job.totalRecipients,
+      sent: job.sent,
+      failed: job.failed,
+      pending: Math.max(0, job.totalRecipients - job.sent - job.failed),
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      lastError: job.lastError || ''
+    }
+  });
+});
+
 router.post('/broadcast', upload.single('image'), async (req, res) => {
   if (!bot) {
     return res.status(500).json({ success: false, message: 'ربات پیکربندی نشده.' });
@@ -2419,8 +2439,12 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
   }
 
   const users = await User.find({ isBanned: false, telegramBlockedAt: null }, 'telegramId');
-  let sent = 0;
-  let failed = 0;
+  const job = await BroadcastJob.create({
+    actor: req.adminActor,
+    hasImage: Boolean(req.file),
+    textPreview: text.slice(0, 120),
+    totalRecipients: users.length
+  });
 
   // برای جلوگیری از برخورد با محدودیت نرخ تلگرام (~۳۰ پیام در ثانیه)،
   // ارسال را به‌صورت دسته‌ای و با تأخیر کوتاه انجام می‌دهیم.
@@ -2429,8 +2453,11 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
 
   res.json({
     success: true,
-    message: `ارسال برای ${users.length} کاربر آغاز شد. این کار در پس‌زمینه ادامه می‌یابد.`,
-    totalRecipients: users.length
+    message: `ارسال برای ${users.length} کاربر آغاز شد. وضعیت ارسال قابل پیگیری است.`,
+    broadcastId: String(job._id),
+    statusUrl: `/api/admin/broadcast/${job._id}`,
+    totalRecipients: users.length,
+    status: job.status
   });
 
   recordAdminLog({
@@ -2440,29 +2467,34 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
     details: `${users.length} گیرنده — ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}`
   });
 
-  for (let i = 0; i < users.length; i += BATCH_SIZE) {
-    const batch = users.slice(i, i + BATCH_SIZE);
-    await Promise.all(
-      batch.map(async user => {
-        try {
-          if (req.file) {
-            await bot.sendPhoto(user.telegramId, req.file.buffer, { caption: text });
-          } else {
-            await bot.sendMessage(user.telegramId, text);
+  void (async () => {
+    let sent = 0;
+    let failed = 0;
+    try {
+      for (let i = 0; i < users.length; i += BATCH_SIZE) {
+        const batch = users.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(batch.map(async user => {
+          try {
+            if (req.file) await bot.sendPhoto(user.telegramId, req.file.buffer, { caption: text });
+            else await bot.sendMessage(user.telegramId, text);
+            return true;
+          } catch (error) {
+            if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
+            return false;
           }
-          sent += 1;
-        } catch (error) {
-          if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
-          failed += 1;
-        }
-      })
-    );
-    if (i + BATCH_SIZE < users.length) {
-      await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        }));
+        sent += results.filter(Boolean).length;
+        failed += results.length - results.filter(Boolean).length;
+        await BroadcastJob.updateOne({ _id: job._id }, { $set: { sent, failed } });
+        if (i + BATCH_SIZE < users.length) await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+      }
+      await BroadcastJob.updateOne({ _id: job._id }, { $set: { status: 'completed', sent, failed, finishedAt: new Date() } });
+      console.log(`📣 Broadcast finished: job=${job._id} sent=${sent} failed=${failed} total=${users.length}`);
+    } catch (error) {
+      await BroadcastJob.updateOne({ _id: job._id }, { $set: { status: 'failed', sent, failed, finishedAt: new Date(), lastError: String(error.message || error).slice(0, 500) } }).catch(() => {});
+      console.error(`[broadcast:${job._id}] failed:`, error.message || error);
     }
-  }
-
-  console.log(`📣 Broadcast finished: sent=${sent} failed=${failed} total=${users.length}`);
+  })();
 });
 
 module.exports = router;
