@@ -25,7 +25,7 @@ schema.index({ user: 1, status: 1, createdAt: -1 });
 // The existing database already has user_1. Use a distinct name for the
 // pending-intent constraint so startup never tries to change that old index.
 schema.index({ user: 1 }, { name: 'pending_user_unique', unique: true, partialFilterExpression: { status: 'pending' } });
-schema.index({ reference: 1 }, { name: 'reference_unique', unique: true });
+schema.index({ reference: 1 }, { unique: true });
 schema.index({ txHashNormalized: 1 }, { unique: true, partialFilterExpression: { txHashNormalized: { $type: 'string' } } });
 
 schema.set('toJSON', { transform(_doc, ret) { delete ret.txHashNormalized; return ret; } });
