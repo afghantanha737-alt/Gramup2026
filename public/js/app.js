@@ -1743,31 +1743,29 @@ async function submitExchange() {
     if (error) error.textContent = t("error_generic");
     return;
   }
-  if (exchangeDirection === "gram_to_points" && amount > state.gramBalance) {
-    if (error) error.textContent = t("error_generic");
-    return;
-  }
-
   if (button) button.disabled = true;
-  const idempotencyScope = exchangeDirection === "gram_to_points"
-    ? "exchange_gram_to_points"
-    : "exchange_points_to_gram";
+  const useInternalGramBalance = exchangeDirection === "gram_to_points" && amount <= state.gramBalance;
+  const idempotencyScope = "exchange_points_to_gram";
   try {
-    const result = await api("/api/points/exchange", {
-      method: "POST",
-      headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) },
-      body: { direction: exchangeDirection, amount }
-    });
-    clearPendingIdempotencyKey(idempotencyScope);
+    const result = exchangeDirection === "gram_to_points" && !useInternalGramBalance
+      ? (typeof window.gramupWallet?.swapGramToPoints === "function"
+        ? await window.gramupWallet.swapGramToPoints(amount)
+        : Promise.reject(Object.assign(new Error("Wallet connection is unavailable."), { code: "WALLET_PROOF_REQUIRED" })))
+      : await api("/api/points/exchange", {
+        method: "POST",
+        headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) },
+        body: { direction: exchangeDirection, amount }
+      });
+    if (exchangeDirection === "points_to_gram" || useInternalGramBalance) clearPendingIdempotencyKey(idempotencyScope);
     state.points = Number(result.points) ?? state.points;
-    state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
+    if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
     haptic("success");
-    toast(result.message, "success");
+    toast(result.message || `${result.pointsGained || 0} Point added after TON confirmation.`, "success");
     hideExchange();
     updateHeader();
     renderWallet();
   } catch (err) {
-    clearDefinitiveIdempotencyFailure(idempotencyScope, err);
+    if (exchangeDirection === "points_to_gram" || useInternalGramBalance) clearDefinitiveIdempotencyFailure(idempotencyScope, err);
     if (error) error.textContent = translateServerMessage(err.code, err.message);
     haptic("error");
   } finally {

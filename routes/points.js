@@ -10,6 +10,7 @@ const User = require('../models/User');
 const Withdrawal = require('../models/Withdrawal');
 const PointsLedger = require('../models/PointsLedger');
 const Deposit = require('../models/Deposit');
+const GramSwapIntent = require('../models/GramSwapIntent');
 const VipPlan = require('../models/VipPlan');
 const VipSubscription = require('../models/VipSubscription');
 const Task = require('../models/Task');
@@ -31,8 +32,10 @@ const {
   normalizeTonTxHash,
   amountToNanoGram,
   verifyNativeGramTransfer,
+  findIncomingNativeGramTransferByReference,
   createDepositReference
 } = require('../utils/tonNativeDepositVerify');
+const { comment } = require('@ton/ton');
 
 // احراز هویت تلگرام + بررسی عضویت فعلی در کانال‌های اجباری (روی هر درخواست محافظت‌شده)
 const { withMembership } = require('../utils/membership');
@@ -138,7 +141,8 @@ function publicConnectedWallet(user) {
     network: wallet.network || '',
     walletApp: wallet.walletApp || '',
     connectedAt: wallet.connectedAt || null,
-    lastSeenAt: wallet.lastSeenAt || null
+    lastSeenAt: wallet.lastSeenAt || null,
+    proofVerifiedAt: wallet.proofVerifiedAt || null
   };
 }
 
@@ -163,15 +167,13 @@ router.post('/wallet/connection', auth, async (req, res) => {
     { _id: req.dbUser._id },
     { $set: {
       walletAddress: address,
-      connectedWallet: {
-        address,
-        canonicalAddress,
-        network,
-        publicKey: String(req.body?.publicKey || '').trim().slice(0, 128),
-        walletApp: String(req.body?.walletApp || '').trim().slice(0, 80),
-        connectedAt,
-        lastSeenAt: now
-      }
+      'connectedWallet.address': address,
+      'connectedWallet.canonicalAddress': canonicalAddress,
+      'connectedWallet.network': network,
+      'connectedWallet.publicKey': String(req.body?.publicKey || '').trim().slice(0, 128),
+      'connectedWallet.walletApp': String(req.body?.walletApp || '').trim().slice(0, 80),
+      'connectedWallet.connectedAt': connectedAt,
+      'connectedWallet.lastSeenAt': now
     } },
     { new: true }
   );
@@ -183,7 +185,7 @@ router.delete('/wallet/connection', auth, async (req, res) => {
     { _id: req.dbUser._id },
     { $set: {
       walletAddress: '',
-      connectedWallet: { address: '', canonicalAddress: '', network: '', publicKey: '', walletApp: '', connectedAt: null, lastSeenAt: null }
+      connectedWallet: { address: '', canonicalAddress: '', network: '', publicKey: '', walletApp: '', connectedAt: null, lastSeenAt: null, proofVerifiedAt: null, proofPublicKey: '' }
     } },
     { new: true }
   );
@@ -786,6 +788,131 @@ router.post('/deposits/:id/verify', auth, async (req, res) => {
     deposit: publicDepositRecord(outcome.deposit),
     message: 'واریز Native GRAM در TON Mainnet تأیید شد و موجودی افزایش یافت.'
   });
+});
+
+function publicSwapIntent(intent) {
+  return {
+    _id: String(intent._id),
+    direction: intent.direction,
+    status: intent.status,
+    reference: intent.reference,
+    amount: intent.amount,
+    expectedPoints: intent.expectedPoints,
+    rate: intent.rateSnapshot,
+    depositAddress: intent.depositAddressSnapshot,
+    walletAddress: intent.walletAddressSnapshot,
+    txHash: intent.txHash || intent.submittedTxHash || '',
+    createdAt: intent.createdAt,
+    verifiedAt: intent.verifiedAt,
+    creditedAt: intent.creditedAt
+  };
+}
+
+// Creates a server-priced, single-pending Swap intent. The wallet signs the
+// transaction; no points are credited until the receiving transaction is
+// found, finalized and matched to this exact reference and source wallet.
+router.post('/swap/gram-to-points/intents', auth, async (req, res) => {
+  const settings = await Settings.getGlobal();
+  const config = getDepositSettingsStatus(settings);
+  const wallet = req.dbUser.connectedWallet || {};
+  const proofAt = wallet.proofVerifiedAt ? new Date(wallet.proofVerifiedAt).getTime() : 0;
+  if (!wallet.address || wallet.network !== '-239' || !proofAt || Date.now() - proofAt > 15 * 60 * 1000) {
+    return res.status(401).json({ success: false, code: 'WALLET_PROOF_REQUIRED', message: 'برای Swap ابتدا Wallet را دوباره وصل و مالکیت آن را تأیید کنید.' });
+  }
+  if (!config.ready || !settings.rate || settings.rate <= 0) {
+    return res.status(503).json({ success: false, code: 'SWAP_UNAVAILABLE', message: 'Swap خودکار فعلاً فعال نیست؛ تنظیمات شبکه یا نرخ کامل نیست.' });
+  }
+  const amount = round6(req.body?.amount);
+  const amountRaw = amountToNanoGram(amount);
+  const expectedPoints = Math.floor(amount / settings.rate);
+  if (amountRaw == null || expectedPoints <= 0) {
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار GRAM برای تبدیل معتبر نیست.' });
+  }
+  const reference = createDepositReference().replace('GRAMUP:', 'GRAMUP:SWAP:');
+  let intent;
+  try {
+    intent = await GramSwapIntent.create({
+      user: req.dbUser._id,
+      direction: 'gram_to_points',
+      reference,
+      amount,
+      amountRaw: amountRaw.toString(),
+      expectedPoints,
+      rateSnapshot: settings.rate,
+      depositAddressSnapshot: config.depositWalletAddress,
+      walletAddressSnapshot: wallet.address
+    });
+  } catch (error) {
+    if (error?.code === 11000) return res.status(409).json({ success: false, code: 'SWAP_ALREADY_PENDING', message: 'یک Swap قبلی هنوز در حال بررسی است.' });
+    throw error;
+  }
+  const payload = comment(reference).toBoc().toString('base64');
+  return res.status(201).json({
+    success: true,
+    intent: publicSwapIntent(intent),
+    transaction: {
+      validUntil: Math.floor(Date.now() / 1000) + 600,
+      network: '-239',
+      messages: [{ address: config.depositWalletAddress, amount: amountRaw.toString(), payload }]
+    }
+  });
+});
+
+router.get('/swap/gram-to-points/intents/:id', auth, async (req, res) => {
+  if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
+  const intent = await GramSwapIntent.findOne({ _id: req.params.id, user: req.dbUser._id });
+  if (!intent) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
+  return res.json({ success: true, intent: publicSwapIntent(intent) });
+});
+
+router.post('/swap/gram-to-points/intents/:id/verify', auth, async (req, res) => {
+  if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
+  const intent = await GramSwapIntent.findOne({ _id: req.params.id, user: req.dbUser._id });
+  if (!intent) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
+  if (intent.status === 'confirmed') {
+    const user = await User.findById(req.dbUser._id).select('points');
+    return res.json({ success: true, status: 'confirmed', points: user?.points ?? 0, intent: publicSwapIntent(intent) });
+  }
+  const sourceAddress = normalizeTonAddress(intent.walletAddressSnapshot);
+  let verification;
+  try {
+    verification = req.body?.txHash
+      ? await verifyNativeGramTransfer({ txHash: req.body.txHash, depositAddress: intent.depositAddressSnapshot, reference: intent.reference })
+      : await findIncomingNativeGramTransferByReference({ depositAddress: intent.depositAddressSnapshot, reference: intent.reference });
+  } catch {
+    return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'بررسی TON فعلاً در دسترس نیست؛ موجودی تغییر نکرد.' });
+  }
+  if (verification.status === 'pending') {
+    await GramSwapIntent.updateOne({ _id: intent._id, user: req.dbUser._id, status: 'pending' }, { $set: { verificationNote: verification.code || 'pending' } });
+    return res.status(202).json({ success: true, status: 'pending', code: verification.code, intent: publicSwapIntent(intent), message: 'تراکنش هنوز در TON نهایی نشده است؛ چند لحظه بعد دوباره بررسی کنید.' });
+  }
+  if (verification.status !== 'verified') return res.status(400).json({ success: false, code: verification.code || 'SWAP_VERIFICATION_FAILED', message: 'تراکنش Swap با Reference معتبر مطابقت ندارد؛ هیچ Point اضافه نشد.' });
+  if (sourceAddress && verification.sourceAddress !== sourceAddress) {
+    return res.status(400).json({ success: false, code: 'SWAP_SOURCE_WALLET_MISMATCH', message: 'تراکنش از Wallet متصل‌شده ارسال نشده است؛ هیچ Point اضافه نشد.' });
+  }
+  const actualPoints = Math.floor(verification.amount / intent.rateSnapshot);
+  if (actualPoints <= 0) return res.status(400).json({ success: false, code: 'SWAP_AMOUNT_TOO_SMALL', message: 'مبلغ تراکنش برای دریافت Point کافی نیست.' });
+  let outcome;
+  try {
+    await withMongoTransaction(async session => {
+      const claimed = await GramSwapIntent.findOneAndUpdate(
+        { _id: intent._id, user: req.dbUser._id, status: 'pending', txHashNormalized: { $exists: false } },
+        { $set: { status: 'confirmed', amount: verification.amount, amountRaw: verification.amountRaw, txHash: verification.txHash, txHashNormalized: verification.txHash, submittedTxHash: verification.submittedTxHash || '', sourceAddress: verification.sourceAddress, verificationNote: 'confirmed_native_gram_swap_by_toncenter_v3_mainnet', verifiedAt: verification.confirmedAt, creditedAt: new Date() } },
+        { new: true, session }
+      );
+      if (!claimed) throw Object.assign(new Error('SWAP_ALREADY_PROCESSED'), { code: 'SWAP_ALREADY_PROCESSED' });
+      const updated = await User.findByIdAndUpdate(req.dbUser._id, { $inc: { points: actualPoints } }, { new: true, session });
+      if (!updated) throw new Error('SWAP_USER_NOT_FOUND');
+      const ledgerResult = await recordLedgerRequired({ user: updated._id, type: 'exchange_in', currency: 'points', amount: actualPoints, description: 'Swap خودکار Native GRAM به Point', balanceAfter: updated.points, sourceId: `swap:${verification.txHash}`, transactionId: verification.txHash, session });
+      if (!ledgerResult.created) throw new Error('SWAP_LEDGER_ALREADY_EXISTS');
+      outcome = { intent: claimed, points: updated.points };
+    });
+  } catch (error) {
+    if (error?.code === 11000) return res.status(409).json({ success: false, code: 'SWAP_TX_ALREADY_USED', message: 'این تراکنش قبلاً پردازش شده است.' });
+    if (error?.code === 'SWAP_ALREADY_PROCESSED') return res.status(409).json({ success: false, code: error.code, message: 'این Swap قبلاً پردازش شده است.' });
+    throw error;
+  }
+  return res.json({ success: true, status: 'confirmed', points: outcome.points, pointsGained: actualPoints, intent: publicSwapIntent(outcome.intent), message: `${actualPoints} Point با تأیید تراکنش TON اضافه شد.` });
 });
 
 // VIP catalog and user subscription state. Plan values are always read from

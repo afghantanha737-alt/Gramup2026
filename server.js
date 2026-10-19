@@ -132,6 +132,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/required-channels', require('./routes/membership'));
 app.use('/api/app-info', require('./routes/appInfo'));
 app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/ton-proof', require('./routes/tonProof'));
 app.use('/api/points', require('./routes/points'));
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
@@ -231,7 +232,7 @@ async function startServer() {
       './models/IdempotencyOperation', './models/TelegramWebhookUpdate', './models/RateLimitBucket',
       './models/AdminSession', './models/TelegramAdminConversation', './models/AdminLog', './models/DistributedJobLock',
       './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit',
-      './models/VipPlan', './models/VipSubscription', './models/BroadcastJob'
+      './models/VipPlan', './models/VipSubscription', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent'
     ]) await require(modelPath).init();
 
     // Latest Post Engagement requires its per-channel/post/user uniqueness constraint

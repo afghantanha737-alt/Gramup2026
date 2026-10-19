@@ -51,7 +51,9 @@ const userSchema = new mongoose.Schema(
       publicKey: { type: String, default: '' },
       walletApp: { type: String, default: '' },
       connectedAt: { type: Date, default: null },
-      lastSeenAt: { type: Date, default: null }
+      lastSeenAt: { type: Date, default: null },
+      proofVerifiedAt: { type: Date, default: null },
+      proofPublicKey: { type: String, default: '' }
     },
     language: { type: String, enum: ['fa', 'ps', 'en'], default: 'fa' },
     isBanned: { type: Boolean, default: false },

@@ -251,6 +251,25 @@ async function transactionsByMessageHash(messageHash, options) {
   return Array.isArray(result?.transactions) ? result.transactions : [];
 }
 
+async function transactionsByAccount(account, options) {
+  const result = await tonCenterGet('/transactions', { account, limit: 50 }, options);
+  return Array.isArray(result?.transactions) ? result.transactions : [];
+}
+
+async function findIncomingNativeGramTransferByReference({ depositAddress, reference }, options = {}) {
+  const normalizedDeposit = normalizeTonAddress(depositAddress);
+  if (!normalizedDeposit || !String(reference || '').trim()) {
+    return { status: 'mismatch', code: 'INVALID_DEPOSIT_DETAILS' };
+  }
+  const transactions = await transactionsByAccount(normalizedDeposit, options);
+  const candidate = transactions.find(transaction => isIncomingTo(transaction, normalizedDeposit)
+    && hasExactReference(transaction?.in_msg, reference));
+  if (!candidate) return { status: 'pending', code: 'TON_TRANSACTION_NOT_INDEXED' };
+  const txHash = normalizeTonTxHash(candidate?.hash);
+  if (!txHash) return { status: 'pending', code: 'TON_TRANSACTION_NOT_INDEXED' };
+  return verifyIncomingTransaction(candidate, { txHash, depositAddress: normalizedDeposit, reference });
+}
+
 async function verifyNativeGramTransfer({ txHash, depositAddress, reference }, options = {}) {
   const normalizedHash = normalizeTonTxHash(txHash);
   const normalizedDeposit = normalizeTonAddress(depositAddress);
@@ -328,5 +347,6 @@ module.exports = {
   hasExactReference,
   hasMasterchainFinality,
   verifyNativeGramTransfer,
+  findIncomingNativeGramTransferByReference,
   createDepositReference
 };
