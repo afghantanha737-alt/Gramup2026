@@ -76,6 +76,10 @@
     if (!transaction?.messages?.length) throw new Error('Deposit transaction is unavailable.');
     return state.ui.sendTransaction(transaction);
   }
+  function handleConnectionError(error) {
+    state.error = error?.message || 'Wallet connection was cancelled.';
+    notify();
+  }
   async function connect() {
     if (!state.ui) { state.error = 'Wallet connection is unavailable.'; notify(); return; }
     state.error = '';
@@ -84,16 +88,27 @@
       // call stack preserves mobile WebView user activation for Tonkeeper.
       if (!state.proofPayload) throw new Error('Wallet security challenge is still loading. Please tap Connect again.');
       state.ui.setConnectRequestParameters({ state: 'ready', value: { tonProof: state.proofPayload } });
-      state.ui.openModal().catch(error => { state.error = error?.message || 'Wallet connection was cancelled.'; notify(); });
+      // TON Connect UI versions differ: openModal() may return void or a Promise.
+      // Never call .catch() directly on the return value, otherwise a valid
+      // modal open can be followed by a TypeError and an unnecessary re-render.
+      const opened = state.ui.openModal();
+      if (opened && typeof opened.catch === 'function') opened.catch(handleConnectionError);
     } catch (error) { state.error = error?.message || 'Wallet connection was cancelled.'; notify(); }
   }
-  async function disconnect() { if (!state.ui) return; try { await state.ui.disconnect(); } catch (error) { console.warn('Wallet disconnect failed:', error); } await clearServer(); state.proofVerified = false; }
+  async function disconnect() {
+    if (!state.ui) return;
+    try { await state.ui.disconnect(); } catch (error) { console.warn('Wallet disconnect failed:', error); }
+    // Update the UI immediately; server cleanup is deliberately secondary.
+    state.connected = false; state.proofVerified = false; state.address = ''; state.network = ''; state.walletName = ''; state.publicKey = ''; state.error = '';
+    notify();
+    await clearServer();
+  }
   async function init() {
     if (state.ready) return state;
     if (!window.TON_CONNECT_UI?.TonConnectUI) { state.error = 'TON Connect UI is unavailable.'; notify(); return state; }
     try {
       state.ui = new window.TON_CONNECT_UI.TonConnectUI({ manifestUrl });
-      state.unsubscribe = state.ui.onStatusChange(wallet => applyWallet(wallet));
+      state.unsubscribe = state.ui.onStatusChange(wallet => applyWallet(wallet), handleConnectionError);
       state.ready = true;
       applyWallet(state.ui.wallet);
       try { await prepareProof(); } catch (error) { state.error = error?.message || 'Wallet security challenge failed to load.'; notify(); }
