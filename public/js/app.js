@@ -1666,14 +1666,14 @@ async function submitWithdraw() {
     if (error) error.textContent = t("error_generic");
     return;
   }
-  if (!window.gramupWallet?.isConnected() || address.length < 6) {
+  if (!window.gramupWallet?.isConnected() || !window.gramupWallet?.isProofVerified?.() || address.length < 6) {
     if (error) error.textContent = t("error_generic");
     return;
   }
 
   if (button) button.disabled = true;
   try {
-    const result = await api("/api/points/withdraw", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey("withdraw") }, body: { gram, address } });
+    const result = await window.gramupWallet.requestWithdrawal(gram, getPendingIdempotencyKey("withdraw"));
     clearPendingIdempotencyKey("withdraw");
     state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
     haptic("success");
@@ -1991,22 +1991,22 @@ async function submitGramDeposit() {
     if (!window.gramupWallet?.isProofVerified?.()) {
       throw Object.assign(new Error(t("wallet_proof_required_for_deposit")), { code: "WALLET_PROOF_REQUIRED" });
     }
-    const created = await api("/api/points/deposits", { method: "POST", body: { amount } });
+    const created = await window.gramupWallet.requestDeposit(amount);
     currentDeposit = created?.deposit;
     if (!currentDeposit?._id || !created?.transaction) throw new Error(t("deposit_transaction_unavailable"));
-    await window.gramupWallet.sendDepositTransaction(created.transaction);
     setDepositActionMessage(t("deposit_sent_waiting"), "normal");
     let result = null;
     for (let attempt = 0; attempt < 12; attempt += 1) {
       await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000));
       try {
-        result = await api(`/api/points/deposits/${encodeURIComponent(currentDeposit._id)}/verify`, { method: "POST", body: {} });
+        result = await window.gramupWallet.verifyDeposit(currentDeposit._id);
         if (result?.status === "confirmed") break;
       } catch (error) {
         if (error.code !== "TON_TRANSACTION_NOT_INDEXED" && error.status !== 202) throw error;
       }
     }
     if (result?.status === "confirmed") {
+      window.gramupWallet?.setOperation?.("deposit", "confirmed");
       const balance = Number(result.gramBalance);
       if (Number.isFinite(balance)) state.gramBalance = balance;
       setDepositActionMessage(t("deposit_confirmed_message", { amount: formatNumber(result.amount, 9) }), "success");
@@ -2022,6 +2022,8 @@ async function submitGramDeposit() {
       await refreshDepositHistory();
     }
   } catch (error) {
+    if (!currentDeposit && error?.deposit) currentDeposit = error.deposit;
+    window.gramupWallet?.setOperation?.("deposit", "error", error);
     setDepositActionMessage(translateServerMessage(error.code, error.message), "error");
     haptic("error");
     let deposits = [];

@@ -202,7 +202,8 @@ async function run() {
   assert.ok(miniAppUi.includes('data-copy-target="depositReference"'));
   assert.ok(miniAppUi.includes('class="depositMemoCode"') && !miniAppUi.includes('copyAddress('));
   assert.ok(app.includes('reference.textContent = currentDeposit?.reference || t("deposit_reference_auto")'));
-  assert.ok(app.includes('sendDepositTransaction'));
+  assert.ok(app.includes('window.gramupWallet.requestDeposit(amount)'));
+  assert.ok(app.includes('window.gramupWallet.verifyDeposit(currentDeposit._id)'));
   assert.ok(miniAppUi.includes('id="depositAmount"'));
   assert.ok(app.includes('async function copyDepositValue(targetId)'));
   assert.ok(app.includes('navigator.clipboard?.writeText)') && app.includes('await navigator.clipboard.writeText(value)'));
