@@ -3,6 +3,7 @@ const assert = require('assert');
 const crypto = require('crypto');
 const {
   WalletContractV4,
+  WalletContractV5R1,
   beginCell,
   storeStateInit
 } = require('@ton/ton');
@@ -34,6 +35,30 @@ assert.strictEqual(verified.address, address);
 assert.strictEqual(Buffer.from(verified.publicKey, 'base64').toString('hex'), publicKey.toString('hex'));
 assert.throws(() => verifyTonProof({ address, network: '-3', walletStateInit: stateInit, proof, expectedDomain: domain, expectedPayload: payload }), /TON_PROOF_NETWORK_NOT_ALLOWED/);
 assert.throws(() => verifyTonProof({ address, network: SUPPORTED_NETWORK, walletStateInit: stateInit, proof: { ...proof, payload: 'wrong' }, expectedDomain: domain, expectedPayload: payload }), /TON_PROOF_PAYLOAD_MISMATCH/);
+
+const v5Wallet = WalletContractV5R1.create({
+  workchain: 0,
+  publicKey,
+  walletId: {
+    networkGlobalId: Number(SUPPORTED_NETWORK),
+    context: { walletVersion: 'v5r1', workchain: 0, subwalletNumber: 0 }
+  }
+});
+const v5StateInit = beginCell().store(storeStateInit(v5Wallet.init)).endCell().toBoc().toString('base64');
+const v5Address = v5Wallet.address.toString({ urlSafe: true, bounceable: true });
+const v5Proof = {
+  timestamp,
+  domain: { lengthBytes: Buffer.byteLength(domain), value: domain },
+  payload,
+  signature: crypto.sign(null, proofDigest(v5Wallet.address, {
+    timestamp,
+    domain: { lengthBytes: Buffer.byteLength(domain), value: domain },
+    payload
+  }), privateKey).toString('base64')
+};
+const verifiedV5 = verifyTonProof({ address: v5Address, network: SUPPORTED_NETWORK, walletStateInit: v5StateInit, proof: v5Proof, expectedDomain: domain, expectedPayload: payload });
+assert.strictEqual(verifiedV5.address, v5Address);
+assert.strictEqual(Buffer.from(verifiedV5.publicKey, 'base64').toString('hex'), publicKey.toString('hex'));
 assert.match(pointsRoute, /swap\/gram-to-points\/intents/);
 assert.match(pointsRoute, /txHashNormalized/);
 assert.match(serverSource, /models\/TonProofChallenge/);

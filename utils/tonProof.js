@@ -9,7 +9,8 @@ const {
   loadStateInit,
   WalletContractV3R1,
   WalletContractV3R2,
-  WalletContractV4
+  WalletContractV4,
+  WalletContractV5R1
 } = require('@ton/ton');
 
 const PROOF_PREFIX = Buffer.from('ton-proof-item-v2/', 'utf8');
@@ -33,6 +34,15 @@ function walletCodeHashes() {
     const wallet = Contract.create({ workchain: 0, publicKey, walletId: DEFAULT_WALLET_ID });
     result.set(wallet.init.code.hash().toString('hex'), name);
   }
+  const v5r1 = WalletContractV5R1.create({
+    workchain: 0,
+    publicKey,
+    walletId: {
+      networkGlobalId: Number(SUPPORTED_NETWORK),
+      context: { walletVersion: 'v5r1', workchain: 0, subwalletNumber: 0 }
+    }
+  });
+  result.set(v5r1.init.code.hash().toString('hex'), 'v5r1');
   return result;
 }
 
@@ -65,8 +75,15 @@ function proofDigest(address, proof) {
 
 function extractKnownWalletPublicKey(stateInit) {
   const codeHash = stateInit.code.hash().toString('hex');
-  if (!KNOWN_WALLET_CODE_HASHES.has(codeHash)) return null;
+  const walletVersion = KNOWN_WALLET_CODE_HASHES.get(codeHash);
+  if (!walletVersion) return null;
   const data = stateInit.data.beginParse();
+  if (walletVersion === 'v5r1') {
+    data.loadBit(); // is_signature_auth_allowed
+    data.loadUint(32); // seqno
+    data.loadUint(32); // serialized wallet_id
+    return data.loadBuffer(32);
+  }
   data.loadUint(32); // seqno
   data.loadUint(32); // wallet_id
   return data.loadBuffer(32);
