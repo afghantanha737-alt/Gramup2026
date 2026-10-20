@@ -84,6 +84,7 @@ window.state = state;
 const latestPostOpenedTaskIds = new Set();
 const latestPostOpenedAt = new Map();
 const latestPostOpeningTaskIds = new Set();
+let dailyCheckinTimer = null;
 
 /* ================= DOM HELPERS ================= */
 const $ = (selector) => document.querySelector(selector);
@@ -1406,9 +1407,35 @@ function startLatestPostCooldownCountdown() {
 }
 
 const DAILY_CHECKIN_REWARDS = Object.freeze([5, 7, 9, 11, 13, 14, 15]);
+function dailyCycleDay() {
+  const streak = Math.floor(Number(state.streak) || 0);
+  return streak > 0 ? ((streak - 1) % DAILY_CHECKIN_REWARDS.length) + 1 : 0;
+}
+function stopDailyCheckinCountdown() {
+  if (dailyCheckinTimer) clearInterval(dailyCheckinTimer);
+  dailyCheckinTimer = null;
+}
+async function startDailyCheckinCountdown() {
+  stopDailyCheckinCountdown();
+  const countdown = document.querySelector("[data-daily-checkin-countdown]");
+  if (!countdown || state.canCheckIn || !Number(state.nextResetAt)) return;
+  const tick = async () => {
+    const remaining = Number(state.nextResetAt) - Date.now();
+    if (remaining > 0) {
+      countdown.textContent = t("checkin_next_available_in", { time: formatCountdown(remaining) });
+      return;
+    }
+    stopDailyCheckinCountdown();
+    countdown.textContent = t("checkin_refreshing");
+    try { await loadUserData({ force: true }); }
+    finally { if (state.activeTab === "tasks") renderTasks(); }
+  };
+  await tick();
+  if (document.querySelector("[data-daily-checkin-countdown]")) dailyCheckinTimer = setInterval(tick, 1000);
+}
 function renderDailyCheckinCard() {
-  const completedDays = state.streak === 7 ? 7 : Math.min(7, Math.max(0, state.streak));
-  const nextDay = state.streak === 7 ? 1 : Math.min(7, completedDays + 1);
+  const completedDays = dailyCycleDay();
+  const nextDay = state.canCheckIn ? (completedDays >= 7 ? 1 : completedDays + 1) : (completedDays || 1);
   const dayCells = DAILY_CHECKIN_REWARDS.map((reward, index) => {
     const day = index + 1;
     const completed = day <= completedDays;
@@ -1424,6 +1451,7 @@ function renderDailyCheckinCard() {
     <p class="dailyCheckSubtitle">${state.canCheckIn ? t("daily_check_available") : t("daily_check_completed")}</p>
     <div class="dailyCheckGrid">${dayCells}</div>
     <div class="dailyCheckFooter"><span>${t("daily_check_today_reward", { n: formatPoints(DAILY_CHECKIN_REWARDS[nextDay - 1]) })}</span><button id="checkinBtn" class="primaryBtn" type="button" ${state.canCheckIn ? "" : "disabled"} onclick="doCheckIn()">${state.canCheckIn ? t("checkin_button") : t("checkin_done_button")}</button></div>
+    <div class="dailyCheckCountdown" data-daily-checkin-countdown>${state.canCheckIn ? "" : t("checkin_next_available_in", { time: formatCountdown(Math.max(0, Number(state.nextResetAt) - Date.now())) })}</div>
   </section>`;
 }
 async function doCheckIn() {
@@ -1448,6 +1476,7 @@ async function doCheckIn() {
 }
 window.doCheckIn = doCheckIn;
 function renderTasks() {
+  stopDailyCheckinCountdown();
   const content = $("#content");
   const taskSection = ["daily", "vip", "invite"].includes(state.taskSection) ? state.taskSection : "daily";
   const isInviteSection = taskSection === "invite";
@@ -1590,6 +1619,7 @@ function renderTasks() {
     </div>
   `;
   startLatestPostCooldownCountdown();
+  if (taskSection === "daily") void startDailyCheckinCountdown();
 }
 
 async function retryTasks() { await loadTasks({ force: true }); if (state.activeTab === "tasks") renderTasks(); else if (state.activeTab === "home") renderHome(); }

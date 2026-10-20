@@ -2335,6 +2335,7 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .dailyCheckDay.is-complete{border-color:rgba(52,211,153,.35);background:rgba(16,185,129,.12);}.dailyCheckDay.is-complete .dailyCheckDayNumber{background:#10b981;color:#06140f;}
 .dailyCheckDay.is-current{border-color:rgba(167,139,250,.8);box-shadow:0 0 0 1px rgba(167,139,250,.2);}.dailyCheckDay.is-current .dailyCheckDayNumber{background:#8b5cf6;color:#fff;}
 .dailyCheckFooter{margin-top:15px;color:var(--text-muted);font-size:11px;}.dailyCheckFooter .primaryBtn{margin:0;padding:10px 14px;}
+.dailyCheckCountdown{margin-top:10px;padding:9px 12px;border:1px solid rgba(103,232,249,.18);border-radius:12px;background:rgba(6,21,27,.42);color:#67e8f9;font-size:11px;font-weight:800;text-align:center;letter-spacing:.15px;}
 @media (max-width:420px){.dailyCheckGrid{gap:3px}.dailyCheckDay{padding:8px 2px}.dailyCheckDay small{font-size:8px}.dailyCheckFooter{align-items:stretch;flex-direction:column}.dailyCheckFooter .primaryBtn{width:100%;}}
 
 /* =========================================================

@@ -230,6 +230,7 @@ const { postWithdrawalRequested } = require('../utils/payoutChannel');
 const { synthesizeHistory } = require('../utils/withdrawalStatus');
 const { getLevel } = require('../utils/levels');
 const { withMongoTransaction } = require('../utils/mongoTransaction');
+const { cycleDayForStreak, dailyCheckinReward } = require('../utils/dailyCheckin');
 
 // GET /api/points/me
 router.get('/me', auth, async (req, res) => {
@@ -278,7 +279,6 @@ router.post('/daily-chest', auth, async (req, res) => {
 });
 // POST /api/points/checkin
 router.post('/checkin', auth, async (req, res) => {
-  const settings = await Settings.getGlobal();
   const todayKey = utcDayKey(new Date());
   let result;
   try {
@@ -292,9 +292,10 @@ router.post('/checkin', auth, async (req, res) => {
       }
 
       const wasYesterday = current.lastCheckIn && wasUtcYesterday(current.lastCheckIn, todayKey * DAY_MS);
+      // The streak remains historical, while payment follows the seven-day cycle.
       const newStreak = wasYesterday ? current.streak + 1 : 1;
-      const bonus = Math.min(newStreak, 30) * settings.streakBonusPoints;
-      const earned = settings.dailyCheckInPoints + bonus;
+      const earned = dailyCheckinReward(newStreak);
+      const cycleDay = cycleDayForStreak(newStreak);
       const inc = { points: earned, totalCheckins: 1 };
 
       const updated = await User.findOneAndUpdate(
@@ -311,12 +312,12 @@ router.post('/checkin', auth, async (req, res) => {
         user: updated._id,
         type: 'checkin',
         amount: earned,
-        description: `ورود روزانه (استریک ${updated.streak})`,
+        description: `ورود روزانه (روز ${cycleDay} از چرخه ۷روزه)`,
         balanceAfter: updated.points,
         sourceId: `checkin:${updated._id}:${todayKey}`,
         session
       });
-      return { updated, earned };
+      return { updated, earned, cycleDay };
     });
   } catch (error) {
     if (error.code === 'ALREADY_CHECKED_IN') return res.status(400).json({ success: false, message: error.message, code: error.code });
@@ -328,6 +329,7 @@ router.post('/checkin', auth, async (req, res) => {
     earned: result.earned,
     points: result.updated.points,
     streak: result.updated.streak,
+    cycleDay: result.cycleDay,
     nextResetAt: nextResetTimestamp()
   });
 });
