@@ -176,6 +176,11 @@ async function run() {
   const styles = fs.readFileSync(path.join(project, 'public/css/style.css'), 'utf8');
   const i18n = fs.readFileSync(path.join(project, 'public/js/i18n.js'), 'utf8');
   assert.ok(route.includes("router.post('/deposits/:id/verify'"));
+  assert.ok(route.includes("router.post('/deposits'"));
+  assert.ok(route.includes('hasRecentWalletProof(req.dbUser)'));
+  assert.ok(route.includes('requestedAmountRaw'));
+  assert.ok(route.includes("DEPOSIT_SOURCE_WALLET_MISMATCH"));
+  assert.ok(route.includes('findIncomingNativeGramTransferByReference'));
   assert.ok(route.includes('await verifyNativeGramTransfer('));
   assert.ok(!route.includes('verifyGramJettonTransfer') && !route.includes('/jetton/transfers'));
   assert.ok(route.includes('await withMongoTransaction(async session =>'));
@@ -196,7 +201,9 @@ async function run() {
   assert.ok(miniAppUi.includes('data-copy-target="depositWalletAddress"'));
   assert.ok(miniAppUi.includes('data-copy-target="depositReference"'));
   assert.ok(miniAppUi.includes('class="depositMemoCode"') && !miniAppUi.includes('copyAddress('));
-  assert.ok(app.includes('reference.textContent = currentDeposit.reference'));
+  assert.ok(app.includes('reference.textContent = currentDeposit?.reference || t("deposit_reference_auto")'));
+  assert.ok(app.includes('sendDepositTransaction'));
+  assert.ok(miniAppUi.includes('id="depositAmount"'));
   assert.ok(app.includes('async function copyDepositValue(targetId)'));
   assert.ok(app.includes('navigator.clipboard?.writeText)') && app.includes('await navigator.clipboard.writeText(value)'));
   assert.ok(app.includes('document.execCommand("copy")'));

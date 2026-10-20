@@ -147,6 +147,12 @@ function publicConnectedWallet(user) {
   };
 }
 
+function hasRecentWalletProof(user) {
+  const wallet = user?.connectedWallet || {};
+  const proofAt = wallet.proofVerifiedAt ? new Date(wallet.proofVerifiedAt).getTime() : 0;
+  return Boolean(wallet.address && wallet.network === '-239' && proofAt && Date.now() - proofAt <= 15 * 60 * 1000);
+}
+
 // TON Connect performs the wallet handshake in the client. This endpoint only
 // records the selected address for the authenticated GramUp account.
 router.get('/wallet/connection', auth, async (req, res) => {
@@ -590,6 +596,7 @@ function publicDepositRecord(deposit) {
     network: deposit.network,
     token: deposit.token,
     depositWalletAddress: deposit.depositAddressSnapshot,
+    requestedAmount: deposit.requestedAmount,
     minimumDepositGram: deposit.minimumDepositSnapshot,
     amount: deposit.amount,
     txHash: deposit.txHash || deposit.submittedTxHash || '',
@@ -604,7 +611,7 @@ router.get('/deposits', auth, async (req, res) => {
   const deposits = await Deposit.find({ user: req.dbUser._id, assetType: 'native_gram' })
     .sort({ createdAt: -1 })
     .limit(30)
-    .select('reference network token assetType depositAddressSnapshot minimumDepositSnapshot amount submittedTxHash txHash status createdAt verifiedAt creditedAt');
+    .select('reference network token assetType depositAddressSnapshot minimumDepositSnapshot requestedAmount amount submittedTxHash txHash status createdAt verifiedAt creditedAt');
   res.json({ success: true, deposits: deposits.map(publicDepositRecord) });
 });
 
@@ -614,6 +621,18 @@ router.post('/deposits', auth, async (req, res) => {
   if (!config.ready) {
     return res.status(503).json({ success: false, code: 'DEPOSIT_DISABLED', message: 'واریز GRAM روی TON Mainnet در حال حاضر فعال نیست.' });
   }
+  if (!hasRecentWalletProof(req.dbUser)) {
+    return res.status(401).json({ success: false, code: 'WALLET_PROOF_REQUIRED', message: 'برای واریز ابتدا Wallet را وصل و مالکیت آن را تأیید کنید.' });
+  }
+  const requestedAmount = round6(req.body?.amount);
+  const requestedAmountRaw = amountToNanoGram(requestedAmount);
+  if (requestedAmountRaw == null) {
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار GRAM برای واریز معتبر نیست.' });
+  }
+  const minimumRaw = amountToNanoGram(config.minimumDepositGram);
+  if (minimumRaw == null || requestedAmountRaw < minimumRaw) {
+    return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: `حداقل مبلغ واریز ${config.minimumDepositGram} GRAM است.` });
+  }
 
   // Close any unverified invoice from the former Jetton-only implementation. It is
   // never eligible for Native GRAM credit; changing status releases the legacy
@@ -622,8 +641,25 @@ router.post('/deposits', auth, async (req, res) => {
     { user: req.dbUser._id, status: 'pending', assetType: { $ne: 'native_gram' } },
     { $set: { status: 'rejected', verificationNote: 'legacy_jetton_deposit_disabled', verifiedAt: new Date() } }
   );
-  const existing = await Deposit.findOne({ user: req.dbUser._id, assetType: 'native_gram', status: 'pending' }).sort({ createdAt: -1 });
-  if (existing) return res.json({ success: true, deposit: publicDepositRecord(existing) });
+  let existing = await Deposit.findOne({ user: req.dbUser._id, assetType: 'native_gram', status: 'pending' }).sort({ createdAt: -1 });
+  if (existing && !existing.requestedAmountRaw) {
+    existing = await Deposit.findOneAndUpdate(
+      { _id: existing._id, user: req.dbUser._id, status: 'pending' },
+      { $set: { status: 'rejected', verificationNote: 'replaced_by_wallet_deposit_intent', verifiedAt: new Date() } },
+      { new: false }
+    );
+    existing = null;
+  }
+  if (existing) {
+    if (existing.requestedAmountRaw && existing.requestedAmountRaw !== requestedAmountRaw.toString()) {
+      return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_PENDING', message: 'یک واریز قبلی هنوز در حال تأیید است.' });
+    }
+    return res.json({ success: true, deposit: publicDepositRecord(existing), transaction: {
+      validUntil: Math.floor(Date.now() / 1000) + 600,
+      network: '-239',
+      messages: [{ address: existing.depositAddressSnapshot, amount: existing.requestedAmountRaw, payload: comment(existing.reference).toBoc().toString('base64') }]
+    } });
+  }
 
   let deposit;
   try {
@@ -634,16 +670,27 @@ router.post('/deposits', auth, async (req, res) => {
       token: 'GRAM',
       assetType: 'native_gram',
       depositAddressSnapshot: config.depositWalletAddress,
+      walletAddressSnapshot: req.dbUser.connectedWallet.address,
       minimumDepositSnapshot: config.minimumDepositGram,
+      requestedAmount,
+      requestedAmountRaw: requestedAmountRaw.toString(),
       status: 'pending'
     });
   } catch (error) {
     if (error?.code !== 11000) throw error;
     deposit = await Deposit.findOne({ user: req.dbUser._id, assetType: 'native_gram', status: 'pending' }).sort({ createdAt: -1 });
     if (!deposit) throw error;
-    return res.json({ success: true, deposit: publicDepositRecord(deposit) });
+    return res.json({ success: true, deposit: publicDepositRecord(deposit), transaction: {
+      validUntil: Math.floor(Date.now() / 1000) + 600,
+      network: '-239',
+      messages: [{ address: deposit.depositAddressSnapshot, amount: deposit.requestedAmountRaw, payload: comment(deposit.reference).toBoc().toString('base64') }]
+    } });
   }
-  return res.status(201).json({ success: true, deposit: publicDepositRecord(deposit) });
+  return res.status(201).json({ success: true, deposit: publicDepositRecord(deposit), transaction: {
+    validUntil: Math.floor(Date.now() / 1000) + 600,
+    network: '-239',
+    messages: [{ address: deposit.depositAddressSnapshot, amount: deposit.requestedAmountRaw, payload: comment(deposit.reference).toBoc().toString('base64') }]
+  } });
 });
 
 router.post('/deposits/:id/verify', auth, async (req, res) => {
@@ -661,17 +708,12 @@ router.post('/deposits/:id/verify', auth, async (req, res) => {
   }
 
   const submittedHash = normalizeTonTxHash(req.body?.txHash);
-  if (!submittedHash) {
-    return res.status(400).json({ success: false, code: 'INVALID_TON_TX_HASH', message: 'Transaction ID باید hash معتبر TON (۶۴ رقم hexadecimal یا Base64 معادل آن) باشد.' });
-  }
 
   let verification;
   try {
-    verification = await verifyNativeGramTransfer({
-      txHash: submittedHash,
-      depositAddress: deposit.depositAddressSnapshot,
-      reference: deposit.reference
-    });
+    verification = submittedHash
+      ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
+      : await findIncomingNativeGramTransferByReference({ depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference });
   } catch {
     return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'TON Center در دسترس نیست؛ موجودی تغییر نکرده است. دوباره تلاش کنید.' });
   }
@@ -679,7 +721,7 @@ router.post('/deposits/:id/verify', auth, async (req, res) => {
   if (verification.status === 'pending') {
     await Deposit.updateOne(
       { _id: deposit._id, user: req.dbUser._id, status: 'pending' },
-      { $set: { submittedTxHash: submittedHash, verificationNote: verification.code || 'pending' } }
+          { $set: { ...(submittedHash ? { submittedTxHash: submittedHash } : {}), verificationNote: verification.code || 'pending' } }
     );
     return res.status(202).json({
       success: true,
@@ -700,6 +742,17 @@ router.post('/deposits/:id/verify', auth, async (req, res) => {
   const actualRaw = BigInt(verification.amountRaw);
   if (minimumRaw == null) {
     return res.status(503).json({ success: false, code: 'INVALID_DEPOSIT_SETTINGS', message: 'تنظیم حداقل Deposit با دقت ۹ رقم اعشار Native GRAM سازگار نیست؛ موجودی تغییر نکرد.' });
+  }
+
+  if (deposit.walletAddressSnapshot) {
+    const expectedSource = normalizeTonAddress(deposit.walletAddressSnapshot);
+    if (!expectedSource || verification.sourceAddress !== expectedSource) {
+      return res.status(400).json({ success: false, code: 'DEPOSIT_SOURCE_WALLET_MISMATCH', message: 'این تراکنش از Wallet متصل‌شده ارسال نشده است؛ موجودی تغییر نکرد.' });
+    }
+  }
+
+  if (deposit.requestedAmountRaw && actualRaw !== BigInt(deposit.requestedAmountRaw)) {
+    return res.status(400).json({ success: false, code: 'DEPOSIT_AMOUNT_MISMATCH', message: 'مبلغ تراکنش با مبلغ انتخاب‌شده مطابقت ندارد؛ موجودی تغییر نکرد.' });
   }
 
   if (actualRaw < minimumRaw) {

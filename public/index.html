@@ -273,7 +273,9 @@
     <div id="depositPanel" style="display:none;text-align:start">
       <div class="tbPill tbPillGreen" style="margin:0 auto 12px;display:table" data-i18n="deposit_network_ton_mainnet">TON Mainnet</div>
       <p style="font-size:13px;color:var(--danger);font-weight:700" data-i18n="deposit_mainnet_warning">فقط ارز بومی GRAM روی TON Mainnet ارسال کنید؛ Jetton پذیرفته نمی‌شود.</p>
-      <label for="depositWalletAddress" data-i18n="deposit_address_label">آدرس دریافت GRAM</label>
+      <label for="depositAmount" data-i18n="deposit_amount_label">مقدار GRAM برای واریز</label>
+      <input id="depositAmount" type="number" inputmode="decimal" step="0.000000001" min="0" placeholder="مثلاً 1" data-i18n-ph="deposit_amount_ph">
+      <label for="depositWalletAddress" data-i18n="deposit_address_label">آدرس دریافت GRAM پروژه</label>
 
       <div class="depositCopyRow">
         <input id="depositWalletAddress" type="text" readonly dir="ltr" style="margin:0;min-width:0;font-size:12px">
@@ -288,13 +290,9 @@
         <button type="button" class="secondaryBtn" data-copy-target="depositReference" data-i18n="deposit_copy">کپی</button>
       </div>
 
-      <p class="small depositMemoNotice" data-i18n="deposit_memo_not_address">این Memo Code آدرس کیف‌پول نیست؛ آن را به‌عنوان مقصد وارد نکنید.</p>
-      <p class="small" style="margin:8px 0 12px" data-i18n="deposit_reference_warning">این Reference را دقیقاً در comment تراکنش Native GRAM وارد کنید تا واریز به حساب شما منتسب شود. بدون comment صحیح، سیستم نمی‌تواند خودکار واریز را به حساب شما نسبت دهد.</p>
+      <p class="small depositMemoNotice" data-i18n="deposit_memo_not_address">سیستم این comment را خودکار به تراکنش اضافه می‌کند؛ آن را تغییر ندهید.</p>
 
-      <label for="depositTxHash" data-i18n="deposit_tx_hash_label">Transaction ID / Tx Hash</label>
-      <input id="depositTxHash" type="text" maxlength="66" autocomplete="off" spellcheck="false" dir="ltr" placeholder="64 hexadecimal characters" data-i18n-ph="deposit_tx_hash_ph">
-
-      <button id="depositVerifyButton" type="button" class="primaryBtn" style="width:100%;margin-top:8px" onclick="submitGramDeposit()" data-i18n="deposit_check_button">بررسی تراکنش</button>
+      <button id="depositVerifyButton" type="button" class="primaryBtn" style="width:100%;margin-top:8px" onclick="submitGramDeposit()" data-i18n="deposit_send_button">ارسال درخواست واریز از Wallet</button>
       <p id="depositActionMessage" role="status" aria-live="polite" class="small" style="min-height:20px"></p>
       <div id="depositHistoryList" style="margin-top:10px"></div>
     </div>
@@ -310,6 +308,6 @@
 <script src="js/i18n.js?v=20261020-chain-wallet-balance"></script>
 <script src="js/app.js?v=20261020-chain-wallet-balance"></script>
 <script src="https://unpkg.com/@tonconnect/ui@5.0.1/dist/tonconnect-ui.min.js"></script>
-<script src="js/walletConnect.js?v=20261019-wallet-proof-swap-phase2"></script>
+<script src="js/walletConnect.js?v=20261020-tonkeeper-deposit-flow"></script>
 </body>
 </html>

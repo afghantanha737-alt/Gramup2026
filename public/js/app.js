@@ -1916,12 +1916,8 @@ async function loadDepositPanel() {
     const pending = deposits.find(item => item.status === "pending");
     const configData = await api("/api/points/deposit/config");
     currentDeposit = pending || null;
-    if (!currentDeposit && configData?.enabled) {
-      const created = await api("/api/points/deposits", { method: "POST", body: {} });
-      currentDeposit = created?.deposit || null;
-    }
 
-    if (!currentDeposit) {
+    if (!configData?.enabled) {
       if (panel) panel.style.display = "none";
       if (disabled) disabled.style.display = "block";
       if (message) message.textContent = t("deposit_coming_soon");
@@ -1932,13 +1928,13 @@ async function loadDepositPanel() {
     if (disabled) disabled.style.display = "none";
     const address = $("#depositWalletAddress");
     const reference = $("#depositReference");
-    const hash = $("#depositTxHash");
+    const amount = $("#depositAmount");
     const minimum = $("#depositMinimumText");
-    if (address) address.value = currentDeposit.depositWalletAddress || configData?.depositWalletAddress || "";
-    if (reference) reference.textContent = currentDeposit.reference || "";
-    if (hash) hash.value = currentDeposit.txHash || currentDeposit.submittedTxHash || "";
-    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(currentDeposit.minimumDepositGram ?? configData?.minimumDepositGram ?? 0, 9) });
-    if (button) button.disabled = currentDeposit.status !== "pending";
+    if (address) address.value = currentDeposit?.depositWalletAddress || configData?.depositWalletAddress || "";
+    if (reference) reference.textContent = currentDeposit?.reference || t("deposit_reference_auto");
+    if (amount && currentDeposit?.requestedAmount != null) amount.value = currentDeposit.requestedAmount;
+    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(currentDeposit?.minimumDepositGram ?? configData?.minimumDepositGram ?? 0, 9) });
+    if (button) button.disabled = currentDeposit?.status === "confirmed";
     renderDepositHistory(deposits);
   } catch (error) {
     if (panel) panel.style.display = "none";
@@ -1951,34 +1947,45 @@ async function loadDepositPanel() {
 
 async function submitGramDeposit() {
   const button = $("#depositVerifyButton");
-  const input = $("#depositTxHash");
-  const txHash = String(input?.value || "").trim();
-  if (!currentDeposit?._id || currentDeposit.status !== "pending" || depositSubmissionBusy) return;
-  if (!/^(?:0x)?(?:[a-f\d]{64}|[a-z\d+/_-]{43,44}={0,2})$/i.test(txHash)) {
-    setDepositActionMessage(t("deposit_invalid_hash_message"), "error");
+  const input = $("#depositAmount");
+  const amount = Number(input?.value || 0);
+  if (depositSubmissionBusy) return;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    setDepositActionMessage(t("deposit_invalid_amount_message"), "error");
     return;
   }
   depositSubmissionBusy = true;
   if (button) button.disabled = true;
   setDepositActionMessage(t("history_loading"));
   try {
-    const result = await api(`/api/points/deposits/${encodeURIComponent(currentDeposit._id)}/verify`, {
-      method: "POST",
-      body: { txHash }
-    });
-    currentDeposit = result.deposit || { ...currentDeposit, status: result.status, submittedTxHash: txHash };
-    if (result.status === "confirmed") {
+    if (!window.gramupWallet?.isProofVerified?.()) {
+      throw Object.assign(new Error(t("wallet_proof_required_for_deposit")), { code: "WALLET_PROOF_REQUIRED" });
+    }
+    const created = await api("/api/points/deposits", { method: "POST", body: { amount } });
+    currentDeposit = created?.deposit;
+    if (!currentDeposit?._id || !created?.transaction) throw new Error(t("deposit_transaction_unavailable"));
+    await window.gramupWallet.sendDepositTransaction(created.transaction);
+    setDepositActionMessage(t("deposit_sent_waiting"), "normal");
+    let result = null;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000));
+      try {
+        result = await api(`/api/points/deposits/${encodeURIComponent(currentDeposit._id)}/verify`, { method: "POST", body: {} });
+        if (result?.status === "confirmed") break;
+      } catch (error) {
+        if (error.code !== "TON_TRANSACTION_NOT_INDEXED" && error.status !== 202) throw error;
+      }
+    }
+    if (result?.status === "confirmed") {
       const balance = Number(result.gramBalance);
       if (Number.isFinite(balance)) state.gramBalance = balance;
       setDepositActionMessage(t("deposit_confirmed_message", { amount: formatNumber(result.amount, 9) }), "success");
       toast(t("deposit_confirmed_message", { amount: formatNumber(result.amount, 9) }), "success");
       haptic("success");
-      if (button) button.disabled = true;
       updateHeader();
       if (state.activeTab === "wallet") renderWallet();
       await refreshDepositHistory();
     } else {
-      currentDeposit.submittedTxHash = txHash;
       setDepositActionMessage(t("deposit_pending_message"), "normal");
       haptic("warning");
       if (button) button.disabled = false;

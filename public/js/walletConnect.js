@@ -42,7 +42,19 @@
     return `<div class="walletConnectCard walletConnected"><div><div class="walletConnectTitle">${state.proofVerified ? verifiedLabel : text.connected}</div><div class="walletConnectHint"><span class="walletStatusDot"></span>${shortAddress(state.address)}${state.proofVerified ? '' : ` · ${text.reconnect}`}</div></div><button type="button" class="${state.proofVerified ? 'walletDisconnectButton' : 'walletConnectButton'}" data-wallet-${state.proofVerified ? 'disconnect' : 'connect'}>${state.proofVerified ? text.disconnect : text.reconnect}</button></div>`;
   }
   function mount(rootId) { const root = document.getElementById(rootId); if (!root) return; root.innerHTML = getStatusHtml(); root.querySelector('[data-wallet-connect]')?.addEventListener('click', () => connect()); root.querySelector('[data-wallet-disconnect]')?.addEventListener('click', () => disconnect()); }
-  async function prepareProof() { const api = window.gramupApi; if (typeof api !== 'function') throw new Error('Authentication is not ready.'); const result = await api('/api/ton-proof/payload', { method: 'POST' }); if (!result?.payload) throw new Error('TON Proof challenge could not be created.'); state.proofPayload = result.payload; state.ui.setConnectRequestParameters({ state: 'ready', value: { tonProof: result.payload } }); }
+  async function prepareProof(force = false) {
+    const api = window.gramupApi;
+    if (typeof api !== 'function') throw new Error('Authentication is not ready.');
+    if (!force && state.proofPayload) {
+      state.ui.setConnectRequestParameters({ state: 'ready', value: { tonProof: state.proofPayload } });
+      return state.proofPayload;
+    }
+    const result = await api('/api/ton-proof/payload', { method: 'POST' });
+    if (!result?.payload) throw new Error('TON Proof challenge could not be created.');
+    state.proofPayload = result.payload;
+    state.ui.setConnectRequestParameters({ state: 'ready', value: { tonProof: result.payload } });
+    return result.payload;
+  }
   async function swapGramToPoints(amount) {
     const api = window.gramupApi;
     if (!state.ui || !state.connected || !state.proofVerified) throw Object.assign(new Error('Reconnect and verify your Wallet first.'), { code: 'WALLET_PROOF_REQUIRED' });
@@ -59,14 +71,35 @@
     pending.code = 'SWAP_CONFIRMATION_PENDING';
     throw pending;
   }
-  async function connect() { if (!state.ui) { state.error = 'Wallet connection is unavailable.'; notify(); return; } state.error = ''; try { await prepareProof(); await state.ui.openModal(); } catch (error) { state.error = error?.message || 'Wallet connection was cancelled.'; notify(); } }
+  async function sendDepositTransaction(transaction) {
+    if (!state.ui || !state.connected || !state.proofVerified) throw Object.assign(new Error('Reconnect and verify your Wallet first.'), { code: 'WALLET_PROOF_REQUIRED' });
+    if (!transaction?.messages?.length) throw new Error('Deposit transaction is unavailable.');
+    return state.ui.sendTransaction(transaction);
+  }
+  async function connect() {
+    if (!state.ui) { state.error = 'Wallet connection is unavailable.'; notify(); return; }
+    state.error = '';
+    try {
+      // The payload is prefetched during init. Keeping openModal in the click
+      // call stack preserves mobile WebView user activation for Tonkeeper.
+      if (!state.proofPayload) throw new Error('Wallet security challenge is still loading. Please tap Connect again.');
+      state.ui.setConnectRequestParameters({ state: 'ready', value: { tonProof: state.proofPayload } });
+      state.ui.openModal().catch(error => { state.error = error?.message || 'Wallet connection was cancelled.'; notify(); });
+    } catch (error) { state.error = error?.message || 'Wallet connection was cancelled.'; notify(); }
+  }
   async function disconnect() { if (!state.ui) return; try { await state.ui.disconnect(); } catch (error) { console.warn('Wallet disconnect failed:', error); } await clearServer(); state.proofVerified = false; }
   async function init() {
     if (state.ready) return state;
     if (!window.TON_CONNECT_UI?.TonConnectUI) { state.error = 'TON Connect UI is unavailable.'; notify(); return state; }
-    try { state.ui = new window.TON_CONNECT_UI.TonConnectUI({ manifestUrl }); state.unsubscribe = state.ui.onStatusChange(wallet => applyWallet(wallet)); state.ready = true; applyWallet(state.ui.wallet); } catch (error) { state.error = error?.message || 'Wallet connection failed to initialize.'; notify(); }
+    try {
+      state.ui = new window.TON_CONNECT_UI.TonConnectUI({ manifestUrl });
+      state.unsubscribe = state.ui.onStatusChange(wallet => applyWallet(wallet));
+      state.ready = true;
+      applyWallet(state.ui.wallet);
+      try { await prepareProof(); } catch (error) { state.error = error?.message || 'Wallet security challenge failed to load.'; notify(); }
+    } catch (error) { state.error = error?.message || 'Wallet connection failed to initialize.'; notify(); }
     return state;
   }
-  window.gramupWallet = { state, init, mount, connect, disconnect, swapGramToPoints, getStatusHtml, getAddress: () => state.address, isConnected: () => state.connected, isProofVerified: () => state.proofVerified };
+  window.gramupWallet = { state, init, mount, connect, disconnect, swapGramToPoints, sendDepositTransaction, getStatusHtml, getAddress: () => state.address, isConnected: () => state.connected, isProofVerified: () => state.proofVerified };
   window.initGramupWalletConnect = init;
 })();
