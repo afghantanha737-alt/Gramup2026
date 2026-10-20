@@ -33,6 +33,7 @@ const {
   amountToNanoGram,
   verifyNativeGramTransfer,
   findIncomingNativeGramTransferByReference,
+  getNativeGramBalance,
   createDepositReference
 } = require('../utils/tonNativeDepositVerify');
 const { comment } = require('@ton/ton');
@@ -150,6 +151,21 @@ function publicConnectedWallet(user) {
 // records the selected address for the authenticated GramUp account.
 router.get('/wallet/connection', auth, async (req, res) => {
   res.json({ success: true, wallet: publicConnectedWallet(req.dbUser) });
+});
+
+router.get('/wallet/chain-balance', auth, async (req, res) => {
+  const address = req.dbUser.connectedWallet?.canonicalAddress || req.dbUser.connectedWallet?.address || '';
+  if (!address) return res.status(409).json({ success: false, code: 'WALLET_NOT_CONNECTED', message: 'ابتدا Wallet خود را وصل کنید.' });
+  try {
+    const balance = await getNativeGramBalance(address);
+    if (balance.status !== 'ok') {
+      return res.status(502).json({ success: false, code: balance.code, message: 'موجودی Wallet فعلاً از شبکه دریافت نشد.' });
+    }
+    return res.json({ success: true, network: 'TON_MAINNET', token: 'GRAM', ...balance });
+  } catch (error) {
+    const code = error?.message === 'TON_PROVIDER_TIMEOUT' ? 'TON_PROVIDER_TIMEOUT' : 'TON_PROVIDER_UNAVAILABLE';
+    return res.status(503).json({ success: false, code, message: 'ارتباط با شبکه TON فعلاً در دسترس نیست.' });
+  }
 });
 
 router.post('/wallet/connection', auth, async (req, res) => {

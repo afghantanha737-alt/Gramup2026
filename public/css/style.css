@@ -981,6 +981,10 @@ html[data-theme="dark"] .streakFire { background: rgba(255, 255, 255, .08); }
 .tbWalletIcon svg { width: 24px; height: 24px; }
 .tbWalletIcon.tbIconBlue svg { width: 100%; height: 100%; }
 .tbWalletValue { margin: 4px 0 6px; font-size: 24px; line-height: 1.1; font-weight: 800; letter-spacing: -.6px; color: var(--text); word-break: break-all; direction: ltr; }
+.walletChainBalance { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; padding: 14px 15px; border: 1px solid rgba(56,189,248,.22); border-radius: 18px; background: linear-gradient(135deg, rgba(56,189,248,.12), rgba(124,58,237,.08)), var(--tb-card); box-shadow: var(--tb-card-shadow); }
+.walletChainBalanceLabel, .walletChainBalanceMeta { display: block; color: var(--text-muted); font-size: 10px; font-weight: 700; }
+.walletChainBalance strong { display: block; margin: 4px 0; color: var(--text); font-size: 18px; font-weight: 900; direction: ltr; }
+.walletChainRefresh { flex: 0 0 auto; padding: 9px 11px; border: 1px solid rgba(56,189,248,.28); border-radius: 12px; color: var(--text); background: rgba(56,189,248,.10); font-size: 10px; font-weight: 800; }
 .tbWalletActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .tbAct {
   display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 6px 12px; border-radius: 22px;

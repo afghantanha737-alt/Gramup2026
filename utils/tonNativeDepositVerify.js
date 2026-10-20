@@ -256,6 +256,29 @@ async function transactionsByAccount(account, options) {
   return Array.isArray(result?.transactions) ? result.transactions : [];
 }
 
+async function getNativeGramBalance(address, options = {}) {
+  const normalizedAddress = normalizeTonAddress(address);
+  if (!normalizedAddress) return { status: 'mismatch', code: 'INVALID_WALLET_ADDRESS' };
+  const result = await tonCenterGet('/accountStates', { address: normalizedAddress, include_boc: false }, options);
+  const account = Array.isArray(result?.accounts)
+    ? result.accounts.find(item => normalizeTonAddress(item?.address) === normalizedAddress) || result.accounts[0]
+    : null;
+  if (!account || account.balance === undefined || account.balance === null) {
+    return { status: 'mismatch', code: 'TON_ACCOUNT_NOT_FOUND' };
+  }
+  let raw;
+  try {
+    raw = BigInt(String(account.balance));
+  } catch {
+    return { status: 'mismatch', code: 'TON_BALANCE_INVALID' };
+  }
+  if (raw < 0n || raw > BigInt(Number.MAX_SAFE_INTEGER)) {
+    return { status: 'mismatch', code: 'TON_BALANCE_UNSAFE' };
+  }
+  const amount = Number(raw) / Number(NANO_GRAM);
+  return { status: 'ok', address: normalizedAddress, balanceRaw: raw.toString(), balance: amount };
+}
+
 async function findIncomingNativeGramTransferByReference({ depositAddress, reference }, options = {}) {
   const normalizedDeposit = normalizeTonAddress(depositAddress);
   if (!normalizedDeposit || !String(reference || '').trim()) {
@@ -348,5 +371,6 @@ module.exports = {
   hasMasterchainFinality,
   verifyNativeGramTransfer,
   findIncomingNativeGramTransferByReference,
+  getNativeGramBalance,
   createDepositReference
 };

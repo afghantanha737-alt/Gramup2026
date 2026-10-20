@@ -2052,6 +2052,27 @@ const TB_ICONS = {
 };
 
 let walletRenderSequence = 0;
+async function loadWalletChainBalance(renderRequestId = walletRenderSequence) {
+  const value = document.getElementById('walletChainBalanceValue');
+  const meta = document.getElementById('walletChainBalanceMeta');
+  if (!value || !meta) return;
+  value.textContent = t('wallet_chain_balance_loading');
+  meta.textContent = 'TON Mainnet';
+  try {
+    const result = await api('/api/points/wallet/chain-balance');
+    if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
+    value.textContent = `${formatNumber(result.balance, 6)} GRAM`;
+    meta.textContent = t('wallet_chain_balance_title');
+  } catch (error) {
+    if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
+    value.textContent = t('wallet_chain_balance_unavailable');
+    meta.textContent = error?.code === 'WALLET_NOT_CONNECTED' ? t('wallet_connected_withdraw_hint') : 'TON Mainnet';
+  }
+}
+window.refreshWalletChainBalance = () => loadWalletChainBalance(walletRenderSequence);
+window.onGramupWalletChange = () => {
+  if (state.activeTab === 'wallet') void loadWalletChainBalance(walletRenderSequence);
+};
 function renderWallet() {
   const renderRequestId = ++walletRenderSequence;
   const content = $("#content");
@@ -2063,6 +2084,10 @@ function renderWallet() {
       <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.gramUsdPrice > 0 ? `≈ $${formatFixed(state.gramBalance * state.gramUsdPrice, 3)}` : "—"}</b></div>
     </section>
     <div id="tonWalletConnection" aria-live="polite"></div>
+    <section class="walletChainBalance" aria-live="polite">
+      <div><span class="walletChainBalanceLabel">${t("wallet_chain_balance_title")}</span><strong id="walletChainBalanceValue">${t("wallet_chain_balance_loading")}</strong><small id="walletChainBalanceMeta">TON Mainnet</small></div>
+      <button type="button" class="walletChainRefresh" onclick="refreshWalletChainBalance()">↻ ${t("wallet_chain_balance_refresh")}</button>
+    </section>
 
     <div class="tbWalletGrid">
       <div class="tbWalletCard">
@@ -2117,6 +2142,7 @@ function renderWallet() {
   `;
 
   window.gramupWallet?.mount("tonWalletConnection");
+  void loadWalletChainBalance(renderRequestId);
 
   loadWalletHistory().then(() => {
     if (renderRequestId !== walletRenderSequence || state.activeTab !== "wallet") return;
