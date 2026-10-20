@@ -10,6 +10,7 @@ async function run() {
   let transactionSent = null;
   let modalOpenCount = 0;
   let requestedNetwork = null;
+  let persistedVerifiedAddress = '';
   const walletAddress = 'EQExampleWalletAddressForTest';
   const wallet = {
     account: {
@@ -48,8 +49,14 @@ async function run() {
     dispatchEvent() {},
     async gramupApi(url, options = {}) {
       calls.push({ url, options });
-      if (url === '/api/ton-proof/payload') return { success: true, payload: `challenge-${calls.filter(c => c.url === url).length}` };
-      if (url === '/api/ton-proof/verify') return { success: true, verified: true, wallet: { address: options.body.account.address } };
+      if (url === '/api/ton-proof/payload') return { success: true, payload: `challenge-${calls.filter(c => c.url === url).length}`, expiresAt: new Date(Date.now() + 900000).toISOString() };
+      if (url === '/api/ton-proof/verify') { persistedVerifiedAddress = options.body.account.address; return { success: true, verified: true, wallet: { address: persistedVerifiedAddress } }; }
+      if (url === '/api/points/wallet/connection/restore') return {
+        success: true,
+        verified: options.body.address === persistedVerifiedAddress && options.body.network === '-239',
+        wallet: options.body.address === persistedVerifiedAddress ? { address: persistedVerifiedAddress, proofVerifiedAt: new Date().toISOString() } : null
+      };
+      if (url === '/api/points/wallet/connection' && options.method === 'DELETE') { persistedVerifiedAddress = ''; return { success: true }; }
       if (url === '/api/points/wallet/connection') return { success: true };
       if (url === '/api/points/deposits') return {
         success: true,
@@ -109,6 +116,17 @@ async function run() {
   assert.strictEqual(walletApi.isProofVerified(), true);
   assert.strictEqual(walletApi.state.proofAddress, walletAddress);
 
+  // Closing/reopening the Mini App may restore a TonConnect account without
+  // its original proof item. The server's persistent address binding restores
+  // verified state without requiring another signature or disconnect.
+  walletStatusListener(null);
+  walletStatusListener({ account: wallet.account, device: wallet.device });
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.strictEqual(walletApi.state.phase, 'verified');
+  assert.strictEqual(walletApi.isProofVerified(), true, 'same persisted Mainnet wallet proof restores without prompting reconnect');
+  assert.strictEqual(walletApi.state.connected, true);
+
   const withdrawal = await walletApi.requestWithdrawal(1, 'withdraw-key-1');
   assert.strictEqual(withdrawal.withdrawalId, 'withdrawal-123');
   const withdrawalCall = calls.find(call => call.url === '/api/points/withdraw');
@@ -126,6 +144,7 @@ async function run() {
   assert.strictEqual(walletApi.state.phase, 'disconnected');
   assert.strictEqual(walletApi.isProofVerified(), false);
   assert(calls.some(call => call.url === '/api/points/wallet/connection' && call.options.method === 'DELETE'), 'disconnect clears the server-side wallet association');
+  assert.strictEqual(persistedVerifiedAddress, '', 'only explicit Disconnect removes the persisted verified wallet');
   console.log('PASS — mocked TON Connect UI state, proof gate, deposit and withdrawal server interactions');
 }
 

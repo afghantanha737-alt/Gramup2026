@@ -150,13 +150,36 @@ function publicConnectedWallet(user) {
 function hasRecentWalletProof(user) {
   const wallet = user?.connectedWallet || {};
   const proofAt = wallet.proofVerifiedAt ? new Date(wallet.proofVerifiedAt).getTime() : 0;
-  return Boolean(wallet.address && wallet.network === '-239' && proofAt && Date.now() - proofAt <= 15 * 60 * 1000);
+  return Boolean(wallet.address && wallet.network === '-239' && wallet.proofPublicKey && proofAt && proofAt <= Date.now());
 }
 
 // TON Connect performs the wallet handshake in the client. This endpoint only
 // records the selected address for the authenticated GramUp account.
 router.get('/wallet/connection', auth, async (req, res) => {
   res.json({ success: true, wallet: publicConnectedWallet(req.dbUser) });
+});
+
+// Restore a previously server-verified proof binding when TonConnect restores
+// the same local wallet session without replaying the original ton_proof item.
+router.post('/wallet/connection/restore', auth, async (req, res) => {
+  const wallet = req.dbUser.connectedWallet || {};
+  const requestedAddress = normalizeTonAddress(req.body?.address || '');
+  const storedAddress = normalizeTonAddress(wallet.canonicalAddress || wallet.address || '');
+  const proofAt = wallet.proofVerifiedAt ? new Date(wallet.proofVerifiedAt).getTime() : 0;
+  if (!requestedAddress || req.body?.network !== '-239' || wallet.network !== '-239' ||
+      requestedAddress !== storedAddress || !wallet.proofPublicKey || !proofAt || proofAt > Date.now()) {
+    return res.status(409).json({ success: false, verified: false, code: 'WALLET_PROOF_REQUIRED', message: 'این Wallet قبلاً برای حساب شما تأیید نشده است.' });
+  }
+  const now = new Date();
+  const updated = await User.findOneAndUpdate(
+    { _id: req.dbUser._id },
+    { $set: {
+      'connectedWallet.lastSeenAt': now,
+      'connectedWallet.walletApp': String(req.body?.walletApp || wallet.walletApp || '').trim().slice(0, 80)
+    } },
+    { new: true }
+  );
+  return res.json({ success: true, verified: true, wallet: publicConnectedWallet(updated) });
 });
 
 router.get('/wallet/chain-balance', auth, async (req, res) => {
@@ -473,7 +496,7 @@ router.post('/withdraw', auth, async (req, res) => {
   }
   const connectedAddress = String(u.connectedWallet?.address || '').trim();
   if (!hasRecentWalletProof(u) || u.connectedWallet?.network !== '-239') {
-    return res.status(403).json({ success: false, message: 'برای برداشت، مالکیت Wallet متصل‌شده را دوباره با TON Proof تأیید کنید.', code: 'WALLET_PROOF_REQUIRED' });
+    return res.status(403).json({ success: false, message: 'برای برداشت، یک Wallet تأییدشده در TON Mainnet وصل کنید.', code: 'WALLET_PROOF_REQUIRED' });
   }
   if (!connectedAddress || walletAddress !== connectedAddress) {
     return res.status(409).json({ success: false, message: 'آدرس برداشت باید با Wallet متصل‌شده یکسان باشد.', code: 'WALLET_ADDRESS_MISMATCH' });
@@ -891,9 +914,8 @@ router.post('/swap/gram-to-points/intents', auth, async (req, res) => {
   const settings = await Settings.getGlobal();
   const config = getDepositSettingsStatus(settings);
   const wallet = req.dbUser.connectedWallet || {};
-  const proofAt = wallet.proofVerifiedAt ? new Date(wallet.proofVerifiedAt).getTime() : 0;
-  if (!wallet.address || wallet.network !== '-239' || !proofAt || Date.now() - proofAt > 15 * 60 * 1000) {
-    return res.status(401).json({ success: false, code: 'WALLET_PROOF_REQUIRED', message: 'برای Swap ابتدا Wallet را دوباره وصل و مالکیت آن را تأیید کنید.' });
+  if (!hasRecentWalletProof(req.dbUser) || wallet.network !== '-239') {
+    return res.status(401).json({ success: false, code: 'WALLET_PROOF_REQUIRED', message: 'برای Swap ابتدا Wallet تأییدشدهٔ TON Mainnet را وصل کنید.' });
   }
   if (!config.ready || !settings.rate || settings.rate <= 0) {
     return res.status(503).json({ success: false, code: 'SWAP_UNAVAILABLE', message: 'Swap خودکار فعلاً فعال نیست؛ تنظیمات شبکه یا نرخ کامل نیست.' });

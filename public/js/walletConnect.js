@@ -19,6 +19,7 @@
     ui: null,
     unsubscribe: null,
     proofPayload: '',
+    proofPayloadExpiresAt: 0,
     statusSequence: 0
   };
   let proofVerificationInFlight = '';
@@ -112,13 +113,14 @@
   }
 
   async function prepareProof(force = false) {
-    if (!force && state.proofPayload) {
+    if (!force && state.proofPayload && state.proofPayloadExpiresAt > Date.now() + 15000) {
       state.ui?.setConnectRequestParameters({ state: 'ready', value: { tonProof: state.proofPayload } });
       return state.proofPayload;
     }
     const result = await apiClient()('/api/ton-proof/payload', { method: 'POST' });
     if (!result?.payload) throw new Error('TON Proof challenge could not be created.');
     state.proofPayload = result.payload;
+    state.proofPayloadExpiresAt = Date.parse(result.expiresAt || '') || (Date.now() + 14 * 60 * 1000);
     state.ui?.setConnectRequestParameters({ state: 'ready', value: { tonProof: result.payload } });
     return result.payload;
   }
@@ -213,9 +215,40 @@
     }
   }
 
+  async function restorePersistedProof(wallet, sequence) {
+    const address = wallet?.account?.address || '';
+    const network = wallet?.account?.chain || '';
+    if (!address || network !== '-239') return false;
+    try {
+      const result = await apiClient()('/api/points/wallet/connection/restore', {
+        method: 'POST',
+        body: { address, network, walletApp: wallet.device?.appName || wallet.provider?.name || '' }
+      });
+      if (sequence !== state.statusSequence || !state.connected || state.address !== address || state.network !== network) return false;
+      if (result?.success !== true || result?.verified !== true || !result.wallet?.proofVerifiedAt) return false;
+      state.proofVerified = true;
+      state.proofAddress = address;
+      state.proofNetwork = network;
+      state.phase = 'verified';
+      state.error = '';
+      notify();
+      return true;
+    } catch (error) {
+      if (error?.code && !['WALLET_PROOF_REQUIRED', 'WALLET_ADDRESS_MISMATCH'].includes(error.code)) {
+        console.warn('Persistent TON Proof restoration failed:', error);
+      }
+      return false;
+    }
+  }
+
+  async function restoreOrVerify(wallet, sequence) {
+    if (await restorePersistedProof(wallet, sequence)) return true;
+    if (sequence !== state.statusSequence || !state.connected) return false;
+    return verifyAndSync(wallet);
+  }
+
   function applyWallet(wallet) {
     const account = wallet?.account;
-    const previousAddress = state.address;
     state.statusSequence += 1;
     state.connected = Boolean(account?.address);
     state.address = account?.address || '';
@@ -231,7 +264,8 @@
       state.phase = state.ready ? 'disconnected' : 'initializing';
       state.operation = { kind: '', phase: 'idle' };
       notify();
-      if (previousAddress) void clearServer().catch(() => {});
+      // A null status can be a transient TonConnect restore signal. Only the
+      // explicit Disconnect action below clears the persisted server binding.
       if (state.ready) void prepareProof(true).catch(error => { state.error = error?.message || labels().proofRequired; notify(); });
       return;
     }
@@ -249,7 +283,8 @@
     }
     state.phase = 'verifying';
     notify();
-    void verifyAndSync(wallet);
+    const sequence = state.statusSequence;
+    void restoreOrVerify(wallet, sequence);
   }
 
   function getStatusHtml() {
