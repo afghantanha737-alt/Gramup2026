@@ -23,7 +23,7 @@
 
 <!-- App CSS -->
 <link rel="icon" type="image/svg+xml" href="img/gramup-logo-new.jpg">
-<link rel="stylesheet" href="css/style.css?v=20261020-wallet-connect-refactor-1">
+<link rel="stylesheet" href="css/style.css?v=20261020-deposit-streamline-1">
 <link rel="stylesheet" href="css/theme-selector.css?v=20261016-theme1">
 
 </head>
@@ -275,26 +275,28 @@
       <p style="font-size:13px;color:var(--danger);font-weight:700" data-i18n="deposit_mainnet_warning">فقط ارز بومی GRAM روی TON Mainnet ارسال کنید؛ Jetton پذیرفته نمی‌شود.</p>
       <label for="depositAmount" data-i18n="deposit_amount_label">مقدار GRAM برای واریز</label>
       <input id="depositAmount" type="number" inputmode="decimal" step="0.000000001" min="0" placeholder="مثلاً 1" data-i18n-ph="deposit_amount_ph">
-      <label for="depositWalletAddress" data-i18n="deposit_address_label">آدرس دریافت GRAM پروژه</label>
-
-      <div class="depositCopyRow">
-        <input id="depositWalletAddress" type="text" readonly dir="ltr" style="margin:0;min-width:0;font-size:12px">
-        <button type="button" class="secondaryBtn" data-copy-target="depositWalletAddress" data-i18n="deposit_copy">کپی</button>
-      </div>
-
       <p id="depositMinimumText" class="small" style="margin:8px 0 12px"></p>
-      <div class="depositMemoLabel" data-i18n="deposit_reference_label">Memo Code</div>
-
-      <div class="depositCopyRow depositMemoRow">
-        <code id="depositReference" class="depositMemoCode" dir="ltr"></code>
-        <button type="button" class="secondaryBtn" data-copy-target="depositReference" data-i18n="deposit_copy">کپی</button>
-      </div>
-
-      <p class="small depositMemoNotice" data-i18n="deposit_memo_not_address">سیستم این comment را خودکار به تراکنش اضافه می‌کند؛ آن را تغییر ندهید.</p>
-
+      <p class="small depositAutoSendHint" data-i18n="deposit_auto_send_hint">با Wallet متصل‌شده، آدرس و کد مرجع خودکار به تراکنش اضافه می‌شوند.</p>
       <button id="depositVerifyButton" type="button" class="primaryBtn" style="width:100%;margin-top:8px" onclick="submitGramDeposit()" data-i18n="deposit_send_button">ارسال درخواست واریز از Wallet</button>
       <p id="depositActionMessage" role="status" aria-live="polite" class="small" style="min-height:20px"></p>
       <div id="depositHistoryList" style="margin-top:10px"></div>
+
+      <details class="depositManualDetails">
+        <summary data-i18n="deposit_manual_details">اطلاعات واریز دستی (اختیاری)</summary>
+        <div class="depositManualBody">
+          <label for="depositWalletAddress" data-i18n="deposit_address_label">آدرس دریافت GRAM</label>
+          <div class="depositCopyRow">
+            <input id="depositWalletAddress" type="text" readonly dir="ltr" style="margin:0;min-width:0;font-size:12px">
+            <button type="button" class="secondaryBtn" data-copy-target="depositWalletAddress" data-i18n="deposit_copy">کپی</button>
+          </div>
+          <div class="depositMemoLabel" data-i18n="deposit_reference_label">کد مرجع</div>
+          <div class="depositCopyRow depositMemoRow">
+            <code id="depositReference" class="depositMemoCode" dir="ltr"></code>
+            <button type="button" class="secondaryBtn" data-copy-target="depositReference" data-i18n="deposit_copy">کپی</button>
+          </div>
+          <p class="small depositMemoNotice" data-i18n="deposit_memo_not_address">این کد مرجع فقط برای شناسایی واریز است؛ آدرس کیف پول نیست.</p>
+        </div>
+      </details>
     </div>
 
     <button type="button" class="secondaryBtn" onclick="hideDeposit()" data-i18n="deposit_ok">باشه</button>
@@ -305,8 +307,8 @@
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/maintenanceGate.js?v=20261006-maintenance"></script>
-<script src="js/i18n.js?v=20261020-daily-check-cycle"></script>
-<script src="js/app.js?v=20261020-daily-check-cycle"></script>
+<script src="js/i18n.js?v=20261020-deposit-streamline-1"></script>
+<script src="js/app.js?v=20261020-deposit-streamline-1"></script>
 <script src="https://unpkg.com/@tonconnect/ui@5.0.1/dist/tonconnect-ui.min.js"></script>
 <script src="js/walletConnect.js?v=20261020-wallet-connect-refactor-1"></script>
 </body>

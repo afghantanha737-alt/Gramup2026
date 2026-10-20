@@ -1886,6 +1886,13 @@ html[data-theme="light"] .referralMilestonesList .referralTaskItem { background:
   font-size: 11px;
   line-height: 1.6;
 }
+.depositAutoSendHint { margin: 8px 0 4px; color: var(--text-soft); font-size: 11px; line-height: 1.6; }
+.depositManualDetails { margin-top: 12px; border: 1px solid var(--line-strong); border-radius: 14px; background: rgba(255,255,255,.025); }
+.depositManualDetails summary { padding: 12px 14px; color: var(--text-soft); font-size: 12px; font-weight: 750; cursor: pointer; list-style-position: inside; }
+.depositManualDetails[open] summary { border-bottom: 1px solid var(--line); color: var(--text); }
+.depositManualBody { padding: 12px; }
+.depositManualBody > label { display: block; margin-bottom: 7px; color: var(--text-soft); font-size: 12px; font-weight: 700; }
+.depositManualBody .depositMemoNotice { margin-bottom: 0; }
 html[data-theme="light"] .depositMemoCode {
   border-color: rgba(124, 58, 237, .4);
   color: #6d28d9;

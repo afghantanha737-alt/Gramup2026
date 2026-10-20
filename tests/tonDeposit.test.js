@@ -200,6 +200,10 @@ async function run() {
   assert.ok(app.includes('submitGramDeposit'));
   assert.ok(miniAppUi.includes('data-copy-target="depositWalletAddress"'));
   assert.ok(miniAppUi.includes('data-copy-target="depositReference"'));
+  assert.ok(miniAppUi.includes('<details class="depositManualDetails">'), 'manual deposit address and reference are collapsed by default');
+  assert.ok(miniAppUi.includes('data-i18n="deposit_auto_send_hint"'));
+  assert.ok(app.includes('const historyPromise = refreshDepositHistory().catch(() => null)'), 'deposit history loads concurrently and cannot block configuration rendering');
+  assert.ok(i18n.includes('deposit_manual_details') && i18n.includes('deposit_auto_send_hint'));
   assert.ok(miniAppUi.includes('class="depositMemoCode"') && !miniAppUi.includes('copyAddress('));
   assert.ok(app.includes('reference.textContent = currentDeposit?.reference || t("deposit_reference_auto")'));
   assert.ok(app.includes('window.gramupWallet.requestDeposit(amount)'));

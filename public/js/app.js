@@ -1925,10 +1925,12 @@ function showDeposit() {
   const panel = $("#depositPanel");
   const disabled = $("#depositDisabledMessage");
   const message = $("#depositMessage");
-  if (overlay) overlay.style.display = "flex";
+  if (overlay) { overlay.style.display = "flex"; overlay.setAttribute("aria-busy", "true"); }
   if (panel) panel.style.display = "none";
   if (disabled) disabled.style.display = "block";
-  if (message) message.textContent = t("deposit_coming_soon");
+  if (message) message.textContent = t("history_loading");
+  const submitButton = $("#depositVerifyButton");
+  if (submitButton) submitButton.disabled = true;
   setDepositActionMessage("");
   void loadDepositPanel();
 }
@@ -1937,15 +1939,16 @@ window.showDeposit = showDeposit;
 async function loadDepositPanel() {
   if (depositPanelLoading) return;
   depositPanelLoading = true;
+  const overlay = $("#depositOverlay");
   const panel = $("#depositPanel");
   const disabled = $("#depositDisabledMessage");
   const message = $("#depositMessage");
   const button = $("#depositVerifyButton");
   try {
-    const deposits = await refreshDepositHistory();
-    const pending = deposits.find(item => item.status === "pending");
+    // Fetch both resources together. History is useful but should not delay the
+    // form once the deposit configuration is available.
+    const historyPromise = refreshDepositHistory().catch(() => null);
     const configData = await api("/api/points/deposit/config");
-    currentDeposit = pending || null;
 
     if (!configData?.enabled) {
       if (panel) panel.style.display = "none";
@@ -1960,18 +1963,28 @@ async function loadDepositPanel() {
     const reference = $("#depositReference");
     const amount = $("#depositAmount");
     const minimum = $("#depositMinimumText");
+    if (address) address.value = configData?.depositWalletAddress || "";
+    if (reference) reference.textContent = t("deposit_reference_auto");
+    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(configData?.minimumDepositGram ?? 0, 9) });
+    if (button) button.disabled = true;
+
+    // The form is visible now; finish optional history lookup and restore an
+    // existing invoice before enabling submission.
+    const deposits = await historyPromise;
+    const pending = deposits?.find(item => item.status === "pending");
+    currentDeposit = pending || null;
     if (address) address.value = currentDeposit?.depositWalletAddress || configData?.depositWalletAddress || "";
     if (reference) reference.textContent = currentDeposit?.reference || t("deposit_reference_auto");
     if (amount && currentDeposit?.requestedAmount != null) amount.value = currentDeposit.requestedAmount;
     if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(currentDeposit?.minimumDepositGram ?? configData?.minimumDepositGram ?? 0, 9) });
     if (button) button.disabled = currentDeposit?.status === "confirmed";
-    renderDepositHistory(deposits);
   } catch (error) {
     if (panel) panel.style.display = "none";
     if (disabled) disabled.style.display = "block";
     if (message) message.textContent = translateServerMessage(error.code, error.message);
   } finally {
     depositPanelLoading = false;
+    if (overlay) overlay.setAttribute("aria-busy", "false");
   }
 }
 
