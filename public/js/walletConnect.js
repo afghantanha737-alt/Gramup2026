@@ -32,6 +32,7 @@
       connecting: 'Waiting for wallet approval…', connected: 'Wallet connected', verifying: 'Verifying wallet ownership…',
       verified: 'Wallet verified', disconnecting: 'Disconnecting wallet…', unavailable: 'TON Connect UI is unavailable.',
       proofRequired: 'Reconnect and approve the TON Proof request to use wallet actions.',
+      reconnectPrompt: 'This wallet session had no TON Proof. It was disconnected; tap Connect wallet again and approve the proof request.',
       operation: { submitting: 'Sending request to server…', sending: 'Approve the transaction in your wallet…', pending: 'Transaction sent; waiting for network confirmation…', confirmed: 'Transaction confirmed.', error: 'The wallet operation could not be completed.' }
     };
     if (lang === 'ps') return {
@@ -40,6 +41,7 @@
       connecting: 'د والټ تایید ته انتظار…', connected: 'والټ وصل شو', verifying: 'د والټ مالکیت تاییدېږي…',
       verified: 'والټ تایید شو', disconnecting: 'والټ جلا کېږي…', unavailable: 'TON Connect UI نشته.',
       proofRequired: 'د والټ د عملیاتو لپاره بیا وصل شئ او د TON Proof غوښتنه تایید کړئ.',
+      reconnectPrompt: 'په دې اتصال کې TON Proof نه و. والټ جلا شو؛ د Connect تڼۍ بیا کېکاږئ او Proof تایید کړئ.',
       operation: { submitting: 'سرور ته غوښتنه لېږل کېږي…', sending: 'په خپل والټ کې معامله تایید کړئ…', pending: 'معامله ولېږل شوه؛ د شبکې تایید ته انتظار…', confirmed: 'معامله تایید شوه.', error: 'د والټ عملیات بشپړ نه شول.' }
     };
     return {
@@ -48,6 +50,7 @@
       connecting: 'در انتظار تأیید Wallet…', connected: 'Wallet متصل است', verifying: 'در حال تأیید مالکیت Wallet…',
       verified: 'مالکیت Wallet تأیید شد', disconnecting: 'در حال قطع اتصال Wallet…', unavailable: 'TON Connect UI در دسترس نیست.',
       proofRequired: 'برای استفاده از عملیات Wallet، دوباره متصل شوید و درخواست TON Proof را تأیید کنید.',
+      reconnectPrompt: 'اتصال فعلی TON Proof نداشت و قطع شد. حالا دوباره روی «وصل کردن Wallet» بزنید و درخواست اثبات را تأیید کنید.',
       operation: { submitting: 'در حال ارسال درخواست به سرور…', sending: 'تراکنش را در Wallet خود تأیید کنید…', pending: 'تراکنش ارسال شد؛ در انتظار تأیید شبکه…', confirmed: 'تراکنش تأیید شد.', error: 'عملیات Wallet انجام نشد.' }
     };
   }
@@ -297,7 +300,7 @@
     notify();
   }
 
-  function connect() {
+  async function connect() {
     if (!state.ui) {
       state.phase = 'error';
       state.error = labels().unavailable;
@@ -305,6 +308,28 @@
       return;
     }
     if (state.phase === 'connecting' || state.phase === 'disconnecting') return;
+
+    // tonProof is attached to a new ConnectRequest. Re-selecting a wallet in
+    // an already-connected, proof-less session does not create that request.
+    // Disconnect first, then require a second user tap to open the wallet.
+    if (state.connected && !isCurrentProof()) {
+      state.phase = 'disconnecting';
+      state.error = '';
+      notify();
+      try {
+        await state.ui.disconnect();
+        if (state.connected) applyWallet(null);
+        state.phase = 'disconnected';
+        state.error = labels().reconnectPrompt;
+        notify();
+      } catch (error) {
+        state.phase = 'connected';
+        state.error = error?.message || labels().proofRequired;
+        notify();
+      }
+      return;
+    }
+
     state.error = '';
     state.phase = 'connecting';
     notify();
@@ -451,6 +476,10 @@
     }
     try {
       state.ui = new window.TON_CONNECT_UI.TonConnectUI({ manifestUrl });
+      // Pin fresh connections to the same Mainnet accepted by the proof and financial APIs.
+      if (!state.ui.connected && typeof state.ui.setConnectionNetwork === 'function') {
+        state.ui.setConnectionNetwork('-239');
+      }
       state.unsubscribe = state.ui.onStatusChange(wallet => applyWallet(wallet), handleConnectionError);
       state.ready = true;
       state.phase = 'disconnected';

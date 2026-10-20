@@ -8,6 +8,8 @@ async function run() {
   const calls = [];
   let walletStatusListener;
   let transactionSent = null;
+  let modalOpenCount = 0;
+  let requestedNetwork = null;
   const walletAddress = 'EQExampleWalletAddressForTest';
   const wallet = {
     account: {
@@ -30,7 +32,8 @@ async function run() {
       return () => {};
     }
     setConnectRequestParameters(parameters) { this.connectParameters = parameters; }
-    openModal() { return Promise.resolve(); }
+    setConnectionNetwork(network) { requestedNetwork = network; }
+    openModal() { modalOpenCount += 1; return Promise.resolve(); }
     async disconnect() {
       this.wallet = null;
       walletStatusListener?.(null);
@@ -75,6 +78,7 @@ async function run() {
 
   await walletApi.init();
   assert.strictEqual(walletApi.state.phase, 'disconnected');
+  assert.strictEqual(requestedNetwork, '-239', 'fresh wallet connections are pinned to TON Mainnet');
   assert(calls.some(call => call.url === '/api/ton-proof/payload'), 'proof challenge is prefetched');
   walletApi.connect();
   assert.strictEqual(walletApi.state.phase, 'connecting');
@@ -85,6 +89,17 @@ async function run() {
   await new Promise(resolve => setImmediate(resolve));
   assert.strictEqual(walletApi.state.phase, 'connected');
   await assert.rejects(() => walletApi.requestWithdrawal(1, 'key-test'), error => error.code === 'WALLET_PROOF_REQUIRED');
+
+  // Verify on an old proof-less session must disconnect; the next tap creates a fresh ConnectRequest.
+  const firstModalOpenCount = modalOpenCount;
+  await walletApi.connect();
+  assert.strictEqual(walletApi.state.connected, false);
+  assert.strictEqual(walletApi.state.phase, 'disconnected');
+  assert.strictEqual(modalOpenCount, firstModalOpenCount, 'disconnect and opening the wallet picker require separate taps');
+  assert(walletApi.state.error.includes('tap Connect wallet again'));
+  await new Promise(resolve => setImmediate(resolve));
+  walletApi.connect();
+  assert.strictEqual(modalOpenCount, firstModalOpenCount + 1, 'second tap opens the wallet picker');
 
   // Signed proof is submitted to the server, and successful verification is bound to this address.
   walletStatusListener(wallet);
