@@ -8,6 +8,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 const envExample = fs.readFileSync(path.join(root, '.env.example'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'scripts/migrate-referral-v2.js'), 'utf8');
 const smokeCheck = fs.readFileSync(path.join(root, 'scripts/verify-production.js'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 
 assert.ok(packageJson.scripts.test.includes('tests/*.test.js'), 'npm test includes the standard tests directory');
 assert.ok(fs.existsSync(path.join(root, 'tests/referralIdentifier.test.js')), 'referral contract test is in the standard tests directory');
@@ -16,6 +17,8 @@ assert.ok(packageJson.scripts['verify:production'], 'read-only production smoke 
 assert.ok(migration.includes("mode: options.apply ? 'apply' : 'dry-run'"), 'migration has explicit dry-run/apply modes');
 assert.ok(migration.includes('legacy_exempt'), 'migration never awards historical referral rewards');
 assert.ok(migration.includes('withTransaction'), 'migration apply path is transactional');
+assert.ok(migration.includes('countDocuments(selector)') && migration.includes('Partial scan refused'), 'migration never silently applies an incomplete capped scan');
+assert.ok(server.includes('for (const modelName of mongoose.modelNames()) await mongoose.model(modelName).init()'), 'startup waits for all registered model indexes');
 assert.ok(smokeCheck.includes('/api/health') && smokeCheck.includes('/api/ready'), 'smoke check covers health and readiness only');
 assert.ok(smokeCheck.includes('readOnly: true'), 'smoke check identifies itself as read-only');
 for (const key of [

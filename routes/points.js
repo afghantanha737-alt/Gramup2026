@@ -184,7 +184,8 @@ router.post('/wallet/connection', auth, async (req, res) => {
 
   const current = req.dbUser.connectedWallet || {};
   const now = new Date();
-  const connectedAt = current.address === address ? (current.connectedAt || now) : now;
+  const sameWallet = normalizeTonAddress(current.canonicalAddress || current.address) === canonicalAddress;
+  const connectedAt = sameWallet ? (current.connectedAt || now) : now;
   const updated = await User.findOneAndUpdate(
     { _id: req.dbUser._id },
     { $set: {
@@ -195,7 +196,8 @@ router.post('/wallet/connection', auth, async (req, res) => {
       'connectedWallet.publicKey': String(req.body?.publicKey || '').trim().slice(0, 128),
       'connectedWallet.walletApp': String(req.body?.walletApp || '').trim().slice(0, 80),
       'connectedWallet.connectedAt': connectedAt,
-      'connectedWallet.lastSeenAt': now
+      'connectedWallet.lastSeenAt': now,
+      ...(!sameWallet ? { 'connectedWallet.proofVerifiedAt': null, 'connectedWallet.proofPublicKey': '' } : {})
     } },
     { new: true }
   );
@@ -470,7 +472,10 @@ router.post('/withdraw', auth, async (req, res) => {
     return res.status(400).json({ success: false, message: 'آدرس کیف پول نامعتبر است.', code: 'INVALID_ADDRESS' });
   }
   const connectedAddress = String(u.connectedWallet?.address || '').trim();
-  if (connectedAddress && walletAddress !== connectedAddress) {
+  if (!hasRecentWalletProof(u) || u.connectedWallet?.network !== '-239') {
+    return res.status(403).json({ success: false, message: 'برای برداشت، مالکیت Wallet متصل‌شده را دوباره با TON Proof تأیید کنید.', code: 'WALLET_PROOF_REQUIRED' });
+  }
+  if (!connectedAddress || walletAddress !== connectedAddress) {
     return res.status(409).json({ success: false, message: 'آدرس برداشت باید با Wallet متصل‌شده یکسان باشد.', code: 'WALLET_ADDRESS_MISMATCH' });
   }
   if (amount < minWithdrawGram) {

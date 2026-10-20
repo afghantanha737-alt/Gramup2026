@@ -2,7 +2,6 @@
 const express = require('express');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
-const { isValidAdminKey } = require('../utils/adminKey');
 const { bot, broadcastCopyToActiveUsers } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const User = require('../models/User');
@@ -294,12 +293,12 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    await finishWebhookUpdate(updateId, 'completed');
+    await finishWebhookUpdate(updateId, 'completed', '', claim.processingToken);
     return res.sendStatus(200);
   } catch (error) {
     recordWebhookProcessingFailure();
     if (updateType === 'start') recordStartHandlerFailure();
-    await finishWebhookUpdate(updateId, 'failed', error?.code || 'PROCESSING_FAILED').catch(logError => {
+    await finishWebhookUpdate(updateId, 'failed', error?.code || 'PROCESSING_FAILED', claim.processingToken).catch(logError => {
       console.error('Could not persist failed Telegram update status:', logError.message || logError);
     });
     console.error('Telegram webhook update processing failed:', { updateId, updateType, error: error.message || String(error) });
@@ -307,38 +306,9 @@ router.post('/webhook', async (req, res) => {
   }
 });
 
-router.get('/set-webhook', async (req, res) => {
-  const adminKey = req.headers['x-admin-key'] || req.query.key;
-  if (!isValidAdminKey(typeof adminKey === 'string' ? adminKey : '')) {
-    return res.status(403).json({ success: false, message: 'دسترسی غیرمجاز. کلید ادمین لازم است (?key=ADMIN_KEY).' });
-  }
-  if (!bot || !APP_URL) {
-    return res.status(400).json({ success: false, message: 'BOT_TOKEN یا APP_URL تنظیم نشده است.' });
-  }
-  if (WEBHOOK_SECRET && !/^[A-Za-z0-9_-]{1,256}$/.test(WEBHOOK_SECRET)) {
-    return res.status(400).json({ success: false, message: 'TELEGRAM_WEBHOOK_SECRET باید ۱ تا ۲۵۶ کاراکتر و فقط شامل حروف انگلیسی، عدد، _ یا - باشد.' });
-  }
-  try {
-    const url = `${APP_URL.replace(/\/$/, '')}/api/telegram/webhook`;
-    const options = {
-      allowed_updates: ['message', 'callback_query', 'channel_post', 'message_reaction'],
-      ...(WEBHOOK_SECRET ? { secret_token: WEBHOOK_SECRET } : {})
-    };
-    await bot.setWebHook(url, options);
-    const info = await bot.getWebhookInfo();
-    res.json({
-      success: true,
-      message: `Webhook تنظیم شد: ${url}`,
-      webhook: {
-        url: info.url || '',
-        allowedUpdates: info.allowed_updates || [],
-        pendingUpdateCount: Number(info.pending_update_count) || 0,
-        lastErrorMessage: info.last_error_message || ''
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
+router.get('/set-webhook', (req, res) => {
+  res.set('Allow', 'POST');
+  return res.status(405).json({ success: false, code: 'METHOD_NOT_ALLOWED', message: 'برای تنظیم Webhook از مسیر POST بخش مدیریت استفاده کنید.' });
 });
 
 module.exports = router;

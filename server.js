@@ -235,6 +235,11 @@ async function startServer() {
       './models/VipPlan', './models/VipSubscription', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent'
     ]) await require(modelPath).init();
 
+    // Route imports register every application model. Await all indexes too;
+    // connection-time autoIndex builds are otherwise fire-and-forget, so an
+    // omitted unique/TTL index could still be building after HTTP starts.
+    for (const modelName of mongoose.modelNames()) await mongoose.model(modelName).init();
+
     // Latest Post Engagement requires its per-channel/post/user uniqueness constraint
     // before Telegram webhooks are accepted.
     await require('./models/TaskReactionState').init();

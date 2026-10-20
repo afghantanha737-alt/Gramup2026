@@ -31,11 +31,11 @@ function legacyTonTxHashMatcher(value) {
   return /^[a-f\d]{64}$/i.test(hash) ? new RegExp(`^${hash}$`, 'i') : hash;
 }
 
-async function fetchJson(url) {
+async function fetchJson(url, fetchImpl = globalThis.fetch) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetchImpl(url, { signal: controller.signal });
     const data = await response.json().catch(() => null);
     return { ok: response.ok, status: response.status, data };
   } finally {
@@ -43,10 +43,7 @@ async function fetchJson(url) {
   }
 }
 
-/** انتهای یک آدرس TON را برای تطبیق تقریبی برمی‌گرداند (چون یک آدرس می‌تواند هم به فرم raw و هم فرم user-friendly باشد). */
-function addressSuffix(address, length = 12) {
-  return String(address || '').replace(/[^a-zA-Z0-9]/g, '').slice(-length);
-}
+const { normalizeTonAddress } = require('./tonNativeDepositVerify');
 
 /**
  * @param {Object} params
@@ -56,7 +53,7 @@ function addressSuffix(address, length = 12) {
  * @param {string} params.token - نماد توکن (مثلاً 'TON' یا 'GRAM')
  * @param {number} [params.toleranceRatio] - حداکثر اختلاف نسبی قابل‌قبول بین مبلغ تراکنش و مبلغ درخواستی
  */
-async function verifyTonTransaction({ txHash, expectedAddress, expectedAmount, token, toleranceRatio = 0.02 }) {
+async function verifyTonTransaction({ txHash, expectedAddress, expectedAmount, token, toleranceRatio = 0.02, fetchImpl = globalThis.fetch }) {
   const hash = String(txHash || '').trim();
   if (hash.length < 10) {
     return { ok: false, reason: 'فرمت هش تراکنش نامعتبر به‌نظر می‌رسد (خیلی کوتاه است).' };
@@ -64,7 +61,7 @@ async function verifyTonTransaction({ txHash, expectedAddress, expectedAmount, t
 
   let result;
   try {
-    result = await fetchJson(`${TONCENTER_API}/transactions?hash=${encodeURIComponent(hash)}&limit=1`);
+    result = await fetchJson(`${TONCENTER_API}/transactions?hash=${encodeURIComponent(hash)}&limit=1`, fetchImpl);
   } catch (error) {
     const reason = error?.name === 'AbortError'
       ? 'اتصال به Explorer زمان زیادی طول کشید (timeout).'
@@ -88,8 +85,9 @@ async function verifyTonTransaction({ txHash, expectedAddress, expectedAmount, t
   }
 
   const outMsgs = Array.isArray(tx.out_msgs) ? tx.out_msgs : [];
-  const expectedSuffix = addressSuffix(expectedAddress);
-  const matchingMsg = outMsgs.find(m => addressSuffix(m.destination).endsWith(expectedSuffix) && expectedSuffix.length > 0);
+  const expectedCanonicalAddress = normalizeTonAddress(expectedAddress);
+  if (!expectedCanonicalAddress) return { ok: false, reason: 'آدرس مقصد مورد انتظار نامعتبر است.', raw: tx };
+  const matchingMsg = outMsgs.find(m => normalizeTonAddress(m.destination) === expectedCanonicalAddress);
 
   const fromAddress = tx.account || tx.in_msg?.source || '';
 

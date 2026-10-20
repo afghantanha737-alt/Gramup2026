@@ -38,13 +38,12 @@ async function verifyMobileChallenge(payload, telegramId) {
   if (!raw.startsWith('mobile_')) return false;
   const token = raw.slice('mobile_'.length);
   if (token.length < 20 || !telegramId) return false;
-  const challenge = await MobileAuthChallenge.findOne({ tokenHash: hashToken(token), status: 'pending' });
-  if (!challenge || challenge.expiresAt <= new Date()) return false;
-  challenge.status = 'verified';
-  challenge.telegramId = String(telegramId);
-  challenge.verifiedAt = new Date();
-  await challenge.save();
-  return true;
+  const challenge = await MobileAuthChallenge.findOneAndUpdate(
+    { tokenHash: hashToken(token), status: 'pending', expiresAt: { $gt: new Date() } },
+    { $set: { status: 'verified', telegramId: String(telegramId), verifiedAt: new Date() } },
+    { new: true }
+  );
+  return Boolean(challenge);
 }
 
 async function consumeMobileChallenge(challengeId, token, userAgent = '') {
@@ -52,11 +51,19 @@ async function consumeMobileChallenge(challengeId, token, userAgent = '') {
   if (!challenge || challenge.status !== 'verified' || !challenge.telegramId) return null;
   const user = await User.findOne({ telegramId: String(challenge.telegramId) });
   if (!user || user.isBanned) return null;
+  const claimed = await MobileAuthChallenge.findOneAndUpdate(
+    { _id: challenge._id, status: 'verified', consumedAt: null, expiresAt: { $gt: new Date() } },
+    { $set: { status: 'consumed', consumedAt: new Date() } },
+    { new: true }
+  );
+  if (!claimed) return null;
   const accessToken = randomToken(48);
-  await MobileSession.create({ user: user._id, tokenHash: hashToken(accessToken), expiresAt: new Date(Date.now() + SESSION_TTL_MS), userAgent: String(userAgent || '').slice(0, 300) });
-  challenge.status = 'consumed';
-  challenge.consumedAt = new Date();
-  await challenge.save();
+  try {
+    await MobileSession.create({ user: user._id, tokenHash: hashToken(accessToken), expiresAt: new Date(Date.now() + SESSION_TTL_MS), userAgent: String(userAgent || '').slice(0, 300) });
+  } catch (error) {
+    await MobileAuthChallenge.updateOne({ _id: claimed._id, status: 'consumed' }, { $set: { status: 'verified', consumedAt: null } }).catch(() => {});
+    throw error;
+  }
   return { accessToken, expiresAt: new Date(Date.now() + SESSION_TTL_MS), user };
 }
 

@@ -7,9 +7,11 @@
 
 ```bash
 npm install
-cp .env.example .env     # و مقدارها را پر کنید (حداقل BOT_TOKEN، MONGO_URI، ADMIN_KEY)
+cp .env.example .env     # همه متغیرهای الزامی محیط انتخابی را تنظیم کنید
 npm start
 ```
+
+برای `NODE_ENV=production`، علاوه بر `BOT_TOKEN`، `MONGO_URI` و `ADMIN_KEY`، مقدارهای `APP_URL`، `ALLOWED_ORIGINS` و `TELEGRAM_WEBHOOK_SECRET` معتبر نیز الزامی‌اند؛ MongoDB باید Replica Set/Sharded و دارای transaction باشد. اجرای سرور در production با secret نامعتبر متوقف می‌شود و readiness تا تکمیل تنظیمات 503 می‌دهد. برای local development، `NODE_ENV=development` بگذارید و MongoDB محلی/آزمایشی استفاده کنید. پیش از انتشار، `npm test` و سپس `npm run verify:production` را اجرا کنید.
 
 پنل ادمین: `https://آدرس-شما/admin.html` (با `ADMIN_KEY` وارد می‌شود).
 

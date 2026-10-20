@@ -66,6 +66,7 @@ async function getOrCreateUser(tgUser, startParam, requestIp = '', requestUserAg
   if (!tgUser || !tgUser.id) return null;
   const telegramId = String(tgUser.id);
   let dbUser = await User.findOne({ telegramId });
+  let createdByThisRequest = false;
   const referralQuery = referralIdentifierQuery(startParam);
   let referrer = referralQuery
     ? await User.findOne(referralQuery).select('_id telegramId isBanned signupIpHash signupDeviceHash')
@@ -78,19 +79,29 @@ async function getOrCreateUser(tgUser, startParam, requestIp = '', requestUserAg
   if (!dbUser) {
     const signupIpHash = hashNetworkIdentifier(requestIp);
     const signupDeviceHash = hashDeviceIdentifier(requestUserAgent);
-    dbUser = await User.create({
-      telegramId,
-      username: tgUser.username || '',
-      firstName: tgUser.first_name || '',
-      lastName: tgUser.last_name || '',
-      photoUrl: tgUser.photo_url || '',
-      referralCode: generateReferralCode(telegramId),
-      signupIpHash,
-      signupDeviceHash,
-      referralRiskScore: 0,
-      referralRiskFlags: []
-    });
-  } else {
+    try {
+      dbUser = await User.create({
+        telegramId,
+        username: tgUser.username || '',
+        firstName: tgUser.first_name || '',
+        lastName: tgUser.last_name || '',
+        photoUrl: tgUser.photo_url || '',
+        referralCode: generateReferralCode(telegramId),
+        signupIpHash,
+        signupDeviceHash,
+        referralRiskScore: 0,
+        referralRiskFlags: []
+      });
+      createdByThisRequest = true;
+    } catch (error) {
+      // Two tabs can authenticate the same new Telegram account concurrently;
+      // the unique telegramId index chooses one creator, and the other reloads it.
+      if (error?.code !== 11000) throw error;
+      dbUser = await User.findOne({ telegramId });
+      if (!dbUser) throw error;
+    }
+  }
+  if (!createdByThisRequest) {
     let changed = false;
     if (tgUser.username && tgUser.username !== dbUser.username) {
       dbUser.username = tgUser.username;

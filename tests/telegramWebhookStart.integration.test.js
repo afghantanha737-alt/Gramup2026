@@ -12,13 +12,19 @@ const { bot } = require('../utils/bot');
 const User = require('../models/User');
 const referralSystem = require('../utils/referralSystem');
 const webhookDedup = require('../utils/webhookDedup');
-const claimedUpdates = new Set();
+const claimedUpdates = new Map();
+let claimSequence = 0;
 webhookDedup.claimWebhookUpdate = async updateId => {
-  if (claimedUpdates.has(Number(updateId))) return { claimed: false, duplicate: true };
-  claimedUpdates.add(Number(updateId));
-  return { claimed: true };
+  const previous = claimedUpdates.get(Number(updateId));
+  if (previous?.status === 'completed' || previous?.status === 'processing') return { claimed: false, duplicate: true };
+  const processingToken = `claim-${++claimSequence}`;
+  claimedUpdates.set(Number(updateId), { status: 'processing', processingToken });
+  return { claimed: true, processingToken };
 };
-webhookDedup.finishWebhookUpdate = async () => {};
+webhookDedup.finishWebhookUpdate = async (updateId, status, _failureCode, processingToken) => {
+  const current = claimedUpdates.get(Number(updateId));
+  if (current?.processingToken === processingToken) current.status = status;
+};
 
 const users = new Map();
 const sentMessages = [];
@@ -59,6 +65,8 @@ app.use('/api/telegram', telegramRouter);
   });
 
   try {
+    const unsafeBootstrap = await fetch(`${endpoint.replace('/webhook', '/set-webhook')}?key=${encodeURIComponent('test-bot-token-not-real')}`);
+    assert.strictEqual(unsafeBootstrap.status, 405, 'state-changing webhook bootstrap is not exposed as GET with a query secret');
     const first = await postUpdate({
       update_id: 1001,
       message: { message_id: 1, chat: { id: 111 }, from: { id: 111, first_name: 'New' }, text: '/start invite_CODE' }
@@ -90,7 +98,12 @@ app.use('/api/telegram', telegramRouter);
     assert.strictEqual(denied.status, 401, 'invalid Telegram webhook secret must be rejected');
     assert.strictEqual(sentMessages.length, 2, 'unauthenticated webhook request must not send a message');
 
-    bot.sendMessage = async () => { throw new Error('simulated send failure'); };
+    let shouldFailFirstAttempt = true;
+    bot.sendMessage = async (chatId, text, options) => {
+      if (shouldFailFirstAttempt) { shouldFailFirstAttempt = false; throw new Error('simulated send failure'); }
+      sentMessages.push({ chatId, text, options });
+      return { message_id: sentMessages.length };
+    };
     const failed = await postUpdate({
       update_id: 1004,
       message: { message_id: 4, chat: { id: 333 }, from: { id: 333 }, text: '/start' }
@@ -101,15 +114,18 @@ app.use('/api/telegram', telegramRouter);
       update_id: 1004,
       message: { message_id: 4, chat: { id: 333 }, from: { id: 333 }, text: '/start' }
     });
-    assert.strictEqual(duplicateFailureRetry.status, 200, 'duplicate update_id is acknowledged without repeating side effects');
-    assert.strictEqual(sentMessages.length, 2, 'duplicate delivery cannot repeat a welcome side effect');
+    assert.strictEqual(duplicateFailureRetry.status, 200, 'failed update retry should be processed and acknowledged');
+    assert.strictEqual(sentMessages.length, 3, 'failed update is retried and its welcome is sent');
+    const completedDuplicate = await postUpdate({ update_id: 1004, message: { message_id: 4, chat: { id: 333 }, from: { id: 333 }, text: '/start' } });
+    assert.strictEqual(completedDuplicate.status, 200, 'completed update duplicates are acknowledged');
+    assert.strictEqual(sentMessages.length, 3, 'completed update duplicates do not repeat side effects');
 
     const invalidSecret = await postUpdate({
       update_id: 1006,
       message: { message_id: 6, chat: { id: 555 }, from: { id: 555 }, text: '/start' }
     }, 'wrong-secret');
     assert.strictEqual(invalidSecret.status, 401, 'configured webhook with an invalid secret is rejected');
-    assert.strictEqual(sentMessages.length, 2, 'invalid webhook secret cannot trigger side effects');
+    assert.strictEqual(sentMessages.length, 3, 'invalid webhook secret cannot trigger side effects');
 
     const beforeMissingSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     process.env.TELEGRAM_WEBHOOK_SECRET = '';

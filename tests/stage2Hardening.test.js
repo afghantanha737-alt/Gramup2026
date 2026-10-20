@@ -149,11 +149,34 @@ async function main() {
     transactionModule.withMongoTransaction = originalTransaction;
   }
 
-  // Durable webhook claim must rely on unique database insertion and treat duplicate IDs as no-op.
-  const { claimWebhookUpdate } = require('../utils/webhookDedup');
-  const seen = new Set();
-  const fakeUpdateModel = { create: async document => { if (seen.has(document.updateId)) { const error = new Error('duplicate'); error.code = 11000; throw error; } seen.add(document.updateId); return document; } };
-  assert.deepStrictEqual(await claimWebhookUpdate(101, 'message', fakeUpdateModel), { claimed: true });
+  // Durable webhook claim uses unique insertion and refuses concurrent processing duplicates.
+  const { claimWebhookUpdate, finishWebhookUpdate } = require('../utils/webhookDedup');
+  const webhookRows = new Map();
+  const fakeUpdateModel = {
+    create: async document => { if (webhookRows.has(document.updateId)) { const error = new Error('duplicate'); error.code = 11000; throw error; } webhookRows.set(document.updateId, { ...document }); return document; },
+    findOneAndUpdate: async (filter, update) => {
+      const row = webhookRows.get(filter.updateId);
+      if (!row || row.status !== 'failed') return null;
+      Object.assign(row, update.$set);
+      row.attemptCount += update.$inc.attemptCount;
+      return { ...row };
+    },
+    updateOne: async (filter, update) => {
+      const row = webhookRows.get(filter.updateId);
+      if (row?.status === 'processing' && row.processingToken === filter.processingToken) Object.assign(row, update.$set);
+    }
+  };
+  const firstWebhookClaim = await claimWebhookUpdate(101, 'message', fakeUpdateModel);
+  assert.strictEqual(firstWebhookClaim.claimed, true);
+  assert.ok(firstWebhookClaim.processingToken, 'claim includes a unique fencing token');
+  await finishWebhookUpdate(101, 'failed', 'TRANSIENT', firstWebhookClaim.processingToken, fakeUpdateModel);
+  const retryWebhookClaim = await claimWebhookUpdate(101, 'message', fakeUpdateModel);
+  assert.strictEqual(retryWebhookClaim.reclaimed, true, 'failed Telegram update can be retried');
+  assert.notStrictEqual(retryWebhookClaim.processingToken, firstWebhookClaim.processingToken);
+  await finishWebhookUpdate(101, 'completed', '', firstWebhookClaim.processingToken, fakeUpdateModel);
+  assert.strictEqual(webhookRows.get(101).status, 'processing', 'stale handler cannot finish a newer claim');
+  await finishWebhookUpdate(101, 'completed', '', retryWebhookClaim.processingToken, fakeUpdateModel);
+  assert.strictEqual(webhookRows.get(101).status, 'completed');
   assert.deepStrictEqual(await claimWebhookUpdate(101, 'message', fakeUpdateModel), { claimed: false, duplicate: true });
   assert.deepStrictEqual(await claimWebhookUpdate('bad', 'message', fakeUpdateModel), { claimed: false, invalid: true });
 

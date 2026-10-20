@@ -8,7 +8,7 @@ const { verifyMongoTransactionCapability } = require('../utils/mongoTransaction'
 const { reviewStatusOf } = require('../utils/referralCore');
 
 function parseArgs(argv) {
-  const options = { apply: false, limit: 5000, help: false };
+  const options = { apply: false, limit: null, help: false };
   for (const arg of argv) {
     if (arg === '--apply') options.apply = true;
     else if (arg === '--help' || arg === '-h') options.help = true;
@@ -29,7 +29,7 @@ function printHelp() {
     '',
     'Dry run (default): npm run migrate:referral-v2',
     'Apply after backup and review: npm run migrate:referral-v2 -- --apply',
-    'Optional limit: npm run migrate:referral-v2 -- --limit=5000',
+    'Optional safety cap (the command fails rather than scanning only part of the data): npm run migrate:referral-v2 -- --limit=5000',
     '',
     'The migration only creates missing level-1 ReferralRelationship rows from User.referredBy.',
     'It never changes User balances, PointsLedger, or referral reward eligibility.'
@@ -126,10 +126,16 @@ async function main(argv = process.argv.slice(2)) {
       if (!capability.supported) throw new Error(`MongoDB transactions are required for --apply: ${capability.reason}`);
     }
 
-    const users = await User.find({ referredBy: { $ne: null } })
+    const selector = { referredBy: { $ne: null } };
+    const totalUsers = await User.countDocuments(selector);
+    if (options.limit && totalUsers > options.limit) {
+      throw new Error(`Partial scan refused: ${totalUsers} legacy referrals exist but --limit is ${options.limit}. Omit --limit for a complete scan.`);
+    }
+    let userQuery = User.find(selector)
       .select('_id referredBy accountReviewStatus isBanned referralRiskBlocked referralRiskScore')
-      .limit(options.limit)
-      .lean();
+      .sort({ _id: 1 });
+    if (options.limit) userQuery = userQuery.limit(options.limit);
+    const users = await userQuery.lean();
     const relationships = await ReferralRelationship.find({ level: 1 })
       .select('referrerId referredUserId level')
       .lean();

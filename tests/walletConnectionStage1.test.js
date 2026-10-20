@@ -12,6 +12,9 @@ const manifest = JSON.parse(fs.readFileSync('public/tonconnect-manifest.json', '
 assert(points.includes("router.post('/wallet/connection'"));
 assert(points.includes("router.delete('/wallet/connection'"));
 assert(points.includes("network !== '-239'"));
+assert(points.includes("if (!hasRecentWalletProof(u) || u.connectedWallet?.network !== '-239')"), 'server requires a recent Mainnet proof for withdrawals');
+assert(points.includes("if (!connectedAddress || walletAddress !== connectedAddress)"), 'withdrawals cannot target an arbitrary address when no wallet is connected');
+assert(points.includes("'connectedWallet.proofVerifiedAt': null, 'connectedWallet.proofPublicKey': ''"), 'changing wallet association invalidates the previous ownership proof');
 assert(points.includes('WALLET_ADDRESS_MISMATCH'));
 assert(user.includes('connectedWallet:'));
 assert(app.includes('window.gramupApi = api;'));

@@ -765,15 +765,23 @@ function hideLanguageOverlay() {
 }
 window.hideLanguageOverlay = hideLanguageOverlay;
 
+let languageSelectionSequence = 0;
+let languageSelectionQueue = Promise.resolve();
 async function selectLanguage(lang) {
   if (!["fa", "ps", "en"].includes(lang)) return;
   if (lang === state.language) { hideLanguageOverlay(); return; }
+  const selectionId = ++languageSelectionSequence;
 
+  const saveRequest = languageSelectionQueue.catch(() => {}).then(() =>
+    api("/api/auth/language", { method: "PATCH", body: { language: lang } })
+  );
+  languageSelectionQueue = saveRequest.catch(() => {});
   try {
-    await api("/api/auth/language", { method: "PATCH", body: { language: lang } });
+    await saveRequest;
   } catch (error) {
     console.warn("Failed to persist language:", error);
   }
+  if (selectionId !== languageSelectionSequence) return;
 
   state.language = lang;
   localStorage.setItem("appLanguage", lang);
@@ -1167,11 +1175,22 @@ function safeTaskHttpUrl(value) {
 }
 
 function openTaskLinkOnly(url) {
-  if (!url) return;
-  if (tg?.openLink) tg.openLink(url);
-  else window.open(url, "_blank");
+  const safeUrl = safeTaskHttpUrl(url);
+  if (!safeUrl) return;
+  if (tg?.openLink) tg.openLink(safeUrl);
+  else window.open(safeUrl, "_blank", "noopener,noreferrer");
 }
 window.openTaskLinkOnly = openTaskLinkOnly;
+
+document.addEventListener("click", event => {
+  const button = event.target?.closest?.("[data-task-open-url]");
+  if (!button) return;
+  event.preventDefault();
+  const url = button.dataset.taskOpenUrl;
+  const taskId = button.dataset.latestPostOpen;
+  if (taskId) void openLatestPostTask(url, taskId);
+  else openTaskLinkOnly(url);
+});
 
 async function openLatestPostTask(url, taskId) {
   const id = String(taskId || "");
@@ -1557,12 +1576,11 @@ function renderTasks() {
           const remaining = nextAvailableAt && Number.isFinite(nextAvailableAt.getTime())
             ? nextAvailableAt.getTime() - (Date.now() + state.tasksServerOffsetMs)
             : 0;
-          const latestPostUrlArgument = escapeHTML(JSON.stringify(safeTaskHttpUrl(task.url)).replaceAll("<", "\\u003c"));
           const openedAtMs = latestPostOpenedAt.get(String(task._id));
           const openWaitRemaining = openedAtMs ? openedAtMs + 10000 - (Date.now() + state.tasksServerOffsetMs) : 0;
           const waitingForCheck = latestPostOpenedTaskIds.has(String(task._id)) && openWaitRemaining <= 0;
           const openButton = !waitingForCheck && remaining <= 0 && safeUrl
-            ? `<button class="taskAction" data-latest-post-open="${escapeHTML(task._id)}" style="background:var(--surface-3);color:var(--text)" onclick="openLatestPostTask(${latestPostUrlArgument}, '${escapeHTML(task._id)}')">${t("task_action_start")}</button>`
+            ? `<button class="taskAction" data-latest-post-open="${escapeHTML(task._id)}" data-task-open-url="${escapeHTML(safeUrl)}" style="background:var(--surface-3);color:var(--text)">${t("task_action_start")}</button>`
             : "";
           let actionButton = "";
           if (remaining > 0) {
@@ -1588,14 +1606,14 @@ function renderTasks() {
             : status === "rejected" ? `<div class="taskHint error" style="flex-basis:100%">${t("task_submission_rejected")}</div>` : "";
           actionHtml = `
             <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
-              ${task.url ? `<button class="taskAction" style="background:var(--surface-3);color:var(--text)" onclick="openTaskLinkOnly('${safeUrl}')">${t("task_action_open")}</button>` : ""}
+              ${safeUrl ? `<button class="taskAction" data-task-open-url="${escapeHTML(safeUrl)}" style="background:var(--surface-3);color:var(--text)">${t("task_action_open")}</button>` : ""}
               <input class="hidden" id="screenshot-file-${task._id}" type="file" accept="image/jpeg,image/png,image/webp" onchange="submitScreenshotTask('${task._id}', this.files[0], this)">
               <button class="taskAction" data-upload-screenshot="${task._id}" onclick="chooseScreenshotFile('${task._id}')">📸 ${t("task_action_upload")}</button>
             </div>${rejectedNote}`;
         } else {
           actionHtml = `
             <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
-              ${task.url ? `<button class="taskAction" style="background:var(--surface-3);color:var(--text)" onclick="openTaskLinkOnly('${safeUrl}')">${t("task_action_open")}</button>` : ""}
+              ${safeUrl ? `<button class="taskAction" data-task-open-url="${escapeHTML(safeUrl)}" style="background:var(--surface-3);color:var(--text)">${t("task_action_open")}</button>` : ""}
               <button class="taskAction" data-verify="${task._id}" onclick="verifyTelegramTask('${task._id}')">${t("task_action_verify")}</button>
             </div>`;
         }
@@ -2265,19 +2283,23 @@ function ensureWithdrawalDetailOverlay() {
   return el;
 }
 
+let withdrawalDetailRequestSequence = 0;
 function closeWithdrawalDetail() {
+  withdrawalDetailRequestSequence += 1;
   const el = document.getElementById("withdrawalDetailOverlay");
   if (el) el.style.display = "none";
 }
 window.closeWithdrawalDetail = closeWithdrawalDetail;
 
 async function openWithdrawalDetail(id) {
+  const requestId = ++withdrawalDetailRequestSequence;
   const el = ensureWithdrawalDetailOverlay();
   el.style.display = "flex";
   el.innerHTML = `<div class="modalBox withdrawBox" role="dialog" aria-modal="true"><div class="loading" style="height:120px"></div></div>`;
 
   try {
     const data = await api(`/api/points/withdrawals/${id}`);
+    if (requestId !== withdrawalDetailRequestSequence || el.style.display === "none") return;
     const w = data.withdrawal;
     const statusInfo = WITHDRAW_STATUS_UI[w.status] || { cls: "" };
     const showReason = (w.status === "rejected" || w.status === "cancelled") && w.adminNote;
@@ -2316,6 +2338,7 @@ async function openWithdrawalDetail(id) {
         </div>
       </div>`;
   } catch (error) {
+    if (requestId !== withdrawalDetailRequestSequence || el.style.display === "none") return;
     el.innerHTML = `<div class="modalBox withdrawBox"><div class="emptyState"><div class="emptyDesc">${escapeHTML(error.message)}</div></div>
       <button type="button" class="secondaryBtn" style="width:100%;margin-top:12px" onclick="closeWithdrawalDetail()">${t("common_close")}</button></div>`;
   }

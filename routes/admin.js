@@ -1142,7 +1142,7 @@ router.get('/withdrawals', async (req, res) => {
 router.post('/withdrawals/:id/approve', async (req, res) => {
   const txHash = String((req.body && req.body.txHash) || '').trim();
   const txHashNormalized = normalizeTonTxHash(txHash);
-  const forceManualConfirm = Boolean(req.body && req.body.forceManualConfirm);
+  const forceManualConfirm = req.body?.forceManualConfirm === true;
 
   if (!txHash) {
     return res.status(400).json({ success: false, message: 'وارد کردن Transaction Hash الزامی است.' });

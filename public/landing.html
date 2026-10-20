@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050609">
 <meta name="color-scheme" content="dark">
 <title>Gramup — Task & Loyalty App</title>
@@ -11,7 +11,7 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="Gramup">
 <meta property="og:description" content="A Telegram task and loyalty app for points and promotional rewards, subject to eligibility and published rules.">
-<link rel="icon" type="image/svg+xml" href="img/gramup-logo-new.jpg">
+<link rel="icon" type="image/jpeg" href="img/gramup-logo-new.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Vazirmatn:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
       <h1 class="landingTitle">Gram<span>up</span></h1>
       <p class="landingTagline" data-i18n="tagline">تسک انجام بده، دوست دعوت کن و هر روز وارد شو — پوینت جمع کن و در صورت واجد شرایط بودن طبق قوانین درخواست تبدیل یا برداشت بده.</p>
       <div class="landingCtas">
-        <a class="landingCtaPrimary" href="#" id="openAppLink" target="_blank" rel="noopener">🚀 <span data-i18n="ctaOpen">باز کردن Gramup</span></a>
+        <a class="landingCtaPrimary" href="#" id="openAppLink" target="_blank" rel="noopener noreferrer" aria-disabled="true" tabindex="-1">🚀 <span data-i18n="ctaOpen">باز کردن Gramup</span></a>
         <a class="landingCtaGhost" href="proof.html"><span data-i18n="ctaProof">مشاهده‌ی سوابق پرداخت ↗</span></a>
       </div>
     </div>
@@ -94,11 +94,11 @@
     <div class="landingSection">
       <div class="landingTrust">
         <div class="landingCtas">
-          <a class="landingCtaGhost" href="terms.html">Terms</a>
-          <a class="landingCtaGhost" href="privacy.html">Privacy</a>
-          <a class="landingCtaGhost" href="rewards.html">Reward Rules</a>
-          <a class="landingCtaGhost" href="withdrawal.html">Withdrawal Rules</a>
-          <a class="landingCtaGhost" href="support.html">Support</a>
+          <a class="landingCtaGhost" href="terms.html" data-i18n="footerTerms">شرایط</a>
+          <a class="landingCtaGhost" href="privacy.html" data-i18n="footerPrivacy">حریم خصوصی</a>
+          <a class="landingCtaGhost" href="rewards.html" data-i18n="footerRewards">قوانین پاداش</a>
+          <a class="landingCtaGhost" href="withdrawal.html" data-i18n="footerWithdrawal">قوانین برداشت</a>
+          <a class="landingCtaGhost" href="support.html" data-i18n="footerSupport">پشتیبانی</a>
         </div>
       </div>
     </div>
@@ -120,6 +120,7 @@ const I18N = {
     s3Title: "شرایط تبدیل و برداشت را بررسی کن", s3Desc: "از کیف‌پول اپ، در صورت واجد شرایط بودن به آدرس TON خودت درخواست بده",
     trustDesc: "پرداخت‌های تکمیل‌شده Gramup، در صورت ثبت روی زنجیره، با جزئیات تراکنش و لینک explorer قابل بررسی‌اند.",
     trustCta: "مشاهده‌ی سوابق پرداخت ↗",
+    footerTerms: "شرایط", footerPrivacy: "حریم خصوصی", footerRewards: "قوانین پاداش", footerWithdrawal: "قوانین برداشت", footerSupport: "پشتیبانی",
     langBtn: "English"
   },
   ps: {
@@ -136,6 +137,7 @@ const I18N = {
     s3Title: "GRAM ته یې بدل او ایستل یې کړئ", s3Desc: "د اپ له والټ څخه، خپل TON پته ته د ایستلو غوښتنه ورکړئ",
     trustDesc: "بشپړې شوې تادیات، که په زنځیر کې ثبت شي، د تراکنش له جزئیاتو او explorer لینک سره د کتلو وړ دي.",
     trustCta: "د بشپړو شوو تادیاتو سوابق وګورئ ↗",
+    footerTerms: "شرایط", footerPrivacy: "د محرمیت تګلاره", footerRewards: "د انعام اصول", footerWithdrawal: "د ایستلو اصول", footerSupport: "ملاتړ",
     langBtn: "English"
   },
   en: {
@@ -152,6 +154,7 @@ const I18N = {
     s3Title: "Review conversion and withdrawal rules", s3Desc: "From the app's wallet, request a withdrawal to your TON address when eligible",
     trustDesc: "Completed Gramup payments may be verifiable with transaction details and an explorer link when recorded on-chain.",
     trustCta: "View payment records ↗",
+    footerTerms: "Terms", footerPrivacy: "Privacy", footerRewards: "Reward Rules", footerWithdrawal: "Withdrawal Rules", footerSupport: "Support",
     langBtn: "فارسی"
   }
 };
@@ -175,12 +178,21 @@ function toggleLang() {
 }
 
 async function loadAppInfo() {
+  const link = document.getElementById("openAppLink");
+  link.addEventListener("click", event => {
+    if (link.dataset.ready !== "true") event.preventDefault();
+  });
   try {
     const res = await fetch("/api/app-info");
+    if (!res.ok) return;
     const data = await res.json();
-    const link = document.getElementById("openAppLink");
-    if (data.botLink) link.href = data.botLink;
-  } catch (error) { /* دکمه بدون این هم شکل درستی دارد، فقط لینکش خالی می‌ماند */ }
+    const botLink = new URL(String(data.botLink || ""));
+    if (botLink.protocol !== "https:" || botLink.hostname !== "t.me") return;
+    link.href = botLink.toString();
+    link.dataset.ready = "true";
+    link.removeAttribute("aria-disabled");
+    link.removeAttribute("tabindex");
+  } catch (error) { /* keep CTA disabled if app info is not available */ }
 }
 
 applyLang();
