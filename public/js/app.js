@@ -1377,7 +1377,7 @@ function formatCountdown(milliseconds) {
 
 function startLatestPostCooldownCountdown() {
   clearInterval(latestPostCooldownTimer);
-  const buttons = Array.from(document.querySelectorAll("[data-latest-post-cooldown], [data-latest-post-wait]"));
+  const buttons = Array.from(document.querySelectorAll("[data-latest-post-cooldown], [data-latest-post-wait], [data-bio-link-cooldown]"));
   if (!buttons.length) return;
 
   const tick = () => {
@@ -1389,7 +1389,9 @@ function startLatestPostCooldownCountdown() {
         ? Number(button.dataset.openedAt || 0) + 10000 - now
         : Date.parse(button.dataset.until || "") - now;
       if (remaining > 0) {
-        button.textContent = button.dataset.latestPostWait === "true"
+        button.textContent = button.dataset.bioLinkCooldown === "true"
+          ? t("task_latest_post_available_in", { time: formatCountdown(remaining) })
+          : button.dataset.latestPostWait === "true"
           ? t("task_latest_post_check_in", { time: formatCountdown(remaining) })
           : t("task_latest_post_available_in", { time: formatCountdown(remaining) });
         return;
@@ -1397,7 +1399,7 @@ function startLatestPostCooldownCountdown() {
       const waitingForCheck = button.dataset.latestPostWait === "true";
       button.disabled = false;
       button.dataset.taskState = "AVAILABLE";
-      button.textContent = waitingForCheck ? t("task_action_claim") : t("task_action_start");
+      button.textContent = button.dataset.bioLinkCooldown === "true" ? t("bio_link_task_verify") : waitingForCheck ? t("task_action_claim") : t("task_action_start");
       if (waitingForCheck) {
         // Re-render the same task immediately so the button gets the Claim
         // click handler and data attribute; no page/tab refresh is required.
@@ -1416,7 +1418,7 @@ function startLatestPostCooldownCountdown() {
         if (state.activeTab === "tasks") renderTasks();
       });
     }
-    if (!document.querySelector("[data-latest-post-cooldown], [data-latest-post-wait]")) {
+    if (!document.querySelector("[data-latest-post-cooldown], [data-latest-post-wait], [data-bio-link-cooldown]")) {
       clearInterval(latestPostCooldownTimer);
       latestPostCooldownTimer = null;
     }
@@ -1563,6 +1565,8 @@ function renderTasks() {
       ${visibleTasks.map(task => {
         const status = completionStatus(task._id);
         const icon = taskIconMarkup(task);
+        const taskTitle = task.taskKind === "bio_link" ? t("bio_link_task_title") : task.title;
+        const taskDescription = task.taskKind === "bio_link" ? t("bio_link_task_desc") : task.description;
         const safeUrl = safeTaskHttpUrl(task.url).replaceAll("'", "\\'");
         let actionHtml;
 
@@ -1570,6 +1574,15 @@ function renderTasks() {
           actionHtml = status === "approved"
             ? `<button class="taskAction done" disabled>${t("task_btn_done")}</button>`
             : `<button class="taskAction pending" disabled>🔒 VIP ${formatPoints(task.vipPlanNumber)}</button>`;
+        } else if (task.taskKind === "bio_link") {
+          const completion = completionRecord(task._id);
+          const nextAvailableAt = completion?.nextAvailableAt ? new Date(completion.nextAvailableAt) : null;
+          const remaining = nextAvailableAt && Number.isFinite(nextAvailableAt.getTime())
+            ? nextAvailableAt.getTime() - (Date.now() + state.tasksServerOffsetMs)
+            : 0;
+          actionHtml = remaining > 0
+            ? `<button class="taskAction pending" data-task-state="COOLDOWN" data-bio-link-cooldown="true" data-until="${escapeHTML(nextAvailableAt.toISOString())}" disabled>${t("task_latest_post_available_in", { time: formatCountdown(remaining) })}</button>`
+            : `<button class="taskAction" data-verify="${escapeHTML(task._id)}" onclick="verifyTelegramTask('${escapeHTML(task._id)}')">${t("bio_link_task_verify")}</button>`;
         } else if (task.verifyType === "latest_post") {
           const completion = completionRecord(task._id);
           const nextAvailableAt = completion?.nextAvailableAt ? new Date(completion.nextAvailableAt) : null;
@@ -1624,8 +1637,8 @@ function renderTasks() {
         <div class="taskItem" style="flex-wrap:wrap">
           <div class="taskIcon">${icon}</div>
           <div class="taskBody">
-            <div class="taskTitle">${task.isSpecialOfDay ? `<span class="sponsoredTag">⭐ ${t("special_task_badge")}</span> ` : ""}${task.isSponsored ? `<span class="sponsoredTag">${t("task_sponsored_tag")}</span> ` : ""}${escapeHTML(task.title)}</div>
-            ${task.description ? `<div class="taskDesc">${escapeHTML(task.description)}</div>` : ""}
+            <div class="taskTitle">${task.isSpecialOfDay ? `<span class="sponsoredTag">⭐ ${t("special_task_badge")}</span> ` : ""}${task.isSponsored ? `<span class="sponsoredTag">${t("task_sponsored_tag")}</span> ` : ""}${escapeHTML(taskTitle)}</div>
+            ${taskDescription ? `<div class="taskDesc">${escapeHTML(taskDescription)}</div>` : ""}
             ${task.verifyType === "latest_post" ? `<div class="taskDesc">${t("task_latest_post_open_hint")}</div>` : ""}
             ${task.isSpecialOfDay && task.expiresAt ? `<div class="taskDesc" style="color:var(--warning)">⏳ ${t("special_task_deadline", { date: new Date(task.expiresAt).toLocaleString(state.language === "en" ? "en-US" : "fa-IR") })}</div>` : ""}
             <div class="taskReward">+${formatPoints(task.reward)} ${t("points_unit")}</div>

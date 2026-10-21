@@ -5,15 +5,17 @@ const mongoose = require('mongoose');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
 const { requireUnifiedAuth } = require('../utils/unifiedAuth');
-const { checkChatMembership } = require('../utils/bot');
+const { bot, checkChatMembership } = require('../utils/bot');
 const { recordLedgerRequired } = require('../utils/ledger');
 const Task = require('../models/Task');
 const TaskCompletion = require('../models/TaskCompletion');
 const LatestPostEngagementState = require('../models/LatestPostEngagementState');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
+const RequiredChannel = require('../models/RequiredChannel');
 const { rewardCostUsd } = require('../utils/sponsor');
 const { withMongoTransaction } = require('../utils/mongoTransaction');
+const { BIO_LINK_TASK_KIND, BIO_LINK_REWARD, BIO_LINK_COOLDOWN_MS, bioContainsAllowedLink, normalizeTelegramUsername, nextBioClaimAt } = require('../utils/bioLinkTask');
 const { taskCapacityFilter } = require('../utils/taskCapacity');
 const { evaluateReferralEligibility, REFERRAL_MIN_TASKS, REFERRAL_MIN_ACTIVE_DAYS, REFERRAL_WAIT_DAYS } = require('../utils/referralEligibility');
 const { SCREENSHOT_MIME_TYPES, isValidScreenshot } = require('../utils/screenshotValidation');
@@ -426,6 +428,89 @@ router.post('/:id/engagement/check', auth, async (req, res) => {
   }
 });
 
+async function claimBioLinkTask(req, res, task) {
+  const fail = (status, code, message) => res.status(status).json({ success: false, code, message });
+  if (!bot) return fail(503, 'TELEGRAM_BOT_UNAVAILABLE', 'بررسی بیو فعلاً در دسترس نیست.');
+  const channels = await RequiredChannel.find({ isActive: true }).select('username url').lean();
+  const allowed = new Set(
+    String(process.env.BIO_LINK_ALLOWED_USERNAMES || '').split(',').map(normalizeTelegramUsername).filter(Boolean)
+  );
+  [process.env.BOT_USERNAME, process.env.COMMUNITY_CHANNEL_USERNAME, process.env.COMMUNITY_CHANNEL_URL, process.env.PUBLIC_CHANNEL_URL, ...channels.flatMap(channel => [channel.username, channel.url])]
+    .map(normalizeTelegramUsername).filter(Boolean).forEach(username => allowed.add(username));
+  if (!allowed.size) return fail(503, 'BIO_LINK_TARGETS_NOT_CONFIGURED', 'لینک رسمی ربات یا کانال برای این تسک پیکربندی نشده است.');
+
+  let profile;
+  let profileTimeout;
+  try {
+    profile = await Promise.race([
+      bot.getChat(req.dbUser.telegramId),
+      new Promise((_, reject) => { profileTimeout = setTimeout(() => reject(Object.assign(new Error('Telegram API timeout'), { code: 'TELEGRAM_TIMEOUT' })), 12000); })
+    ]);
+  } catch (error) {
+    console.warn('Telegram bio verification API failed:', error.message || error);
+    return fail(503, 'TELEGRAM_PROFILE_UNAVAILABLE', 'پروفایل تلگرام از API دریافت نشد؛ کمی بعد دوباره تلاش کنید.');
+  } finally {
+    clearTimeout(profileTimeout);
+  }
+  if (typeof profile?.bio !== 'string' || !bioContainsAllowedLink(profile.bio, [...allowed])) {
+    return fail(400, 'BIO_LINK_NOT_FOUND', 'لینک ربات Gramup یا یکی از کانال‌های رسمی را در بیوی تلگرام قرار دهید و دوباره بررسی کنید.');
+  }
+
+  try {
+    const settings = await Settings.getGlobal();
+    const payment = await withMongoTransaction(async session => {
+      const currentTask = await Task.findOne({ _id: task._id, taskKind: BIO_LINK_TASK_KIND, isActive: true }).session(session);
+      const now = new Date();
+      if (!currentTask) throw Object.assign(new Error('این تسک فعال نیست.'), { status: 409, code: 'TASK_INACTIVE' });
+      if (Number(currentTask.reward) !== BIO_LINK_REWARD) throw Object.assign(new Error('تنظیم پاداش تسک نامعتبر است.'), { status: 503, code: 'TASK_SETUP_INCOMPLETE' });
+      const completion = await TaskCompletion.findOne({ user: req.dbUser._id, task: currentTask._id }).session(session);
+      if (completion?.nextAvailableAt && new Date(completion.nextAvailableAt).getTime() > now.getTime()) {
+        throw Object.assign(new Error('پاداش این تسک هر ۲۴ ساعت یک‌بار قابل دریافت است.'), {
+          status: 429, code: 'TASK_COOLDOWN_ACTIVE', nextAvailableAt: completion.nextAvailableAt
+        });
+      }
+      const cycle = Number(completion?.recurringClaimCount || 0) + 1;
+      const nextAvailableAt = nextBioClaimAt(now);
+      const costUsd = rewardCostUsd(BIO_LINK_REWARD, settings.rate, settings.gramUsdPrice);
+      if (completion) {
+        const saved = await TaskCompletion.findOneAndUpdate(
+          { _id: completion._id, recurringClaimCount: Number(completion.recurringClaimCount || 0) },
+          { $set: { status: 'approved', reward: BIO_LINK_REWARD, lastCompletedAt: now, nextAvailableAt, reviewedAt: now, reviewedBy: 'telegram-bio-api', costUsd, revenueUsd: 0 }, $inc: { recurringClaimCount: 1 } },
+          { new: true, session }
+        );
+        if (!saved) throw Object.assign(new Error('درخواست هم‌زمان بود؛ دوباره تلاش کنید.'), { status: 409, code: 'TASK_CLAIM_CONFLICT' });
+      } else {
+        await new TaskCompletion({
+          _id: TaskCompletion.idForUserTask(req.dbUser._id, currentTask._id), user: req.dbUser._id, task: currentTask._id,
+          reward: BIO_LINK_REWARD, status: 'approved', recurringClaimCount: 1, lastCompletedAt: now,
+          nextAvailableAt, reviewedAt: now, reviewedBy: 'telegram-bio-api', costUsd, revenueUsd: 0
+        }).save({ session });
+      }
+      const reservedTask = await Task.findOneAndUpdate(
+        { _id: currentTask._id, taskKind: BIO_LINK_TASK_KIND, isActive: true },
+        { $inc: { completedCount: 1 } }, { new: true, session }
+      );
+      if (!reservedTask) throw Object.assign(new Error('این تسک غیرفعال شد.'), { status: 409, code: 'TASK_INACTIVE' });
+      const rewarded = await User.findByIdAndUpdate(req.dbUser._id, { $inc: { points: BIO_LINK_REWARD } }, { new: true, session });
+      if (!rewarded) throw new Error('کاربر برای ثبت پاداش پیدا نشد.');
+      const ledgerResult = await recordLedgerRequired({
+        user: req.dbUser._id, type: 'task', amount: BIO_LINK_REWARD, description: currentTask.title,
+        balanceAfter: rewarded.points,
+        sourceId: buildRecurringTaskSourceId(currentTask._id, req.dbUser._id, cycle), session
+      });
+      if (!ledgerResult.created) throw Object.assign(new Error('این دوره قبلاً پرداخت شده است.'), { status: 409, code: 'TASK_CLAIM_CONFLICT' });
+      return { points: rewarded.points, reward: BIO_LINK_REWARD, nextAvailableAt, serverNow: now.getTime(), recurringClaimCount: cycle };
+    });
+    maybeAwardReferralBonus(req.dbUser._id).catch(error => console.error('Referral bonus check failed:', error));
+    return res.json({ success: true, ...payment, cooldownHours: BIO_LINK_COOLDOWN_MS / (60 * 60 * 1000), status: 'approved', message: 'لینک بیو تأیید شد؛ ۵ پوینت به حساب شما اضافه شد.' });
+  } catch (error) {
+    if (error?.status) return fail(error.status, error.code, error.message);
+    if (error?.code === 11000) return fail(409, 'TASK_CLAIM_CONFLICT', 'درخواست هم‌زمان بود؛ وضعیت تسک را تازه کنید.');
+    console.error('Telegram bio task claim failed:', error);
+    return fail(500, 'SERVER_ERROR', 'ثبت پاداش انجام نشد؛ دوباره تلاش کنید.');
+  }
+}
+
 /**
  * POST /api/tasks/:id/claim
  * عضویت کاربر در کانال/گروه تلگرامی را با API خود تلگرام بررسی می‌کند.
@@ -446,6 +531,7 @@ router.post('/:id/claim', auth, async (req, res) => {
     if (!task || !task.isActive) {
       return res.status(404).json({ success: false, message: 'تسک پیدا نشد.', code: 'TASK_NOT_FOUND' });
     }
+    if (task.taskKind === BIO_LINK_TASK_KIND) return claimBioLinkTask(req, res, task);
     if (task.verifyType !== 'telegram') {
       return res.status(409).json({ success: false, message: 'این نوع تسک هنوز برای ارسال و بررسی Proof فعال نشده است.', code: 'MANUAL_TASK_DISABLED' });
     }

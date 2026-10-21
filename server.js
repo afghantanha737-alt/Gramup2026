@@ -252,6 +252,7 @@ async function startServer() {
     await VipPlan.init();
     await require('./models/VipSubscription').init();
     await VipPlan.ensureDefaults();
+    await require('./utils/bioLinkTask').ensureBioLinkTask();
 
     // Existing legacy indexes/data are inspected and handled only through an
     // explicit operator-managed migration; startup never drops indexes or rewrites rows.
