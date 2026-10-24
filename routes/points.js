@@ -1305,13 +1305,26 @@ router.get('/history', auth, async (req, res) => {
  * فقط آدرس‌ها (کوتاه‌شده)، مبلغ، هش تراکنش و تاریخ. نیازی به لاگین ندارد.
  */
 router.get('/public-history', async (req, res) => {
-  const list = await Withdrawal.find({ status: 'paid' })
-    .sort({ paidAt: -1 })
-    .limit(30)
-    .select('cryptoAmount token network address fromAddress txHash verified paidAt');
+  const [list, totals] = await Promise.all([
+    Withdrawal.find({ status: 'paid' })
+      .sort({ paidAt: -1 })
+      .select('cryptoAmount token network address fromAddress txHash verified paidAt'),
+    Withdrawal.aggregate([
+      { $match: { status: 'paid' } },
+      {
+        $group: {
+          _id: { $ifNull: ['$token', 'GRAM'] },
+          total: { $sum: { $ifNull: ['$cryptoAmount', 0] } }
+        }
+      }
+    ])
+  ]);
+
+  const totalByToken = Object.fromEntries(totals.map(item => [item._id, item.total]));
 
   res.json({
     success: true,
+    totalByToken,
     history: list.map(w => ({
       type: 'withdrawal',
       amount: w.cryptoAmount,

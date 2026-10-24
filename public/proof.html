@@ -81,7 +81,7 @@ const I18N = {
     channelBannerDesc: "All real user withdrawals and TON transaction proofs are posted live in our verified channel.",
     channelBtn: "Join @GramUpPayouts ↗",
     statTotal: "Total in records", statCount: "Records shown", statVerified: "With transaction hash",
-    listTitle: "Recent payments", loading: "Loading…", cta: "Open Gramup",
+    listTitle: "All completed payments", loading: "Loading…", cta: "Open Gramup",
     note: "Full wallet addresses are withheld to protect users' privacy. When a transaction hash is available, it links directly to a public TON explorer for independent review.",
     empty: "No completed payment records yet. Records will appear here after a payment is completed and recorded.",
     to: "To", from: "From", txid: "Tx hash", view: "View on Tonviewer ↗",
@@ -95,7 +95,7 @@ const I18N = {
     channelBannerDesc: "تمام برداشت‌های کاربران و لینک‌های تراکنش بلاک‌چین TON در کانال عمومی منتشر می‌شوند.",
     channelBtn: "عضویت در @GramUpPayouts ↗",
     statTotal: "مجموع ثبت‌شده", statCount: "سوابق نمایش‌داده‌شده", statVerified: "دارای هش تراکنش",
-    listTitle: "پرداخت‌های اخیر", loading: "در حال بارگذاری...", cta: "باز کردن Gramup",
+    listTitle: "همه پرداخت‌های تکمیل‌شده", loading: "در حال بارگذاری...", cta: "باز کردن Gramup",
     note: "آدرس کامل کیف‌پول‌ها برای حفظ حریم خصوصی نمایش داده نمی‌شود. وقتی هش تراکنش در دسترس باشد، لینک مستقیم explorer برای بررسی عمومی نشان داده می‌شود.",
     empty: "هنوز سابقه پرداخت تکمیل‌شده‌ای وجود ندارد. پس از تکمیل و ثبت پرداخت، سابقه در اینجا نمایش داده می‌شود.",
     to: "به آدرس", from: "از آدرس", txid: "هش تراکنش", view: "مشاهده در Tonviewer ↗",
@@ -191,11 +191,15 @@ async function load() {
     const history = Array.isArray(data.history) ? data.history : [];
     lastHistory = history;
 
-    const totalsByToken = {};
+    const totalsByToken = data.totalByToken && typeof data.totalByToken === "object"
+      ? data.totalByToken
+      : {};
     let hashCount = 0;
     history.forEach(item => {
-      const token = item.token || "";
-      totalsByToken[token] = (totalsByToken[token] || 0) + (Number(item.amount) || 0);
+      if (!data.totalByToken) {
+        const token = item.token || "";
+        totalsByToken[token] = (totalsByToken[token] || 0) + (Number(item.amount) || 0);
+      }
       if (item.txHash) hashCount += 1;
     });
     const totalText = Object.entries(totalsByToken).map(([token, sum]) =>
