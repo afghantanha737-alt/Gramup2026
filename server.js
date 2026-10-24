@@ -268,6 +268,13 @@ async function startServer() {
     const { runDailyReminderSweep } = require('./utils/dailyReminder');
     setInterval(() => { void runJob('daily-reminder-sweep', 'Daily reminder sweep', runDailyReminderSweep); }, 10 * 60 * 1000);
 
+    // Automatic English daily check-in reminder; users are de-duplicated using
+    // the existing per-user reminder timestamp, so no database schema change is needed.
+    const { runDailyCheckinNotificationSweep } = require('./utils/dailyCheckinNotification');
+    setInterval(() => {
+      void runJob('daily-checkin-notification-sweep', 'Daily check-in notification sweep', runDailyCheckinNotificationSweep);
+    }, 60 * 1000);
+
     const { settleClosedWeeks } = require('./utils/weeklyLeaderboardSettlement');
     void runJob('weekly-leaderboard-settlement', 'Initial weekly settlement', settleClosedWeeks);
     setInterval(() => { void runJob('weekly-leaderboard-settlement', 'Scheduled weekly settlement', settleClosedWeeks); }, 60 * 1000);
