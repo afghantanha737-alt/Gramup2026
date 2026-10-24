@@ -3085,6 +3085,18 @@ let vipCountdownTimer = null;
 let vipCountdownRefreshPending = false;
 const vipClaimingIds = new Set();
 const vipPurchasingPlanNumbers = new Set();
+let vipSelectedCategory = "starter";
+
+function setVipPlanCategory(category) {
+  if (!["starter", "pro", "ultimate"].includes(category)) return;
+  vipSelectedCategory = category;
+  if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") {
+    const content = $("#content");
+    if (content) content.innerHTML = renderProfileVip();
+    startVipCountdown();
+  }
+}
+window.setVipPlanCategory = setVipPlanCategory;
 
 function stopVipCountdown() {
   if (vipCountdownTimer) clearInterval(vipCountdownTimer);
@@ -3127,30 +3139,48 @@ function startVipCountdown() {
 function renderProfileVip() {
   const plans = state.vipPlans || [];
   const subscriptions = state.vipSubscriptions || [];
-  const planCards = plans.map(plan => {
+  const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
+  const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
+  const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
+  const iconByPlan = { 1: "◈", 2: "✦", 3: "♛", 4: "✦", 5: "⬡", 6: "✧", 7: "◆", 8: "♦", 9: "⬦", 10: "♛" };
+  const planCards = visiblePlans.map(plan => {
     const available = plan.enabled === true && plan.comingSoon !== true;
-    const statusKey = plan.comingSoon ? "vip_status_coming_soon" : available ? "vip_status_active" : "vip_status_inactive";
     const canAfford = Number(state.points) >= Number(plan.pricePoints);
-    const buttonLabel = plan.comingSoon ? t("vip_status_coming_soon") : available ? (canAfford ? t("vip_buy") : t("vip_insufficient_points")) : t("vip_status_inactive");
+    const neededPoints = Math.max(0, Number(plan.pricePoints) - (Number(state.points) || 0));
     const planNumber = Number(plan.planNumber);
-    const theme = planNumber === 1 ? "bronze" : planNumber === 2 ? "silver" : planNumber === 3 ? "gold" : "future";
+    const isOwned = subscriptions.some(subscription => Number(subscription.planNumber) === planNumber && subscription.status === "active");
+    const theme = themeByPlan[planNumber] || "sapphire";
+    const statusKey = plan.comingSoon ? "vip_status_coming_soon"
+      : !available ? "vip_status_inactive"
+        : isOwned ? "vip_status_owned"
+          : planNumber === 3 ? "vip_badge_popular"
+            : planNumber === 6 ? "vip_badge_recommended"
+              : planNumber === 10 ? "vip_badge_best_value" : "";
+    const statusClass = isOwned ? "vipPlanBadge--owned"
+      : planNumber === 3 ? "vipPlanBadge--popular"
+        : planNumber === 6 ? "vipPlanBadge--recommended"
+          : planNumber === 10 ? "vipPlanBadge--best-value" : "vipPlanBadge--status";
+    const buttonLabel = plan.comingSoon ? t("vip_status_coming_soon")
+      : available ? (canAfford ? t("vip_buy") : t("vip_need_more_points", { n: formatPoints(neededPoints) }))
+        : t("vip_status_inactive");
+    const totalRewardPoints = plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100);
+    const dailyAveragePoints = plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays));
+    const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
       <article class="vipPlanCard vipPlanCard--${theme}">
         <div class="vipPlanGlow" aria-hidden="true"></div>
         <div class="vipPlanTopline">
-          <div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">${theme === "bronze" ? "◈" : theme === "silver" ? "✦" : theme === "gold" ? "♛" : "◇"}</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</div></div>
-          <span class="badge ${available ? "success" : "info"}">${t(statusKey)}</span>
+          <div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">${iconByPlan[planNumber] || "✦"}</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</div></div>
+          ${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}
         </div>
-        ${`
-          <div class="vipPlanStats">
-            <div class="vipPlanStat"><span>${t("vip_price", { n: formatPoints(plan.pricePoints) })}</span><b>${formatPoints(plan.pricePoints)}</b></div>
-            <div class="vipPlanStat"><span>${t("vip_rate", { n: formatNumber(plan.monthlyRewardPercent, 2) })}</span><b>${formatNumber(plan.monthlyRewardPercent, 2)}%</b></div>
-            <div class="vipPlanStat"><span>${t("vip_duration", { n: formatPoints(plan.durationDays) })}</span><b>${formatPoints(plan.durationDays)}</b></div>
-          </div>
-          <div class="vipPlanReward"><span>${t("vip_total_reward", { n: formatPoints(plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100)) })}</span><b>${formatPoints(plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100))}</b></div>
-          <div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays))) })}</div>`}
-        <button type="button" class="vipPlanButton ${available ? "vipPlanButton--primary" : "vipPlanButton--secondary"}" ${available && canAfford && !vipPurchasingPlanNumbers.has(Number(plan.planNumber)) ? "" : "disabled"} onclick="purchaseVipPlan(${Number(plan.planNumber)})">${vipPurchasingPlanNumbers.has(Number(plan.planNumber)) ? t("vip_buying") : buttonLabel}</button>
-        ${available && !canAfford ? `<div class="vipPlanBalance">${t("vip_balance", { n: formatPoints(state.points) })}</div>` : ""}
+        <div class="vipPlanStats">
+          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${formatPoints(plan.pricePoints)}</b></div>
+          <div class="vipPlanStat"><span>${t("vip_plan_profit_label")}</span><b>${formatNumber(plan.monthlyRewardPercent, 2)}%</b></div>
+          <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(plan.durationDays) })}</b></div>
+        </div>
+        <div class="vipPlanReward"><span>${t("vip_total_reward_label")}</span><b>${formatPoints(totalRewardPoints)} ${t("vip_points_unit")}</b></div>
+        <div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>
+        <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})">${isPurchasing ? t("vip_buying") : buttonLabel}</button>
       </article>`;
   }).join("");
 
@@ -3188,27 +3218,37 @@ function renderProfileVip() {
 
   return `
     <style>
-      .vipRedesign{--vip-ink:#f7f5ff;--vip-muted:#a8a5b8;--vip-line:rgba(255,255,255,.1);margin:0 -2px;padding:4px 0 24px;background:radial-gradient(circle at 86% 0%,rgba(124,58,237,.2),transparent 35%),linear-gradient(180deg,rgba(11,8,22,.24),transparent 70%);color:var(--vip-ink)}
-      .vipRedesign .sectionHeader{margin-bottom:14px}.vipRedesign .sectionTitle{letter-spacing:-.2px}.vipRedesign .sectionMore{color:#c4b5fd}
-      .vipHero{padding:18px;border:1px solid rgba(167,139,250,.2);border-radius:24px;background:linear-gradient(145deg,rgba(76,29,149,.28),rgba(16,13,29,.84));box-shadow:0 18px 42px rgba(30,16,70,.25);margin-bottom:18px}.vipHero .cardSubtitle{color:var(--vip-muted);line-height:1.8}
-      .vipPlanCard,.vipSubscriptionCard{position:relative;isolation:isolate;overflow:hidden;margin:12px 0;padding:17px;border:1px solid var(--vip-line);border-radius:24px;background:linear-gradient(145deg,rgba(255,255,255,.09),rgba(17,15,28,.9) 58%);box-shadow:0 15px 35px rgba(0,0,0,.22)}.vipPlanGlow{position:absolute;z-index:-1;width:160px;height:160px;right:-75px;top:-90px;border-radius:50%;filter:blur(3px);opacity:.7}.vipPlanCard--bronze{border-color:rgba(205,127,50,.38)}.vipPlanCard--bronze .vipPlanGlow{background:rgba(180,83,9,.35)}.vipPlanCard--silver{border-color:rgba(203,213,225,.35)}.vipPlanCard--silver .vipPlanGlow{background:rgba(148,163,184,.28)}.vipPlanCard--gold{border-color:rgba(250,204,21,.45);background:linear-gradient(145deg,rgba(120,72,12,.25),rgba(25,19,24,.92) 62%)}.vipPlanCard--gold .vipPlanGlow{background:rgba(234,179,8,.4)}.vipPlanCard--future{opacity:.9}
-      .vipPlanTopline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}.vipPlanTitleWrap{display:flex;align-items:center;gap:9px;min-width:0}.vipPlanMark{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:12px;color:#e9d5ff;background:rgba(139,92,246,.18);font-size:20px}.vipPlanCard--bronze .vipPlanMark{color:#fdba74;background:rgba(180,83,9,.2)}.vipPlanCard--silver .vipPlanMark{color:#e2e8f0;background:rgba(148,163,184,.2)}.vipPlanCard--gold .vipPlanMark{color:#fde68a;background:rgba(234,179,8,.2)}.vipPlanTitle{font-size:16px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vipPlanCard .badge,.vipSubscriptionCard .badge{flex:0 0 auto}
-      .vipPlanStats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}.vipPlanStat{min-width:0;padding:10px 8px;border:1px solid rgba(255,255,255,.07);border-radius:15px;background:rgba(0,0,0,.16);text-align:center}.vipPlanStat span{display:block;min-height:28px;color:var(--vip-muted);font-size:9px;line-height:1.5}.vipPlanStat b{display:block;margin-top:3px;font-size:13px;color:#fff;direction:ltr}.vipPlanReward{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;border-radius:15px;background:rgba(139,92,246,.11);color:var(--vip-muted);font-size:10px}.vipPlanReward b{color:#ddd6fe;font-size:14px}.vipPlanDaily,.vipPlanBalance{margin-top:9px;color:var(--vip-muted);font-size:10px}.vipPlanButton{width:100%;min-height:44px;margin-top:14px;padding:11px 14px;border-radius:14px;font-size:12px;font-weight:900;transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease}.vipPlanButton:active{transform:scale(.98)}.vipPlanButton--primary{color:#fff;background:linear-gradient(135deg,#a78bfa,#7c3aed);box-shadow:0 9px 22px rgba(124,58,237,.28)}.vipPlanButton--secondary{color:#c4b5fd;background:rgba(139,92,246,.1);border:1px solid rgba(167,139,250,.25)}.vipPlanButton:disabled{opacity:.48;box-shadow:none}.vipSubscriptionGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.vipSubscriptionGrid>div{padding:9px;border-radius:12px;background:rgba(0,0,0,.14);color:var(--vip-muted);font-size:10px;line-height:1.6}.vipSubscriptionCard button{width:100%;margin-top:12px}
-      @media (max-width:420px){.vipPlanCard,.vipSubscriptionCard{padding:14px;border-radius:20px}.vipPlanStats{gap:5px}.vipPlanStat{padding:8px 4px}.vipPlanStat span{font-size:8px}.vipPlanStat b{font-size:12px}.vipPlanTitle{font-size:14px}.vipPlanTopline{gap:6px}.vipSubscriptionGrid{gap:6px}}
+      .vipRedesign{--vip-ink:#f7f7ff;--vip-muted:#a8aec2;--vip-line:rgba(255,255,255,.1);margin:0 -2px;padding:4px 0 26px;background:radial-gradient(circle at 85% 0%,rgba(34,211,238,.12),transparent 31%),radial-gradient(circle at 5% 28%,rgba(124,58,237,.13),transparent 28%),linear-gradient(180deg,rgba(7,12,24,.28),transparent 70%);color:var(--vip-ink)}
+      .vipRedesign .sectionHeader{margin-bottom:14px}.vipRedesign .sectionTitle{letter-spacing:-.2px}.vipRedesign .sectionMore{color:#c4d8ff}
+      .vipHero{position:relative;isolation:isolate;overflow:hidden;padding:19px;margin:0 0 20px;border:1px solid rgba(112,218,255,.24);border-radius:24px;background:radial-gradient(circle at 92% 15%,rgba(34,211,238,.2),transparent 34%),linear-gradient(140deg,rgba(18,66,99,.72),rgba(13,19,37,.96) 65%);box-shadow:0 18px 42px rgba(3,16,35,.3)}.vipHero:after{position:absolute;z-index:-1;content:"";width:170px;height:170px;right:-96px;bottom:-120px;border:1px solid rgba(103,232,249,.22);border-radius:50%;box-shadow:0 0 0 20px rgba(103,232,249,.035),0 0 0 42px rgba(103,232,249,.025)}.vipHeroTop{display:flex;align-items:center;justify-content:space-between;gap:12px}.vipHeroKicker{display:block;color:#91a5bd;font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase}.vipBalanceLabel{margin-top:7px;color:#d4e3f3;font-size:14px;font-weight:700}.vipHeroIcon{display:grid;place-items:center;width:42px;height:42px;border:1px solid rgba(103,232,249,.2);border-radius:15px;background:rgba(34,211,238,.1);color:#67e8f9;font-size:23px}.vipBalanceValue{display:flex;align-items:baseline;gap:8px;margin:9px 0 16px;direction:ltr}.vipBalanceValue strong{font-size:clamp(30px,8vw,43px);font-weight:950;letter-spacing:-1.3px;line-height:1.1;font-variant-numeric:tabular-nums}.vipBalanceValue span{color:#67e8f9;font-size:14px;font-weight:800}.vipHeroBottom{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:13px;border-top:1px solid rgba(255,255,255,.1)}.vipDailySummary span{display:block;color:var(--vip-muted);font-size:10px}.vipDailySummary b{display:block;margin-top:4px;color:#a5f3fc;font-size:14px}.vipHeroButton{flex:0 0 auto;min-height:39px;padding:9px 14px;border:1px solid rgba(103,232,249,.22);border-radius:13px;background:rgba(34,211,238,.12);color:#cffafe;font-size:12px;font-weight:850}
+      .vipCatalog{margin-top:18px}.vipCatalogHeading{margin:0 4px 12px}.vipCatalogHeading h3{margin:0;color:var(--vip-ink);font-size:17px;font-weight:900}.vipCatalogHeading p{margin:5px 0 0;color:var(--vip-muted);font-size:11px;line-height:1.6}
+      .vipPlanTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 12px;padding:5px;border:1px solid rgba(255,255,255,.08);border-radius:17px;background:rgba(4,10,22,.58)}.vipTierTab{min-width:0;padding:9px 5px;border:1px solid transparent;border-radius:12px;background:transparent;color:#9da8bc;text-align:center;transition:background .18s ease,border-color .18s ease,color .18s ease}.vipTierTab span{display:block;font-size:11px;font-weight:850}.vipTierTab small{display:block;margin-top:3px;color:inherit;font-size:9px;opacity:.8}.vipTierTab[aria-selected="true"]{border-color:rgba(103,232,249,.27);background:linear-gradient(135deg,rgba(34,211,238,.18),rgba(59,130,246,.12));color:#dffaff;box-shadow:0 5px 16px rgba(34,211,238,.09)}
+      .vipPlanCard,.vipSubscriptionCard{position:relative;isolation:isolate;overflow:hidden;margin:11px 0;padding:17px;border:1px solid var(--vip-line);border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(12,17,30,.94) 60%);box-shadow:0 14px 32px rgba(0,0,0,.22)}.vipPlanGlow{position:absolute;z-index:-1;width:170px;height:170px;right:-88px;top:-104px;border-radius:50%;filter:blur(4px);opacity:.75}.vipPlanCard--bronze{border-color:rgba(205,127,50,.4)}.vipPlanCard--bronze .vipPlanGlow{background:rgba(180,83,9,.35)}.vipPlanCard--silver{border-color:rgba(203,213,225,.35)}.vipPlanCard--silver .vipPlanGlow{background:rgba(148,163,184,.27)}.vipPlanCard--gold{border-color:rgba(250,204,21,.46);background:linear-gradient(145deg,rgba(120,72,12,.25),rgba(20,19,27,.94) 62%)}.vipPlanCard--gold .vipPlanGlow{background:rgba(234,179,8,.4)}.vipPlanCard--neon{border-color:rgba(59,130,246,.52);background:linear-gradient(145deg,rgba(30,64,175,.2),rgba(12,17,30,.95) 63%)}.vipPlanCard--neon .vipPlanGlow{background:rgba(37,99,235,.43)}.vipPlanCard--cyan{border-color:rgba(34,211,238,.48);background:linear-gradient(145deg,rgba(8,145,178,.2),rgba(12,17,30,.95) 63%)}.vipPlanCard--cyan .vipPlanGlow{background:rgba(6,182,212,.4)}.vipPlanCard--sapphire{border-color:rgba(96,165,250,.48);background:linear-gradient(145deg,rgba(29,78,216,.23),rgba(12,17,30,.95) 63%)}.vipPlanCard--sapphire .vipPlanGlow{background:rgba(59,130,246,.43)}.vipPlanCard--emerald{border-color:rgba(52,211,153,.42);background:linear-gradient(145deg,rgba(5,150,105,.2),rgba(12,17,30,.95) 63%)}.vipPlanCard--emerald .vipPlanGlow{background:rgba(16,185,129,.4)}.vipPlanCard--ruby{border-color:rgba(251,113,133,.45);background:linear-gradient(145deg,rgba(190,24,93,.18),rgba(12,17,30,.95) 63%)}.vipPlanCard--ruby .vipPlanGlow{background:rgba(244,63,94,.38)}.vipPlanCard--ultimate{border:1px solid transparent;background:linear-gradient(145deg,rgba(53,29,75,.97),rgba(12,17,30,.98) 65%) padding-box,linear-gradient(130deg,#facc15,#a855f7,#f9a8d4,#facc15) border-box;box-shadow:0 0 28px rgba(168,85,247,.2),0 14px 32px rgba(0,0,0,.25)}.vipPlanCard--ultimate .vipPlanGlow{background:rgba(168,85,247,.52)}
+      .vipPlanTopline{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:15px}.vipPlanTitleWrap{display:flex;align-items:center;gap:9px;min-width:0}.vipPlanMark{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border:1px solid rgba(255,255,255,.09);border-radius:13px;background:rgba(255,255,255,.055);color:#dbeafe;font-size:19px}.vipPlanCard--bronze .vipPlanMark{color:#fdba74;background:rgba(180,83,9,.2)}.vipPlanCard--silver .vipPlanMark{color:#e2e8f0;background:rgba(148,163,184,.2)}.vipPlanCard--gold .vipPlanMark{color:#fde68a;background:rgba(234,179,8,.2)}.vipPlanCard--neon .vipPlanMark,.vipPlanCard--sapphire .vipPlanMark{color:#93c5fd;background:rgba(37,99,235,.16)}.vipPlanCard--cyan .vipPlanMark{color:#67e8f9;background:rgba(6,182,212,.15)}.vipPlanCard--emerald .vipPlanMark{color:#6ee7b7;background:rgba(16,185,129,.14)}.vipPlanCard--ruby .vipPlanMark{color:#fda4af;background:rgba(244,63,94,.14)}.vipPlanCard--ultimate .vipPlanMark{color:#f5d0fe;background:linear-gradient(135deg,rgba(250,204,21,.2),rgba(168,85,247,.25))}.vipPlanTitle{font-size:15px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vipPlanBadge{flex:0 0 auto;padding:6px 9px;border:1px solid rgba(255,255,255,.09);border-radius:999px;background:rgba(255,255,255,.055);color:#c5cfdd;font-size:9px;font-weight:850;line-height:1.2}.vipPlanBadge--owned{border-color:rgba(74,222,128,.25);background:rgba(34,197,94,.11);color:#86efac}.vipPlanBadge--popular{border-color:rgba(250,204,21,.24);background:rgba(234,179,8,.1);color:#fde68a}.vipPlanBadge--recommended{border-color:rgba(103,232,249,.24);background:rgba(34,211,238,.1);color:#a5f3fc}.vipPlanBadge--best-value{border-color:rgba(216,180,254,.27);background:rgba(168,85,247,.13);color:#e9d5ff}.vipPlanBadge--status{color:#b4bfd0}
+      .vipPlanStats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:10px}.vipPlanStat{min-width:0;padding:10px 7px;border:1px solid rgba(255,255,255,.075);border-radius:14px;background:rgba(0,0,0,.18);text-align:center}.vipPlanStat span{display:block;min-height:27px;color:var(--vip-muted);font-size:9px;line-height:1.45}.vipPlanStat b{display:block;margin-top:4px;color:#fff;font-size:13px;font-variant-numeric:tabular-nums;direction:ltr}.vipPlanReward{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;border:1px solid rgba(255,255,255,.055);border-radius:14px;background:rgba(139,92,246,.09);color:#c2c7d4;font-size:11px}.vipPlanReward b{color:#e9d5ff;font-size:14px;font-variant-numeric:tabular-nums;direction:ltr}.vipPlanDaily{margin-top:9px;color:var(--vip-muted);font-size:10px}.vipPlanButton{width:100%;min-height:45px;margin-top:14px;padding:11px 13px;border:1px solid transparent;border-radius:14px;font-size:12px;font-weight:900;transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease}.vipPlanButton:not(:disabled):active{transform:scale(.985)}.vipPlanButton--primary{color:#fff;background:linear-gradient(135deg,#4f8cff,#7c3aed);box-shadow:0 9px 22px rgba(59,130,246,.2)}.vipPlanButton--insufficient{border-color:rgba(148,163,184,.17);background:rgba(71,85,105,.18);color:#b5c1d2;opacity:1!important}.vipPlanButton--secondary{border-color:rgba(167,139,250,.18);background:rgba(139,92,246,.08);color:#c4b5fd}.vipPlanButton:disabled{cursor:not-allowed;box-shadow:none}.vipPlanList>.vipEmptyTier{padding:18px 12px;border:1px dashed rgba(255,255,255,.13);border-radius:16px;color:var(--vip-muted);font-size:12px;text-align:center}.vipSubscriptionGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.vipSubscriptionGrid>div{padding:9px;border-radius:12px;background:rgba(0,0,0,.14);color:var(--vip-muted);font-size:10px;line-height:1.6}.vipSubscriptionCard button{width:100%;margin-top:12px}.vipPlanCard .badge,.vipSubscriptionCard .badge{flex:0 0 auto}
+      .vipTierTab:focus-visible,.vipHeroButton:focus-visible,.vipPlanButton:focus-visible{outline:2px solid #67e8f9;outline-offset:2px}
+      @media (max-width:420px){.vipPlanCard,.vipSubscriptionCard{padding:14px;border-radius:20px}.vipPlanStats{gap:5px}.vipPlanStat{padding:8px 4px}.vipPlanStat span{font-size:8px}.vipPlanStat b{font-size:11px}.vipPlanTitle{font-size:14px}.vipPlanTopline{gap:6px}.vipPlanBadge{padding:5px 7px;font-size:8px}.vipSubscriptionGrid{gap:6px}.vipHero{padding:16px}.vipBalanceValue strong{font-size:34px}}
     </style>
     <div class="vipRedesign">
     <div class="sectionHeader">
       <button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button>
       <h2 class="sectionTitle">${t("vip_title")}</h2><span></span>
     </div>
-    <div class="vipHero vipHeroReference">
-      <div class="vipHeroBrand"><img src="img/gramup-logo-new.jpg" alt="Gramup"><div><strong>Gram<span>up</span></strong><small>${state.user?.id ? `ID ${escapeHTML(state.user.id)}` : t("vip_title")}</small></div></div>
-      <div class="vipHeroRows"><div><span>${t("vip_current_balance")}</span><b>${formatPoints(state.points)} Points</b></div><div><span>${t("vip_daily_reward_summary")}</span><b>${formatPoints(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0))} Points</b></div></div>
-      <button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanCard')?.scrollIntoView({behavior:'smooth',block:'start'})">${t("vip_buy")}</button>
+    <div class="vipHero" aria-label="${t("vip_current_balance")}">
+      <div class="vipHeroTop"><div><span class="vipHeroKicker">${t("vip_membership_kicker")}</span><div class="vipBalanceLabel">${t("vip_current_balance")}</div></div><span class="vipHeroIcon" aria-hidden="true">✦</span></div>
+      <div class="vipBalanceValue"><strong>${formatPoints(state.points)}</strong><span>${t("vip_points_unit")}</span></div>
+      <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_daily_reward_summary")}</span><b>${formatPoints(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0))} ${t("vip_points_unit")}</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
     </div>
     ${subscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t("vip_active_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
-    <h3 class="sectionTitle" style="margin:18px 4px 8px">${t("vip_title")}</h3>
-    ${planCards || `<div class="card"><div class="emptyDesc">${t("vip_empty_plans")}</div></div>`}
+    <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
+      <div class="vipCatalogHeading"><h3>${t("vip_catalog_title")}</h3><p>${t("vip_intro")}</p></div>
+      <div class="vipPlanTabs" role="tablist" aria-label="${t("vip_tier_tabs_label")}">
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "starter"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('starter')"><span>${t("vip_tier_starter")}</span><small>1–3</small></button>
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "pro"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('pro')"><span>${t("vip_tier_pro")}</span><small>4–7</small></button>
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "ultimate"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('ultimate')"><span>${t("vip_tier_ultimate")}</span><small>8–10</small></button>
+      </div>
+      <div class="vipPlanList" id="vipPlanGrid" role="tabpanel" aria-live="polite">${plans.length ? (planCards || `<div class="vipEmptyTier">${t("vip_category_empty")}</div>`) : `<div class="card"><div class="emptyDesc">${t("vip_empty_plans")}</div></div>`}</div>
+    </section>
     </div>
   `;
 }

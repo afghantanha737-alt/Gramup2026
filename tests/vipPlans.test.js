@@ -78,7 +78,11 @@ assert.match(server, /settleMaturedVipSubscriptions\(\)/);
 assert.match(app, /\/api\/points\/vip\/purchase/);
 assert.match(app, /\/api\/points\/vip\/\$\{encodeURIComponent\(subscriptionId\)\}\/claim/);
 assert.match(app, /getPendingIdempotencyKey\(scope\)/);
-assert.match(app, /vip_insufficient_points/);
+assert.match(app, /vip_need_more_points/);
+assert.match(app, /function setVipPlanCategory\(category\)/);
+assert.match(app, /vipPlanCard--ultimate/);
+assert.match(app, /isOwned \? "vip_status_owned"/);
+assert.doesNotMatch(app, /vipPlanBalance/);
 assert.match(app, /function renderProfileVip\(\)/);
 assert.match(vipPlanModel, /planNumber: 10, pricePoints: 100000, monthlyRewardPercent: 15/, 'catalog seed must include VIP 10');
 assert.match(vipPlanModel, /planNumber: 1, pricePoints: 1000, monthlyRewardPercent: 5/);
@@ -93,7 +97,7 @@ assert.doesNotMatch(app, /buildWheelGradient\(\)/);
 assert.match(translations, /nav_vip:/);
 assert.match(adminUi, /\/api\/admin\/vip\/plans/);
 assert.match(referralCore, /ELIGIBLE_ORIGINAL_EARN_TYPES = Object\.freeze\(\['task', 'checkin', 'leaderboard_reward'\]\)/);
-for (const key of ['menu_vip_plans', 'vip_title', 'vip_buy_confirm', 'vip_claim_button', 'history_type_vip_purchase', 'history_type_vip_daily_reward', 'history_type_vip_principal_return']) {
+for (const key of ['menu_vip_plans', 'vip_title', 'vip_buy_confirm', 'vip_claim_button', 'vip_membership_kicker', 'vip_tier_starter', 'vip_tier_pro', 'vip_tier_ultimate', 'vip_plan_cost_label', 'vip_plan_profit_label', 'vip_plan_duration_label', 'vip_total_reward_label', 'vip_need_more_points', 'vip_status_owned', 'history_type_vip_purchase', 'history_type_vip_daily_reward', 'history_type_vip_principal_return']) {
   assert.ok(translations.includes(`${key}:`), `missing translation ${key}`);
 }
 
