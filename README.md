@@ -45,8 +45,11 @@ Migration تکرارپذیر است و موجودی یا Ledger تاریخی ر�
 ## تست‌ها
 
 ```bash
-node tests/membership.test.js   # منطق عضویت اجباری
+npm test                        # اجرای همه‌ی tests/*.test.js
+node tests/membership.test.js   # اجرای یک تست مستقل
 ```
+
+مجموعه‌ی تست‌های استاندارد به دیتابیس production متصل نمی‌شود؛ تست‌های نیازمند MongoDB/Telegram واقعی باید جداگانه و فقط در محیط آزمایشی اجرا شوند.
 
 ## ساختار پوشه‌ها
 

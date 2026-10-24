@@ -44,10 +44,10 @@ function streakAtRiskMessageFor(lang) {
  * مدل کاربر وجود ندارد، با updatedAt کاربر (که تقریباً با هر تعامل واقعی —
  * پوینت/تسک و... — عوض می‌شود) در ۳۰ روز اخیر تخمین زده می‌شود.
  */
-async function runDailyReminderSweep(now = new Date()) {
-  const User = require('../models/User');
-  const Settings = require('../models/Settings');
-  const { notifyUser } = require('./bot');
+async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
+  const User = dependencies.User || require('../models/User');
+  const Settings = dependencies.Settings || require('../models/Settings');
+  const notifyUser = dependencies.notifyUser || require('./bot').notifyUser;
 
   const settings = await Settings.getGlobal();
 
@@ -87,20 +87,34 @@ async function runDailyReminderSweep(now = new Date()) {
     return { sent: 0, skipped: 'no_candidates' };
   }
 
-  // اول علامت‌گذاری، بعد ارسال (توضیح بالا) — همه‌ی کاندیدها یک‌جا mark می‌شوند
-  await User.updateMany(
-    { _id: { $in: candidates.map(c => c._id) } },
-    { $set: { lastReminderSentAt: now } }
-  );
-
   const BATCH_SIZE = 20;
   const DELAY_MS = 1100;
   let sent = 0;
   let lastError = '';
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
     const batch = candidates.slice(i, i + BATCH_SIZE);
+    const claimed = (await Promise.all(batch.map(async user => {
+      // This conditional claim is shared with the check-in notification sweep.
+      // Never overwrite a marker another job already acquired for this UTC day.
+      const claim = await User.updateOne({
+        _id: user._id,
+        isBanned: false,
+        telegramBlockedAt: null,
+        $and: [
+          { $or: [{ lastCheckIn: null }, { lastCheckIn: { $lt: startOfToday } }] },
+          { $or: [{ lastReminderSentAt: null }, { lastReminderSentAt: { $exists: false } }, { lastReminderSentAt: { $lt: startOfToday } }] }
+        ]
+      }, { $set: { lastReminderSentAt: now } });
+      return claim.modifiedCount ? user : null;
+    }))).filter(Boolean);
+
+    if (!claimed.length) {
+      if (i + BATCH_SIZE < candidates.length) await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+      continue;
+    }
+
     const results = await Promise.allSettled(
-      batch.map(u => notifyUser(
+      claimed.map(u => notifyUser(
         u.telegramId,
         Number(u.streak) >= 3 ? streakAtRiskMessageFor(u.language) : reminderMessageFor(settings, u.language)
       ))
@@ -118,7 +132,7 @@ async function runDailyReminderSweep(now = new Date()) {
     $set: {
       dailyReminderLastRunAt: now,
       dailyReminderLastSentCount: sent,
-      dailyReminderLastStatus: 'ok',
+      dailyReminderLastStatus: lastError ? 'partial' : 'ok',
       dailyReminderLastError: lastError
     }
   });

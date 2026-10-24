@@ -56,6 +56,10 @@ const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 const adminUi = fs.readFileSync(path.join(root, 'public/admin.html'), 'utf8');
 const translations = fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8');
 const vipPlanModel = fs.readFileSync(path.join(root, 'models/VipPlan.js'), 'utf8');
+const vipPurchaseSection = pointsRoute.slice(
+  pointsRoute.indexOf("router.post('/vip/purchase'"),
+  pointsRoute.indexOf("router.post('/vip/:subscriptionId/claim'")
+);
 
 assert.match(pointsRoute, /router\.get\('\/vip\/plans'/);
 assert.match(pointsRoute, /router\.post\('\/vip\/purchase'/);
@@ -68,6 +72,12 @@ assert.match(pointsRoute, /sourceId = `vip:\$\{subscription\._id\}:claim:\$\{cla
 assert.match(pointsRoute, /lastClaimAt\.getTime\(\) \+ DAY_MS/);
 assert.match(pointsRoute, /body: \{ planNumber \}/, 'purchase request hash must cover plan ID, not client reward fields');
 assert.match(pointsRoute, /calculateTotalRewardCents\(pricePoints, plan\.monthlyRewardPercent, plan\.durationDays\)/);
+assert.match(vipPurchaseSection, /points: finalPoints/,
+  'purchase response must include points awarded by the first-time VIP activation task');
+assert.match(vipPurchaseSection, /balanceAfter: user\.points/,
+  'VIP debit ledger balance must reflect the post-debit, pre-activation-reward balance');
+assert.ok(vipPurchaseSection.indexOf("type: 'vip_purchase'") < vipPurchaseSection.indexOf("type: 'task'"),
+  'the purchase debit ledger must be recorded before the activation reward ledger');
 assert.match(adminRoute, /router\.put\('\/vip\/plans'/);
 assert.match(adminRoute, /input\.length !== 10/);
 assert.match(ledgerModel, /'vip_purchase'/);

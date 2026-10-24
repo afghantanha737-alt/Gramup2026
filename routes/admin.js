@@ -50,22 +50,11 @@ const { getTelegramWebhookMetrics } = require('../utils/telegramWebhookMetrics')
 const { calculateTotalRewardCents } = require('../utils/vipRewards');
 const { toVipAdminRecord } = require('../utils/vipAdminReadModel');
 const { isTestEnvironment, normalizeAllowedTelegramIds } = require('../utils/maintenance');
+const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
 
 const MAX_REQUIRED_CHANNELS = 5;
 
 const escapeRegex = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-function isTestDeleteEnvironment() {
-  const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
-  const appEnv = String(process.env.APP_ENV || '').trim().toLowerCase();
-  if (appEnv === 'production') return false;
-  if (nodeEnv === 'test' || appEnv === 'test') return true;
-  try {
-    const hostname = new URL(String(process.env.APP_URL || '')).hostname.toLowerCase();
-    return hostname === 'gramup-test.onrender.com' || hostname.endsWith('.gramup-test.onrender.com');
-  } catch {
-    return false;
-  }
-}
 function pageParams(query, defaultLimit = 100, maxLimit = 300) {
   const page = Math.max(1, Math.floor(Number(query.page) || 1));
   const limit = Math.min(maxLimit, Math.max(1, Math.floor(Number(query.limit) || defaultLimit)));

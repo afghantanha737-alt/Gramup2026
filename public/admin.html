@@ -354,7 +354,7 @@
         </div>
         <div class="card" style="margin-top:12px;background:var(--surface2)">
           <b>عملیات گروهی موجودی</b>
-          <p class="small">فقط کاربران انتخاب‌شده از نتایج فعلی اعمال می‌شود؛ هر کاربر جداگانه در Audit و Ledger ثبت خواهد شد. حداکثر ۱۰۰ کاربر.</p>
+          <p class="small">فقط کاربران انتخاب‌شده در صفحهٔ فعلی اعمال می‌شوند؛ برای کاربران دیگر از صفحه‌بندی یا جستجو استفاده کنید. هر کاربر جداگانه در Audit و Ledger ثبت خواهد شد. حداکثر ۱۰۰ کاربر.</p>
           <div class="row">
             <select id="bulkCurrency" style="flex:1;margin:0"><option value="points">Points</option><option value="gram">GRAM</option></select>
             <select id="bulkAction" style="flex:1;margin:0" onchange="toggleBulkAmount()"><option value="add">افزودن</option><option value="zero">صفرکردن</option></select>
@@ -1517,8 +1517,11 @@ async function loadOpsMetrics() {
 
 /* ---------- USERS ---------- */
 let userSearchDebounce = null;
+let userCurrentPage = 1;
+let userListFilterKey = "";
 function debouncedLoadUsers() {
   clearTimeout(userSearchDebounce);
+  userCurrentPage = 1;
   userSearchDebounce = setTimeout(loadUsers, 350);
 }
 
@@ -1532,17 +1535,29 @@ async function loadUsers() {
   if (search) params.set("search", search);
   if (status) params.set("status", status);
   if (sort) params.set("sort", sort);
+  const filterKey = params.toString();
+  if (filterKey !== userListFilterKey) {
+    userListFilterKey = filterKey;
+    userCurrentPage = 1;
+  }
+  params.set("page", String(userCurrentPage));
 
   try {
     const data = await api(`/api/admin/users${params.toString() ? "?" + params.toString() : ""}`);
     const users = data.users || [];
+    const pagination = data.pagination || { page: userCurrentPage, pages: 1, total: users.length };
     if (users.length === 0) {
+      const lastPage = Math.max(1, Number(pagination.pages) || 1);
+      if (userCurrentPage > lastPage) {
+        userCurrentPage = lastPage;
+        return loadUsers();
+      }
       container.innerHTML = `<div class="empty">${search || status ? "با این فیلتر کاربری پیدا نشد." : "کاربری یافت نشد."}</div>`;
       return;
     }
     container.innerHTML = `
       <table class="adminUsersTable">
-        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه نتایج" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>Points</th><th>GRAM</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه کاربران این صفحه" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>Points</th><th>GRAM</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
         <tbody>
           ${users.map(u => `
             <tr>
@@ -1558,17 +1573,31 @@ async function loadUsers() {
                   : `<button class="danger" onclick="userAction('${u._id}','ban')">مسدود کردن</button>`
                 }
                 <button class="secondary" onclick="openUserAccount('${u._id}')">موجودی و جزئیات</button>
-                <button class="danger" onclick="deleteUser('${u._id}')">Delete User</button>
+                <button class="danger" title="TEST environment only; deletes the account and its related records" onclick="deleteUser('${u._id}')">Delete User (TEST only)</button>
                 <button class="secondary" onclick="testWeeklyRewardNotification('${u._id}')">Test Weekly Reward Notification</button>
               </td>
             </tr>
           `).join("")}
         </tbody>
       </table>
+      <div class="flexBetween" style="gap:8px;flex-wrap:wrap;margin-top:10px">
+        <span class="small">صفحه ${Number(pagination.page || userCurrentPage)} از ${Math.max(1, Number(pagination.pages) || 1)} · مجموع ${Number(pagination.total) || 0} کاربر</span>
+        <div class="row" style="gap:6px;margin:0">
+          <button type="button" class="secondary" onclick="changeUserPage(-1)" ${userCurrentPage <= 1 ? "disabled" : ""}>قبلی</button>
+          <button type="button" class="secondary" onclick="changeUserPage(1)" ${userCurrentPage >= Math.max(1, Number(pagination.pages) || 1) ? "disabled" : ""}>بعدی</button>
+        </div>
+      </div>
     `;
   } catch (error) {
     container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
+}
+
+function changeUserPage(delta) {
+  const nextPage = Math.max(1, userCurrentPage + Number(delta || 0));
+  if (nextPage === userCurrentPage) return;
+  userCurrentPage = nextPage;
+  loadUsers();
 }
 
 let activeAccountUserId = "";
@@ -1709,7 +1738,7 @@ async function userAction(id, action) {
 }
 
 async function deleteUser(id) {
-  const warning = "این عملیات User و داده‌های وابسته او را به‌صورت کامل از TEST حذف می‌کند و قابل بازگشت نیست.";
+  const warning = "این عملیات فقط در محیط TEST مجاز است. User و داده‌های وابسته او به‌صورت کامل حذف می‌شوند و قابل بازگشت نیستند. کاربری که کاربران دیگری را دعوت کرده باشد تا زمان رفع وابستگی حذف نمی‌شود.";
   if (!confirm(warning)) return;
   const confirmation = prompt("برای تأیید نهایی حذف، عبارت DELETE USER را دقیقاً وارد کنید:");
   if (confirmation !== "DELETE USER") {

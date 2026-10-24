@@ -15,7 +15,7 @@ for (let plan = 1; plan <= 10; plan += 1) {
 }
 const pointsRoute = fs.readFileSync(path.join(__dirname, '../routes/points.js'), 'utf8');
 assert.match(pointsRoute, /TaskCompletion/);
-assert.match(pointsRoute, /vip-task:\$\{vipTask\._id\}:user:\$\{user\._id\}/);
+assert.match(pointsRoute, /vip-task:\$\{activationTaskReward\.task\._id\}:user:\$\{user\._id\}/);
 assert.match(pointsRoute, /reviewedBy: 'vip-purchase-system'/);
 assert.match(pointsRoute, /taskLedger\.created/);
 const taskModel = fs.readFileSync(path.join(__dirname, '../models/Task.js'), 'utf8');

@@ -1084,6 +1084,8 @@ router.post('/vip/purchase', auth, async (req, res) => {
 
         // A successful, paid VIP subscription completes its matching one-time task.
         // This is deliberately inside the same transaction as the debit and purchase ledger.
+        let finalPoints = user.points;
+        let activationTaskReward = null;
         const taskDefinition = vipActivationTaskDefinition(planNumber);
         const vipTask = await Task.findOneAndUpdate(
           { taskKind: 'vip_activation', vipPlanNumber: planNumber },
@@ -1106,18 +1108,8 @@ router.post('/vip/purchase', auth, async (req, res) => {
             { new: true, session }
           );
           if (!rewarded) throw vipError('VIP_TASK_USER_NOT_FOUND', 'کاربر برای ثبت پاداش Task پیدا نشد.', 500);
-          const taskLedger = await recordLedgerRequired({
-            user: user._id,
-            type: 'task',
-            currency: 'points',
-            amount: vipTask.reward,
-            description: vipTask.title,
-            balanceAfter: rewarded.points,
-            sourceId: `vip-task:${vipTask._id}:user:${user._id}`,
-            transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_purchase', key: req.get('Idempotency-Key'), leg: `activation-task-${planNumber}` }),
-            session
-          });
-          if (!taskLedger.created) throw vipError('VIP_TASK_LEDGER_DUPLICATE', 'پاداش Task این خرید قبلاً ثبت شده است.', 409);
+          finalPoints = rewarded.points;
+          activationTaskReward = { task: vipTask, amount: vipTask.reward, balanceAfter: rewarded.points };
         }
 
         const ledger = await recordLedgerRequired({
@@ -1133,9 +1125,26 @@ router.post('/vip/purchase', auth, async (req, res) => {
         });
         if (!ledger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'این خرید قبلاً ثبت شده است.', 409);
 
+        // Persist ledger entries in the same order as the balance mutations:
+        // debit first, then (if newly earned) the activation-task credit.
+        if (activationTaskReward) {
+          const taskLedger = await recordLedgerRequired({
+            user: user._id,
+            type: 'task',
+            currency: 'points',
+            amount: activationTaskReward.amount,
+            description: activationTaskReward.task.title,
+            balanceAfter: activationTaskReward.balanceAfter,
+            sourceId: `vip-task:${activationTaskReward.task._id}:user:${user._id}`,
+            transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_purchase', key: req.get('Idempotency-Key'), leg: `activation-task-${planNumber}` }),
+            session
+          });
+          if (!taskLedger.created) throw vipError('VIP_TASK_LEDGER_DUPLICATE', 'پاداش Task این خرید قبلاً ثبت شده است.', 409);
+        }
+
         return { body: {
           success: true,
-          points: user.points,
+          points: finalPoints,
           subscription: publicVipSubscription(subscription, startAt)
         } };
       }
