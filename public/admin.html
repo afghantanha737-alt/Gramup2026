@@ -1324,7 +1324,10 @@ async function loadWithdrawals() {
     container.innerHTML = list.map(w => `
       <div class="card" style="margin-bottom:10px" id="wd-${w._id}">
         <div class="flexBetween" style="margin-bottom:8px">
-          <b>${escapeHtml(w.user?.firstName || w.user?.username || "—")}</b>
+          <div style="min-width:0;display:flex;flex-direction:column;gap:3px">
+            <b>${escapeHtml(w.user?.firstName || w.user?.username || "—")}</b>
+            <span class="small" style="direction:ltr;text-align:left;font-family:monospace;user-select:all;cursor:text">Telegram ID: ${escapeHtml(w.user?.telegramId || "—")}</span>
+          </div>
           <span class="badge ${w.status}">${STATUS_FA[w.status] || w.status}</span>
         </div>
         <div class="small" style="margin-bottom:2px">شناسه‌ی برداشت: <span style="font-family:monospace">${escapeHtml(w._id)}</span></div>
