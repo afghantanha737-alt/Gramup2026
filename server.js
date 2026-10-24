@@ -283,6 +283,12 @@ async function startServer() {
     void runJob('weekly-challenge-start-notification', 'Initial weekly challenge start notification', runWeeklyChallengeStartNotification);
     setInterval(() => { void runJob('weekly-challenge-start-notification', 'Scheduled weekly challenge start notification', runWeeklyChallengeStartNotification); }, 60 * 1000);
 
+    const { runWeeklyCampaignNotification } = require('./utils/weeklyCampaignNotification');
+    void runJob('weekly-campaign-notification', 'Initial weekly campaign notification', runWeeklyCampaignNotification);
+    setInterval(() => {
+      void runJob('weekly-campaign-notification', 'Scheduled weekly campaign notification', runWeeklyCampaignNotification);
+    }, 60 * 1000);
+
     const { settleMaturedVipSubscriptions } = require('./utils/vipSettlement');
     void runJob('vip-principal-settlement', 'Initial VIP principal settlement', () => settleMaturedVipSubscriptions());
     setInterval(() => { void runJob('vip-principal-settlement', 'Scheduled VIP principal settlement', () => settleMaturedVipSubscriptions()); }, 60 * 1000);
