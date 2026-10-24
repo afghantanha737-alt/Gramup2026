@@ -3086,6 +3086,9 @@ let vipCountdownRefreshPending = false;
 const vipClaimingIds = new Set();
 const vipPurchasingPlanNumbers = new Set();
 let vipSelectedCategory = "starter";
+let vipSubscriptionFilter = "active";
+let vipClaimAllBusy = false;
+let vipClaimAllProgress = { done: 0, total: 0 };
 
 function setVipPlanCategory(category) {
   if (!["starter", "pro", "ultimate"].includes(category)) return;
@@ -3097,6 +3100,17 @@ function setVipPlanCategory(category) {
   }
 }
 window.setVipPlanCategory = setVipPlanCategory;
+
+function setVipSubscriptionFilter(filter) {
+  if (!["active", "expired"].includes(filter)) return;
+  vipSubscriptionFilter = filter;
+  if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") {
+    const content = $("#content");
+    if (content) content.innerHTML = renderProfileVip();
+    startVipCountdown();
+  }
+}
+window.setVipSubscriptionFilter = setVipSubscriptionFilter;
 
 function stopVipCountdown() {
   if (vipCountdownTimer) clearInterval(vipCountdownTimer);
@@ -3139,6 +3153,10 @@ function startVipCountdown() {
 function renderProfileVip() {
   const plans = state.vipPlans || [];
   const subscriptions = state.vipSubscriptions || [];
+  const activeSubscriptions = subscriptions.filter(subscription => subscription.status === "active");
+  const expiredSubscriptions = subscriptions.filter(subscription => subscription.status !== "active");
+  const filteredSubscriptions = vipSubscriptionFilter === "active" ? activeSubscriptions : expiredSubscriptions;
+  const claimableSubscriptions = activeSubscriptions.filter(subscription => subscription.canClaim === true);
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
@@ -3184,14 +3202,14 @@ function renderProfileVip() {
       </article>`;
   }).join("");
 
-  const subscriptionCards = subscriptions.map(subscription => {
+  const subscriptionCards = filteredSubscriptions.map(subscription => {
     const isActive = subscription.status === "active";
     const isCancelled = subscription.status === "cancelled";
     const statusText = isActive ? t("vip_status_active") : isCancelled ? t("vip_status_cancelled") : t("vip_status_completed");
     const nextReward = formatPoints(subscription.nextRewardPoints || 0);
     let claimMarkup = "";
     if (isActive && subscription.canClaim) {
-      const claiming = vipClaimingIds.has(subscription.id);
+      const claiming = vipClaimingIds.has(subscription.id) || vipClaimAllBusy;
       claimMarkup = `<button type="button" class="primary" ${claiming ? "disabled" : ""} onclick="claimVipReward('${escapeHTML(subscription.id)}')">${claiming ? t("vip_loading") : t("vip_claim_button", { n: nextReward })}</button>`;
     } else if (isActive && subscription.nextClaimAt) {
       const claimTime = Date.parse(subscription.nextClaimAt);
@@ -3239,7 +3257,7 @@ function renderProfileVip() {
       <div class="vipBalanceValue"><strong>${formatPoints(state.points)}</strong><span>${t("vip_points_unit")}</span></div>
       <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_daily_reward_summary")}</span><b>${formatPoints(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0))} ${t("vip_points_unit")}</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
     </div>
-    ${subscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t("vip_active_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
+    ${subscriptions.length ? `<div class="vipSubscriptionTools" style="display:grid;gap:9px;margin:12px 0"><div class="vipStatusTabs" role="tablist" aria-label="${t("vip_subscription_filters_label")}" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:rgba(4,10,22,.58)"><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "active"}" onclick="setVipSubscriptionFilter('active')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "active" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "active" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "active" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_active")} <b>${formatPoints(activeSubscriptions.length)}</b></button><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "expired"}" onclick="setVipSubscriptionFilter('expired')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "expired" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "expired" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "expired" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_expired")} <b>${formatPoints(expiredSubscriptions.length)}</b></button></div><button type="button" class="vipClaimAll" ${!claimableSubscriptions.length || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" style="width:100%;min-height:43px;padding:10px 14px;border:1px solid rgba(74,222,128,.25);border-radius:13px;background:${claimableSubscriptions.length && !vipClaimAllBusy ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(34,211,238,.12))" : "rgba(71,85,105,.15)"};color:${claimableSubscriptions.length && !vipClaimAllBusy ? "#a7f3d0" : "#8792a5"};font-size:12px;font-weight:900">${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_all", { n: formatPoints(claimableSubscriptions.length) })}</button></div>${filteredSubscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t(vipSubscriptionFilter === "active" ? "vip_active_title" : "vip_expired_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t(vipSubscriptionFilter === "active" ? "vip_active_empty" : "vip_expired_empty")}</div></div>`}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
     <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
       <div class="vipCatalogHeading"><h3>${t("vip_catalog_title")}</h3><p>${t("vip_intro")}</p></div>
       <div class="vipPlanTabs" role="tablist" aria-label="${t("vip_tier_tabs_label")}">
@@ -3303,8 +3321,8 @@ async function purchaseVipPlan(planNumber) {
 }
 window.purchaseVipPlan = purchaseVipPlan;
 
-async function claimVipReward(subscriptionId) {
-  if (!subscriptionId || vipClaimingIds.has(subscriptionId)) return;
+async function claimVipReward(subscriptionId, options = {}) {
+  if (!subscriptionId || vipClaimingIds.has(subscriptionId) || (vipClaimAllBusy && !options.bulk)) return false;
   vipClaimingIds.add(subscriptionId);
   const scope = `vip_claim_${subscriptionId}`;
   if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") {
@@ -3323,19 +3341,63 @@ async function claimVipReward(subscriptionId) {
     state.vipDataLoaded = false;
     await loadVipPlans();
     if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") await renderProfile();
-    toast(t("vip_claim_success", { n: formatPoints(result.rewardPoints) }), "success");
+    if (!options.silent) toast(t("vip_claim_success", { n: formatPoints(result.rewardPoints) }), "success");
+    return true;
   } catch (error) {
     clearDefinitiveIdempotencyFailure(scope, error);
-    toast(translateServerMessage(error.code, error.message), "error");
+    if (!options.silent) toast(translateServerMessage(error.code, error.message), "error");
     state.vipDataLoaded = false;
     await loadVipPlans();
     if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") await renderProfile();
+    return false;
   } finally {
     vipClaimingIds.delete(subscriptionId);
     if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") startVipCountdown();
   }
 }
 window.claimVipReward = claimVipReward;
+
+async function claimAllVipRewards() {
+  if (vipClaimAllBusy || vipClaimingIds.size) return;
+  const subscriptionIds = (state.vipSubscriptions || [])
+    .filter(subscription => subscription.status === "active" && subscription.canClaim === true)
+    .map(subscription => subscription.id)
+    .filter(Boolean);
+  if (!subscriptionIds.length) return;
+
+  vipClaimAllBusy = true;
+  vipClaimAllProgress = { done: 0, total: subscriptionIds.length };
+  const isVipView = () => (state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip";
+  if (isVipView()) {
+    const content = $("#content");
+    if (content) content.innerHTML = renderProfileVip();
+  }
+
+  let succeeded = 0;
+  try {
+    for (const subscriptionId of subscriptionIds) {
+      const claimed = await claimVipReward(subscriptionId, { silent: true, bulk: true });
+      if (claimed) succeeded += 1;
+      vipClaimAllProgress.done += 1;
+      if (isVipView()) {
+        const content = $("#content");
+        if (content) content.innerHTML = renderProfileVip();
+      }
+    }
+    const failed = subscriptionIds.length - succeeded;
+    toast(t("vip_claim_all_result", { success: succeeded, failed, total: subscriptionIds.length }), failed ? "warning" : "success");
+  } finally {
+    vipClaimAllBusy = false;
+    vipClaimAllProgress = { done: 0, total: 0 };
+    if (isVipView()) {
+      state.vipDataLoaded = false;
+      await loadVipPlans();
+      await renderProfile();
+      startVipCountdown();
+    }
+  }
+}
+window.claimAllVipRewards = claimAllVipRewards;
 
 let profileRenderSequence = 0;
 async function renderProfile() {
