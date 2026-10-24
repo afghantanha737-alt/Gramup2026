@@ -287,6 +287,12 @@ async function startServer() {
     void runJob('vip-principal-settlement', 'Initial VIP principal settlement', () => settleMaturedVipSubscriptions());
     setInterval(() => { void runJob('vip-principal-settlement', 'Scheduled VIP principal settlement', () => settleMaturedVipSubscriptions()); }, 60 * 1000);
 
+    const { runVipRewardNotificationSweep } = require('./utils/vipRewardNotification');
+    void runJob('vip-reward-notification-sweep', 'Initial VIP reward notification sweep', runVipRewardNotificationSweep);
+    setInterval(() => {
+      void runJob('vip-reward-notification-sweep', 'Scheduled VIP reward notification sweep', runVipRewardNotificationSweep);
+    }, 5 * 60 * 1000);
+
     server = app.listen(PORT, () => {
       server.requestTimeout = 120000;
       server.headersTimeout = 125000;
