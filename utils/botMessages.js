@@ -90,6 +90,11 @@ const MESSAGES = {
     ps: () => `⏰ مه هېروئ چې نن Gramup ته ننوځئ او خپله ورځنۍ ګټه ترلاسه کړئ!\nخپل پرله‌پسې ورځې مه ورکوئ — هره ۷ ورځې یو وړیا د ګردونې چانس ترلاسه کوئ.`,
     en: () => `⏰ Don't forget to check in on Gramup today and claim your daily reward!\nKeep your streak alive — complete the seven-day reward cycle.`
   },
+  dailyReminderPersonalized: {
+    fa: (day, points, streak) => `⏰ یادآوری Daily Check\nامروز روز ${day} چرخه شماست و با ورود امروز ${points} پوینت دریافت می‌کنید.\nاستریک فعلی شما: ${streak} روز. همین حالا وارد Gramup شوید و پاداش‌تان را بگیرید.`,
+    ps: (day, points, streak) => `⏰ د ورځني Check یادونه\nنن ستاسو د دورې ${day} ورځ ده او د ننوتلو سره ${points} پوائنټه ترلاسه کوئ.\nستاسو اوسنی سټریک: ${streak} ورځې. همدا اوس Gramup ته ننوځئ او خپله ګټه واخلئ.`,
+    en: (day, points, streak) => `⏰ Daily Check reminder\nToday is Day ${day} of your cycle and you can claim ${points} points by checking in.\nYour current streak: ${streak} days. Open Gramup now and claim your reward.`
+  },
   leaderboardReward: {
     fa: (rank, points, week) => `🏆 تبریک! شما رتبه ${rank} لیدربورد هفتگی را کسب کردید.\n\n${points} پوینت جایزه هفته ${week} به حسابتان اضافه شد.`,
     ps: (rank, points, week) => `🏆 مبارک شه! تاسو د اونیز غوره لیست ${rank} مقام ترلاسه کړ.\n\n${points} پوائنټ د ${week} اونۍ جایزه ستاسو حساب ته اضافه شوه.`,

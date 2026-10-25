@@ -1,15 +1,15 @@
 'use strict';
 /** node tests/dailyReminder.test.js — منطق زمان‌بندی یادآوری ورود روزانه و متن‌های چندزبانه‌ی ربات */
 const assert = require('assert');
-const { shouldRunNow, utcDayKey, streakAtRiskMessageFor } = require('../utils/dailyReminder');
+const { shouldRunNow, utcDayKey, streakAtRiskMessageFor, reminderMessageFor, kabulDayStart } = require('../utils/dailyReminder');
 const { botText } = require('../utils/botMessages');
 
 // ---- shouldRunNow
 assert.strictEqual(shouldRunNow({ dailyReminderEnabled: false, dailyReminderHourUtc: 15 }, new Date('2026-01-01T15:05:00Z')), false, 'خاموش یعنی هرگز اجرا نشود');
-assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 15 }, new Date('2026-01-01T15:05:00Z')), true, 'داخل همان ساعت');
-assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 15 }, new Date('2026-01-01T14:59:00Z')), false, 'یک دقیقه قبل از ساعت هنوز نه');
-assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 15 }, new Date('2026-01-01T16:00:00Z')), false, 'یک ساعت بعد دیگر نه');
-assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 0 }, new Date('2026-01-01T00:30:00Z')), true, 'ساعت صفر UTC هم باید کار کند');
+assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 2, dailyReminderMinuteUtc: 30 }, new Date('2026-01-01T02:30:00Z')), true, '۷ صبح کابل برابر ۰۲:۳۰ UTC است');
+assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 2, dailyReminderMinuteUtc: 30 }, new Date('2026-01-01T02:29:00Z')), false, 'یک دقیقه قبل از ساعت هنوز نه');
+assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 2, dailyReminderMinuteUtc: 30 }, new Date('2026-01-01T02:31:00Z')), false, 'یک دقیقه بعد دیگر نه');
+assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 0, dailyReminderMinuteUtc: 0 }, new Date('2026-01-01T00:00:00Z')), true, 'ساعت صفر UTC هم باید کار کند');
 console.log('PASS  shouldRunNow: فقط داخل ساعت تنظیم‌شده و وقتی فعال است');
 
 // ---- utcDayKey: باید برای هر لحظه در یک روز UTC یکسان و برای روز بعد متفاوت باشد
@@ -41,5 +41,11 @@ console.log('PASS  botText: زبان نامعتبر/خالی به فارسی ب�
 assert.ok(streakAtRiskMessageFor('fa').includes('استریک'));
 assert.ok(streakAtRiskMessageFor('en').includes('streak'));
 console.log('PASS  streakAtRiskMessageFor: پیام خطر استریک برای زبان‌ها');
+
+const personalized = reminderMessageFor({ dailyReminderMessage: '' }, 'fa', 2, new Date('2026-01-01T02:00:00Z'), new Date('2026-01-02T02:30:00Z'));
+assert.match(personalized, /روز 3/);
+assert.match(personalized, /9 پوینت/);
+assert.ok(kabulDayStart(new Date('2026-01-02T02:30:00Z')) < new Date('2026-01-02T02:30:00Z'));
+console.log('PASS  reminderMessageFor: روز چرخه و پاداش بر اساس استریک شخصی‌سازی می‌شود');
 
 console.log('ALL PASS');

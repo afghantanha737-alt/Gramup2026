@@ -2202,7 +2202,8 @@ router.put('/settings', async (req, res) => {
     dailyCheckInPoints: v => v >= 0,
     streakBonusPoints: v => v >= 0,
     gramUsdPrice: v => v >= 0,
-    dailyReminderLocalHour: v => Number.isInteger(v) && v >= 0 && v <= 23
+    dailyReminderLocalHour: v => Number.isInteger(v) && v >= 0 && v <= 23,
+    dailyReminderLocalMinute: v => Number.isInteger(v) && v >= 0 && v <= 59
   };
 
   const changes = {};
@@ -2309,6 +2310,9 @@ router.put('/settings', async (req, res) => {
     const localHour = changes.dailyReminderLocalHour !== undefined ? changes.dailyReminderLocalHour : settings.dailyReminderLocalHour;
     const timezone = changes.dailyReminderTimezone !== undefined ? changes.dailyReminderTimezone : settings.dailyReminderTimezone;
     changes.dailyReminderHourUtc = targetUtcHour(localHour, timezone);
+  }
+  if (changes.dailyReminderLocalMinute !== undefined) {
+    changes.dailyReminderMinuteUtc = changes.dailyReminderLocalMinute;
   }
 
 

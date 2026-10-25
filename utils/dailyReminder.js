@@ -11,14 +11,36 @@ function utcDayKey(date = new Date()) {
 /** بخش خالص (بدون دیتابیس) تصمیم‌گیری — آیا همین الان باید یادآوری اجرا شود؟ */
 function shouldRunNow(settings, now = new Date()) {
   if (!settings.dailyReminderEnabled) return false;
-  return now.getUTCHours() === settings.dailyReminderHourUtc;
+  const hour = Number(settings.dailyReminderHourUtc);
+  const minute = Number(settings.dailyReminderMinuteUtc ?? 0);
+  return now.getUTCHours() === hour && now.getUTCMinutes() === minute;
 }
 
-/** متن نهایی پیام: اگر ادمین متن سفارشی نوشته همان، وگرنه متن پیش‌فرض چندزبانه */
-function reminderMessageFor(settings, lang) {
+function kabulDayStart(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kabul', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+  return new Date(Date.UTC(values.year, values.month - 1, values.day) - (4.5 * 60 * 60 * 1000));
+}
+
+/** متن شخصی‌سازی‌شده: روز چرخه و پاداش همان کاربر در پیام درج می‌شود. */
+function reminderMessageFor(settings, lang, streak = 0, lastCheckIn = null, now = new Date()) {
   const { botText } = require('./botMessages');
+  const { DAILY_CHECKIN_REWARDS, cycleDayForStreak } = require('./dailyCheckin');
+  const currentDayStart = kabulDayStart(now).getTime();
+  const lastDayStart = lastCheckIn ? kabulDayStart(new Date(lastCheckIn)).getTime() : null;
+  const nextStreak = lastDayStart === currentDayStart - 86400000 ? Number(streak || 0) + 1 : 1;
+  const day = cycleDayForStreak(nextStreak) || 1;
+  const points = DAILY_CHECKIN_REWARDS[day - 1];
   const custom = String(settings.dailyReminderMessage || '').trim();
-  return custom || botText('dailyReminder', lang);
+  const fallback = botText('dailyReminderPersonalized', lang, day, points, Math.max(0, Number(streak) || 0));
+  if (!custom) return fallback;
+  const rendered = custom
+    .replaceAll('{day}', String(day))
+    .replaceAll('{points}', String(points))
+    .replaceAll('{streak}', String(Math.max(0, Number(streak) || 0)));
+  return rendered.includes(String(day)) || rendered.includes(String(points)) ? rendered : `${rendered}\n\n${fallback}`;
 }
 
 function streakAtRiskMessageFor(lang) {
@@ -55,11 +77,12 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
     return { sent: 0, skipped: settings.dailyReminderEnabled ? 'wrong_hour' : 'disabled' };
   }
 
-  const startOfToday = new Date(utcDayKey(now) * 86400000);
+  const startOfToday = kabulDayStart(now);
 
   const filter = {
     isBanned: false,
     telegramBlockedAt: null,
+    telegramId: { $exists: true, $nin: [null, ''] },
     $and: [
       { $or: [{ lastCheckIn: null }, { lastCheckIn: { $lt: startOfToday } }] },
       { $or: [{ lastReminderSentAt: null }, { lastReminderSentAt: { $lt: startOfToday } }] }
@@ -72,7 +95,7 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
 
   let candidates;
   try {
-    candidates = await User.find(filter, '_id telegramId language streak').lean();
+    candidates = await User.find(filter, '_id telegramId language streak lastCheckIn').lean();
   } catch (error) {
     await Settings.updateOne({}, {
       $set: { dailyReminderLastRunAt: now, dailyReminderLastStatus: 'error', dailyReminderLastError: String(error.message || error).slice(0, 300) }
@@ -116,7 +139,7 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
     const results = await Promise.allSettled(
       claimed.map(u => notifyUser(
         u.telegramId,
-        Number(u.streak) >= 3 ? streakAtRiskMessageFor(u.language) : reminderMessageFor(settings, u.language)
+        reminderMessageFor(settings, u.language, u.streak, u.lastCheckIn, now)
       ))
     );
     results.forEach(r => {
@@ -148,4 +171,4 @@ async function sendTestReminder(telegramId, lang = 'fa') {
   return notifyUser(telegramId, reminderMessageFor(settings, lang));
 }
 
-module.exports = { runDailyReminderSweep, sendTestReminder, reminderMessageFor, streakAtRiskMessageFor, utcDayKey, shouldRunNow };
+module.exports = { runDailyReminderSweep, sendTestReminder, reminderMessageFor, streakAtRiskMessageFor, utcDayKey, kabulDayStart, shouldRunNow };

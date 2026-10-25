@@ -260,20 +260,32 @@ async function startServer() {
     const runJob = (key, label, job) => withDistributedJobLock(key, job)
       .catch(error => console.error(`${label} failed:`, error.message || error));
 
+    // GramUp daily reminder policy: all users who started the bot, every day at
+    // 07:00 Asia/Kabul (02:30 UTC). Apply once to existing installations while
+    // preserving any later admin changes.
+    const Settings = require('./models/Settings');
+    await Settings.updateOne(
+      { key: 'global', dailyReminderPolicyVersion: { $lt: 1 } },
+      { $set: {
+        dailyReminderEnabled: true,
+        dailyReminderHourUtc: 2,
+        dailyReminderMinuteUtc: 30,
+        dailyReminderTimezone: 'Asia/Kabul',
+        dailyReminderLocalHour: 7,
+        dailyReminderLocalMinute: 0,
+        dailyReminderAudience: 'all',
+        dailyReminderPolicyVersion: 1
+      } },
+      { upsert: true }
+    );
+
     const runReferralSweep = require('./utils/referralSweep');
     void runJob('referral-sweep', 'Referral sweep', runReferralSweep);
     setInterval(() => { void runJob('referral-sweep', 'Scheduled referral sweep', runReferralSweep); }, 15 * 60 * 1000);
 
     // Shared database leases prevent each app instance from sending the same reminders.
     const { runDailyReminderSweep } = require('./utils/dailyReminder');
-    setInterval(() => { void runJob('daily-reminder-sweep', 'Daily reminder sweep', runDailyReminderSweep); }, 10 * 60 * 1000);
-
-    // Automatic English daily check-in reminder; users are de-duplicated using
-    // the existing per-user reminder timestamp, so no database schema change is needed.
-    const { runDailyCheckinNotificationSweep } = require('./utils/dailyCheckinNotification');
-    setInterval(() => {
-      void runJob('daily-checkin-notification-sweep', 'Daily check-in notification sweep', runDailyCheckinNotificationSweep);
-    }, 60 * 1000);
+    setInterval(() => { void runJob('daily-reminder-sweep', 'Daily reminder sweep', runDailyReminderSweep); }, 60 * 1000);
 
     const { settleClosedWeeks } = require('./utils/weeklyLeaderboardSettlement');
     void runJob('weekly-leaderboard-settlement', 'Initial weekly settlement', settleClosedWeeks);
