@@ -21,6 +21,41 @@ function buildMiniAppUrl(appUrl, payload, isNewUser) {
   }
 }
 
+function normalizePublicUrl(value, fallback = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  if (/^@?[A-Za-z0-9_]{5,32}$/.test(raw)) return `https://t.me/${raw.replace(/^@/, '')}`;
+  try {
+    const url = new URL(raw);
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function buildWelcomeReplyMarkup(webAppUrl) {
+  if (!webAppUrl) return undefined;
+  const communityUrl = normalizePublicUrl(
+    process.env.COMMUNITY_CHANNEL_URL ||
+    process.env.PUBLIC_CHANNEL_URL ||
+    process.env.COMMUNITY_CHANNEL_USERNAME,
+    'https://t.me/GramupOfficialChannel'
+  );
+  const payoutsUrl = normalizePublicUrl(
+    process.env.PAYOUT_CHANNEL_URL || process.env.PAYOUT_CHANNEL_ID,
+    'https://t.me/GramUpPayouts'
+  );
+  return {
+    inline_keyboard: [
+      [{ text: 'Open Mini App', web_app: { url: webAppUrl } }],
+      [
+        { text: 'Community', url: communityUrl },
+        { text: 'Payouts', url: payoutsUrl }
+      ]
+    ]
+  };
+}
+
 async function handleTelegramStart({
   message,
   bot,
@@ -79,9 +114,7 @@ async function handleTelegramStart({
   }
 
   const webAppUrl = buildMiniAppUrl(appUrl, command.payload, isNewUser);
-  const replyMarkup = webAppUrl
-    ? { inline_keyboard: [[{ text: '🚀 Open GramUp', web_app: { url: webAppUrl } }]] }
-    : undefined;
+  const replyMarkup = buildWelcomeReplyMarkup(webAppUrl);
   const fallbackName = language === 'en' ? 'friend' : 'دوست عزیز';
   const name = message.from.first_name || fallbackName;
   const options = replyMarkup ? { reply_markup: replyMarkup } : {};
@@ -100,4 +133,4 @@ async function handleTelegramStart({
   };
 }
 
-module.exports = { parseTelegramStart, buildMiniAppUrl, handleTelegramStart };
+module.exports = { parseTelegramStart, buildMiniAppUrl, buildWelcomeReplyMarkup, handleTelegramStart };

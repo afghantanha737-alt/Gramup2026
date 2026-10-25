@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { parseTelegramStart, buildMiniAppUrl, handleTelegramStart } = require('../utils/telegramStart');
+const { parseTelegramStart, buildMiniAppUrl, buildWelcomeReplyMarkup, handleTelegramStart } = require('../utils/telegramStart');
 const {
   recordWebhookUpdate,
   recordStartWelcomeSent,
@@ -18,6 +18,12 @@ assert.strictEqual(parseTelegramStart('/help'), null);
 assert.strictEqual(buildMiniAppUrl('https://gramup.example/app?lang=en', 'ref_123', true), 'https://gramup.example/app?lang=en&ref=ref_123');
 assert.strictEqual(buildMiniAppUrl('https://gramup.example/app', 'ref_123', false), 'https://gramup.example/app');
 assert.strictEqual(buildMiniAppUrl('', 'ref_123', true), '');
+const welcomeMarkup = buildWelcomeReplyMarkup('https://gramup.example/app');
+assert.strictEqual(welcomeMarkup.inline_keyboard[0][0].text, 'Open Mini App');
+assert.strictEqual(welcomeMarkup.inline_keyboard[0][0].web_app.url, 'https://gramup.example/app');
+assert.deepStrictEqual(welcomeMarkup.inline_keyboard[1].map(button => button.text), ['Community', 'Payouts']);
+assert.strictEqual(welcomeMarkup.inline_keyboard[1][0].url, 'https://t.me/GramupOfficialChannel');
+assert.strictEqual(welcomeMarkup.inline_keyboard[1][1].url, 'https://t.me/GramUpPayouts');
 
 function fixture(existingUser = null) {
   const users = new Map();
@@ -59,8 +65,9 @@ function fixture(existingUser = null) {
   assert.strictEqual(fresh.sent.length, 1);
   assert.strictEqual(fresh.sent[0][1], 'welcome:fa:Ava');
   const freshButton = fresh.sent[0][2].reply_markup.inline_keyboard[0][0];
-  assert.strictEqual(freshButton.text, '🚀 Open GramUp');
+  assert.strictEqual(freshButton.text, 'Open Mini App');
   assert.strictEqual(new URL(freshButton.web_app.url).searchParams.get('ref'), 'inviter_42');
+  assert.deepStrictEqual(fresh.sent[0][2].reply_markup.inline_keyboard[1].map(button => button.text), ['Community', 'Payouts']);
 
   const contactRequest = fixture();
   const contactResult = await handleTelegramStart({
