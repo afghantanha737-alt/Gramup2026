@@ -568,6 +568,11 @@
             <button type="button" class="secondary" onclick="sendReminderTest()">ارسال Test</button>
           </div>
           <div id="reminderTestMsg" class="small" style="margin-bottom:10px"></div>
+          <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:4px">
+            <button type="button" class="secondary" onclick="sendReminderTestAll()">ارسال تست فوری به همه کاربران</button>
+            <div class="small" style="margin-top:6px">این عملیات فقط پیام آزمایشی می‌فرستد، پاداش یا وضعیت Daily Check را تغییر نمی‌دهد و نتیجه ارسال در همان‌جا نمایش داده می‌شود.</div>
+            <div id="reminderTestAllMsg" class="small" style="margin-top:6px"></div>
+          </div>
 
           <div class="small" style="line-height:2">
             <b>وضعیت آخرین اجرای سیستم:</b><br>
@@ -1980,6 +1985,19 @@ async function sendReminderTest() {
   try {
     await api("/api/admin/daily-reminder/test", { method: "POST", body: JSON.stringify({ telegramId }) });
     box.innerHTML = '<span style="color:var(--success)">✅ ارسال شد — تلگرامت را چک کن.</span>';
+  } catch (error) {
+    box.innerHTML = `<span style="color:var(--danger)">${escapeHtml(error.message)}</span>`;
+  }
+}
+
+async function sendReminderTestAll() {
+  const box = document.getElementById("reminderTestAllMsg");
+  if (!confirm("این کار برای همه کاربران شروع‌کرده پیام تستی می‌فرستد و ممکن است تعداد زیادی پیام ارسال شود. ادامه می‌دهید؟")) return;
+  box.textContent = "در حال شروع ارسال...";
+  try {
+    const result = await api("/api/admin/daily-reminder/test-all", { method: "POST", body: JSON.stringify({}) });
+    box.textContent = result.message || "ارسال تستی آغاز شد.";
+    if (result.broadcastId) pollBroadcastStatus(result.broadcastId, box);
   } catch (error) {
     box.innerHTML = `<span style="color:var(--danger)">${escapeHtml(error.message)}</span>`;
   }

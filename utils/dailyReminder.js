@@ -171,4 +171,42 @@ async function sendTestReminder(telegramId, lang = 'fa') {
   return notifyUser(telegramId, reminderMessageFor(settings, lang));
 }
 
-module.exports = { runDailyReminderSweep, sendTestReminder, reminderMessageFor, streakAtRiskMessageFor, utcDayKey, kabulDayStart, shouldRunNow };
+/**
+ * ارسال فوری آزمایشی برای همه‌ی کاربران شروع‌کرده.
+ * این مسیر عمداً lastReminderSentAt و هیچ موجودی یا وضعیت کاربر را تغییر نمی‌دهد.
+ */
+async function sendTestReminderToAll({ User, Settings, notifyUser, now = new Date(), onProgress } = {}) {
+  User = User || require('../models/User');
+  Settings = Settings || require('../models/Settings');
+  if (!notifyUser) ({ notifyUser } = require('./bot'));
+  const settings = await Settings.getGlobal();
+  const users = await User.find({
+    isBanned: false,
+    telegramBlockedAt: null,
+    telegramId: { $exists: true, $nin: ['', null] }
+  }).select('_id telegramId language streak lastCheckIn').lean();
+  const BATCH_SIZE = 20;
+  const DELAY_MS = 1100;
+  let sent = 0;
+  let failed = 0;
+  let lastError = '';
+  for (let i = 0; i < users.length; i += BATCH_SIZE) {
+    const batch = users.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(user => notifyUser(
+      user.telegramId,
+      reminderMessageFor(settings, user.language, user.streak, user.lastCheckIn, now)
+    )));
+    results.forEach(result => {
+      if (result.status === 'fulfilled' && result.value) sent += 1;
+      else {
+        failed += 1;
+        if (result.status === 'rejected') lastError = String(result.reason?.message || result.reason).slice(0, 300);
+      }
+    });
+    await onProgress?.({ sent, failed, total: users.length, lastError });
+    if (i + BATCH_SIZE < users.length) await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+  }
+  return { sent, failed, total: users.length, lastError };
+}
+
+module.exports = { runDailyReminderSweep, sendTestReminder, sendTestReminderToAll, reminderMessageFor, streakAtRiskMessageFor, utcDayKey, kabulDayStart, shouldRunNow };

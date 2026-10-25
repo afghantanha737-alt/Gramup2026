@@ -36,7 +36,7 @@ const RequiredChannel = require('../models/RequiredChannel');
 const { membership, validateChannelRef, normalizeChannelInput } = require('../utils/membership');
 const { canTransition, requiresReason, shouldRefund, synthesizeHistory, isTerminal } = require('../utils/withdrawalStatus');
 const { COMMON_TIMEZONES, isValidTimezone, targetUtcHour } = require('../utils/timezones');
-const { sendTestReminder } = require('../utils/dailyReminder');
+const { sendTestReminder, sendTestReminderToAll } = require('../utils/dailyReminder');
 const { normalizeSponsorInput, marginInfo, rewardCostUsd } = require('../utils/sponsor');
 const { startOfUtcWeek, endOfUtcWeek, weekKey } = require('../utils/weeklyLeaderboard');
 const { createAdminSession, getAdminSession, revokeAdminSession, SESSION_TTL_MS } = require('../utils/adminSession');
@@ -2355,6 +2355,47 @@ router.post('/daily-reminder/test', async (req, res) => {
     });
   }
   res.json({ success: true, message: 'پیام آزمایشی ارسال شد.' });
+});
+
+/**
+ * POST /api/admin/daily-reminder/test-all — ارسال فوری و شخصی‌سازی‌شده‌ی پیام تست
+ * برای همه‌ی کاربران شروع‌کرده. این عملیات زمان‌بندی روزانه و markerهای کاربران را تغییر نمی‌دهد.
+ */
+router.post('/daily-reminder/test-all', async (req, res) => {
+  if (!bot) return res.status(503).json({ success: false, message: 'ربات پیکربندی نشده.' });
+  const users = await User.find({ isBanned: false, telegramBlockedAt: null, telegramId: { $exists: true, $nin: ['', null] } }, 'telegramId');
+  const job = await BroadcastJob.create({
+    actor: `${req.adminActor} — daily reminder test`,
+    hasImage: false,
+    textPreview: '[TEST] Daily Check reminder — personalized',
+    totalRecipients: users.length
+  });
+  res.json({
+    success: true,
+    message: `ارسال آزمایشی برای ${users.length} کاربر آغاز شد.`,
+    broadcastId: String(job._id),
+    statusUrl: `/api/admin/broadcast/${job._id}`,
+    totalRecipients: users.length,
+    status: job.status
+  });
+  recordAdminLog({
+    actor: req.adminActor,
+    action: 'daily_reminder_test_all',
+    targetType: 'broadcast',
+    details: `${users.length} گیرنده — personalized daily reminder test`
+  });
+  void sendTestReminderToAll({
+    User,
+    Settings,
+    now: new Date(),
+    onProgress: progress => BroadcastJob.updateOne({ _id: job._id }, {
+      $set: { sent: progress.sent, failed: progress.failed, lastError: progress.lastError || '' }
+    })
+  }).then(result => BroadcastJob.updateOne({ _id: job._id }, {
+    $set: { status: 'completed', sent: result.sent, failed: result.failed, lastError: result.lastError || '', finishedAt: new Date() }
+  })).catch(error => BroadcastJob.updateOne({ _id: job._id }, {
+    $set: { status: 'failed', finishedAt: new Date(), lastError: String(error.message || error).slice(0, 500) }
+  }).catch(() => {}));
 });
 
 /* -------------------- STATS (داشبورد آمار) -------------------- */
