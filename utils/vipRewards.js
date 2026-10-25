@@ -1,53 +1,34 @@
 'use strict';
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REWARD_BASE_DAYS = 30;
 const POINTS_DECIMALS = 2;
-
+const GRAM_DECIMALS = 6;
+const GRAM_SCALE = 10 ** GRAM_DECIMALS;
 function calculateTotalRewardCents(pricePoints, monthlyRewardPercent, durationDays) {
-  const price = Number(pricePoints);
-  const percent = Number(monthlyRewardPercent);
-  const days = Number(durationDays);
-  if (!Number.isInteger(price) || price < 1 || !Number.isFinite(percent) || percent <= 0 || percent > 100
-    || !Number.isInteger(days) || days < 1 || days > 3650) return null;
-  // Percentage is monthly. A 30-day subscription therefore receives price × rate%.
+  const price = Number(pricePoints), percent = Number(monthlyRewardPercent), days = Number(durationDays);
+  if (!Number.isInteger(price) || price < 1 || !Number.isFinite(percent) || percent <= 0 || percent > 100 || !Number.isInteger(days) || days < 1 || days > 3650) return null;
   return Math.round(price * percent * days / REWARD_BASE_DAYS + Number.EPSILON);
 }
-
 function dailyRewardCents(totalRewardCents, durationDays, completedClaims) {
-  const total = Number(totalRewardCents);
-  const days = Number(durationDays);
-  const index = Number(completedClaims);
-  if (!Number.isInteger(total) || total < 0 || !Number.isInteger(days) || days < 1
-    || !Number.isInteger(index) || index < 0 || index >= days) return null;
-  // Cumulative rounding distributes remainder cents while guaranteeing an exact total.
-  const before = Math.round(total * index / days);
-  const after = Math.round(total * (index + 1) / days);
-  return after - before;
+  const total = Number(totalRewardCents), days = Number(durationDays), index = Number(completedClaims);
+  if (!Number.isInteger(total) || total < 0 || !Number.isInteger(days) || days < 1 || !Number.isInteger(index) || index < 0 || index >= days) return null;
+  return Math.round(total * (index + 1) / days) - Math.round(total * index / days);
 }
-
-function pointsFromCents(cents) {
-  const amount = Number(cents);
-  if (!Number.isInteger(amount)) return null;
-  return Number((amount / 100).toFixed(POINTS_DECIMALS));
+function calculateTotalRewardMicros(priceGram, monthlyRewardPercent, durationDays) {
+  const price = Number(priceGram), percent = Number(monthlyRewardPercent), days = Number(durationDays);
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(percent) || percent <= 0 || percent > 100 || !Number.isInteger(days) || days < 1 || days > 3650) return null;
+  return Math.round(price * GRAM_SCALE * percent * days / REWARD_BASE_DAYS / 100 + Number.EPSILON);
 }
-
-function calculateDaysRemaining(endAt, now = new Date()) {
-  const remainingMs = new Date(endAt).getTime() - new Date(now).getTime();
-  return Math.max(0, Math.ceil(remainingMs / DAY_MS));
+function dailyRewardMicros(totalRewardMicros, durationDays, completedClaims) {
+  const total = Number(totalRewardMicros), days = Number(durationDays), index = Number(completedClaims);
+  if (!Number.isInteger(total) || total < 0 || !Number.isInteger(days) || days < 1 || !Number.isInteger(index) || index < 0 || index >= days) return null;
+  return Math.round(total * (index + 1) / days) - Math.round(total * index / days);
 }
-
-function calculateDaysCompleted(startAt, durationDays, now = new Date()) {
-  const elapsedMs = Math.max(0, new Date(now).getTime() - new Date(startAt).getTime());
-  return Math.min(Number(durationDays), Math.floor(elapsedMs / DAY_MS));
+function gramFromMicros(micros) {
+  const value = Number(micros);
+  return Number.isInteger(value) && value >= 0 ? Number((value / GRAM_SCALE).toFixed(GRAM_DECIMALS)) : null;
 }
-
-module.exports = {
-  DAY_MS,
-  REWARD_BASE_DAYS,
-  calculateTotalRewardCents,
-  dailyRewardCents,
-  pointsFromCents,
-  calculateDaysRemaining,
-  calculateDaysCompleted
-};
+function pointsFromCents(cents) { const amount = Number(cents); return Number.isInteger(amount) ? Number((amount / 100).toFixed(POINTS_DECIMALS)) : null; }
+function calculateDaysRemaining(endAt, now = new Date()) { return Math.max(0, Math.ceil((new Date(endAt).getTime() - new Date(now).getTime()) / DAY_MS)); }
+function calculateDaysCompleted(startAt, durationDays, now = new Date()) { return Math.min(Number(durationDays), Math.floor(Math.max(0, new Date(now).getTime() - new Date(startAt).getTime()) / DAY_MS)); }
+module.exports = { DAY_MS, REWARD_BASE_DAYS, GRAM_SCALE, calculateTotalRewardCents, dailyRewardCents, calculateTotalRewardMicros, dailyRewardMicros, gramFromMicros, pointsFromCents, calculateDaysRemaining, calculateDaysCompleted };

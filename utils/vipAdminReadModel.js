@@ -18,8 +18,9 @@ function toVipAdminRecord(subscription, now = new Date()) {
   const status = ['active', 'expired', 'cancelled'].includes(subscription?.displayStatus)
     ? subscription.displayStatus
     : effectiveVipStatus(subscription, now);
-  const expected = Math.max(0, Number(subscription?.totalRewardPoints) || 0);
-  const earned = Math.max(0, Number(subscription?.claimedRewardPoints) || 0);
+  const isGram = subscription?.pricingCurrency === 'gram' || Number.isFinite(Number(subscription?.priceGram));
+  const expected = Math.max(0, Number(isGram ? subscription?.totalRewardGram : subscription?.totalRewardPoints) || 0);
+  const earned = Math.max(0, Number(isGram ? subscription?.claimedRewardGram : subscription?.claimedRewardPoints) || 0);
   const fullName = [user.firstName, user.lastName].map(value => String(value || '').trim()).filter(Boolean).join(' ');
   const remainingDays = status === 'active' ? calculateDaysRemaining(subscription?.endAt, now) : 0;
 
@@ -34,12 +35,18 @@ function toVipAdminRecord(subscription, now = new Date()) {
     startDate: subscription?.startAt || null,
     expiryDate: subscription?.endAt || null,
     durationDays: Number(subscription?.durationDays) || 0,
-    purchaseAmountPoints: Number(subscription?.pricePoints) || 0,
+    pricingCurrency: isGram ? 'gram' : 'points',
+    purchaseAmountGram: isGram ? Number(subscription?.priceGram) || 0 : 0,
+    purchaseAmountPoints: !isGram ? Number(subscription?.pricePoints) || 0 : 0,
     monthlyRewardPercent: Number(subscription?.monthlyRewardPercent) || 0,
-    dailyEarningPoints: Number(subscription?.dailyRewardAveragePoints) || 0,
-    totalExpectedEarningPoints: expected,
-    earnedToDatePoints: earned,
-    remainingEarningPoints: Math.max(0, expected - earned),
+    dailyEarningGram: isGram ? Number(subscription?.dailyRewardAverageGram) || 0 : 0,
+    dailyEarningPoints: !isGram ? Number(subscription?.dailyRewardAveragePoints) || 0 : 0,
+    totalExpectedEarningGram: isGram ? expected : 0,
+    totalExpectedEarningPoints: !isGram ? expected : 0,
+    earnedToDateGram: isGram ? earned : 0,
+    earnedToDatePoints: !isGram ? earned : 0,
+    remainingEarningGram: isGram ? Math.max(0, expected - earned) : 0,
+    remainingEarningPoints: !isGram ? Math.max(0, expected - earned) : 0,
     claimsCompleted: Number(subscription?.claimsCompleted) || 0,
     totalClaims: Number(subscription?.durationDays) || 0,
     status,

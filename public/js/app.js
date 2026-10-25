@@ -3183,6 +3183,7 @@ async function loadVipPlans() {
     state.vipPlans = Array.isArray(data?.plans) ? data.plans : [];
     state.vipSubscriptions = Array.isArray(data?.subscriptions) ? data.subscriptions : [];
     if (data?.points != null) state.points = Number(data.points) || 0;
+    if (data?.gramBalance != null) state.gramBalance = Number(data.gramBalance) || 0;
     const serverNow = Date.parse(data?.serverNow || "");
     state.vipServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
     state.vipDataLoaded = true;
@@ -3290,8 +3291,11 @@ function renderProfileVip() {
   const iconByPlan = { 1: "◈", 2: "✦", 3: "♛", 4: "✦", 5: "⬡", 6: "✧", 7: "◆", 8: "♦", 9: "⬦", 10: "♛" };
   const planCards = visiblePlans.map(plan => {
     const available = plan.enabled === true && plan.comingSoon !== true;
-    const canAfford = Number(state.points) >= Number(plan.pricePoints);
-    const neededPoints = Math.max(0, Number(plan.pricePoints) - (Number(state.points) || 0));
+    const isGram = plan.pricingCurrency === 'gram';
+    const price = isGram ? Number(plan.priceGram) : Number(plan.pricePoints);
+    const balance = isGram ? Number(state.gramBalance) : Number(state.points);
+    const canAfford = balance >= price;
+    const needed = Math.max(0, price - (balance || 0));
     const planNumber = Number(plan.planNumber);
     const isOwned = subscriptions.some(subscription => Number(subscription.planNumber) === planNumber && subscription.status === "active");
     const theme = themeByPlan[planNumber] || "sapphire";
@@ -3306,10 +3310,12 @@ function renderProfileVip() {
         : planNumber === 6 ? "vipPlanBadge--recommended"
           : planNumber === 10 ? "vipPlanBadge--best-value" : "vipPlanBadge--status";
     const buttonLabel = plan.comingSoon ? t("vip_status_coming_soon")
-      : available ? (canAfford ? t("vip_buy") : t("vip_need_more_points", { n: formatPoints(neededPoints) }))
+      : available ? (canAfford ? t("vip_buy") : t("vip_need_more_points", { n: formatNumber(needed, isGram ? 6 : 0) }))
         : t("vip_status_inactive");
-    const totalRewardPoints = plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100);
-    const dailyAveragePoints = plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays));
+    const totalRewardPoints = plan.totalRewardPoints || 0;
+    const totalRewardGram = plan.totalRewardGram || 0;
+    const dailyAveragePoints = plan.dailyRewardAveragePoints || 0;
+    const dailyAverageGram = plan.dailyRewardAverageGram || 0;
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
       <article class="vipPlanCard vipPlanCard--${theme}">
@@ -3319,12 +3325,12 @@ function renderProfileVip() {
           ${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}
         </div>
         <div class="vipPlanStats">
-          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${formatPoints(plan.pricePoints)}</b></div>
+          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${formatNumber(price, isGram ? 6 : 0)} ${isGram ? "GRAM" : t("vip_points_unit")}</b></div>
           <div class="vipPlanStat"><span>${t("vip_plan_profit_label")}</span><b>${formatNumber(plan.monthlyRewardPercent, 2)}%</b></div>
           <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(plan.durationDays) })}</b></div>
         </div>
-        <div class="vipPlanReward"><span>${t("vip_total_reward_label")}</span><b>${formatPoints(totalRewardPoints)} ${t("vip_points_unit")}</b></div>
-        <div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>
+        <div class="vipPlanReward"><span>${t("vip_total_reward_label")}</span><b>${formatNumber(isGram ? totalRewardGram : totalRewardPoints, isGram ? 6 : 2)} ${isGram ? "GRAM" : t("vip_points_unit")}</b></div>
+        <div class="vipPlanDaily">${t("vip_daily_average", { n: formatNumber(isGram ? dailyAverageGram : dailyAveragePoints, isGram ? 6 : 2) })} ${isGram ? "GRAM" : t("vip_points_unit")}</div>
         <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})">${isPurchasing ? t("vip_buying") : buttonLabel}</button>
       </article>`;
   }).join("");
@@ -3333,7 +3339,12 @@ function renderProfileVip() {
     const isActive = subscription.status === "active";
     const isCancelled = subscription.status === "cancelled";
     const statusText = isActive ? t("vip_status_active") : isCancelled ? t("vip_status_cancelled") : t("vip_status_completed");
-    const nextReward = formatPoints(subscription.nextRewardPoints || 0);
+    const isGramSubscription = subscription.pricingCurrency === 'gram';
+    const nextReward = formatNumber(isGramSubscription ? (subscription.nextRewardGram || 0) : (subscription.nextRewardPoints || 0), isGramSubscription ? 6 : 2);
+    const earned = formatNumber(isGramSubscription ? (subscription.claimedRewardGram || 0) : (subscription.claimedRewardPoints || 0), isGramSubscription ? 6 : 2);
+    const totalReward = formatNumber(isGramSubscription ? (subscription.totalRewardGram || 0) : (subscription.totalRewardPoints || 0), isGramSubscription ? 6 : 2);
+    const principal = formatNumber(isGramSubscription ? (subscription.priceGram || 0) : (subscription.pricePoints || 0), isGramSubscription ? 6 : 0);
+    const unit = isGramSubscription ? 'GRAM' : t('vip_points_unit');
     let claimMarkup = "";
     if (isActive && subscription.canClaim) {
       const claiming = vipClaimingIds.has(subscription.id) || vipClaimAllBusy;
@@ -3353,9 +3364,9 @@ function renderProfileVip() {
           <div>${t("vip_days_remaining", { n: formatPoints(subscription.daysRemaining) })}</div>
           <div>${t("vip_claim_progress", { claimed: formatPoints(subscription.claimsCompleted), total: formatPoints(subscription.totalClaims) })}</div>
           ${isActive ? `<div>${t("vip_todays_reward", { n: nextReward })}</div>` : ""}
-          <div>${t("vip_total_earned", { n: formatPoints(subscription.claimedRewardPoints) })}</div>
-          <div>${t("vip_total_reward", { n: formatPoints(subscription.totalRewardPoints) })}</div>
-          ${isActive ? `<div>${t("vip_principal_note", { n: formatPoints(subscription.pricePoints) })}</div>` : isCancelled ? "" : `<div>${t("vip_status_completed")}</div>`}
+          <div>${t("vip_total_earned", { n: earned })} ${unit}</div>
+          <div>${t("vip_total_reward", { n: totalReward })} ${unit}</div>
+          ${isActive ? `<div>${t("vip_principal_note", { n: principal })} ${unit}</div>` : isCancelled ? "" : `<div>${t("vip_status_completed")}</div>`}
         </div>
         ${claimMarkup}
       </article>`;
@@ -3416,7 +3427,10 @@ async function purchaseVipPlan(planNumber) {
   const plan = state.vipPlans.find(item => Number(item.planNumber) === Number(planNumber));
   if (!plan || plan.enabled !== true || plan.comingSoon === true) return;
   if (vipPurchasingPlanNumbers.has(Number(plan.planNumber))) return;
-  if (Number(state.points) < Number(plan.pricePoints)) return toast(t("vip_balance", { n: formatPoints(state.points) }), "error");
+  const isGram = plan.pricingCurrency === 'gram';
+  const price = isGram ? Number(plan.priceGram) : Number(plan.pricePoints);
+  const balance = isGram ? Number(state.gramBalance) : Number(state.points);
+  if (balance < price) return toast(t("vip_balance", { n: formatNumber(balance, isGram ? 6 : 0) }), "error");
   vipPurchasingPlanNumbers.add(Number(plan.planNumber));
   if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") {
     const content = $("#content");
@@ -3424,7 +3438,7 @@ async function purchaseVipPlan(planNumber) {
   }
   const scope = `vip_purchase_${plan.planNumber}`;
   try {
-    const confirmed = await confirmVipPurchase(t("vip_buy_confirm", { n: formatPoints(plan.planNumber), price: formatPoints(plan.pricePoints) }));
+    const confirmed = await confirmVipPurchase(t("vip_buy_confirm", { n: formatPoints(plan.planNumber), price: formatNumber(price, isGram ? 6 : 0), unit: isGram ? "GRAM" : t("vip_points_unit") }));
     if (!confirmed) return;
     const result = await api("/api/points/vip/purchase", {
       method: "POST",
@@ -3432,7 +3446,8 @@ async function purchaseVipPlan(planNumber) {
       body: { planNumber: Number(plan.planNumber) }
     });
     clearPendingIdempotencyKey(scope);
-    state.points = Number(result.points) || state.points;
+    state.points = result.points != null ? Number(result.points) : state.points;
+    state.gramBalance = result.gramBalance != null ? Number(result.gramBalance) : state.gramBalance;
     updateHeader();
     state.vipDataLoaded = false;
     await loadVipPlans();
@@ -3463,7 +3478,8 @@ async function claimVipReward(subscriptionId, options = {}) {
       body: JSON.stringify({})
     });
     clearPendingIdempotencyKey(scope);
-    state.points = Number(result.points) || state.points;
+    state.points = result.points != null ? Number(result.points) : state.points;
+    state.gramBalance = result.gramBalance != null ? Number(result.gramBalance) : state.gramBalance;
     updateHeader();
     state.vipDataLoaded = false;
     await loadVipPlans();
