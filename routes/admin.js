@@ -9,7 +9,7 @@ const Task = require('../models/Task');
 const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
-const { normalizeTonAddress, amountToNanoGram } = require('../utils/tonNativeDepositVerify');
+const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
 const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, broadcastToActiveUsers } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { postWithdrawalPaid } = require('../utils/payoutChannel');
@@ -51,6 +51,7 @@ const { calculateTotalRewardCents } = require('../utils/vipRewards');
 const { toVipAdminRecord } = require('../utils/vipAdminReadModel');
 const { isTestEnvironment, normalizeAllowedTelegramIds } = require('../utils/maintenance');
 const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
+const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/depositFinance');
 
 const MAX_REQUIRED_CHANNELS = 5;
 
@@ -1095,6 +1096,112 @@ router.get('/liability-summary', async (req, res) => {
       note: 'ذخیره واقعی در تنظیمات پروژه ثبت نشده است؛ برای جلوگیری از گزارش ساختگی نمایش داده نمی‌شود.'
     }
   });
+});
+
+function publicAdminDeposit(deposit) {
+  const row = deposit.toObject ? deposit.toObject() : deposit;
+  return {
+    _id: String(row._id),
+    reference: row.reference,
+    status: row.status,
+    network: row.network,
+    token: row.token,
+    requestedAmount: row.requestedAmount,
+    amount: row.amount,
+    txHash: row.txHash || row.submittedTxHash || '',
+    sourceAddress: row.sourceAddress || row.walletAddressSnapshot || '',
+    depositAddress: row.depositAddressSnapshot,
+    verificationNote: row.verificationNote || '',
+    createdAt: row.createdAt,
+    verifiedAt: row.verifiedAt,
+    creditedAt: row.creditedAt,
+    user: row.user && typeof row.user === 'object' ? {
+      _id: row.user._id,
+      telegramId: row.user.telegramId || '',
+      username: row.user.username || '',
+      firstName: row.user.firstName || ''
+    } : { _id: row.user }
+  };
+}
+
+// Deposit operations are deliberately separate from the read-only liability summary.
+router.get('/deposits', async (req, res) => {
+  const status = String(req.query.status || '').trim();
+  if (status && !['pending', 'confirmed', 'rejected'].includes(status)) {
+    return res.status(400).json({ success: false, message: 'وضعیت Deposit نامعتبر است.' });
+  }
+  const filter = { assetType: 'native_gram', ...(status ? { status } : {}) };
+  const { page, limit, skip } = pageParams(req.query, 100, 300);
+  const [list, total, totals] = await Promise.all([
+    Deposit.find(filter).populate('user', 'telegramId username firstName').sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Deposit.countDocuments(filter),
+    Deposit.aggregate([
+      { $match: { assetType: 'native_gram' } },
+      { $group: { _id: '$status', amount: { $sum: { $ifNull: ['$amount', 0] } }, count: { $sum: 1 } } }
+    ])
+  ]);
+  const byStatus = Object.fromEntries(totals.map(row => [row._id, { amount: Number(row.amount) || 0, count: Number(row.count) || 0 }]));
+  res.json({
+    success: true,
+    deposits: list.map(publicAdminDeposit),
+    summary: {
+      pending: byStatus.pending || { amount: 0, count: 0 },
+      confirmed: byStatus.confirmed || { amount: 0, count: 0 },
+      rejected: byStatus.rejected || { amount: 0, count: 0 },
+      totalConfirmedAmount: Number(byStatus.confirmed?.amount) || 0,
+      totalConfirmedCount: Number(byStatus.confirmed?.count) || 0
+    },
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+  });
+});
+
+router.post('/deposits/:id/approve', async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ success: false, message: 'Deposit پیدا نشد.' });
+  const deposit = await Deposit.findOne({ _id: req.params.id, assetType: 'native_gram' });
+  if (!deposit) return res.status(404).json({ success: false, message: 'Deposit پیدا نشد.' });
+  if (deposit.status !== 'pending') return res.status(409).json({ success: false, code: 'DEPOSIT_NOT_PENDING', message: 'این Deposit دیگر در انتظار تأیید نیست.' });
+  const submittedHash = normalizeTonTxHash(req.body?.txHash);
+  let verification;
+  try {
+    verification = submittedHash
+      ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
+      : await findIncomingNativeGramTransferByReference({ depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference });
+  } catch {
+    return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'بررسی TON Center فعلاً در دسترس نیست؛ موجودی تغییر نکرد.' });
+  }
+  if (verification.status !== 'verified') {
+    return res.status(400).json({ success: false, code: verification.code || 'DEPOSIT_NOT_VERIFIED', message: 'تراکنش واقعی و نهایی برای این Reference پیدا نشد؛ Deposit تأیید نشد.' });
+  }
+  const minimumRaw = amountToNanoGram(deposit.minimumDepositSnapshot);
+  if (minimumRaw == null || BigInt(verification.amountRaw) < minimumRaw) {
+    return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: 'مبلغ تراکنش از حداقل Deposit کمتر است.' });
+  }
+  if (deposit.walletAddressSnapshot && normalizeTonAddress(deposit.walletAddressSnapshot) !== verification.sourceAddress) {
+    return res.status(400).json({ success: false, code: 'DEPOSIT_SOURCE_WALLET_MISMATCH', message: 'Wallet مبدأ با Wallet ثبت‌شده کاربر مطابقت ندارد.' });
+  }
+  if (deposit.requestedAmountRaw && BigInt(deposit.requestedAmountRaw) !== BigInt(verification.amountRaw)) {
+    return res.status(400).json({ success: false, code: 'DEPOSIT_AMOUNT_MISMATCH', message: 'مبلغ تراکنش با مبلغ درخواست‌شده یکسان نیست.' });
+  }
+  try {
+    const outcome = await creditVerifiedDeposit({ depositId: deposit._id, verification, submittedHash, actor: req.adminActor });
+    return res.json({ success: true, alreadyConfirmed: Boolean(outcome.alreadyConfirmed), deposit: publicAdminDeposit(outcome.deposit) });
+  } catch (error) {
+    const status = ['DEPOSIT_ALREADY_PROCESSED', 'DEPOSIT_LEDGER_ALREADY_EXISTS'].includes(error.code) ? 409 : 500;
+    if (status === 500) console.error('Admin deposit approval failed:', error);
+    return res.status(status).json({ success: false, code: error.code || 'DEPOSIT_APPROVAL_FAILED', message: error.message || 'تأیید Deposit انجام نشد.' });
+  }
+});
+
+router.post('/deposits/:id/reject', async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ success: false, message: 'Deposit پیدا نشد.' });
+  try {
+    const rejected = await rejectPendingDeposit({ depositId: req.params.id, actor: req.adminActor, reason: req.body?.reason || req.body?.note });
+    return res.json({ success: true, deposit: publicAdminDeposit(rejected) });
+  } catch (error) {
+    const status = error.code === 'DEPOSIT_REASON_REQUIRED' ? 400 : error.code === 'DEPOSIT_NOT_PENDING' ? 409 : 500;
+    if (status === 500) console.error('Admin deposit rejection failed:', error);
+    return res.status(status).json({ success: false, code: error.code || 'DEPOSIT_REJECTION_FAILED', message: error.message || 'لغو Deposit انجام نشد.' });
+  }
 });
 
 router.get('/ops-metrics', (req, res) => {

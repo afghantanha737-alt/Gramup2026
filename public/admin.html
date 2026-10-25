@@ -129,6 +129,7 @@
       <button data-tab="stats" onclick="switchTab('stats')">آمار</button>
       <button data-tab="tasks" onclick="switchTab('tasks')">تسک‌ها</button>
       <button data-tab="withdrawals" onclick="switchTab('withdrawals')">برداشت‌ها</button>
+      <button data-tab="deposits" onclick="switchTab('deposits')">واریزها</button>
       <button data-tab="weekly" onclick="switchTab('weekly')">جوایز لیدربورد</button>
       <button data-tab="audit" onclick="switchTab('audit')">حسابرسی مالی</button>
       <button data-tab="ops" onclick="switchTab('ops')">وضعیت سیستم</button>
@@ -300,6 +301,27 @@
           </select>
         </div>
         <div id="withdrawalsList" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <!-- DEPOSITS -->
+    <div id="tab-deposits" class="tabContent hidden">
+      <div class="card">
+        <div class="flexBetween">
+          <b>واریزهای Native GRAM</b>
+          <div class="row">
+            <select id="depositFilter" onchange="loadDeposits()" style="width:auto;margin:0">
+              <option value="">همه</option>
+              <option value="pending" selected>در انتظار تأیید</option>
+              <option value="confirmed">تأییدشده</option>
+              <option value="rejected">لغوشده/ردشده</option>
+            </select>
+            <button class="secondary" type="button" onclick="loadDeposits()">به‌روزرسانی</button>
+          </div>
+        </div>
+        <div id="depositSummary" class="statsGrid" style="margin-top:12px"></div>
+        <p class="small">تأیید فقط پس از بررسی واقعی تراکنش روی TON Mainnet انجام می‌شود. تغییر وضعیت دستی بدون تراکنش واقعی باعث افزایش موجودی نمی‌شود.</p>
+        <div id="depositsList" style="margin-top:10px"></div>
       </div>
     </div>
 
@@ -746,6 +768,7 @@ function switchTab(tab) {
   if (tab === "stats") { loadStats(); loadLiabilitySummary(); }
   if (tab === "tasks") { loadTasks(); loadScreenshotSubmissions(); }
   if (tab === "withdrawals") loadWithdrawals();
+  if (tab === "deposits") loadDeposits();
   if (tab === "users") loadUsers();
   if (tab === "logs") loadLogs();
   if (tab === "tasks") loadTaskFormSettings();
@@ -1373,6 +1396,58 @@ async function loadWithdrawals() {
   } catch (error) {
     container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
+}
+
+const DEPOSIT_STATUS_FA = { pending: "در انتظار تأیید", confirmed: "تأییدشده", rejected: "لغوشده/ردشده" };
+function renderDepositSummary(summary) {
+  const n = value => (Number(value) || 0).toLocaleString("fa-IR", { maximumFractionDigits: 9 });
+  const box = document.getElementById("depositSummary");
+  if (!box) return;
+  box.innerHTML = `
+    <div class="card" style="margin-bottom:0"><div class="small">مجموع واریز تأییدشده</div><div style="font-size:20px;font-weight:800">${n(summary?.totalConfirmedAmount)} GRAM</div><div class="small">${n(summary?.totalConfirmedCount)} تراکنش</div></div>
+    <div class="card" style="margin-bottom:0"><div class="small">در انتظار تأیید</div><div style="font-size:20px;font-weight:800">${n(summary?.pending?.amount)} GRAM</div><div class="small">${n(summary?.pending?.count)} تراکنش</div></div>
+    <div class="card" style="margin-bottom:0"><div class="small">لغوشده/ردشده</div><div style="font-size:20px;font-weight:800">${n(summary?.rejected?.amount)} GRAM</div><div class="small">${n(summary?.rejected?.count)} تراکنش</div></div>`;
+}
+
+async function loadDeposits() {
+  const container = document.getElementById("depositsList");
+  if (!container) return;
+  container.innerHTML = '<div class="empty">در حال بارگذاری واریزها...</div>';
+  const status = document.getElementById("depositFilter")?.value || "";
+  try {
+    const data = await api(`/api/admin/deposits${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+    renderDepositSummary(data.summary || {});
+    const list = data.deposits || [];
+    if (!list.length) { container.innerHTML = '<div class="empty">واریزی برای این وضعیت وجود ندارد.</div>'; return; }
+    const n = value => (Number(value) || 0).toLocaleString("fa-IR", { maximumFractionDigits: 9 });
+    container.innerHTML = list.map(d => {
+      const user = d.user?.firstName || (d.user?.username ? `@${d.user.username}` : d.user?.telegramId || "کاربر حذف‌شده");
+      const date = d.createdAt ? new Date(d.createdAt).toLocaleString("fa-IR") : "—";
+      return `<div class="card" style="margin-bottom:10px">
+        <div class="flexBetween"><div><b>${escapeHtml(user)}</b><div class="small">Telegram ID: ${escapeHtml(d.user?.telegramId || "—")}</div></div><span class="badge ${d.status === "confirmed" ? "approved" : d.status === "rejected" ? "rejected" : "pending"}">${escapeHtml(DEPOSIT_STATUS_FA[d.status] || d.status)}</span></div>
+        <div class="small" style="margin-top:8px">شناسه: <span style="font-family:monospace">${escapeHtml(d._id)}</span> · تاریخ: ${escapeHtml(date)}</div>
+        <div style="margin-top:6px">مبلغ: <b>${n(d.amount || d.requestedAmount)} GRAM</b> · شبکه: ${escapeHtml(d.network || "TON Mainnet")}</div>
+        <div class="small" style="margin-top:5px">Reference: <span style="font-family:monospace;user-select:all">${escapeHtml(d.reference || "—")}</span></div>
+        ${d.txHash ? `<div class="small" style="margin-top:5px">TxID: <span style="font-family:monospace;user-select:all">${escapeHtml(d.txHash)}</span></div>` : ""}
+        ${d.status === "pending" ? `<div class="row" style="margin-top:10px"><button class="success" type="button" onclick="approveDeposit('${d._id}')">بررسی و تأیید</button><button class="danger" type="button" onclick="rejectDeposit('${d._id}')">لغو Deposit</button></div>` : ""}
+        ${d.verificationNote ? `<div class="small" style="margin-top:6px">یادداشت: ${escapeHtml(d.verificationNote)}</div>` : ""}
+      </div>`;
+    }).join("");
+  } catch (error) { container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; }
+}
+
+async function approveDeposit(id) {
+  if (!confirm("سیستم تراکنش واقعی TON را بررسی می‌کند و فقط در صورت تطبیق، موجودی کاربر را افزایش می‌دهد. ادامه؟")) return;
+  try { await api(`/api/admin/deposits/${id}/approve`, { method: "POST", body: JSON.stringify({}) }); showMsg("Deposit با موفقیت بررسی و تأیید شد.", "success"); loadDeposits(); }
+  catch (error) { showMsg(error.message, "error"); }
+}
+
+async function rejectDeposit(id) {
+  const reason = prompt("دلیل لغو یا رد Deposit را وارد کنید (الزامی):");
+  if (reason === null || !reason.trim()) { showMsg("دلیل لغو الزامی است.", "error"); return; }
+  if (!confirm("این Deposit لغو می‌شود و هیچ موجودی به کاربر اضافه نخواهد شد. ادامه؟")) return;
+  try { await api(`/api/admin/deposits/${id}/reject`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) }); showMsg("Deposit لغو شد.", "success"); loadDeposits(); }
+  catch (error) { showMsg(error.message, "error"); }
 }
 
 function showApproveForm(id) {

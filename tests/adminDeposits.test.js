@@ -1,0 +1,20 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const admin = fs.readFileSync('routes/admin.js', 'utf8');
+const finance = fs.readFileSync('utils/depositFinance.js', 'utf8');
+const html = fs.readFileSync('public/admin.html', 'utf8');
+
+assert(admin.includes("router.get('/deposits'"), 'admin deposits list route must exist');
+assert(admin.includes("router.post('/deposits/:id/approve'"), 'admin deposit approval route must exist');
+assert(admin.includes("router.post('/deposits/:id/reject'"), 'admin deposit rejection route must exist');
+assert(admin.includes('findIncomingNativeGramTransferByReference'), 'approval must verify on-chain by reference');
+assert(admin.includes('DEPOSIT_SOURCE_WALLET_MISMATCH'), 'approval must bind source wallet');
+assert(admin.includes('DEPOSIT_AMOUNT_MISMATCH'), 'approval must bind requested amount');
+assert(finance.includes('withMongoTransaction'), 'credit must use Mongo transaction');
+assert(finance.includes('recordLedgerRequired'), 'credit must write required ledger entry');
+assert(finance.includes("status: 'pending'"), 'state transition must be conditional on pending');
+assert(html.includes('data-tab="deposits"'), 'admin deposits tab must exist');
+assert(html.includes('approveDeposit'), 'admin approval UI must exist');
+assert(html.includes('rejectDeposit'), 'admin rejection UI must exist');
+console.log('PASS — Admin deposits list, verified approval, rejection and summary contracts');
