@@ -178,16 +178,54 @@ function haptic(type = "light") {
 
 /* ================= TOAST ================= */
 let toastTimer = null;
+function celebrateTransaction() {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const burst = document.createElement('div');
+  burst.className = 'successBurst';
+  for (let index = 0; index < 18; index += 1) {
+    const piece = document.createElement('i');
+    piece.style.setProperty('--angle', `${index * 20 + Math.random() * 12}deg`);
+    piece.style.setProperty('--distance', `${82 + Math.random() * 92}px`);
+    piece.style.setProperty('--delay', `${Math.random() * 90}ms`);
+    piece.style.setProperty('--burst-color', ['#67e8f9', '#a78bfa', '#f5c451', '#34d399'][index % 4]);
+    burst.appendChild(piece);
+  }
+  document.body.appendChild(burst);
+  setTimeout(() => burst.remove(), 980);
+}
 function toast(message, type = "normal") {
   const el = $("#toast");
   if (!el) return;
   clearTimeout(toastTimer);
   el.textContent = message;
-  el.classList.remove("show", "success", "error", "warning");
+  el.classList.remove("show", "success", "error", "warning", "transactionPulse");
+  el.dataset.icon = type === "success" ? "✓" : type === "error" ? "!" : type === "warning" ? "⌁" : "✦";
   if (type !== "normal") el.classList.add(type);
-  requestAnimationFrame(() => el.classList.add("show"));
+  requestAnimationFrame(() => {
+    el.classList.add("show");
+    if (type === "success") {
+      el.classList.add("transactionPulse");
+      celebrateTransaction();
+      haptic("success");
+    }
+  });
   toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
 }
+
+/* Touch feedback is delegated once so dynamically rendered cards and buttons get the same motion. */
+document.addEventListener("click", event => {
+  const target = event.target?.closest?.("button, a, [role='button']");
+  if (!target || target.disabled || target.getAttribute("aria-disabled") === "true") return;
+  const rect = target.getBoundingClientRect();
+  const ripple = document.createElement("span");
+  ripple.className = "ripple";
+  ripple.style.left = `${event.clientX - rect.left}px`;
+  ripple.style.top = `${event.clientY - rect.top}px`;
+  target.querySelectorAll(":scope > .ripple").forEach(item => item.remove());
+  target.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 650);
+  if (target.matches("button")) haptic("light");
+}, { passive: true });
 
 /* ================= SAFE HTML ================= */
 function escapeHTML(value) {
