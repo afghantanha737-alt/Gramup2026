@@ -12,11 +12,12 @@
   },
   "dependencies": {
     "@ton/ton": "^16.3.0",
+    "body-parser": "1.20.9",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "mongoose": "^8.5.0",
-    "multer": "^2.3.0"
+    "multer": "2.5.0"
   },
   "engines": {
     "node": ">=18.0.0"

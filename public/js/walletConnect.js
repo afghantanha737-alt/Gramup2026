@@ -510,7 +510,20 @@
       return state;
     }
     try {
-      state.ui = new window.TON_CONNECT_UI.TonConnectUI({ manifestUrl });
+      const options = { manifestUrl };
+      // In Telegram Mini Apps, an explicit TWA return target keeps the user
+      // inside the same GramUp flow after Tonkeeper approval. The endpoint
+      // returns only the public bot link and never exposes credentials.
+      if (window.Telegram?.WebApp?.initData) {
+        try {
+          const infoResponse = await fetch('/api/app-info', { headers: { accept: 'application/json' }, cache: 'no-store' });
+          const info = infoResponse.ok ? await infoResponse.json() : null;
+          if (info?.botLink && /^https:\/\/t\.me\/[A-Za-z0-9_]{5,32}\/[A-Za-z0-9_-]{1,64}$/.test(info.botLink)) {
+            options.actionsConfiguration = { returnStrategy: 'back', twaReturnUrl: info.botLink };
+          }
+        } catch { /* browser fallback: TON Connect uses its default return flow */ }
+      }
+      state.ui = new window.TON_CONNECT_UI.TonConnectUI(options);
       // Pin fresh connections to the same Mainnet accepted by the proof and financial APIs.
       if (!state.ui.connected && typeof state.ui.setConnectionNetwork === 'function') {
         state.ui.setConnectionNetwork('-239');

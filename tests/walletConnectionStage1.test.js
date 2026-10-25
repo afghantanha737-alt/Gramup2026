@@ -35,6 +35,8 @@ assert(wallet.includes('state.ui.openModal()'));
 assert(wallet.includes('state.connected = false; state.proofVerified = false'));
 assert(wallet.includes('onStatusChange(wallet => applyWallet(wallet), handleConnectionError)'));
 assert(wallet.includes('state.proofAddress === state.address'), 'proof must match the currently connected address');
+assert(wallet.includes("fetch('/api/app-info'"), 'Telegram Mini App resolves a public TWA return URL');
+assert(wallet.includes('twaReturnUrl: info.botLink'), 'Tonkeeper returns to the public GramUp Mini App');
 assert(wallet.includes("async function requestDeposit(amount)"));
 assert(wallet.includes("async function verifyDeposit(depositId)"));
 assert(wallet.includes("async function requestWithdrawal(gram, idempotencyKey)"));
