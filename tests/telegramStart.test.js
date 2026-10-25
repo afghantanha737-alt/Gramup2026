@@ -47,6 +47,7 @@ function fixture(existingUser = null) {
     generateReferralCode: id => `CODE${id}`,
     linkReferralByCode,
     botText: (key, language, name) => `${key}:${language}:${name}`,
+    welcomeImagePath: null,
     logger: { error: () => {} }
   };
   return { users, sent, linked, User, dependencies };

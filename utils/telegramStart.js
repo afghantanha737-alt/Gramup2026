@@ -1,8 +1,11 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { contactRequestKeyboard } = require('./telegramPhoneContact');
 const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 const START_COMMAND = /^\/start(?:@[A-Za-z0-9_]+)?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/;
+const DEFAULT_WELCOME_IMAGE_PATH = path.join(__dirname, '..', 'public', 'img', 'welcome-bot.jpg');
 
 function parseTelegramStart(text) {
   const match = START_COMMAND.exec(String(text || '').trim());
@@ -64,6 +67,7 @@ async function handleTelegramStart({
   generateReferralCode,
   linkReferralByCode,
   botText,
+  welcomeImagePath = process.env.WELCOME_IMAGE_PATH || DEFAULT_WELCOME_IMAGE_PATH,
   logger = console
 }) {
   const command = parseTelegramStart(message?.text);
@@ -118,12 +122,21 @@ async function handleTelegramStart({
   const fallbackName = language === 'en' ? 'friend' : 'دوست عزیز';
   const name = message.from.first_name || fallbackName;
   const options = replyMarkup ? { reply_markup: replyMarkup } : {};
+  const welcomeText = botText('welcome', language, name);
+  let welcomeImage = null;
+  if (welcomeImagePath) {
+    try {
+      welcomeImage = fs.readFileSync(welcomeImagePath);
+    } catch (error) {
+      logger.warn?.('Telegram welcome image could not be read; using text fallback:', error.message || error);
+    }
+  }
 
-  await bot.sendMessage(
-    message.chat.id,
-    botText('welcome', language, name),
-    options
-  );
+  if (welcomeImage && typeof bot.sendPhoto === 'function') {
+    await bot.sendPhoto(message.chat.id, welcomeImage, { caption: welcomeText, ...options });
+  } else {
+    await bot.sendMessage(message.chat.id, welcomeText, options);
+  }
 
   return {
     isNewUser,

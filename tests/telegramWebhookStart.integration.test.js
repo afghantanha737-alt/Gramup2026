@@ -48,6 +48,10 @@ bot.sendMessage = async (chatId, text, options) => {
   sentMessages.push({ chatId, text, options });
   return { message_id: sentMessages.length };
 };
+bot.sendPhoto = async (chatId, _photo, options = {}) => {
+  sentMessages.push({ chatId, text: options.caption || '', options, photo: true });
+  return { message_id: sentMessages.length };
+};
 
 const telegramRouter = require('../routes/telegramWebhook');
 const app = express();
@@ -79,6 +83,7 @@ app.use('/api/telegram', telegramRouter);
     assert.strictEqual(first.status, 200, 'successful /start update must receive HTTP 200');
     assert.strictEqual(users.has('111'), true, 'new Telegram user must be created');
     assert.strictEqual(sentMessages.length, 1, 'bot must send the Welcome message');
+    assert.strictEqual(sentMessages[0].photo, true, 'welcome must be sent as a photo when the asset is available');
     assert.ok(sentMessages[0].text.includes('سلام New'), 'the bot sends the existing localized Welcome');
     assert.ok(sentMessages[0].text.includes('به Gramup خوش آمدی'));
     const firstUrl = sentMessages[0].options.reply_markup.inline_keyboard[0][0].web_app.url;
@@ -113,9 +118,9 @@ app.use('/api/telegram', telegramRouter);
     assert.strictEqual(sentMessages.length, 3, 'unauthenticated webhook request must not send a message');
 
     let shouldFailFirstAttempt = true;
-    bot.sendMessage = async (chatId, text, options) => {
+    bot.sendPhoto = async (chatId, _photo, options = {}) => {
       if (shouldFailFirstAttempt) { shouldFailFirstAttempt = false; throw new Error('simulated send failure'); }
-      sentMessages.push({ chatId, text, options });
+      sentMessages.push({ chatId, text: options.caption || '', options, photo: true });
       return { message_id: sentMessages.length };
     };
     const failed = await postUpdate({
