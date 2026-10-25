@@ -36,6 +36,14 @@ function fixture(existingUser = null) {
       const user = { _id: 'new-user-id', language: 'fa', ...values };
       users.set(String(user.telegramId), user);
       return user;
+    },
+    updateOne: async (filter, update) => {
+      const user = [...users.values()].find(candidate => String(candidate._id) === String(filter._id));
+      if (!user) return { modifiedCount: 0 };
+      const expected = filter.lastAutoWelcomeKey?.$ne;
+      if (expected !== undefined && user.lastAutoWelcomeKey === expected) return { modifiedCount: 0 };
+      Object.assign(user, update.$set || {});
+      return { modifiedCount: 1 };
     }
   };
   const bot = { sendMessage: async (...args) => { sent.push(args); return { message_id: 1 }; } };
@@ -69,6 +77,12 @@ function fixture(existingUser = null) {
   assert.strictEqual(freshButton.text, 'Open Mini App');
   assert.strictEqual(new URL(freshButton.web_app.url).searchParams.get('ref'), 'inviter_42');
   assert.deepStrictEqual(fresh.sent[0][2].reply_markup.inline_keyboard[1].map(button => button.text), ['Community', 'Payouts']);
+  const duplicateStart = await handleTelegramStart({
+    ...fresh.dependencies,
+    message: { text: '/start inviter_42', from: { id: 123, first_name: 'Ava' }, chat: { id: 123 } }
+  });
+  assert.strictEqual(duplicateStart.welcomeSent, true);
+  assert.strictEqual(fresh.sent.length, 1, 'the same start payload must not send a duplicate welcome');
 
   const contactRequest = fixture();
   const contactResult = await handleTelegramStart({

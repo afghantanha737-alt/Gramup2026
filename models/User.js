@@ -67,7 +67,9 @@ const userSchema = new mongoose.Schema(
     // اگر تلگرام 403 بدهد (ربات بلاک شده یا حساب غیرفعال است)، از ارسال‌های بعدی حذف می‌شود.
     telegramBlockedAt: { type: Date, default: null },
     // آخرین باری که یادآوری ورود روزانه برایش ارسال شد (برای جلوگیری از ارسال تکراری در همان روز)
-    lastReminderSentAt: { type: Date, default: null }
+    lastReminderSentAt: { type: Date, default: null },
+    // آخرین payloadای که برای آن welcome خودکار از startapp/auth ارسال شده است.
+    lastAutoWelcomeKey: { type: String, default: '' }
   },
   { timestamps: true }
 );

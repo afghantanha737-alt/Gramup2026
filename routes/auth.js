@@ -10,6 +10,7 @@ const { referralIdentifierQuery } = require('../utils/referralCore');
 const { isVerifiedAllowedPhone, contactRequestKeyboard } = require('../utils/telegramPhoneContact');
 const { bot } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
+const { sendWelcomeMessage, welcomeTriggerKey } = require('../utils/telegramStart');
 const Settings = require('../models/Settings');
 
 const auth = requireTelegramAuth(process.env.BOT_TOKEN);
@@ -33,6 +34,25 @@ router.get('/me', auth, async (req, res) => {
       const risk = assessReferralRisk({ referrer, signupIpHash: hashNetworkIdentifier(req.ip), signupDeviceHash: hashDeviceIdentifier(req.get('user-agent') || '') });
       await linkReferral({ referredUserId: u._id, referrerId: referrer._id, riskScore: risk.score, riskFlags: risk.flags, source: 'signup' });
       u = await User.findById(u._id);
+    }
+  }
+
+  const autoWelcomeIdentifier = String(req.telegramStartParam || refFromUrl || '').trim();
+  if (autoWelcomeIdentifier && bot) {
+    try {
+      await sendWelcomeMessage({
+        message: { chat: { id: u.telegramId }, from: req.tgUser },
+        user: u,
+        bot,
+        User,
+        appUrl: process.env.APP_URL,
+        payload: autoWelcomeIdentifier,
+        botText,
+        triggerKey: welcomeTriggerKey(autoWelcomeIdentifier)
+      });
+    } catch (error) {
+      // Welcome delivery must not prevent the Mini App from bootstrapping.
+      console.warn('Automatic startapp welcome delivery failed:', error.message || error);
     }
   }
 

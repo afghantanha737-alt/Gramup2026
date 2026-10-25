@@ -182,6 +182,7 @@ function requireTelegramAuth(botToken) {
 
       req.tgUser = verified.user;
       req.dbUser = dbUser;
+      req.telegramStartParam = verified.startParam || '';
       if (!isVerifiedAllowedPhone(dbUser) && !isPhoneVerificationBootstrapRequest(req)) {
         return res.status(403).json({
           success: false,

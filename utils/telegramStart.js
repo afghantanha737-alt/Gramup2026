@@ -59,6 +59,73 @@ function buildWelcomeReplyMarkup(webAppUrl) {
   };
 }
 
+function welcomeTriggerKey(value) {
+  const normalized = String(value || '').trim();
+  return normalized ? `payload:${normalized.slice(0, 64)}` : '';
+}
+
+async function claimWelcomeTrigger(User, user, triggerKey) {
+  if (!triggerKey || !User || !user?._id || typeof User.updateOne !== 'function') return true;
+  const result = await User.updateOne(
+    { _id: user._id, lastAutoWelcomeKey: { $ne: triggerKey } },
+    { $set: { lastAutoWelcomeKey: triggerKey } }
+  );
+  return Number(result?.modifiedCount ?? result?.nModified ?? 0) > 0;
+}
+
+async function releaseWelcomeTrigger(User, user, triggerKey) {
+  if (!triggerKey || !User || !user?._id || typeof User.updateOne !== 'function') return;
+  await User.updateOne(
+    { _id: user._id, lastAutoWelcomeKey: triggerKey },
+    { $set: { lastAutoWelcomeKey: '' } }
+  ).catch(() => {});
+}
+
+async function sendWelcomeMessage({
+  message,
+  user,
+  bot,
+  appUrl,
+  payload = null,
+  isNewUser = false,
+  botText,
+  User,
+  welcomeImagePath = process.env.WELCOME_IMAGE_PATH || DEFAULT_WELCOME_IMAGE_PATH,
+  triggerKey = '',
+  logger = console
+}) {
+  const claimed = await claimWelcomeTrigger(User, user, triggerKey);
+  if (!claimed) return { sent: false, hasMiniAppButton: Boolean(appUrl) };
+
+  const language = user?.language || 'fa';
+  const webAppUrl = buildMiniAppUrl(appUrl, payload, isNewUser);
+  const replyMarkup = buildWelcomeReplyMarkup(webAppUrl);
+  const fallbackName = language === 'en' ? 'friend' : 'دوست عزیز';
+  const name = message?.from?.first_name || user?.firstName || fallbackName;
+  const options = replyMarkup ? { reply_markup: replyMarkup } : {};
+  const welcomeText = botText('welcome', language, name);
+  let welcomeImage = null;
+  if (welcomeImagePath) {
+    try {
+      welcomeImage = fs.readFileSync(welcomeImagePath);
+    } catch (error) {
+      logger.warn?.('Telegram welcome image could not be read; using text fallback:', error.message || error);
+    }
+  }
+
+  try {
+    if (welcomeImage && typeof bot.sendPhoto === 'function') {
+      await bot.sendPhoto(message.chat.id, welcomeImage, { caption: welcomeText, ...options });
+    } else {
+      await bot.sendMessage(message.chat.id, welcomeText, options);
+    }
+  } catch (error) {
+    await releaseWelcomeTrigger(User, user, triggerKey);
+    throw error;
+  }
+  return { sent: true, hasMiniAppButton: Boolean(replyMarkup) };
+}
+
 async function handleTelegramStart({
   message,
   bot,
@@ -117,33 +184,33 @@ async function handleTelegramStart({
     if (typeof user.save === 'function') await user.save();
   }
 
-  const webAppUrl = buildMiniAppUrl(appUrl, command.payload, isNewUser);
-  const replyMarkup = buildWelcomeReplyMarkup(webAppUrl);
-  const fallbackName = language === 'en' ? 'friend' : 'دوست عزیز';
-  const name = message.from.first_name || fallbackName;
-  const options = replyMarkup ? { reply_markup: replyMarkup } : {};
-  const welcomeText = botText('welcome', language, name);
-  let welcomeImage = null;
-  if (welcomeImagePath) {
-    try {
-      welcomeImage = fs.readFileSync(welcomeImagePath);
-    } catch (error) {
-      logger.warn?.('Telegram welcome image could not be read; using text fallback:', error.message || error);
-    }
-  }
-
-  if (welcomeImage && typeof bot.sendPhoto === 'function') {
-    await bot.sendPhoto(message.chat.id, welcomeImage, { caption: welcomeText, ...options });
-  } else {
-    await bot.sendMessage(message.chat.id, welcomeText, options);
-  }
+  const sentWelcome = await sendWelcomeMessage({
+    message,
+    user,
+    bot,
+    appUrl,
+    payload: command.payload,
+    isNewUser,
+    botText,
+    User,
+    welcomeImagePath,
+    triggerKey: welcomeTriggerKey(command.payload),
+    logger
+  });
 
   return {
     isNewUser,
     hadReferralPayload: Boolean(command.payload),
     welcomeSent: true,
-    hasMiniAppButton: Boolean(replyMarkup)
+    hasMiniAppButton: sentWelcome.hasMiniAppButton
   };
 }
 
-module.exports = { parseTelegramStart, buildMiniAppUrl, buildWelcomeReplyMarkup, handleTelegramStart };
+module.exports = {
+  parseTelegramStart,
+  buildMiniAppUrl,
+  buildWelcomeReplyMarkup,
+  welcomeTriggerKey,
+  sendWelcomeMessage,
+  handleTelegramStart
+};
