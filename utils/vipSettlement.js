@@ -3,7 +3,7 @@
 const VipSubscription = require('../models/VipSubscription');
 const User = require('../models/User');
 const PointsLedger = require('../models/PointsLedger');
-const { recordLedgerRequired } = require('../utils/ledger');
+const { recordLedgerRequired } = require('./ledger');
 const { withMongoTransaction } = require('./mongoTransaction');
 
 function duplicateLedgerError() {
@@ -36,12 +36,9 @@ async function settleOne(subscriptionId, now) {
     subscription.principalReturnedAt = now;
     await subscription.save({ session });
 
-    const isGram = subscription.pricingCurrency === 'gram' || Number.isFinite(Number(subscription.priceGram));
-    const currency = isGram ? 'gram' : 'points';
-    const amount = isGram ? Number(subscription.priceGram) : Number(subscription.pricePoints);
     const user = await User.findOneAndUpdate(
       { _id: subscription.user },
-      { $inc: isGram ? { gramBalance: amount } : { points: amount } },
+      { $inc: { points: subscription.pricePoints } },
       { new: true, session }
     );
     if (!user) throw new Error('VIP subscriber no longer exists; principal return transaction was not committed.');
@@ -49,17 +46,17 @@ async function settleOne(subscriptionId, now) {
     const ledger = await recordLedgerRequired({
       user: user._id,
       type: 'vip_principal_return',
-      currency,
-      amount,
+      currency: 'points',
+      amount: subscription.pricePoints,
       description: '',
-      balanceAfter: isGram ? user.gramBalance : user.points,
+      balanceAfter: user.points,
       sourceId,
       transactionId: sourceId,
       session
     });
     if (!ledger.created) throw duplicateLedgerError();
 
-    return { settled: true, subscriptionId: String(subscription._id), ...(isGram ? { gramBalance: user.gramBalance, principalGram: amount } : { points: user.points, principalPoints: amount }) };
+    return { settled: true, subscriptionId: String(subscription._id), points: user.points };
   });
 }
 

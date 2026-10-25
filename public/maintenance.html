@@ -12,7 +12,6 @@
     .mark{width:88px;height:88px;margin:0 auto 22px;display:grid;place-items:center;border-radius:28px;background:linear-gradient(135deg,#c4b5fd,#7c3aed);box-shadow:0 14px 36px rgba(124,58,237,.35)}
     .mark svg{width:52px;height:52px;stroke:#fff;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.eyebrow{color:var(--accent);font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}.title{margin:10px 0 12px;font-size:29px;line-height:1.25}.text{margin:0 auto 25px;max-width:390px;color:var(--muted);font-size:15px;line-height:1.9}.langs{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.langs button{border:1px solid var(--line);border-radius:999px;padding:9px 14px;background:rgba(255,255,255,.05);color:var(--muted);font:inherit;font-size:12px;cursor:pointer}.langs button.active,.langs button:hover{border-color:var(--accent);background:rgba(167,139,250,.16);color:var(--text)}
   </style>
-  <link rel="stylesheet" href="css/motion.css?v=20261026-motion-2">
 </head>
 <body>
   <main class="card" role="status" aria-live="polite">
@@ -46,6 +45,5 @@
     document.querySelectorAll('[data-lang]').forEach(button => button.addEventListener('click', () => setLanguage(button.dataset.lang)));
     setLanguage(initial);
   </script>
-  <script src="js/motion.js?v=20261026-motion-2"></script>
 </body>
 </html>

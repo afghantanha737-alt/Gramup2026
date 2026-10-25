@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>پنل ادمین | GRAM Rewards</title>
+<title>پنل ادمین | Points Rewards</title>
 <style>
   :root{
     --bg:#0b0c11; --surface:#12141c; --surface2:#171a22; --line:rgba(255,255,255,.09);
@@ -96,7 +96,6 @@
   .modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.76);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:3vh 12px;overflow:auto}
   .modalCard{width:min(900px,100%);max-height:94vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
 </style>
-  <link rel="stylesheet" href="css/motion.css?v=20261026-motion-2">
 </head>
 <body>
 
@@ -209,7 +208,7 @@
         </div>
         <label id="taskUrlLabel">لینک انجام Task (اختیاری؛ برای دکمه‌ی «باز کردن لینک»)</label>
         <input id="taskUrl" placeholder="https://...">
-        <label>مقدار پاداش (GRAM)</label>
+        <label>مقدار پاداش (پوینت)</label>
         <input id="taskReward" type="number" placeholder="مثلاً 100">
         <div id="taskCapacityFields">
           <label>حداکثر تعداد تکمیل (اختیاری — برای تسک اسپانسری نادیده گرفته می‌شود)</label>
@@ -371,7 +370,7 @@
           <select id="userSortFilter" onchange="loadUsers()" style="flex:1;min-width:110px;margin:0">
             <option value="newest">جدیدترین</option>
             <option value="oldest">قدیمی‌ترین</option>
-            <option value="points">بیشترین GRAM</option>
+            <option value="points">بیشترین پوینت</option>
             <option value="invited">بیشترین دعوت</option>
           </select>
         </div>
@@ -379,7 +378,7 @@
           <b>عملیات گروهی موجودی</b>
           <p class="small">فقط کاربران انتخاب‌شده در صفحهٔ فعلی اعمال می‌شوند؛ برای کاربران دیگر از صفحه‌بندی یا جستجو استفاده کنید. هر کاربر جداگانه در Audit و Ledger ثبت خواهد شد. حداکثر ۱۰۰ کاربر.</p>
           <div class="row">
-            <select id="bulkCurrency" style="flex:1;margin:0"><option value="points">GRAM</option><option value="gram">GRAM</option></select>
+            <select id="bulkCurrency" style="flex:1;margin:0"><option value="points">Points</option><option value="gram">GRAM</option></select>
             <select id="bulkAction" style="flex:1;margin:0" onchange="toggleBulkAmount()"><option value="add">افزودن</option><option value="zero">صفرکردن</option></select>
             <input id="bulkAmount" type="number" min="0" step="1" placeholder="مقدار" style="flex:1;margin:0">
             <input id="bulkReason" placeholder="دلیل اجباری" style="flex:2;margin:0">
@@ -473,7 +472,7 @@
     <div id="tab-vip" class="tabContent hidden">
       <div class="card">
         <div class="flexBetween"><b>VIP Management</b><button type="button" class="secondary" onclick="loadVipManagement()">Refresh</button></div>
-        <p class="small">Read-only subscription reporting. Revenue and rewards are shown in GRAM using recorded purchase snapshots.</p>
+        <p class="small">Read-only subscription reporting. Revenue and rewards are shown in Points using recorded purchase snapshots.</p>
         <div id="vipSummaryGrid" class="statsGrid" style="margin-top:12px"><div class="empty">Loading VIP summary…</div></div>
       </div>
 
@@ -498,7 +497,7 @@
 
       <div class="card">
         <div class="flexBetween"><b>VIP Plan Settings</b><span class="small">The existing plan API and validation are unchanged.</span></div>
-        <p class="small">The purchase amount is deducted from GRAM. Existing plan changes continue to affect new purchases only.</p>
+        <p class="small">The purchase amount is deducted from Points. Existing plan changes continue to affect new purchases only.</p>
         <div id="vipPlansAdminStatus" class="small" style="margin:8px 0"></div>
         <div id="vipPlansAdminList"></div>
         <button type="button" class="secondary" onclick="saveVipPlansAdmin()" style="margin-top:10px">ذخیره پلن‌های VIP</button>
@@ -531,7 +530,7 @@
           <div id="maintenanceAllowedList" class="small" style="margin-top:10px"></div>
           <div id="maintenanceMessage" class="small" style="margin-top:8px"></div>
         </div>
-        <label>نرخ تبدیل (هر GRAM به GRAM)</label>
+        <label>نرخ تبدیل (هر پوینت به GRAM)</label>
         <input id="setRate" type="number" step="0.000001">
         <label>قیمت هر ۱ GRAM به دلار (برای نمایش ≈ USD؛ صفر = مخفی)</label>
         <input id="setGramUsd" type="number" step="0.0001" min="0">
@@ -580,7 +579,7 @@
             <span id="reminderStatusBox">هنوز اجرا نشده.</span>
           </div>
         </div>
-        <label>حداقل GRAM برای برداشت</label>
+        <label>حداقل پوینت برای برداشت</label>
         <input id="setMinWithdraw" type="number">
         <label>پاداش ورود روزانه (پایه)</label>
         <input id="setDaily" type="number">
@@ -588,8 +587,8 @@
         <input id="setStreakBonus" type="number">
         <div style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:14px 0;background:var(--surface2)">
           <b>Referral — پاداش و کمیسیون</b>
-          <p class="small">پاداش مستقیم برای هر دعوت معتبر دقیقاً ۱۰ GRAM است. کمیسیون فقط از GRAM واقعاً کسب‌شده در task، check-in و leaderboard محاسبه می‌شود؛ تبدیل موجودی و پاداش‌های Referral کمیسیون ایجاد نمی‌کنند.</p>
-          <label>پاداش ثابت دعوت مستقیم (GRAM)</label>
+          <p class="small">پاداش مستقیم برای هر دعوت معتبر دقیقاً ۱۰ Points است. کمیسیون فقط از Points واقعاً کسب‌شده در task، check-in و leaderboard محاسبه می‌شود؛ تبدیل موجودی و پاداش‌های Referral کمیسیون ایجاد نمی‌کنند.</p>
+          <label>پاداش ثابت دعوت مستقیم (Points)</label>
           <input id="setReferralInitialReward" type="number" value="10" disabled>
           <label>نرخ ثابت کمیسیون Referral (قابل‌گسترش تا ۱۰ Level)</label>
           <div id="referralLevelRates"></div>
@@ -600,8 +599,8 @@
             <input type="checkbox" id="setWeeklyLeaderboardEnabled" style="width:auto">
             <span>فعال باشد</span>
           </label>
-          <p class="small">GRAMها هر دوشنبه بر اساس UTC از صفر محاسبه می‌شوند. جوایز زیر برای رتبه‌های اول تا سوم است و می‌تواند از بودجه‌ی تبلیغ‌دهنده تأمین شود.</p>
-          <label>جوایز رتبه‌های ۱، ۲ و ۳ (GRAM)</label>
+          <p class="small">امتیازها هر دوشنبه بر اساس UTC از صفر محاسبه می‌شوند. جوایز زیر برای رتبه‌های اول تا سوم است و می‌تواند از بودجه‌ی تبلیغ‌دهنده تأمین شود.</p>
+          <label>جوایز رتبه‌های ۱، ۲ و ۳ (پوینت)</label>
           <div class="row">
             <input id="setWeeklyPrize1" type="number" min="0" step="1" placeholder="رتبه ۱">
             <input id="setWeeklyPrize2" type="number" min="0" step="1" placeholder="رتبه ۲">
@@ -830,7 +829,7 @@ async function loadStats() {
     referralGrid.innerHTML = `
       <div class="card" style="margin-bottom:0"><div class="small">کل Referralهای ثبت‌شده</div><div style="font-size:20px;font-weight:850">${formatFaNumber(s.totalReferred || 0)}</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">Referral فعال</div><div style="font-size:20px;font-weight:850">${formatFaNumber(s.activeReferred || 0)}</div></div>
-      <div class="card" style="margin-bottom:0"><div class="small">GRAM توزیع‌شده به‌صورت کمیسیون</div><div style="font-size:20px;font-weight:850">${formatFaNumber(s.referralCommissionTotalGRAM || 0)}</div><div class="small">${formatFaNumber(s.referralCommissionTransactions || 0)} رویداد Ledger</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">Points توزیع‌شده به‌صورت کمیسیون</div><div style="font-size:20px;font-weight:850">${formatFaNumber(s.referralCommissionTotalPoints || 0)}</div><div class="small">${formatFaNumber(s.referralCommissionTransactions || 0)} رویداد Ledger</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">تبدیل دعوت‌ها</div><div style="font-size:20px;font-weight:850">٪${s.referralConversionRate || 0}</div><div class="small">${formatFaNumber(s.convertedReferred || 0)} از ${formatFaNumber(s.totalReferred || 0)}</div></div>`;
     const levelRows = Array.isArray(s.referralLevelStats) ? s.referralLevelStats : [];
     document.getElementById("referralLevelStats").innerHTML = `
@@ -868,7 +867,7 @@ async function loadLiabilitySummary() {
     const paid = Number(data.withdrawals?.paid?.amount || 0);
     const confirmedDeposits = Number(data.deposits?.confirmed?.amount || 0);
     container.innerHTML = `<div class="statsGrid" style="margin-top:12px">
-      <div class="card" style="margin-bottom:0"><div class="small">تعهد GRAM فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.points?.currentUserLiability)}</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">تعهد Points فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.points?.currentUserLiability)}</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">تعهد GRAM فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.gram?.currentUserLiability)} GRAM</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">برداشت در انتظار/پردازش</div><div style="font-size:20px;font-weight:800">${n(pending + processing)} GRAM</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">برداشت پرداخت‌شده</div><div style="font-size:20px;font-weight:800">${n(paid)} GRAM</div></div>
@@ -1030,7 +1029,7 @@ async function loadScreenshotSubmissions() {
           <td>${escapeHtml(userName)}<br><span class="small">${escapeHtml(item.user?.telegramId || "—")}</span></td>
           <td>${escapeHtml(item.task?.title || "Task حذف‌شده")}</td>
           <td><button class="secondary" type="button" onclick="viewScreenshotSubmission('${item._id}')">مشاهده تصویر</button></td>
-          <td>+${escapeHtml(item.reward)} GRAM</td>
+          <td>+${escapeHtml(item.reward)} Points</td>
           <td>${submitted ? new Date(submitted).toLocaleString("fa-IR") : "—"}</td>
           <td><span class="badge ${item.status === "approved" ? "approved" : item.status === "rejected" ? "rejected" : "pending"}">${escapeHtml(statusLabel)}</span>
             ${item.status === "pending" ? `<div class="row" style="margin-top:6px"><button type="button" onclick="approveScreenshotSubmission('${item._id}')">تأیید و پرداخت</button><button type="button" class="danger" onclick="rejectScreenshotSubmission('${item._id}')">رد</button></div>` : ""}
@@ -1078,7 +1077,7 @@ async function approveScreenshotSubmission(id) {
   if (!confirm("این Screenshot را تأیید و پاداش ثبت‌شده در سرور را پرداخت می‌کنید؟")) return;
   try {
     const result = await api(`/api/admin/task-submissions/${id}/approve`, { method: "POST", body: JSON.stringify({}) });
-    showMsg(`تأیید شد؛ ${result.reward} GRAM پرداخت شد.`, "success");
+    showMsg(`تأیید شد؛ ${result.reward} پوینت پرداخت شد.`, "success");
     await Promise.all([loadScreenshotSubmissions(), loadTasks()]);
   } catch (error) { showMsg(error.message, "error"); }
 }
@@ -1544,7 +1543,7 @@ async function loadWeeklyAwards() {
       return `<tr><td>${row.rank}</td><td>${escapeHtml(row.user?.firstName || row.user?.username || "—")}</td><td>${row.points}</td><td>${data.prizes?.[row.rank - 1] || 0}</td><td><span class="badge ${status === "paid" ? "paid" : status === "failed" ? "rejected" : "pending"}">${status === "paid" ? "پرداخت‌شده" : status === "failed" ? "ناموفق" : "در انتظار پرداخت"}</span></td></tr>`;
     }).join("");
     container.innerHTML = `<div class="small">بازه: ${new Date(data.weekStart).toLocaleDateString("fa-IR")} تا ${new Date(data.weekEnd).toLocaleDateString("fa-IR")}</div>` +
-      (rows ? `<table style="margin-top:8px"><thead><tr><th>رتبه</th><th>کاربر</th><th>GRAM هفته</th><th>جایزه</th><th>وضعیت</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">برای این هفته رتبه‌ای ثبت نشده است.</div>');
+      (rows ? `<table style="margin-top:8px"><thead><tr><th>رتبه</th><th>کاربر</th><th>امتیاز هفته</th><th>جایزه</th><th>وضعیت</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">برای این هفته رتبه‌ای ثبت نشده است.</div>');
   } catch (error) {
     container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
@@ -1553,7 +1552,7 @@ async function loadWeeklyAwards() {
 async function payWeeklyAwards() {
   const key = document.getElementById("weeklyAwardKey").value.trim();
   if (!key) return showMsg("ابتدا هفته را مشخص کنید.", "error");
-  if (!confirm("جوایز این هفته به موجودی GRAM برندگان اضافه می‌شود و هر رتبه فقط یک‌بار پرداخت خواهد شد. ادامه می‌دهید؟")) return;
+  if (!confirm("جوایز این هفته به موجودی پوینت برندگان اضافه می‌شود و هر رتبه فقط یک‌بار پرداخت خواهد شد. ادامه می‌دهید؟")) return;
   try {
     const data = await api(`/api/admin/weekly-leaderboard/${encodeURIComponent(key)}/pay`, { method: "POST", body: JSON.stringify({}) });
     showMsg(`پرداخت انجام شد: ${(data.results || []).filter(item => item.status === "paid").length} رتبه.`, "success");
@@ -1573,7 +1572,7 @@ async function loadFinancialAudit() {
       container.innerHTML = `<div class="empty">اختلافی پیدا نشد. ${data.checkedUsers} کاربر بررسی شد.</div>`;
       return;
     }
-    container.innerHTML = `<div class="small" style="margin-bottom:8px">${data.checkedUsers} کاربر بررسی شد؛ ${data.discrepancyCount} اختلاف نمایش داده می‌شود.</div><table><thead><tr><th>کاربر</th><th>موجودی GRAM</th><th>Ledger GRAM</th><th>اختلاف GRAM</th><th>موجودی GRAM</th><th>Ledger GRAM</th><th>اختلاف GRAM</th></tr></thead><tbody>${data.discrepancies.map(row => `<tr><td>${escapeHtml(row.name || row.telegramId || "—")}</td><td>${row.pointsBalance}</td><td>${row.pointsLedger}</td><td style="color:var(--danger)">${row.pointsDifference}</td><td>${row.gramBalance}</td><td>${row.gramLedger}</td><td style="color:var(--danger)">${row.gramDifference}</td></tr>`).join("")}</tbody></table>`;
+    container.innerHTML = `<div class="small" style="margin-bottom:8px">${data.checkedUsers} کاربر بررسی شد؛ ${data.discrepancyCount} اختلاف نمایش داده می‌شود.</div><table><thead><tr><th>کاربر</th><th>موجودی پوینت</th><th>Ledger پوینت</th><th>اختلاف پوینت</th><th>موجودی GRAM</th><th>Ledger GRAM</th><th>اختلاف GRAM</th></tr></thead><tbody>${data.discrepancies.map(row => `<tr><td>${escapeHtml(row.name || row.telegramId || "—")}</td><td>${row.pointsBalance}</td><td>${row.pointsLedger}</td><td style="color:var(--danger)">${row.pointsDifference}</td><td>${row.gramBalance}</td><td>${row.gramLedger}</td><td style="color:var(--danger)">${row.gramDifference}</td></tr>`).join("")}</tbody></table>`;
   } catch (error) {
     container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
@@ -1638,13 +1637,13 @@ async function loadUsers() {
     }
     container.innerHTML = `
       <table class="adminUsersTable">
-        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه کاربران این صفحه" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>GRAM</th><th>GRAM</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه کاربران این صفحه" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>Points</th><th>GRAM</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
         <tbody>
           ${users.map(u => `
             <tr>
               <td class="usersSelectCell"><input class="user-select" type="checkbox" value="${u._id}" aria-label="انتخاب کاربر" style="width:auto;margin:0"></td>
               <td class="usersNameCell" data-label="نام / یوزرنیم · Telegram ID">${escapeHtml(u.firstName || u.username || "—")}<div class="small">Telegram ID: ${escapeHtml(u.telegramId || "—")}</div></td>
-              <td data-label="GRAM">${Number(u.points || 0)}</td>
+              <td data-label="Points">${Number(u.points || 0)}</td>
               <td data-label="GRAM">${Number(u.gramBalance || 0)}</td>
               <td data-label="دعوت‌شده">${u.invitedCount || 0}</td>
               <td data-label="وضعیت">${u.isBanned ? '<span class="badge rejected">مسدود</span>' : '<span class="badge approved">فعال</span>'}</td>
@@ -1708,9 +1707,9 @@ function renderUserAccount(data) {
   document.getElementById("accountModalTitle").textContent = `${u.firstName || u.username || u.telegramId || "کاربر"} · ${u.telegramId || u._id}`;
   document.getElementById("accountModalBody").innerHTML = `
     <div class="statsGrid" style="margin-top:12px">
-      <div class="card"><div class="small">GRAM موجود</div><b>${Number(b.currentGRAM || 0)}</b></div>
+      <div class="card"><div class="small">Points موجود</div><b>${Number(b.currentPoints || 0)}</b></div>
       <div class="card"><div class="small">GRAM موجود</div><b>${Number(b.currentGram || 0)}</b></div>
-      <div class="card"><div class="small">کل GRAM کسب‌شده</div><b>${Number(b.totalEarnedGRAM || 0)}</b></div>
+      <div class="card"><div class="small">کل Points کسب‌شده</div><b>${Number(b.totalEarnedPoints || 0)}</b></div>
       <div class="card"><div class="small">GRAM واریزشده</div><b>${Number(b.totalGramCredited || 0)}</b></div>
       <div class="card"><div class="small">GRAM برداشت‌شده</div><b>${Number(b.totalWithdrawnGram || 0)}</b></div>
       <div class="card"><div class="small">دعوت / فعال</div><b>${Number(b.referralCount || 0)} / ${Number(b.activeReferralCount || 0)}</b></div>
@@ -1718,7 +1717,7 @@ function renderUserAccount(data) {
     <div class="card">
       <b>تغییر دستی موجودی</b>
       <div class="row" style="margin-top:10px">
-        <select id="accountBalanceCurrency" style="flex:1;margin:0"><option value="points">GRAM</option><option value="gram">GRAM</option></select>
+        <select id="accountBalanceCurrency" style="flex:1;margin:0"><option value="points">Points</option><option value="gram">GRAM</option></select>
         <select id="accountBalanceAction" style="flex:1;margin:0"><option value="add">افزودن</option><option value="subtract">کسر</option><option value="set">تنظیم مقدار دقیق</option><option value="zero">صفرکردن</option></select>
         <input id="accountBalanceAmount" type="number" min="0" step="1" placeholder="مقدار" style="flex:1;margin:0">
       </div>
@@ -1838,7 +1837,7 @@ async function deleteUser(id) {
 async function testWeeklyRewardNotification(id) {
   if (!confirm("این فقط یک پیام آزمایشی Telegram است و هیچ Reward واقعی پرداخت نمی‌شود. ادامه می‌دهید؟")) return;
   const rank = Number(prompt("مقام آزمایشی را وارد کنید (۱ تا ۳):"));
-  const reward = Number(prompt("مقدار Reward آزمایشی را به GRAM وارد کنید:"));
+  const reward = Number(prompt("مقدار Reward آزمایشی را به Points وارد کنید:"));
   if (!Number.isInteger(rank) || rank < 1 || rank > 3 || !Number.isSafeInteger(reward) || reward <= 0) {
     showMsg("مقام و مقدار Reward باید عدد صحیح معتبر باشند.", "error");
     return;
@@ -2053,8 +2052,8 @@ async function loadVipSummaryAdmin() {
       ["Total VIP Purchases", data.totalVipPurchases, ""],
       ["Active VIPs", data.activeVips, ""],
       ["Expired VIPs", data.expiredVips, ""],
-      ["Total VIP Revenue", data.totalVipRevenueGRAM, "GRAM"],
-      ["Total Daily VIP Earnings", data.totalDailyVipEarningsGRAM, "GRAM / day (average)"],
+      ["Total VIP Revenue", data.totalVipRevenuePoints, "Points"],
+      ["Total Daily VIP Earnings", data.totalDailyVipEarningsPoints, "Points / day (average)"],
       ["Total VIP Users", data.totalVipUsers, ""]
     ];
     grid.innerHTML = cards.map(([label, value, unit]) => `<div class="card" style="margin:0"><div class="small">${escapeHtml(label)}</div><strong style="display:block;font-size:20px;margin-top:8px">${formatVipAdminNumber(value)}${unit ? ` <small>${escapeHtml(unit)}</small>` : ""}</strong></div>`).join("");
@@ -2099,9 +2098,9 @@ async function loadVipSubscriptionsAdmin(page = 1) {
           <td>${escapeHtml(formatVipAdminDate(item.startDate))}</td>
           <td>${escapeHtml(formatVipAdminDate(item.expiryDate))}</td>
           <td>${formatVipAdminNumber(item.durationDays)} days</td>
-          <td>${formatVipAdminNumber(item.purchaseAmountGRAM)} GRAM</td>
-          <td>${formatVipAdminNumber(item.dailyEarningGRAM)} GRAM</td>
-          <td>${formatVipAdminNumber(item.totalExpectedEarningGRAM)} GRAM</td>
+          <td>${formatVipAdminNumber(item.purchaseAmountPoints)} Points</td>
+          <td>${formatVipAdminNumber(item.dailyEarningPoints)} Points</td>
+          <td>${formatVipAdminNumber(item.totalExpectedEarningPoints)} Points</td>
           <td><span class="badge ${escapeHtml(item.status)}">${vipAdminStatusLabel(item.status)}</span></td>
           <td>${formatVipAdminNumber(item.remainingDays)}</td>
           <td><button type="button" class="secondary" onclick="openVipDetails('${escapeHtml(item.id)}')">Details</button></td>
@@ -2135,13 +2134,13 @@ async function openVipDetails(id) {
     const item = data.subscription;
     const fields = [
       ["User ID", item.userId], ["Username", item.username ? `@${item.username}` : "—"], ["Name", item.name || "—"],
-      ["VIP Plan", item.planNumber], ["Purchase Amount", `${formatVipAdminNumber(item.purchaseAmountGRAM)} GRAM`],
+      ["VIP Plan", item.planNumber], ["Purchase Amount", `${formatVipAdminNumber(item.purchaseAmountPoints)} Points`],
       ["Purchase Date", formatVipAdminDate(item.purchaseDate)], ["Start Date", formatVipAdminDate(item.startDate)],
       ["Expiry Date", formatVipAdminDate(item.expiryDate)], ["Duration", `${formatVipAdminNumber(item.durationDays)} days`],
-      ["Daily Earning", `${formatVipAdminNumber(item.dailyEarningGRAM)} GRAM`],
-      ["Total Expected Earning", `${formatVipAdminNumber(item.totalExpectedEarningGRAM)} GRAM`],
-      ["Earned to Date", `${formatVipAdminNumber(item.earnedToDateGRAM)} GRAM`],
-      ["Remaining Earning", `${formatVipAdminNumber(item.remainingEarningGRAM)} GRAM`],
+      ["Daily Earning", `${formatVipAdminNumber(item.dailyEarningPoints)} Points`],
+      ["Total Expected Earning", `${formatVipAdminNumber(item.totalExpectedEarningPoints)} Points`],
+      ["Earned to Date", `${formatVipAdminNumber(item.earnedToDatePoints)} Points`],
+      ["Remaining Earning", `${formatVipAdminNumber(item.remainingEarningPoints)} Points`],
       ["Claims", `${formatVipAdminNumber(item.claimsCompleted)} / ${formatVipAdminNumber(item.totalClaims)}`],
       ["Remaining Days", formatVipAdminNumber(item.remainingDays)], ["Current Status", vipAdminStatusLabel(item.status)]
     ];
@@ -2167,7 +2166,7 @@ async function loadVipPlansAdmin() {
       <div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:var(--surface)">
         <b>پلن ${Number(plan.planNumber)}</b>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px">
-          <div><label>قیمت (GRAM)</label><input id="vipPlanPrice${Number(plan.planNumber)}" type="number" min="0" step="1" value="${Number(plan.priceGRAM) || 0}"></div>
+          <div><label>قیمت (Points)</label><input id="vipPlanPrice${Number(plan.planNumber)}" type="number" min="0" step="1" value="${Number(plan.pricePoints) || 0}"></div>
           <div><label>بازده ماهانه (%)</label><input id="vipPlanRate${Number(plan.planNumber)}" type="number" min="0" max="100" step="0.01" value="${Number(plan.monthlyRewardPercent) || 0}"></div>
           <div><label>مدت (روز)</label><input id="vipPlanDays${Number(plan.planNumber)}" type="number" min="1" max="3650" step="1" value="${Number(plan.durationDays) || 30}"></div>
           <label style="display:flex;align-items:center;gap:8px;margin-top:28px"><input id="vipPlanEnabled${Number(plan.planNumber)}" type="checkbox" style="width:auto" ${plan.enabled ? "checked" : ""}> فعال برای خرید</label>
@@ -2197,7 +2196,7 @@ async function saveVipPlansAdmin() {
     }
     plans.push({
       planNumber,
-      priceGRAM: Number(price.value),
+      pricePoints: Number(price.value),
       monthlyRewardPercent: Number(rate.value),
       durationDays: Number(days.value),
       enabled: enabled.checked,
@@ -2312,10 +2311,10 @@ async function loadSettings() {
     updateReminderPreview();
     updateReminderUtcHint();
     renderReminderStatus(s);
-    document.getElementById("setMinWithdraw").value = s.minWithdrawGRAM ?? "";
-    document.getElementById("setDaily").value = s.dailyCheckInGRAM ?? "";
-    document.getElementById("setStreakBonus").value = s.streakBonusGRAM ?? "";
-    document.getElementById("setReferralInitialReward").value = s.referralInitialRewardGRAM ?? 10;
+    document.getElementById("setMinWithdraw").value = s.minWithdrawPoints ?? "";
+    document.getElementById("setDaily").value = s.dailyCheckInPoints ?? "";
+    document.getElementById("setStreakBonus").value = s.streakBonusPoints ?? "";
+    document.getElementById("setReferralInitialReward").value = s.referralInitialRewardPoints ?? 10;
     renderReferralRates();
     document.getElementById("setWeeklyLeaderboardEnabled").checked = s.weeklyLeaderboardEnabled !== false;
     [0, 1, 2].forEach(i => { document.getElementById(`setWeeklyPrize${i + 1}`).value = s.weeklyLeaderboardPrizes?.[i] ?? [500, 250, 100][i]; });
@@ -2337,12 +2336,12 @@ async function saveSettings() {
     dailyReminderLocalHour: Number(document.getElementById("setReminderLocalHour").value) || 0,
     dailyReminderAudience: document.getElementById("setReminderAudience").value,
     dailyReminderMessage: document.getElementById("setReminderMessage").value.trim(),
-    minWithdrawGRAM: Number(document.getElementById("setMinWithdraw").value),
-    dailyCheckInGRAM: Number(document.getElementById("setDaily").value),
-    streakBonusGRAM: Number(document.getElementById("setStreakBonus").value),
+    minWithdrawPoints: Number(document.getElementById("setMinWithdraw").value),
+    dailyCheckInPoints: Number(document.getElementById("setDaily").value),
+    streakBonusPoints: Number(document.getElementById("setStreakBonus").value),
     weeklyLeaderboardEnabled: document.getElementById("setWeeklyLeaderboardEnabled").checked,
     weeklyLeaderboardPrizes: [1, 2, 3].map(i => Number(document.getElementById(`setWeeklyPrize${i}`).value) || 0),
-    referralInitialRewardGRAM: Number(document.getElementById("setReferralInitialReward").value),
+    referralInitialRewardPoints: Number(document.getElementById("setReferralInitialReward").value),
     referralLevelRates: [10, 5, 3, 1, 1, 1, 1, 1, 1, 1],
     depositEnabled: document.getElementById("setDepositEnabled").checked,
     depositNetwork: "TON_MAINNET",
@@ -2538,6 +2537,5 @@ if (ADMIN_SESSION) {
   });
 }
 </script>
-  <script src="js/motion.js?v=20261026-motion-2"></script>
 </body>
 </html>

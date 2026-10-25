@@ -178,54 +178,16 @@ function haptic(type = "light") {
 
 /* ================= TOAST ================= */
 let toastTimer = null;
-function celebrateTransaction() {
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-  const burst = document.createElement('div');
-  burst.className = 'successBurst';
-  for (let index = 0; index < 18; index += 1) {
-    const piece = document.createElement('i');
-    piece.style.setProperty('--angle', `${index * 20 + Math.random() * 12}deg`);
-    piece.style.setProperty('--distance', `${82 + Math.random() * 92}px`);
-    piece.style.setProperty('--delay', `${Math.random() * 90}ms`);
-    piece.style.setProperty('--burst-color', ['#67e8f9', '#a78bfa', '#f5c451', '#34d399'][index % 4]);
-    burst.appendChild(piece);
-  }
-  document.body.appendChild(burst);
-  setTimeout(() => burst.remove(), 980);
-}
 function toast(message, type = "normal") {
   const el = $("#toast");
   if (!el) return;
   clearTimeout(toastTimer);
   el.textContent = message;
-  el.classList.remove("show", "success", "error", "warning", "transactionPulse");
-  el.dataset.icon = type === "success" ? "✓" : type === "error" ? "!" : type === "warning" ? "⌁" : "✦";
+  el.classList.remove("show", "success", "error", "warning");
   if (type !== "normal") el.classList.add(type);
-  requestAnimationFrame(() => {
-    el.classList.add("show");
-    if (type === "success") {
-      el.classList.add("transactionPulse");
-      celebrateTransaction();
-      haptic("success");
-    }
-  });
+  requestAnimationFrame(() => el.classList.add("show"));
   toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
 }
-
-/* Touch feedback is delegated once so dynamically rendered cards and buttons get the same motion. */
-document.addEventListener("click", event => {
-  const target = event.target?.closest?.("button, a, [role='button']");
-  if (!target || target.disabled || target.getAttribute("aria-disabled") === "true") return;
-  const rect = target.getBoundingClientRect();
-  const ripple = document.createElement("span");
-  ripple.className = "ripple";
-  ripple.style.left = `${event.clientX - rect.left}px`;
-  ripple.style.top = `${event.clientY - rect.top}px`;
-  target.querySelectorAll(":scope > .ripple").forEach(item => item.remove());
-  target.appendChild(ripple);
-  setTimeout(() => ripple.remove(), 650);
-  if (target.matches("button")) haptic("light");
-}, { passive: true });
 
 /* ================= SAFE HTML ================= */
 function escapeHTML(value) {
@@ -3221,7 +3183,6 @@ async function loadVipPlans() {
     state.vipPlans = Array.isArray(data?.plans) ? data.plans : [];
     state.vipSubscriptions = Array.isArray(data?.subscriptions) ? data.subscriptions : [];
     if (data?.points != null) state.points = Number(data.points) || 0;
-    if (data?.gramBalance != null) state.gramBalance = Number(data.gramBalance) || 0;
     const serverNow = Date.parse(data?.serverNow || "");
     state.vipServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
     state.vipDataLoaded = true;
@@ -3329,11 +3290,8 @@ function renderProfileVip() {
   const iconByPlan = { 1: "◈", 2: "✦", 3: "♛", 4: "✦", 5: "⬡", 6: "✧", 7: "◆", 8: "♦", 9: "⬦", 10: "♛" };
   const planCards = visiblePlans.map(plan => {
     const available = plan.enabled === true && plan.comingSoon !== true;
-    const isGram = plan.pricingCurrency === 'gram';
-    const price = isGram ? Number(plan.priceGram) : Number(plan.pricePoints);
-    const balance = isGram ? Number(state.gramBalance) : Number(state.points);
-    const canAfford = balance >= price;
-    const needed = Math.max(0, price - (balance || 0));
+    const canAfford = Number(state.points) >= Number(plan.pricePoints);
+    const neededPoints = Math.max(0, Number(plan.pricePoints) - (Number(state.points) || 0));
     const planNumber = Number(plan.planNumber);
     const isOwned = subscriptions.some(subscription => Number(subscription.planNumber) === planNumber && subscription.status === "active");
     const theme = themeByPlan[planNumber] || "sapphire";
@@ -3348,12 +3306,10 @@ function renderProfileVip() {
         : planNumber === 6 ? "vipPlanBadge--recommended"
           : planNumber === 10 ? "vipPlanBadge--best-value" : "vipPlanBadge--status";
     const buttonLabel = plan.comingSoon ? t("vip_status_coming_soon")
-      : available ? (canAfford ? t("vip_buy") : t("vip_need_more_points", { n: formatNumber(needed, isGram ? 6 : 0) }))
+      : available ? (canAfford ? t("vip_buy") : t("vip_need_more_points", { n: formatPoints(neededPoints) }))
         : t("vip_status_inactive");
-    const totalRewardPoints = plan.totalRewardPoints || 0;
-    const totalRewardGram = plan.totalRewardGram || 0;
-    const dailyAveragePoints = plan.dailyRewardAveragePoints || 0;
-    const dailyAverageGram = plan.dailyRewardAverageGram || 0;
+    const totalRewardPoints = plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100);
+    const dailyAveragePoints = plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays));
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
       <article class="vipPlanCard vipPlanCard--${theme}">
@@ -3363,12 +3319,12 @@ function renderProfileVip() {
           ${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}
         </div>
         <div class="vipPlanStats">
-          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${formatNumber(price, isGram ? 6 : 0)} ${isGram ? "GRAM" : t("vip_points_unit")}</b></div>
+          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${formatPoints(plan.pricePoints)}</b></div>
           <div class="vipPlanStat"><span>${t("vip_plan_profit_label")}</span><b>${formatNumber(plan.monthlyRewardPercent, 2)}%</b></div>
           <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(plan.durationDays) })}</b></div>
         </div>
-        <div class="vipPlanReward"><span>${t("vip_total_reward_label")}</span><b>${formatNumber(isGram ? totalRewardGram : totalRewardPoints, isGram ? 6 : 2)} ${isGram ? "GRAM" : t("vip_points_unit")}</b></div>
-        <div class="vipPlanDaily">${t("vip_daily_average", { n: formatNumber(isGram ? dailyAverageGram : dailyAveragePoints, isGram ? 6 : 2) })} ${isGram ? "GRAM" : t("vip_points_unit")}</div>
+        <div class="vipPlanReward"><span>${t("vip_total_reward_label")}</span><b>${formatPoints(totalRewardPoints)} ${t("vip_points_unit")}</b></div>
+        <div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>
         <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})">${isPurchasing ? t("vip_buying") : buttonLabel}</button>
       </article>`;
   }).join("");
@@ -3377,12 +3333,7 @@ function renderProfileVip() {
     const isActive = subscription.status === "active";
     const isCancelled = subscription.status === "cancelled";
     const statusText = isActive ? t("vip_status_active") : isCancelled ? t("vip_status_cancelled") : t("vip_status_completed");
-    const isGramSubscription = subscription.pricingCurrency === 'gram';
-    const nextReward = formatNumber(isGramSubscription ? (subscription.nextRewardGram || 0) : (subscription.nextRewardPoints || 0), isGramSubscription ? 6 : 2);
-    const earned = formatNumber(isGramSubscription ? (subscription.claimedRewardGram || 0) : (subscription.claimedRewardPoints || 0), isGramSubscription ? 6 : 2);
-    const totalReward = formatNumber(isGramSubscription ? (subscription.totalRewardGram || 0) : (subscription.totalRewardPoints || 0), isGramSubscription ? 6 : 2);
-    const principal = formatNumber(isGramSubscription ? (subscription.priceGram || 0) : (subscription.pricePoints || 0), isGramSubscription ? 6 : 0);
-    const unit = isGramSubscription ? 'GRAM' : t('vip_points_unit');
+    const nextReward = formatPoints(subscription.nextRewardPoints || 0);
     let claimMarkup = "";
     if (isActive && subscription.canClaim) {
       const claiming = vipClaimingIds.has(subscription.id) || vipClaimAllBusy;
@@ -3402,9 +3353,9 @@ function renderProfileVip() {
           <div>${t("vip_days_remaining", { n: formatPoints(subscription.daysRemaining) })}</div>
           <div>${t("vip_claim_progress", { claimed: formatPoints(subscription.claimsCompleted), total: formatPoints(subscription.totalClaims) })}</div>
           ${isActive ? `<div>${t("vip_todays_reward", { n: nextReward })}</div>` : ""}
-          <div>${t("vip_total_earned", { n: earned })} ${unit}</div>
-          <div>${t("vip_total_reward", { n: totalReward })} ${unit}</div>
-          ${isActive ? `<div>${t("vip_principal_note", { n: principal })} ${unit}</div>` : isCancelled ? "" : `<div>${t("vip_status_completed")}</div>`}
+          <div>${t("vip_total_earned", { n: formatPoints(subscription.claimedRewardPoints) })}</div>
+          <div>${t("vip_total_reward", { n: formatPoints(subscription.totalRewardPoints) })}</div>
+          ${isActive ? `<div>${t("vip_principal_note", { n: formatPoints(subscription.pricePoints) })}</div>` : isCancelled ? "" : `<div>${t("vip_status_completed")}</div>`}
         </div>
         ${claimMarkup}
       </article>`;
@@ -3431,7 +3382,7 @@ function renderProfileVip() {
     <div class="vipHero" aria-label="${t("vip_current_balance")}">
       <div class="vipHeroTop"><div><span class="vipHeroKicker">${t("vip_membership_kicker")}</span><div class="vipBalanceLabel">${t("vip_current_balance")}</div></div><span class="vipHeroIcon" aria-hidden="true">✦</span></div>
       <div class="vipBalanceValue"><strong>${formatPoints(state.points)}</strong><span>${t("vip_points_unit")}</span></div>
-      <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_daily_reward_summary")}</span><b>${formatNumber(subscriptions.reduce((sum, item) => sum + Number(item.nextRewardGram || 0), 0), 6)} GRAM</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
+      <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_daily_reward_summary")}</span><b>${formatPoints(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0))} ${t("vip_points_unit")}</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
     </div>
     ${subscriptions.length ? `<div class="vipSubscriptionTools" style="display:grid;gap:9px;margin:12px 0"><div class="vipStatusTabs" role="tablist" aria-label="${t("vip_subscription_filters_label")}" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:rgba(4,10,22,.58)"><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "active"}" onclick="setVipSubscriptionFilter('active')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "active" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "active" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "active" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_active")} <b>${formatPoints(activeSubscriptions.length)}</b></button><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "expired"}" onclick="setVipSubscriptionFilter('expired')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "expired" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "expired" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "expired" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_expired")} <b>${formatPoints(expiredSubscriptions.length)}</b></button></div><button type="button" class="vipClaimAll" ${!claimableSubscriptions.length || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" style="width:100%;min-height:43px;padding:10px 14px;border:1px solid rgba(74,222,128,.25);border-radius:13px;background:${claimableSubscriptions.length && !vipClaimAllBusy ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(34,211,238,.12))" : "rgba(71,85,105,.15)"};color:${claimableSubscriptions.length && !vipClaimAllBusy ? "#a7f3d0" : "#8792a5"};font-size:12px;font-weight:900">${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_all", { n: formatPoints(claimableSubscriptions.length) })}</button></div>${filteredSubscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t(vipSubscriptionFilter === "active" ? "vip_active_title" : "vip_expired_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t(vipSubscriptionFilter === "active" ? "vip_active_empty" : "vip_expired_empty")}</div></div>`}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
     <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
@@ -3465,10 +3416,7 @@ async function purchaseVipPlan(planNumber) {
   const plan = state.vipPlans.find(item => Number(item.planNumber) === Number(planNumber));
   if (!plan || plan.enabled !== true || plan.comingSoon === true) return;
   if (vipPurchasingPlanNumbers.has(Number(plan.planNumber))) return;
-  const isGram = plan.pricingCurrency === 'gram';
-  const price = isGram ? Number(plan.priceGram) : Number(plan.pricePoints);
-  const balance = isGram ? Number(state.gramBalance) : Number(state.points);
-  if (balance < price) return toast(t("vip_balance", { n: formatNumber(balance, isGram ? 6 : 0) }), "error");
+  if (Number(state.points) < Number(plan.pricePoints)) return toast(t("vip_balance", { n: formatPoints(state.points) }), "error");
   vipPurchasingPlanNumbers.add(Number(plan.planNumber));
   if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") {
     const content = $("#content");
@@ -3476,7 +3424,7 @@ async function purchaseVipPlan(planNumber) {
   }
   const scope = `vip_purchase_${plan.planNumber}`;
   try {
-    const confirmed = await confirmVipPurchase(t("vip_buy_confirm", { n: formatPoints(plan.planNumber), price: formatNumber(price, isGram ? 6 : 0), unit: isGram ? "GRAM" : t("vip_points_unit") }));
+    const confirmed = await confirmVipPurchase(t("vip_buy_confirm", { n: formatPoints(plan.planNumber), price: formatPoints(plan.pricePoints) }));
     if (!confirmed) return;
     const result = await api("/api/points/vip/purchase", {
       method: "POST",
@@ -3484,8 +3432,7 @@ async function purchaseVipPlan(planNumber) {
       body: { planNumber: Number(plan.planNumber) }
     });
     clearPendingIdempotencyKey(scope);
-    state.points = result.points != null ? Number(result.points) : state.points;
-    state.gramBalance = result.gramBalance != null ? Number(result.gramBalance) : state.gramBalance;
+    state.points = Number(result.points) || state.points;
     updateHeader();
     state.vipDataLoaded = false;
     await loadVipPlans();
@@ -3516,13 +3463,12 @@ async function claimVipReward(subscriptionId, options = {}) {
       body: JSON.stringify({})
     });
     clearPendingIdempotencyKey(scope);
-    state.points = result.points != null ? Number(result.points) : state.points;
-    state.gramBalance = result.gramBalance != null ? Number(result.gramBalance) : state.gramBalance;
+    state.points = Number(result.points) || state.points;
     updateHeader();
     state.vipDataLoaded = false;
     await loadVipPlans();
     if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") await renderProfile();
-    if (!options.silent) toast(t("vip_claim_success", { n: formatNumber(result.rewardGram || 0, 6) }), "success");
+    if (!options.silent) toast(t("vip_claim_success", { n: formatPoints(result.rewardPoints) }), "success");
     return true;
   } catch (error) {
     clearDefinitiveIdempotencyFailure(scope, error);
