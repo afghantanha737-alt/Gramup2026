@@ -264,9 +264,9 @@ async function startServer() {
     // 07:00 Asia/Kabul (02:30 UTC). Apply once to existing installations while
     // preserving any later admin changes.
     const Settings = require('./models/Settings');
-    await Settings.updateOne(
-      { key: 'global', dailyReminderPolicyVersion: { $lt: 1 } },
-      { $set: {
+    const reminderSettings = await Settings.getGlobal();
+    if (Number(reminderSettings.dailyReminderPolicyVersion || 0) < 1) {
+      Object.assign(reminderSettings, {
         dailyReminderEnabled: true,
         dailyReminderHourUtc: 2,
         dailyReminderMinuteUtc: 30,
@@ -275,9 +275,9 @@ async function startServer() {
         dailyReminderLocalMinute: 0,
         dailyReminderAudience: 'all',
         dailyReminderPolicyVersion: 1
-      } },
-      { upsert: true }
-    );
+      });
+      await reminderSettings.save();
+    }
 
     const runReferralSweep = require('./utils/referralSweep');
     void runJob('referral-sweep', 'Referral sweep', runReferralSweep);
