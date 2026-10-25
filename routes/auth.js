@@ -7,9 +7,13 @@ const User = require('../models/User');
 const { hashNetworkIdentifier, hashDeviceIdentifier, assessReferralRisk } = require('../utils/referralRisk');
 const { linkReferral } = require('../utils/referralSystem');
 const { referralIdentifierQuery } = require('../utils/referralCore');
+const { isVerifiedAllowedPhone, contactRequestKeyboard } = require('../utils/telegramPhoneContact');
+const { bot } = require('../utils/bot');
+const { botText } = require('../utils/botMessages');
 const Settings = require('../models/Settings');
 
 const auth = requireTelegramAuth(process.env.BOT_TOKEN);
+const PHONE_CONTACT_COOLDOWN_MS = 30 * 1000;
 
 // GET /api/auth/me — بوت اولیه کاربر + اعمال کد رفرال از URL (fallback وقتی startapp نداریم)
 router.get('/me', auth, async (req, res) => {
@@ -21,7 +25,7 @@ router.get('/me', auth, async (req, res) => {
   // تا کاربران قدیمی نتوانند بعداً برای خودشان دعوت‌کننده ثبت کنند.
   const isFreshAccount = u.createdAt && Date.now() - new Date(u.createdAt).getTime() < 24 * 60 * 60 * 1000;
 
-  if (!u.referredBy && referralQuery && isFreshAccount) {
+  if (isVerifiedAllowedPhone(u) && !u.referredBy && referralQuery && isFreshAccount) {
     const referrer = await User.findOne(referralQuery).select('_id telegramId isBanned signupIpHash signupDeviceHash');
     // جلوگیری از خودارجاعی و دور رفرال (A دعوت‌کننده‌ی B و B دعوت‌کننده‌ی A)
     const isCycle = referrer && referrer.referredBy && String(referrer.referredBy) === String(u._id);
@@ -37,22 +41,67 @@ router.get('/me', auth, async (req, res) => {
     ? settings.maintenanceAllowedTelegramIds.map(String)
     : [];
   const maintenanceEnabled = settings.maintenanceEnabled === true;
+  const phoneVerified = isVerifiedAllowedPhone(u);
   res.json({
     success: true,
-    telegramId: u.telegramId,
-    firstName: u.firstName,
-    lastName: u.lastName,
-    username: u.username,
-    photoUrl: u.photoUrl,
-    points: u.points,
-    referralCode: u.referralCode,
+    telegramId: phoneVerified ? u.telegramId : '',
+    firstName: phoneVerified ? u.firstName : '',
+    lastName: phoneVerified ? u.lastName : '',
+    username: phoneVerified ? u.username : '',
+    photoUrl: phoneVerified ? u.photoUrl : '',
+    points: phoneVerified ? u.points : 0,
+    referralCode: phoneVerified ? u.referralCode : '',
     language: u.language,
+    phoneVerificationRequired: !phoneVerified,
+    phoneCountryCode: phoneVerified ? u.phoneCountryCode : '',
+    referralMessageConsent: phoneVerified ? (u.referralMessageConsent || 'unset') : 'unset',
     maintenance: {
       enabled: maintenanceEnabled,
       allowed: allowedTelegramIds.includes(String(u.telegramId)),
       required: maintenanceEnabled && !allowedTelegramIds.includes(String(u.telegramId))
     }
   });
+});
+
+router.post('/request-phone-contact', auth, async (req, res) => {
+  if (isVerifiedAllowedPhone(req.dbUser)) return res.json({ success: true, alreadyVerified: true });
+  const username = String(process.env.BOT_USERNAME || '').replace(/^@/, '').trim();
+  if (!username || !/^[A-Za-z0-9_]{5,32}$/.test(username)) {
+    return res.status(503).json({ success: false, code: 'PHONE_CONTACT_BOT_UNAVAILABLE', message: 'ربات برای تأیید شماره در دسترس نیست.' });
+  }
+  const lastRequestAt = req.dbUser.phoneContactRequestedAt ? new Date(req.dbUser.phoneContactRequestedAt).getTime() : 0;
+  const elapsed = Date.now() - lastRequestAt;
+  const botUrl = `https://t.me/${username}`;
+  if (elapsed < PHONE_CONTACT_COOLDOWN_MS) {
+    return res.json({ success: true, alreadyRequested: true, retryAfterMs: PHONE_CONTACT_COOLDOWN_MS - elapsed, botUrl });
+  }
+  const previousRequestAt = req.dbUser.phoneContactRequestedAt;
+  req.dbUser.phoneContactRequestedAt = new Date();
+  await req.dbUser.save();
+  try {
+    if (!bot) throw new Error('Telegram bot is unavailable');
+    const language = req.dbUser.language || 'fa';
+    await bot.sendMessage(String(req.dbUser.telegramId), botText('phoneContactRequest', language), {
+      reply_markup: contactRequestKeyboard(botText('phoneShareButton', language))
+    });
+  } catch (error) {
+    req.dbUser.phoneContactRequestedAt = previousRequestAt || null;
+    await req.dbUser.save().catch(() => {});
+    return res.status(503).json({ success: false, code: 'PHONE_CONTACT_DELIVERY_FAILED', message: 'ارسال درخواست تأیید شماره ناموفق بود.' });
+  }
+  res.json({ success: true, botUrl });
+});
+
+router.patch('/referral-message-consent', auth, async (req, res) => {
+  const consent = String(req.body?.consent || '');
+  if (!['granted', 'denied'].includes(consent)) {
+    return res.status(400).json({ success: false, code: 'INVALID_NOTIFICATION_CONSENT', message: 'انتخاب رضایت نامعتبر است.' });
+  }
+  req.dbUser.referralMessageConsent = consent;
+  req.dbUser.referralMessageConsentAt = new Date();
+  req.dbUser.referralMessageConsentVersion = 'referral-messages-v1';
+  await req.dbUser.save();
+  res.json({ success: true, consent, consentAt: req.dbUser.referralMessageConsentAt });
 });
 
 // PATCH /api/auth/language — تغییر زبان انتخابی کاربر

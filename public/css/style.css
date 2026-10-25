@@ -2410,3 +2410,20 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .taskAction.pending[data-latest-post-wait="true"],
 .taskAction.pending[data-latest-post-cooldown] { min-width: 104px; color: #aeb8c9; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.16); box-shadow: none; font-variant-numeric: tabular-nums; }
 .taskAction[data-latest-post-check] { background: linear-gradient(135deg,#22c879,#0ca66d); color: #fff; box-shadow: 0 7px 15px rgba(16,185,129,.25); }
+
+/* Telegram Contact verification gate (+93/+98 only) */
+body.phone-verification-required #tabbar,
+body.phone-verification-required #notificationBtn { display: none !important; }
+.phoneGate { width: min(100%, 520px); margin: 24px auto; padding: 28px 22px; text-align: center; }
+.phoneGateIcon { width: 62px; height: 62px; margin: 0 auto 16px; display: grid; place-items: center; border-radius: 20px; color: #fff; font-size: 29px; background: linear-gradient(145deg, #0ea5e9, #4f46e5); box-shadow: 0 12px 28px rgba(14,165,233,.24); }
+.phoneGateTitle { margin: 10px 0; font-size: clamp(22px, 6vw, 29px); font-weight: 900; }
+.phoneGateText, .phoneGatePrivacy { color: var(--text-soft); line-height: 1.75; }
+.phoneGateCodes { margin: 18px auto; width: fit-content; padding: 10px 18px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--info); font-size: 20px; font-weight: 900; letter-spacing: .5px; }
+.phoneGateCodes span { padding: 0 10px; color: var(--text-muted); }
+.phoneGatePrivacy { margin: 12px 0 18px; font-size: 12px; }
+.phoneGateMessage { min-height: 22px; margin: 8px 0; color: var(--success); font-size: 13px; font-weight: 700; }
+.phoneGateActions, .referralConsentActions { display: grid; gap: 10px; margin-top: 14px; }
+.phoneGateActions .primaryBtn, .phoneGateActions .secondaryBtn,
+.referralConsentActions .primaryBtn, .referralConsentActions .secondaryBtn { width: 100%; min-height: 46px; }
+.phoneGateActions .textBtn { min-height: 40px; color: var(--text-soft); font-weight: 700; }
+.consentStatus { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--text-soft); background: var(--surface-3); font-size: 13px; }

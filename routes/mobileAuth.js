@@ -5,6 +5,7 @@ require('../utils/asyncHandler').wrapRouter(router);
 const MobileSession = require('../models/MobileSession');
 const { createMobileChallenge, findChallenge, consumeMobileChallenge, getMobileSession, hashToken } = require('../utils/mobileAuth');
 const User = require('../models/User');
+const { isVerifiedAllowedPhone } = require('../utils/telegramPhoneContact');
 
 function botDeepLink(token) {
   const username = String(process.env.BOT_USERNAME || '').replace(/^@/, '').trim();
@@ -24,6 +25,13 @@ router.get('/challenge/:challengeId', async (req, res) => {
 
 router.post('/consume', async (req, res) => {
   const { challengeId, token } = req.body || {};
+  const challenge = await findChallenge(String(challengeId || ''), String(token || ''));
+  if (challenge?.status === 'verified' && challenge.telegramId) {
+    const user = await User.findOne({ telegramId: String(challenge.telegramId) }).select('phoneVerifiedAt phoneCountryCode');
+    if (user && !isVerifiedAllowedPhone(user)) {
+      return res.status(403).json({ success: false, code: 'PHONE_VERIFICATION_REQUIRED', message: 'برای ادامه، Contact تلگرام خود را با شمارهٔ +93 یا +98 تأیید کنید.' });
+    }
+  }
   const result = await consumeMobileChallenge(String(challengeId || ''), String(token || ''), req.get('user-agent'));
   if (!result) return res.status(401).json({ success: false, code: 'MOBILE_CHALLENGE_NOT_VERIFIED', message: 'ورود Telegram هنوز تأیید نشده است.' });
   res.json({ success: true, accessToken: result.accessToken, expiresAt: result.expiresAt, user: { id: String(result.user._id), telegramId: result.user.telegramId, firstName: result.user.firstName, username: result.user.username, points: result.user.points, gramBalance: result.user.gramBalance } });

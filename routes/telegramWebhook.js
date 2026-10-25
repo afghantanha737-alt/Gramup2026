@@ -15,6 +15,7 @@ const { linkReferralByCode } = require('../utils/referralSystem');
 const { extractReactionEmojis, extractAddedReactionEmojis } = require('../utils/latestPostEngagement');
 const { parseTelegramStart, handleTelegramStart } = require('../utils/telegramStart');
 const { verifyMobileChallenge } = require('../utils/mobileAuth');
+const { normalizeTelegramContact, contactRequestKeyboard, isVerifiedAllowedPhone } = require('../utils/telegramPhoneContact');
 const {
   recordWebhookUpdate,
   recordStartWelcomeSent,
@@ -36,6 +37,39 @@ const ADMIN_MENU_KEYBOARD = {
 
 async function sendAdminMenu(chatId) {
   await bot.sendMessage(chatId, '🛠 پنل مدیریت Gramup — یکی را انتخاب کن:', { reply_markup: ADMIN_MENU_KEYBOARD });
+}
+
+async function handlePhoneContactMessage(message) {
+  const senderId = message?.from?.id == null ? '' : String(message.from.id);
+  const chatId = message?.chat?.id;
+  if (!senderId || chatId == null) return;
+  const user = await User.findOne({ telegramId: senderId });
+  if (!user) {
+    await bot.sendMessage(chatId, botText('phoneContactNotRegistered', 'fa'));
+    return;
+  }
+  if (isVerifiedAllowedPhone(user)) {
+    await bot.sendMessage(chatId, botText('phoneContactVerified', user.language || 'fa'));
+    return;
+  }
+
+  const verification = normalizeTelegramContact(message.contact, senderId);
+  if (!verification.ok) {
+    const key = verification.reason === 'unsupported_country' ? 'phoneContactUnsupported' : 'phoneContactNotSelf';
+    const language = user.language || 'fa';
+    await bot.sendMessage(chatId, botText(key, language), {
+      reply_markup: contactRequestKeyboard(botText('phoneShareButton', language))
+    });
+    return;
+  }
+
+  await User.updateOne(
+    { _id: user._id },
+    { $set: { phoneCountryCode: verification.countryCode, phoneVerifiedAt: new Date() } }
+  );
+  await bot.sendMessage(chatId, botText('phoneContactVerified', user.language || 'fa'), {
+    reply_markup: { remove_keyboard: true }
+  });
 }
 
 async function handleAdminStats(chatId) {
@@ -255,9 +289,16 @@ router.post('/webhook', async (req, res) => {
       if (startCommand?.payload && String(startCommand.payload).startsWith('mobile_')) {
         const verified = await verifyMobileChallenge(startCommand.payload, update.message.from?.id);
         if (verified) {
-          await bot.sendMessage(update.message.chat.id, '✅ هویت شما برای اپ Gramup تأیید شد. حالا به اپلیکیشن برگردید.');
+          const user = await User.findOne({ telegramId: String(update.message.from.id) });
+          if (!isVerifiedAllowedPhone(user)) {
+            update.message.text = '/start phone_contact';
+          } else {
+            await bot.sendMessage(update.message.chat.id, '✅ هویت شما برای اپ Gramup تأیید شد. حالا به اپلیکیشن برگردید.');
+            update.message.text = '/start';
+          }
+        } else {
+          update.message.text = '/start';
         }
-        update.message.text = '/start';
       }
       const result = await handleTelegramStart({
         message: update.message,
@@ -282,7 +323,9 @@ router.post('/webhook', async (req, res) => {
       const chatId = message.chat.id;
       const senderId = message.from && String(message.from.id);
       const text = (message.text || '').trim();
-      if (text === '/admin') {
+      if (message.contact) {
+        await handlePhoneContactMessage(message);
+      } else if (text === '/admin') {
         if (isAdminTelegramId(senderId)) await sendAdminMenu(chatId);
         else await bot.sendMessage(chatId, `آیدی عددی شما: ${senderId}\n\nبرای دسترسی مدیریتی از تلگرام، این عدد را به متغیر محیطی ADMIN_TELEGRAM_IDS در تنظیمات سرور اضافه کنید.`);
       } else if (isAdminTelegramId(senderId) && text === '/cancel' && (await adminSessions.isAwaitingContent(senderId))) {

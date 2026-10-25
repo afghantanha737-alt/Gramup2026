@@ -28,6 +28,7 @@ const origin = { _id: 'origin', referredBy: 'l1', isBanned: false, accountReview
 const users = new Map([parent4, parent3, parent2, parent1, origin].map(user => [user._id, user]));
 const entries = new Map();
 const relationships = [];
+let notificationCount = 0;
 
 const fakeUser = {
   findById(id) { return query(users.get(String(id)) || null); },
@@ -60,7 +61,7 @@ require.cache[modelPaths.User] = { id: modelPaths.User, filename: modelPaths.Use
 require.cache[modelPaths.Settings] = { id: modelPaths.Settings, filename: modelPaths.Settings, loaded: true, exports: fakeSettings };
 require.cache[modelPaths.ReferralRelationship] = { id: modelPaths.ReferralRelationship, filename: modelPaths.ReferralRelationship, loaded: true, exports: fakeRelationship };
 require.cache[modelPaths.PointsLedger] = { id: modelPaths.PointsLedger, filename: modelPaths.PointsLedger, loaded: true, exports: FakePointsLedger };
-require.cache[modelPaths.NotificationDelivery] = { id: modelPaths.NotificationDelivery, filename: modelPaths.NotificationDelivery, loaded: true, exports: { sendNotificationOnce: async () => ({ status: 'sent' }) } };
+require.cache[modelPaths.NotificationDelivery] = { id: modelPaths.NotificationDelivery, filename: modelPaths.NotificationDelivery, loaded: true, exports: { sendNotificationOnce: async () => { notificationCount += 1; return { status: 'sent' }; } } };
 require.cache[modelPaths.MongoTransaction] = { id: modelPaths.MongoTransaction, filename: modelPaths.MongoTransaction, loaded: true, exports: { withMongoTransaction: async work => work({ id: 'tx-test' }) } };
 
 const { recordLedgerRequired } = require('../utils/ledger');
@@ -89,8 +90,9 @@ const { distributeReferralCommissions } = require('../utils/referralSystem');
   parent2.referralRiskScore = 50;
   const blocked = await distributeReferralCommissions({ ...earning, sourceId: 'task-risk-100' }, { id: 'tx-4' });
   assert.deepStrictEqual(blocked.map(item => [item.level, item.amount]), [[1, 10]], 'a risky L2 ancestor blocks L2+ without invalidating a clean L1');
+  assert.strictEqual(notificationCount, 0, 'partial referral commissions must never send a Telegram message');
 
-  console.log('ALL PASS — real Spin ledger trigger, immediate L1-L4 commission, young account, anti-abuse and idempotency');
+  console.log('ALL PASS — L1-L4 commission math, no commission notifications, young account, anti-abuse and idempotency');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

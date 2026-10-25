@@ -54,13 +54,22 @@ function fixture(existingUser = null) {
   });
   assert.deepStrictEqual(freshResult, { isNewUser: true, hadReferralPayload: true, welcomeSent: true, hasMiniAppButton: true });
   assert.strictEqual(fresh.users.size, 1);
-  assert.strictEqual(fresh.linked.length, 1, 'a referral payload is processed for a newly-created account');
-  assert.deepStrictEqual(fresh.linked[0], { referredUserId: 'new-user-id', referralCode: 'inviter_42', source: 'signup' });
+  assert.strictEqual(fresh.linked.length, 0, 'referral reward linking waits until phone verification');
+  assert.strictEqual(fresh.users.get('123').pendingReferralIdentifier, 'inviter_42');
   assert.strictEqual(fresh.sent.length, 1);
   assert.strictEqual(fresh.sent[0][1], 'welcome:fa:Ava');
   const freshButton = fresh.sent[0][2].reply_markup.inline_keyboard[0][0];
   assert.strictEqual(freshButton.text, '🚀 Open GramUp');
   assert.strictEqual(new URL(freshButton.web_app.url).searchParams.get('ref'), 'inviter_42');
+
+  const contactRequest = fixture();
+  const contactResult = await handleTelegramStart({
+    ...contactRequest.dependencies,
+    message: { text: '/start phone_contact', from: { id: 124 }, chat: { id: 124 } }
+  });
+  assert.deepStrictEqual(contactResult, { isNewUser: true, hadReferralPayload: false, welcomeSent: true, hasMiniAppButton: false, phoneContactRequested: true });
+  assert.strictEqual(contactRequest.sent[0][1], 'phoneContactRequest:fa:undefined');
+  assert.strictEqual(contactRequest.sent[0][2].reply_markup.keyboard[0][0].request_contact, true);
 
   const existingUser = { _id: 'existing-id', telegramId: '456', language: 'en', referredBy: 'original-referrer' };
   const returning = fixture(existingUser);
@@ -105,7 +114,7 @@ function fixture(existingUser = null) {
   assert.strictEqual(metrics.webhookSecretRejections, 1);
   assert.strictEqual(metrics.updatesReceived, 1);
 
-  console.log('ALL PASS — Telegram /start welcome, referral preservation, retry contract and webhook diagnostics');
+  console.log('ALL PASS — Telegram /start welcome, deferred referral linking, contact request and webhook diagnostics');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

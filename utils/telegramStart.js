@@ -1,5 +1,7 @@
 'use strict';
 
+const { contactRequestKeyboard } = require('./telegramPhoneContact');
+const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 const START_COMMAND = /^\/start(?:@[A-Za-z0-9_]+)?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/;
 
 function parseTelegramStart(text) {
@@ -57,19 +59,29 @@ async function handleTelegramStart({
     }
   }
 
-  if (isNewUser && command.payload) {
-    try {
-      await linkReferralByCode({ referredUserId: user._id, referralCode: command.payload, source: 'signup' });
-    } catch (error) {
-      logger.error('Referral /start linking failed; Mini App fallback will retry:', error.message || error);
+  const language = user.language || 'fa';
+  if (command.payload === 'phone_contact') {
+    if (isVerifiedAllowedPhone(user)) {
+      await bot.sendMessage(message.chat.id, botText('phoneContactVerified', language), { reply_markup: { remove_keyboard: true } });
+    } else {
+      await bot.sendMessage(
+        message.chat.id,
+        botText('phoneContactRequest', language),
+        { reply_markup: contactRequestKeyboard(botText('phoneShareButton', language)) }
+      );
     }
+    return { isNewUser, hadReferralPayload: false, welcomeSent: true, hasMiniAppButton: false, phoneContactRequested: true };
+  }
+
+  if (isNewUser && command.payload) {
+    user.pendingReferralIdentifier = String(command.payload).slice(0, 64);
+    if (typeof user.save === 'function') await user.save();
   }
 
   const webAppUrl = buildMiniAppUrl(appUrl, command.payload, isNewUser);
   const replyMarkup = webAppUrl
     ? { inline_keyboard: [[{ text: '🚀 Open GramUp', web_app: { url: webAppUrl } }]] }
     : undefined;
-  const language = user.language || 'fa';
   const fallbackName = language === 'en' ? 'friend' : 'دوست عزیز';
   const name = message.from.first_name || fallbackName;
   const options = replyMarkup ? { reply_markup: replyMarkup } : {};

@@ -10,6 +10,36 @@ const MESSAGES = {
     ps: name => `سلام ${name} 👋\nGramup ته ښه راغلاست!\nد دندو ترسره کولو، ملګرو بلنې او ورځني ننوتلو سره پوائنټونه راټول کړئ او GRAM ته یې بدل کړئ.`,
     en: name => `Hi ${name} 👋\nWelcome to Gramup!\nComplete tasks, invite friends and check in daily to earn points and convert them to GRAM.`
   },
+  phoneContactRequest: {
+    fa: () => 'برای ادامهٔ ورود، شمارهٔ خودتان را با دکمهٔ زیر از طریق Telegram به اشتراک بگذارید. فقط شماره‌های +93 و +98 پذیرفته می‌شوند. شمارهٔ کامل ذخیره نمی‌شود؛ فقط کد کشور و زمان تأیید ثبت می‌شود.',
+    ps: () => 'د ننوتلو د دوام لپاره، د لاندې تڼۍ له لارې خپل د Telegram Contact شریک کړئ. یوازې د +93 او +98 شمېرې منل کېږي. بشپړه شمېره نه ساتل کېږي؛ یوازې د هېواد کوډ او د تایید وخت ثبتېږي.',
+    en: () => 'To continue signing in, share your own Telegram contact with the button below. Only +93 and +98 numbers are accepted. Your full number is not stored; only the country code and verification time are recorded.'
+  },
+  phoneShareButton: {
+    fa: () => 'اشتراک شمارهٔ خودم',
+    ps: () => 'خپل شمېره شریکول',
+    en: () => 'Share my phone number'
+  },
+  phoneContactNotSelf: {
+    fa: () => 'لطفاً Contact خودتان را با دکمهٔ اشتراک‌گذاری تلگرام بفرستید؛ شمارهٔ شخص دیگری پذیرفته نمی‌شود.',
+    ps: () => 'مهرباني وکړئ د Telegram د شریکولو تڼۍ له لارې خپل Contact واستوئ؛ د بل چا شمېره نه منل کېږي.',
+    en: () => 'Please share your own contact using Telegram’s share button. Someone else’s number cannot be used.'
+  },
+  phoneContactUnsupported: {
+    fa: () => 'ورود فقط با شماره‌های +93 یا +98 ممکن است. Contact با شمارهٔ مجاز خودتان را بفرستید.',
+    ps: () => 'ننوتل یوازې د +93 یا +98 شمېرې سره ممکن دي. د خپل منل شوي شمېرې Contact واستوئ.',
+    en: () => 'Sign-in is only available for +93 or +98 numbers. Please share your own contact with an allowed number.'
+  },
+  phoneContactVerified: {
+    fa: () => '✅ شمارهٔ شما با موفقیت تأیید شد. حالا می‌توانید به Gramup برگردید.',
+    ps: () => '✅ ستاسو شمېره تایید شوه. اوس بېرته Gramup ته ستنېدای شئ.',
+    en: () => '✅ Your phone number is verified. You can now return to Gramup.'
+  },
+  phoneContactNotRegistered: {
+    fa: () => 'ابتدا Gramup را باز کنید و سپس دوباره برای تأیید شماره تلاش کنید.',
+    ps: () => 'لومړی Gramup پرانیزئ، بیا د شمېرې د تایید هڅه وکړئ.',
+    en: () => 'Open Gramup first, then try phone verification again.'
+  },
   taskNew: {
     fa: (title, reward, sponsorName) => `🎯 ${sponsorName ? 'تسک اسپانسری جدید' : 'تسک جدید'} اضافه شد!\n\n${title}${sponsorName ? `\nاسپانسر: ${sponsorName}` : ''}\nپاداش: ${reward} پوینت\n\nهمین حالا از تب «تسک‌ها» انجامش بده.`,
     ps: (title, reward, sponsorName) => `🎯 ${sponsorName ? 'نوې سپانسر شوې دنده' : 'نوې دنده'} اضافه شوه!\n\n${title}${sponsorName ? `\nسپانسر: ${sponsorName}` : ''}\nپاداش: ${reward} پوائنټ\n\nاوس مهال یې د «دندې» ټب څخه ترسره کړئ.`,
@@ -49,6 +79,11 @@ const MESSAGES = {
     fa: (name, points, balance) => `🎉 تبریک! ${name} تسک‌های لازم رو تکمیل کرد و ${points} پوینت پاداش دعوت به حسابت اضافه شد.\nموجودی فعلی: ${balance} پوینت.`,
     ps: (name, points, balance) => `🎉 مبارک شه! ${name} اړینې دندې بشپړې کړې او ${points} پوائنټ د بلنې ګټه ستاسو حساب ته اضافه شوه.\nاوسنی بیلانس: ${balance} پوائنټ.`,
     en: (name, points, balance) => `🎉 Congrats! ${name} completed the required tasks and you earned ${points} referral bonus points.\nCurrent balance: ${balance} points.`
+  },
+  referralInitial: {
+    fa: (name, points) => `🎉 دعوت جدید ثبت شد! ${name} عضو Gramup شد و پاداش اولیهٔ ${points} پوینتی به حسابت اضافه شد.`,
+    ps: (name, points) => `🎉 نوې بلنه ثبت شوه! ${name} د Gramup غړی شو او ستاسو حساب ته د ${points} پوائنټ لومړنی انعام اضافه شو.`,
+    en: (name, points) => `🎉 New invitation confirmed! ${name} joined Gramup and the initial ${points}-point reward was added to your account.`
   },
   dailyReminder: {
     fa: () => `⏰ یادت نره امروز وارد Gramup بشی و پاداش روزانه‌ت رو بگیری!\nاستریکت رو از دست نده — پاداش‌های هفت‌روزه‌ات را کامل کن.`,

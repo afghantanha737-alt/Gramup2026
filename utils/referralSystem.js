@@ -6,6 +6,7 @@ const Settings = require('../models/Settings');
 const ReferralRelationship = require('../models/ReferralRelationship');
 const { withMongoTransaction } = require('./mongoTransaction');
 const { sendNotificationOnce } = require('./notificationDelivery');
+const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 const {
   DEFAULT_REFERRAL_LEVEL_RATES,
   DEFAULT_REFERRAL_INITIAL_REWARD_POINTS,
@@ -227,7 +228,9 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
       initialPaid,
       referrerId: referrer._id,
       referredUserId: invitee._id,
-      notification: initialPaid && initialRewardPoints > 0 ? {
+      notification: linkedNow && initialPaid && Number(initialRewardPoints) === 10
+        && isVerifiedAllowedPhone(referrer)
+        && referrer.referralMessageConsent === 'granted' ? {
         eventKey: `referral-initial:${invitee._id}`,
         type: 'referral_initial',
         user: referrer._id,

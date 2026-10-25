@@ -55,6 +55,13 @@ const userSchema = new mongoose.Schema(
       proofVerifiedAt: { type: Date, default: null },
       proofPublicKey: { type: String, default: '' }
     },
+    phoneCountryCode: { type: String, enum: ['', '+93', '+98'], default: '' },
+    phoneVerifiedAt: { type: Date, default: null },
+    phoneContactRequestedAt: { type: Date, default: null },
+    pendingReferralIdentifier: { type: String, default: '' },
+    referralMessageConsent: { type: String, enum: ['unset', 'granted', 'denied'], default: 'unset' },
+    referralMessageConsentAt: { type: Date, default: null },
+    referralMessageConsentVersion: { type: String, default: '' },
     language: { type: String, enum: ['fa', 'ps', 'en'], default: 'fa' },
     isBanned: { type: Boolean, default: false },
     // اگر تلگرام 403 بدهد (ربات بلاک شده یا حساب غیرفعال است)، از ارسال‌های بعدی حذف می‌شود.

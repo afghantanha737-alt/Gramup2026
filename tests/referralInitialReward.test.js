@@ -21,7 +21,7 @@ const paths = {
   Messages: require.resolve('../utils/botMessages')
 };
 
-const referrer = { _id: 'referrer', telegramId: '200', referredBy: null, isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0, language: 'en' };
+const referrer = { _id: 'referrer', telegramId: '200', referredBy: null, isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0, language: 'en', phoneCountryCode: '+93', phoneVerifiedAt: new Date(), referralMessageConsent: 'granted' };
 const invitee = { _id: 'invitee', telegramId: '100', referredBy: null, referralInitialRewardEligible: false, isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0, firstName: 'New User' };
 const users = new Map([[referrer._id, referrer], [invitee._id, invitee]]);
 const ledgerRows = [];
@@ -107,7 +107,23 @@ const { linkReferral } = require('../utils/referralSystem');
   assert.strictEqual(referrer.points, 20, 'a deleted and re-registered invitee receives a fresh initial reward');
   await new Promise(resolve => setImmediate(resolve));
   assert.strictEqual(notificationCount, 2, 're-registration sends one fresh Telegram notification');
-  console.log('ALL PASS — immediate initial referral reward +10 with no task/day/age gate');
+
+  const noConsentInvitee = { ...invitee, _id: 'invitee-no-consent', telegramId: '101', referredBy: null, referralInitialRewardEligible: false };
+  users.set(noConsentInvitee._id, noConsentInvitee);
+  referrer.referralMessageConsent = 'unset';
+  const unsetConsentResult = await linkReferral({ referredUserId: noConsentInvitee._id, referrerId: referrer._id, source: 'signup' });
+  assert.strictEqual(unsetConsentResult.initialPaid, true, 'the reward remains payable while consent is unset');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.strictEqual(notificationCount, 2, 'unset consent sends no Telegram message');
+
+  const deniedInvitee = { ...invitee, _id: 'invitee-denied', telegramId: '102', referredBy: null, referralInitialRewardEligible: false };
+  users.set(deniedInvitee._id, deniedInvitee);
+  referrer.referralMessageConsent = 'denied';
+  const deniedConsentResult = await linkReferral({ referredUserId: deniedInvitee._id, referrerId: referrer._id, source: 'signup' });
+  assert.strictEqual(deniedConsentResult.initialPaid, true, 'consent affects messaging only, not the existing reward calculation');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.strictEqual(notificationCount, 2, 'no referral Telegram message is sent after the user denies consent');
+  console.log('ALL PASS — initial referral +10 reward, consent-gated new-invite message, and no repeat notification');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

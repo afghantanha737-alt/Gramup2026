@@ -5,6 +5,7 @@ const User = require('../models/User');
 const { hashNetworkIdentifier, hashDeviceIdentifier, assessReferralRisk } = require('./referralRisk');
 const { linkReferral } = require('./referralSystem');
 const { referralIdentifierQuery } = require('./referralCore');
+const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 
 /**
  * initData ارسالی از Telegram WebApp را طبق مستندات رسمی تلگرام
@@ -67,7 +68,8 @@ async function getOrCreateUser(tgUser, startParam, requestIp = '', requestUserAg
   const telegramId = String(tgUser.id);
   let dbUser = await User.findOne({ telegramId });
   let createdByThisRequest = false;
-  const referralQuery = referralIdentifierQuery(startParam);
+  const referralIdentifier = String(startParam || dbUser?.pendingReferralIdentifier || '').trim();
+  const referralQuery = referralIdentifierQuery(referralIdentifier);
   let referrer = referralQuery
     ? await User.findOne(referralQuery).select('_id telegramId isBanned signupIpHash signupDeviceHash')
     : null;
@@ -127,20 +129,37 @@ async function getOrCreateUser(tgUser, startParam, requestIp = '', requestUserAg
   }
 
   // لینک start_param در تلگرام ممکن است در اولین درخواست به‌علت موقت‌بودن
-  // دیتابیس کامل نشود؛ در ورود بعدی همان لینک تا ۲۴ ساعت دوباره بررسی می‌شود.
+  // دیتابیس کامل نشود؛ لینک تا تأیید Contact در حساب تازه نگهداری می‌شود.
   const isFreshAccount = dbUser.createdAt && Date.now() - new Date(dbUser.createdAt).getTime() < 24 * 60 * 60 * 1000;
-  if (!dbUser.referredBy && referrer && isFreshAccount) {
-    await linkReferral({
-      referredUserId: dbUser._id,
-      referrerId: referrer._id,
-      riskScore: referralRisk.score,
-      riskFlags: referralRisk.flags,
-      source: 'signup'
-    });
-    dbUser = await User.findById(dbUser._id);
+  if (!dbUser.referredBy && referrer && (isFreshAccount || Boolean(dbUser.pendingReferralIdentifier))) {
+    if (isVerifiedAllowedPhone(dbUser)) {
+      await linkReferral({
+        referredUserId: dbUser._id,
+        referrerId: referrer._id,
+        riskScore: referralRisk.score,
+        riskFlags: referralRisk.flags,
+        source: 'signup'
+      });
+      if (dbUser.pendingReferralIdentifier) {
+        await User.updateOne({ _id: dbUser._id }, { $set: { pendingReferralIdentifier: '' } });
+      }
+      dbUser = await User.findById(dbUser._id);
+    } else if (startParam && !dbUser.pendingReferralIdentifier) {
+      dbUser.pendingReferralIdentifier = String(startParam).slice(0, 64);
+      await dbUser.save();
+    }
   }
 
   return dbUser;
+}
+
+function isPhoneVerificationBootstrapRequest(req) {
+  const path = String(req.originalUrl || '').split('?')[0].replace(/\/$/, '');
+  return new Set([
+    'GET /api/auth/me',
+    'PATCH /api/auth/language',
+    'POST /api/auth/request-phone-contact'
+  ]).has(`${req.method} ${path}`);
 }
 
 function requireTelegramAuth(botToken) {
@@ -153,7 +172,7 @@ function requireTelegramAuth(botToken) {
         return res.status(401).json({ success: false, message: 'احراز هویت تلگرام نامعتبر است.' });
       }
 
-      const dbUser = await getOrCreateUser(verified.user, verified.startParam, req.ip, req.get('user-agent') || '');
+      const dbUser = await getOrCreateUser(verified.user, verified.startParam || req.query.ref || '', req.ip, req.get('user-agent') || '');
       if (!dbUser) {
         return res.status(401).json({ success: false, message: 'کاربر شناسایی نشد.' });
       }
@@ -163,6 +182,13 @@ function requireTelegramAuth(botToken) {
 
       req.tgUser = verified.user;
       req.dbUser = dbUser;
+      if (!isVerifiedAllowedPhone(dbUser) && !isPhoneVerificationBootstrapRequest(req)) {
+        return res.status(403).json({
+          success: false,
+          code: 'PHONE_VERIFICATION_REQUIRED',
+          message: 'برای ادامه، Contact تلگرام خود را با شمارهٔ +93 یا +98 تأیید کنید.'
+        });
+      }
       next();
     } catch (error) {
       console.error('Telegram auth error:', error);

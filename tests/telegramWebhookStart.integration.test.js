@@ -35,6 +35,11 @@ User.create = async values => {
   users.set(String(user.telegramId), user);
   return user;
 };
+User.updateOne = async (filter, update) => {
+  const user = [...users.values()].find(candidate => String(candidate._id) === String(filter._id));
+  if (user) Object.assign(user, update.$set || {});
+  return { acknowledged: true, modifiedCount: user ? 1 : 0 };
+};
 referralSystem.linkReferralByCode = async args => {
   linkedReferrals.push(args);
   return { linked: true };
@@ -78,17 +83,26 @@ app.use('/api/telegram', telegramRouter);
     assert.ok(sentMessages[0].text.includes('به Gramup خوش آمدی'));
     const firstUrl = sentMessages[0].options.reply_markup.inline_keyboard[0][0].web_app.url;
     assert.strictEqual(new URL(firstUrl).searchParams.get('ref'), 'invite_CODE');
-    assert.strictEqual(linkedReferrals.length, 1, 'new-user referral start payload must be processed');
-    assert.strictEqual(linkedReferrals[0].referralCode, 'invite_CODE');
+    assert.strictEqual(linkedReferrals.length, 0, 'new-user referral reward waits for contact verification and authenticated app entry');
+    assert.strictEqual(users.get('111').pendingReferralIdentifier, 'invite_CODE');
+
+    const contact = await postUpdate({
+      update_id: 1008,
+      message: { message_id: 8, chat: { id: 111 }, from: { id: 111, first_name: 'New' }, contact: { user_id: 111, phone_number: '+93 700 123 456' } }
+    });
+    assert.strictEqual(contact.status, 200, 'self-contact update must be acknowledged');
+    assert.strictEqual(users.get('111').phoneCountryCode, '+93');
+    assert.ok(users.get('111').phoneVerifiedAt instanceof Date);
+    assert.ok(sentMessages[1].text.includes('تأیید شد'));
 
     const returning = await postUpdate({
       update_id: 1002,
       message: { message_id: 2, chat: { id: 111 }, from: { id: 111, first_name: 'New' }, text: '/start another_CODE' }
     });
     assert.strictEqual(returning.status, 200);
-    assert.strictEqual(sentMessages.length, 2, 'registered user must also receive Welcome on /start');
-    assert.strictEqual(linkedReferrals.length, 1, 'repeated /start must not link or reward a second referral');
-    const returningUrl = sentMessages[1].options.reply_markup.inline_keyboard[0][0].web_app.url;
+    assert.strictEqual(sentMessages.length, 3, 'registered user must also receive Welcome on /start');
+    assert.strictEqual(linkedReferrals.length, 0, 'repeated /start must not attach or reward a second referral');
+    const returningUrl = sentMessages[2].options.reply_markup.inline_keyboard[0][0].web_app.url;
     assert.strictEqual(new URL(returningUrl).searchParams.has('ref'), false, 'existing users must not receive a replacement referral payload');
 
     const denied = await postUpdate({
@@ -96,7 +110,7 @@ app.use('/api/telegram', telegramRouter);
       message: { message_id: 3, chat: { id: 222 }, from: { id: 222 }, text: '/start' }
     }, 'wrong-secret');
     assert.strictEqual(denied.status, 401, 'invalid Telegram webhook secret must be rejected');
-    assert.strictEqual(sentMessages.length, 2, 'unauthenticated webhook request must not send a message');
+    assert.strictEqual(sentMessages.length, 3, 'unauthenticated webhook request must not send a message');
 
     let shouldFailFirstAttempt = true;
     bot.sendMessage = async (chatId, text, options) => {
@@ -115,17 +129,17 @@ app.use('/api/telegram', telegramRouter);
       message: { message_id: 4, chat: { id: 333 }, from: { id: 333 }, text: '/start' }
     });
     assert.strictEqual(duplicateFailureRetry.status, 200, 'failed update retry should be processed and acknowledged');
-    assert.strictEqual(sentMessages.length, 3, 'failed update is retried and its welcome is sent');
+    assert.strictEqual(sentMessages.length, 4, 'failed update is retried and its welcome is sent');
     const completedDuplicate = await postUpdate({ update_id: 1004, message: { message_id: 4, chat: { id: 333 }, from: { id: 333 }, text: '/start' } });
     assert.strictEqual(completedDuplicate.status, 200, 'completed update duplicates are acknowledged');
-    assert.strictEqual(sentMessages.length, 3, 'completed update duplicates do not repeat side effects');
+    assert.strictEqual(sentMessages.length, 4, 'completed update duplicates do not repeat side effects');
 
     const invalidSecret = await postUpdate({
       update_id: 1006,
       message: { message_id: 6, chat: { id: 555 }, from: { id: 555 }, text: '/start' }
     }, 'wrong-secret');
     assert.strictEqual(invalidSecret.status, 401, 'configured webhook with an invalid secret is rejected');
-    assert.strictEqual(sentMessages.length, 3, 'invalid webhook secret cannot trigger side effects');
+    assert.strictEqual(sentMessages.length, 4, 'invalid webhook secret cannot trigger side effects');
 
     const beforeMissingSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     process.env.TELEGRAM_WEBHOOK_SECRET = '';
