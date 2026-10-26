@@ -85,9 +85,8 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
 
   const settings = await Settings.getGlobal();
 
-  if (!shouldRunNow(settings, now) && !dependencies.force) {
-    return { sent: 0, skipped: settings.dailyReminderEnabled ? 'wrong_hour' : 'disabled' };
-  }
+  if (!settings.dailyReminderEnabled) return { sent: 0, failed: 0, skipped: 'disabled' };
+  if (!shouldRunNow(settings, now) && !dependencies.force) return { sent: 0, failed: 0, skipped: 'wrong_hour' };
 
   const startOfToday = kabulDayStart(now);
 
@@ -117,7 +116,7 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
 
   if (!candidates.length) {
     await Settings.updateOne({}, {
-      $set: { dailyReminderLastRunAt: now, dailyReminderLastSentCount: 0, dailyReminderLastStatus: 'ok', dailyReminderLastError: '' }
+      $set: { dailyReminderLastRunAt: now, dailyReminderLastSentCount: 0, dailyReminderLastFailedCount: 0, dailyReminderLastStatus: 'ok', dailyReminderLastError: '' }
     });
     return { sent: 0, skipped: 'no_candidates' };
   }
@@ -125,6 +124,7 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
   const BATCH_SIZE = 20;
   const DELAY_MS = 1100;
   let sent = 0;
+  let failed = 0;
   let lastError = '';
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
     const batch = candidates.slice(i, i + BATCH_SIZE);
@@ -156,7 +156,12 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
     );
     results.forEach(r => {
       if (r.status === 'fulfilled' && r.value) sent += 1;
+      if (r.status === 'fulfilled' && !r.value) {
+        failed += 1;
+        lastError ||= 'One or more Telegram notifications returned false.';
+      }
       if (r.status === 'rejected') lastError = String(r.reason && r.reason.message || r.reason).slice(0, 300);
+      if (r.status === 'rejected') failed += 1;
     });
     if (i + BATCH_SIZE < candidates.length) {
       await new Promise(resolve => setTimeout(resolve, DELAY_MS));
@@ -167,12 +172,13 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
     $set: {
       dailyReminderLastRunAt: now,
       dailyReminderLastSentCount: sent,
+      dailyReminderLastFailedCount: failed,
       dailyReminderLastStatus: lastError ? 'partial' : 'ok',
       dailyReminderLastError: lastError
     }
   });
 
-  return { sent, total: candidates.length };
+  return { sent, failed, total: candidates.length };
 }
 
 /** ارسال یک پیام آزمایشی به یک آیدی عددی تلگرام مشخص (دکمه‌ی «ارسال Test» در پنل ادمین) */

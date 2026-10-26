@@ -116,11 +116,20 @@ async function notifyUser(telegramId, text, options = {}) {
     await bot.sendMessage(telegramId, text, options);
     return true;
   } catch (error) {
-    if (isTelegramDeliveryBlocked(error)) {
+    const blocked = isTelegramDeliveryBlocked(error);
+    const errorCode = error?.response?.body?.error_code || error?.response?.statusCode || null;
+    console.warn(JSON.stringify({
+      event: 'telegram_notification_failed',
+      telegramId: String(telegramId),
+      blocked,
+      errorCode,
+      error: String(error?.message || error).slice(0, 300),
+      at: new Date().toISOString()
+    }));
+    if (blocked) {
       await markTelegramBlocked(telegramId);
       return false;
     }
-    console.warn(`notifyUser failed for telegramId=${telegramId}:`, error.message || error);
     return false;
   }
 }

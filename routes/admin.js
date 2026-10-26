@@ -36,7 +36,7 @@ const RequiredChannel = require('../models/RequiredChannel');
 const { membership, validateChannelRef, normalizeChannelInput } = require('../utils/membership');
 const { canTransition, requiresReason, shouldRefund, synthesizeHistory, isTerminal } = require('../utils/withdrawalStatus');
 const { COMMON_TIMEZONES, isValidTimezone, targetUtcHour } = require('../utils/timezones');
-const { sendTestReminder, sendTestReminderToAll } = require('../utils/dailyReminder');
+const { sendTestReminder, sendTestReminderToAll, kabulReminderTarget } = require('../utils/dailyReminder');
 const { normalizeSponsorInput, marginInfo, rewardCostUsd } = require('../utils/sponsor');
 const { startOfUtcWeek, endOfUtcWeek, weekKey } = require('../utils/weeklyLeaderboard');
 const { createAdminSession, getAdminSession, revokeAdminSession, SESSION_TTL_MS } = require('../utils/adminSession');
@@ -2158,6 +2158,44 @@ router.get('/settings', async (req, res) => {
       referralLevelRates: safeAdminReferralRates(settings)
     },
     timezones: COMMON_TIMEZONES
+  });
+});
+
+router.get('/daily-reminder/status', async (req, res) => {
+  const settings = await Settings.getGlobal();
+  const now = new Date();
+  const lastRunAt = settings.dailyReminderLastRunAt ? new Date(settings.dailyReminderLastRunAt) : null;
+  const lastRunAgeSeconds = lastRunAt ? Math.max(0, Math.floor((now.getTime() - lastRunAt.getTime()) / 1000)) : null;
+  return res.json({
+    success: true,
+    scheduler: 'render_cron',
+    schedule: { cron: '0 4 * * *', timezone: 'UTC', localTimezone: 'Asia/Kabul', localTime: '08:30' },
+    enabled: settings.dailyReminderEnabled === true,
+    lastRun: {
+      at: lastRunAt,
+      ageSeconds: lastRunAgeSeconds,
+      sent: Number(settings.dailyReminderLastSentCount || 0),
+      failed: Number(settings.dailyReminderLastFailedCount || 0),
+      status: settings.dailyReminderLastStatus || 'never',
+      error: settings.dailyReminderLastError || ''
+    },
+    expectedTargetForToday: kabulReminderTarget(now),
+    healthy: settings.dailyReminderEnabled === true
+      && Boolean(lastRunAt)
+      && settings.dailyReminderLastStatus === 'ok'
+      && Number(settings.dailyReminderLastFailedCount || 0) === 0
+  });
+});
+
+router.get('/daily-reminder/last-run', async (req, res) => {
+  const settings = await Settings.getGlobal();
+  return res.json({
+    success: true,
+    lastRunAt: settings.dailyReminderLastRunAt || null,
+    sentCount: Number(settings.dailyReminderLastSentCount || 0),
+    failedCount: Number(settings.dailyReminderLastFailedCount || 0),
+    status: settings.dailyReminderLastStatus || 'never',
+    error: settings.dailyReminderLastError || ''
   });
 });
 

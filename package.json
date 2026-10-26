@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "cron:daily-reminder": "node scripts/daily-reminder-cron.js",
     "test": "for f in tests/*.test.js; do node \"$f\" || exit 1; done",
     "migrate:referral-v2": "node scripts/migrate-referral-v2.js",
     "verify:production": "node scripts/verify-production.js"

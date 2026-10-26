@@ -21,6 +21,7 @@ const settingsSchema = new mongoose.Schema(
     dailyReminderMessage: { type: String, default: '' },
     dailyReminderLastRunAt: { type: Date, default: null },
     dailyReminderLastSentCount: { type: Number, default: 0 },
+    dailyReminderLastFailedCount: { type: Number, default: 0 },
     dailyReminderLastStatus: { type: String, default: '' },
     dailyReminderLastError: { type: String, default: '' },
     weeklyLeaderboardEnabled: { type: Boolean, default: true },
