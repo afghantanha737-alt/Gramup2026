@@ -24,6 +24,18 @@ function kabulDayStart(date = new Date()) {
   return new Date(Date.UTC(values.year, values.month - 1, values.day) - (4.5 * 60 * 60 * 1000));
 }
 
+function kabulReminderTarget(date = new Date()) {
+  // 08:30 Asia/Kabul == 04:00 UTC; Kabul has no DST transitions.
+  return new Date(kabulDayStart(date).getTime() + (8 * 60 + 30) * 60 * 1000);
+}
+
+function isCatchUpDue(settings, now = new Date()) {
+  if (!settings?.dailyReminderEnabled) return false;
+  const target = kabulReminderTarget(now);
+  const lastRun = settings.dailyReminderLastRunAt ? new Date(settings.dailyReminderLastRunAt) : null;
+  return now >= target && (!lastRun || lastRun < target);
+}
+
 /** متن شخصی‌سازی‌شده: روز چرخه و پاداش همان کاربر در پیام درج می‌شود. */
 function reminderMessageFor(settings, lang, streak = 0, lastCheckIn = null, now = new Date()) {
   const { botText } = require('./botMessages');
@@ -73,7 +85,7 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
 
   const settings = await Settings.getGlobal();
 
-  if (!shouldRunNow(settings, now)) {
+  if (!shouldRunNow(settings, now) && !dependencies.force) {
     return { sent: 0, skipped: settings.dailyReminderEnabled ? 'wrong_hour' : 'disabled' };
   }
 
@@ -209,4 +221,4 @@ async function sendTestReminderToAll({ User, Settings, notifyUser, now = new Dat
   return { sent, failed, total: users.length, lastError };
 }
 
-module.exports = { runDailyReminderSweep, sendTestReminder, sendTestReminderToAll, reminderMessageFor, streakAtRiskMessageFor, utcDayKey, kabulDayStart, shouldRunNow };
+module.exports = { runDailyReminderSweep, sendTestReminder, sendTestReminderToAll, reminderMessageFor, streakAtRiskMessageFor, utcDayKey, kabulDayStart, kabulReminderTarget, isCatchUpDue, shouldRunNow };

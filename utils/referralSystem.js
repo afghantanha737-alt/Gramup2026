@@ -237,7 +237,10 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
         telegramId: referrer.telegramId,
         language: referrer.language,
         referredName,
-        rewardPoints: initialRewardPoints
+        rewardPoints: initialRewardPoints,
+        referralLevel: 1,
+        commissionRatePercent: rates[0] || 10,
+        registeredAt: new Date()
       } : null
     };
   });
@@ -256,7 +259,10 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
         'referralInitial',
         notification.language,
         notification.referredName,
-        notification.rewardPoints
+        notification.rewardPoints,
+        notification.referralLevel,
+        notification.commissionRatePercent,
+        notification.registeredAt
       )
     }).catch(error => console.error('Referral notification failed:', error.message || error));
   } else {

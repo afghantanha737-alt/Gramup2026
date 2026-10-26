@@ -88,7 +88,7 @@ app.use('/api/telegram', telegramRouter);
     assert.ok(sentMessages[0].text.includes('به Gramup خوش آمدی'));
     const firstUrl = sentMessages[0].options.reply_markup.inline_keyboard[0][0].web_app.url;
     assert.strictEqual(new URL(firstUrl).searchParams.get('ref'), 'invite_CODE');
-    assert.strictEqual(linkedReferrals.length, 0, 'new-user referral reward waits for contact verification and authenticated app entry');
+    assert.strictEqual(linkedReferrals.length, 0, 'new-user referral reward waits for contact verification');
     assert.strictEqual(users.get('111').pendingReferralIdentifier, 'invite_CODE');
 
     const contact = await postUpdate({
@@ -99,6 +99,8 @@ app.use('/api/telegram', telegramRouter);
     assert.strictEqual(users.get('111').phoneCountryCode, '+93');
     assert.ok(users.get('111').phoneVerifiedAt instanceof Date);
     assert.ok(sentMessages[1].text.includes('تأیید شد'));
+    assert.strictEqual(linkedReferrals.length, 1, 'verified self-contact must complete the pending referral exactly once');
+    assert.strictEqual(users.get('111').pendingReferralIdentifier, '', 'pending referral must be consumed after successful linking');
 
     const returning = await postUpdate({
       update_id: 1002,
@@ -106,7 +108,7 @@ app.use('/api/telegram', telegramRouter);
     });
     assert.strictEqual(returning.status, 200);
     assert.strictEqual(sentMessages.length, 3, 'registered user must also receive Welcome on /start');
-    assert.strictEqual(linkedReferrals.length, 0, 'repeated /start must not attach or reward a second referral');
+    assert.strictEqual(linkedReferrals.length, 1, 'repeated /start must not attach or reward a second referral');
     const returningUrl = sentMessages[2].options.reply_markup.inline_keyboard[0][0].web_app.url;
     assert.strictEqual(new URL(returningUrl).searchParams.has('ref'), false, 'existing users must not receive a replacement referral payload');
 

@@ -176,7 +176,7 @@ async function settleWeek(week, options = {}) {
           type: 'weekly_reward',
           user: payment.user,
           telegramId: row.user.telegramId,
-          text: botText('leaderboardReward', row.user.language, rank, payment.points)
+          text: botText('leaderboardReward', row.user.language, rank, payment.points, window.key)
         }).catch(error => console.error('Weekly reward notification failed:', error.message || error));
       }
 

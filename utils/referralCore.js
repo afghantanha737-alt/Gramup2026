@@ -52,7 +52,9 @@ function createMiniAppReferralLink(botUsername, telegramId) {
   const bot = String(botUsername || '').trim().replace(/^@/, '');
   const id = String(telegramId || '').trim();
   if (!/^[A-Za-z0-9_]{5,32}$/.test(bot) || !/^\d{1,20}$/.test(id)) return '';
-  return `https://t.me/${bot}?startapp=${encodeURIComponent(id)}`;
+  const signedIdentifier = createSignedReferralIdentifier(id);
+  if (!signedIdentifier) return '';
+  return `https://t.me/${bot}?startapp=${encodeURIComponent(`ref_${signedIdentifier}`)}`;
 }
 
 function referralIdentifierQuery(value, secret = process.env.REFERRAL_LINK_SECRET || process.env.BOT_TOKEN || '') {
@@ -68,7 +70,9 @@ function referralIdentifierQuery(value, secret = process.env.REFERRAL_LINK_SECRE
     }
     return null;
   }
-  if (/^\d{1,20}$/.test(identifier)) return { telegramId: identifier };
+  // Raw Telegram IDs are intentionally rejected. Referral links must carry an
+  // HMAC signature so a user cannot forge attribution to an arbitrary inviter.
+  if (/^\d{1,20}$/.test(identifier)) return null;
   if (/^[a-z\d]{1,64}$/i.test(identifier)) return { referralCode: identifier.toUpperCase() };
   return null;
 }

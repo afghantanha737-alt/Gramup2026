@@ -67,6 +67,24 @@ async function handlePhoneContactMessage(message) {
     { _id: user._id },
     { $set: { phoneCountryCode: verification.countryCode, phoneVerifiedAt: new Date() } }
   );
+  if (user.pendingReferralIdentifier) {
+    try {
+      const referralResult = await linkReferralByCode({
+        referredUserId: user._id,
+        identifier: user.pendingReferralIdentifier,
+        source: 'signup'
+      });
+      if (referralResult.linked || referralResult.reason === 'invalid_referral_identifier' || referralResult.reason === 'invalid_referrer') {
+        await User.updateOne(
+          { _id: user._id, pendingReferralIdentifier: user.pendingReferralIdentifier },
+          { $set: { pendingReferralIdentifier: '' } }
+        );
+      }
+    } catch (error) {
+      // Keep the pending identifier for a safe retry if the database/provider fails.
+      console.error('Pending referral completion failed:', error.message || error);
+    }
+  }
   await bot.sendMessage(chatId, botText('phoneContactVerified', user.language || 'fa'), {
     reply_markup: { remove_keyboard: true }
   });
@@ -145,11 +163,12 @@ async function handleBroadcastConfirm(telegramId, chatId) {
 
 async function handleCallbackQuery(callbackQuery) {
   const telegramId = String(callbackQuery.from.id);
-  const chatId = callbackQuery.message && callbackQuery.message.chat.id;
+  const callbackChat = callbackQuery.message && callbackQuery.message.chat;
+  const chatId = callbackChat && callbackChat.id;
   if (bot.answerCallbackQuery) {
     bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
   }
-  if (!isAdminTelegramId(telegramId) || !chatId) return;
+  if (!isAdminTelegramId(telegramId) || !chatId || callbackChat.type !== 'private') return;
 
   const data = callbackQuery.data;
   if (data === 'admin_stats') return handleAdminStats(chatId);
@@ -322,16 +341,17 @@ router.post('/webhook', async (req, res) => {
       const message = update.message;
       const chatId = message.chat.id;
       const senderId = message.from && String(message.from.id);
+      const isPrivateChat = message.chat.type === 'private';
       const text = (message.text || '').trim();
       if (message.contact) {
         await handlePhoneContactMessage(message);
-      } else if (text === '/admin') {
+      } else if (isPrivateChat && text === '/admin') {
         if (isAdminTelegramId(senderId)) await sendAdminMenu(chatId);
         else await bot.sendMessage(chatId, `آیدی عددی شما: ${senderId}\n\nبرای دسترسی مدیریتی از تلگرام، این عدد را به متغیر محیطی ADMIN_TELEGRAM_IDS در تنظیمات سرور اضافه کنید.`);
-      } else if (isAdminTelegramId(senderId) && text === '/cancel' && (await adminSessions.isAwaitingContent(senderId))) {
+      } else if (isPrivateChat && isAdminTelegramId(senderId) && text === '/cancel' && (await adminSessions.isAwaitingContent(senderId))) {
         await adminSessions.clearAwaitingContent(senderId);
         await bot.sendMessage(chatId, 'ارسال پیام همگانی لغو شد.');
-      } else if (isAdminTelegramId(senderId) && (await adminSessions.isAwaitingContent(senderId))) {
+      } else if (isPrivateChat && isAdminTelegramId(senderId) && (await adminSessions.isAwaitingContent(senderId))) {
         await handleBroadcastContent(senderId, chatId, message);
       }
     }

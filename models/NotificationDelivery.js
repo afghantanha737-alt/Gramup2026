@@ -9,6 +9,7 @@ const notificationDeliverySchema = new mongoose.Schema({
   telegramId: { type: String, required: true },
   status: { type: String, enum: ['pending', 'sending', 'sent', 'unknown'], default: 'pending', index: true },
   attempts: { type: Number, default: 0, min: 0 },
+  sendingAt: { type: Date, default: null, index: true },
   sentAt: { type: Date, default: null },
   error: { type: String, default: '' }
 });

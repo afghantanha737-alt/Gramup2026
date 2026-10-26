@@ -81,9 +81,9 @@ const MESSAGES = {
     en: (name, points, balance) => `🎉 Congrats! ${name} completed the required tasks and you earned ${points} referral bonus points.\nCurrent balance: ${balance} points.`
   },
   referralInitial: {
-    fa: (name, points) => `🎉 دعوت جدید ثبت شد! ${name} عضو Gramup شد و پاداش اولیهٔ ${points} پوینتی به حسابت اضافه شد.`,
-    ps: (name, points) => `🎉 نوې بلنه ثبت شوه! ${name} د Gramup غړی شو او ستاسو حساب ته د ${points} پوائنټ لومړنی انعام اضافه شو.`,
-    en: (name, points) => `🎉 New invitation confirmed! ${name} joined Gramup and the initial ${points}-point reward was added to your account.`
+    fa: (name, points, level = 1, commission = 10, registeredAt = new Date()) => `🎉 دعوت جدید ثبت شد! ${name} عضو Gramup شد و پاداش اولیهٔ ${points} پوینتی به حسابت اضافه شد.\nسطح دعوت: ${level} (Level ${level})\nاز فعالیت‌ها و تسک‌های این کاربر همیشه ${commission}٪ کمیسیون دریافت می‌کنید.\nزمان ثبت: ${formatKabulDateTime(registeredAt, 'fa')}`,
+    ps: (name, points, level = 1, commission = 10, registeredAt = new Date()) => `🎉 نوې بلنه ثبت شوه! ${name} د Gramup غړی شو او ستاسو حساب ته د ${points} پوائنټ لومړنی انعام اضافه شو.\nد بلنې کچه: ${level} (Level ${level})\nد دې کاروونکي له فعالیتونو او دندو څخه به تل ${commission}٪ کمېشن ترلاسه کوئ.\nد ثبت وخت: ${formatKabulDateTime(registeredAt, 'ps')}`,
+    en: (name, points, level = 1, commission = 10, registeredAt = new Date()) => `🎉 New invitation confirmed! ${name} joined Gramup and the initial ${points}-point reward was added to your account.\nReferral level: ${level} (Level ${level})\nYou will always receive ${commission}% commission from this user's activities and tasks.\nRegistered: ${formatKabulDateTime(registeredAt, 'en')}`
   },
   dailyReminder: {
     fa: () => `⏰ یادت نره امروز وارد Gramup بشی و پاداش روزانه‌ت رو بگیری!\nاستریکت رو از دست نده — پاداش‌های هفت‌روزه‌ات را کامل کن.`,
@@ -106,6 +106,15 @@ const MESSAGES = {
     en: () => '🎯 Weekly Challenge has started!\n\nA new weekly challenge is now live.\nJoin now and compete for the leaderboard rewards.'
   }
 };
+
+function formatKabulDateTime(value, language = 'en') {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const locale = language === 'fa' ? 'fa-AF' : language === 'ps' ? 'ps-AF' : 'en-GB';
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: 'Asia/Kabul', dateStyle: 'medium', timeStyle: 'short', hour12: false
+  }).format(date);
+}
 
 function botText(key, lang, ...args) {
   const set = MESSAGES[key];

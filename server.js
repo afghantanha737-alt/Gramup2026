@@ -61,7 +61,7 @@ app.use(
       if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error('CORS origin not allowed'));
     },
-    allowedHeaders: ['Content-Type', 'X-Telegram-Init-Data', 'Idempotency-Key', 'x-admin-session', 'x-admin-key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data', 'Idempotency-Key', 'x-admin-session', 'x-admin-key'],
     credentials: true
   })
 );
@@ -284,8 +284,15 @@ async function startServer() {
     setInterval(() => { void runJob('referral-sweep', 'Scheduled referral sweep', runReferralSweep); }, 15 * 60 * 1000);
 
     // Shared database leases prevent each app instance from sending the same reminders.
-    const { runDailyReminderSweep } = require('./utils/dailyReminder');
-    setInterval(() => { void runJob('daily-reminder-sweep', 'Daily reminder sweep', runDailyReminderSweep); }, 60 * 1000);
+    const { runDailyReminderSweep, isCatchUpDue } = require('./utils/dailyReminder');
+    const runScheduledDailyReminder = async () => {
+      const currentSettings = await Settings.getGlobal();
+      const forceCatchUp = isCatchUpDue(currentSettings, new Date());
+      return runDailyReminderSweep(new Date(), { force: forceCatchUp });
+    };
+    // Run once on boot to recover a missed 04:00 UTC window, then poll every minute.
+    void runJob('daily-reminder-sweep', 'Initial daily reminder sweep', runScheduledDailyReminder);
+    setInterval(() => { void runJob('daily-reminder-sweep', 'Daily reminder sweep', runScheduledDailyReminder); }, 60 * 1000);
 
     const { settleClosedWeeks } = require('./utils/weeklyLeaderboardSettlement');
     void runJob('weekly-leaderboard-settlement', 'Initial weekly settlement', settleClosedWeeks);

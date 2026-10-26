@@ -54,10 +54,10 @@ router.get('/weekly', auth, async (req, res) => {
     { $match: { createdAt: { $gte: start, $lt: end }, currency: 'points', amount: { $gt: 0 }, type: { $in: POSITIVE_TYPES } } },
     { $group: { _id: '$user', points: { $sum: '$amount' } } },
     { $sort: { points: -1, _id: 1 } },
-    { $limit: 50 },
     { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
     { $unwind: '$user' },
-    { $match: { 'user.isBanned': false } }
+    { $match: { 'user.isBanned': false } },
+    { $limit: 50 }
   ]);
   const myTotals = await PointsLedger.aggregate([
     { $match: { user: req.dbUser._id, createdAt: { $gte: start, $lt: end }, currency: 'points', amount: { $gt: 0 }, type: { $in: POSITIVE_TYPES } } },
@@ -67,7 +67,9 @@ router.get('/weekly', auth, async (req, res) => {
   const above = await PointsLedger.aggregate([
     { $match: { createdAt: { $gte: start, $lt: end }, currency: 'points', amount: { $gt: 0 }, type: { $in: POSITIVE_TYPES } } },
     { $group: { _id: '$user', points: { $sum: '$amount' } } },
-    { $match: { $or: [{ points: { $gt: myPoints } }, { points: myPoints, _id: { $lt: req.dbUser._id } }] } },
+    { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+    { $unwind: '$user' },
+    { $match: { 'user.isBanned': false, $or: [{ points: { $gt: myPoints } }, { points: myPoints, _id: { $lt: req.dbUser._id } }] } },
     { $count: 'count' }
   ]);
   const top = rows.map((row, index) => ({
