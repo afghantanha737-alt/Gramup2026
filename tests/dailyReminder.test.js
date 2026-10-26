@@ -6,9 +6,9 @@ const { botText } = require('../utils/botMessages');
 
 // ---- shouldRunNow
 assert.strictEqual(shouldRunNow({ dailyReminderEnabled: false, dailyReminderHourUtc: 15 }, new Date('2026-01-01T15:05:00Z')), false, 'خاموش یعنی هرگز اجرا نشود');
-assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 2, dailyReminderMinuteUtc: 30 }, new Date('2026-01-01T02:30:00Z')), true, '۷ صبح کابل برابر ۰۲:۳۰ UTC است');
-assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 2, dailyReminderMinuteUtc: 30 }, new Date('2026-01-01T02:29:00Z')), false, 'یک دقیقه قبل از ساعت هنوز نه');
-assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 2, dailyReminderMinuteUtc: 30 }, new Date('2026-01-01T02:31:00Z')), false, 'یک دقیقه بعد دیگر نه');
+assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 4, dailyReminderMinuteUtc: 0 }, new Date('2026-01-01T04:00:00Z')), true, '۰۸:۳۰ کابل برابر ۰۴:۰۰ UTC است');
+assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 4, dailyReminderMinuteUtc: 0 }, new Date('2026-01-01T03:59:00Z')), false, 'یک دقیقه قبل از ساعت هنوز نه');
+assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 4, dailyReminderMinuteUtc: 0 }, new Date('2026-01-01T04:01:00Z')), false, 'یک دقیقه بعد دیگر نه');
 assert.strictEqual(shouldRunNow({ dailyReminderEnabled: true, dailyReminderHourUtc: 0, dailyReminderMinuteUtc: 0 }, new Date('2026-01-01T00:00:00Z')), true, 'ساعت صفر UTC هم باید کار کند');
 console.log('PASS  shouldRunNow: فقط داخل ساعت تنظیم‌شده و وقتی فعال است');
 

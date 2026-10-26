@@ -9,13 +9,13 @@ const {
   runDailyCheckinNotificationSweep
 } = require('../utils/dailyCheckinNotification');
 
-const now = new Date('2026-10-24T08:12:00.000Z');
+const now = new Date('2026-10-24T04:12:00.000Z');
 const yesterday = new Date('2026-10-23T12:00:00.000Z');
 const today = new Date('2026-10-24T01:00:00.000Z');
 
-assert.strictEqual(DEFAULT_HOUR_UTC, 8);
-assert.strictEqual(shouldRunNow(now, 8), true);
-assert.strictEqual(shouldRunNow(new Date('2026-10-24T09:00:00Z'), 8), false);
+assert.strictEqual(DEFAULT_HOUR_UTC, 4);
+assert.strictEqual(shouldRunNow(now, 4), true);
+assert.strictEqual(shouldRunNow(new Date('2026-10-24T05:00:00Z'), 4), false);
 assert.strictEqual(nextCheckinDay({ streak: 1, lastCheckIn: yesterday }, now), 2);
 assert.strictEqual(nextCheckinDay({ streak: 6, lastCheckIn: yesterday }, now), 7);
 assert.strictEqual(nextCheckinDay({ streak: 7, lastCheckIn: yesterday }, now), 1);
@@ -50,7 +50,7 @@ async function testSweep() {
     return telegramId !== '103'; // failed delivery must not stop attempts to the rest
   };
 
-  const result = await runDailyCheckinNotificationSweep(now, { User, notifyUser, hourUtc: 8 });
+  const result = await runDailyCheckinNotificationSweep(now, { User, notifyUser, hourUtc: 4 });
   assert.deepStrictEqual(query.filter, {}, 'the sweep queries all registered users without audience filters');
   assert.match(query.projection, /telegramId/);
   assert.strictEqual(sentMessages.length, 3, 'every registered Telegram user is attempted, including banned/blocked records');
@@ -61,7 +61,7 @@ async function testSweep() {
   ]);
   assert.deepStrictEqual(result, { sent: 2, failed: 1, alreadySent: 0, total: 3 });
 
-  const repeated = await runDailyCheckinNotificationSweep(now, { User, notifyUser, hourUtc: 8 });
+  const repeated = await runDailyCheckinNotificationSweep(now, { User, notifyUser, hourUtc: 4 });
   assert.strictEqual(sentMessages.length, 3, 'the existing per-user reminder timestamp prevents same-day repeats');
   assert.strictEqual(repeated.alreadySent, 3);
   assert.strictEqual((await runDailyCheckinNotificationSweep(now, { User, notifyUser, hourUtc: 9 })).skipped, 'wrong_hour');

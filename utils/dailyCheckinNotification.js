@@ -2,7 +2,7 @@
 
 const { cycleDayForStreak, DAILY_CHECKIN_REWARDS } = require('./dailyCheckin');
 
-const DEFAULT_HOUR_UTC = 8;
+const DEFAULT_HOUR_UTC = 4;
 const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 1100;
 const DAY_MS = 24 * 60 * 60 * 1000;

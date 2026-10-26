@@ -5,7 +5,7 @@ const { runDailyReminderSweep } = require('../utils/dailyReminder');
 const { runDailyCheckinNotificationSweep } = require('../utils/dailyCheckinNotification');
 
 async function main() {
-  const now = new Date('2026-10-26T02:30:00.000Z');
+  const now = new Date('2026-10-26T04:00:00.000Z');
   const todayStart = new Date('2026-10-26T00:00:00.000Z');
   const user = {
     _id: 'user-1',
@@ -32,14 +32,14 @@ async function main() {
     }
   };
   const Settings = {
-    getGlobal: async () => ({ dailyReminderEnabled: true, dailyReminderHourUtc: 2, dailyReminderMinuteUtc: 30, dailyReminderMessage: '', dailyReminderAudience: 'all' }),
+    getGlobal: async () => ({ dailyReminderEnabled: true, dailyReminderHourUtc: 4, dailyReminderMinuteUtc: 0, dailyReminderMessage: '', dailyReminderAudience: 'all' }),
     updateOne: async () => ({ modifiedCount: 1 })
   };
   const notifyUser = async () => { sends += 1; return true; };
 
   await Promise.all([
     runDailyReminderSweep(now, { User, Settings, notifyUser }),
-    runDailyCheckinNotificationSweep(now, { User, Settings, notifyUser, hourUtc: 2 })
+    runDailyCheckinNotificationSweep(now, { User, Settings, notifyUser, hourUtc: 4 })
   ]);
 
   assert.strictEqual(sends, 1, 'competing daily sweeps must not overwrite one another\'s marker or send twice');

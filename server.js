@@ -261,20 +261,20 @@ async function startServer() {
       .catch(error => console.error(`${label} failed:`, error.message || error));
 
     // GramUp daily reminder policy: all users who started the bot, every day at
-    // 07:00 Asia/Kabul (02:30 UTC). Apply once to existing installations while
+    // 08:30 Asia/Kabul (04:00 UTC). Apply once to existing installations while
     // preserving any later admin changes.
     const Settings = require('./models/Settings');
     const reminderSettings = await Settings.getGlobal();
-    if (Number(reminderSettings.dailyReminderPolicyVersion || 0) < 1) {
+    if (Number(reminderSettings.dailyReminderPolicyVersion || 0) < 2) {
       Object.assign(reminderSettings, {
         dailyReminderEnabled: true,
-        dailyReminderHourUtc: 2,
-        dailyReminderMinuteUtc: 30,
+        dailyReminderHourUtc: 4,
+        dailyReminderMinuteUtc: 0,
         dailyReminderTimezone: 'Asia/Kabul',
-        dailyReminderLocalHour: 7,
-        dailyReminderLocalMinute: 0,
+        dailyReminderLocalHour: 8,
+        dailyReminderLocalMinute: 30,
         dailyReminderAudience: 'all',
-        dailyReminderPolicyVersion: 1
+        dailyReminderPolicyVersion: 2
       });
       await reminderSettings.save();
     }
