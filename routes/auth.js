@@ -11,7 +11,7 @@ const { isVerifiedAllowedPhone, contactRequestKeyboard } = require('../utils/tel
 const { bot } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { sendWelcomeMessage, welcomeTriggerKey } = require('../utils/telegramStart');
-const Settings = require('../models/Settings');
+const { getMaintenanceState, isAllowedTelegramId } = require('../utils/maintenance');
 
 const auth = requireTelegramAuth(process.env.BOT_TOKEN);
 const PHONE_CONTACT_COOLDOWN_MS = 30 * 1000;
@@ -56,11 +56,8 @@ router.get('/me', auth, async (req, res) => {
     }
   }
 
-  const settings = await Settings.getGlobal();
-  const allowedTelegramIds = Array.isArray(settings.maintenanceAllowedTelegramIds)
-    ? settings.maintenanceAllowedTelegramIds.map(String)
-    : [];
-  const maintenanceEnabled = settings.maintenanceEnabled === true;
+  const maintenanceState = await getMaintenanceState();
+  const maintenanceAllowed = isAllowedTelegramId(maintenanceState, u.telegramId);
   const phoneVerified = isVerifiedAllowedPhone(u);
   res.json({
     success: true,
@@ -76,9 +73,9 @@ router.get('/me', auth, async (req, res) => {
     phoneCountryCode: phoneVerified ? u.phoneCountryCode : '',
     referralMessageConsent: phoneVerified ? (u.referralMessageConsent || 'unset') : 'unset',
     maintenance: {
-      enabled: maintenanceEnabled,
-      allowed: allowedTelegramIds.includes(String(u.telegramId)),
-      required: maintenanceEnabled && !allowedTelegramIds.includes(String(u.telegramId))
+      enabled: maintenanceState.enabled,
+      allowed: maintenanceAllowed,
+      required: maintenanceState.enabled && !maintenanceAllowed
     }
   });
 });

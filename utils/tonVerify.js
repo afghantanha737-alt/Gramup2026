@@ -78,6 +78,10 @@ async function verifyTonTransaction({ txHash, expectedAddress, expectedAmount, t
     return { ok: false, reason: 'تراکنشی با این هش روی شبکه پیدا نشد.' };
   }
 
+  if (tx.description?.aborted === true) {
+    return { ok: false, reason: 'تراکنش روی شبکه abort شده و پرداخت موفقی محسوب نمی‌شود.', raw: tx };
+  }
+
   const computeOk = tx.description?.compute_ph?.success !== false;
   const actionOk = tx.description?.action?.success !== false;
   if (!computeOk || !actionOk) {

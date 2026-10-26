@@ -53,10 +53,10 @@ router.get('/weekly', auth, async (req, res) => {
   const rows = await PointsLedger.aggregate([
     { $match: { createdAt: { $gte: start, $lt: end }, currency: 'points', amount: { $gt: 0 }, type: { $in: POSITIVE_TYPES } } },
     { $group: { _id: '$user', points: { $sum: '$amount' } } },
-    { $sort: { points: -1, _id: 1 } },
     { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
     { $unwind: '$user' },
     { $match: { 'user.isBanned': false } },
+    { $sort: { points: -1, _id: 1 } },
     { $limit: 50 }
   ]);
   const myTotals = await PointsLedger.aggregate([
@@ -69,7 +69,8 @@ router.get('/weekly', auth, async (req, res) => {
     { $group: { _id: '$user', points: { $sum: '$amount' } } },
     { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
     { $unwind: '$user' },
-    { $match: { 'user.isBanned': false, $or: [{ points: { $gt: myPoints } }, { points: myPoints, _id: { $lt: req.dbUser._id } }] } },
+    { $match: { 'user.isBanned': false } },
+    { $match: { $or: [{ points: { $gt: myPoints } }, { points: myPoints, _id: { $lt: req.dbUser._id } }] } },
     { $count: 'count' }
   ]);
   const top = rows.map((row, index) => ({

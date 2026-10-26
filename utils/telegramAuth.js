@@ -165,7 +165,7 @@ function isPhoneVerificationBootstrapRequest(req) {
 function requireTelegramAuth(botToken) {
   return async function telegramAuthMiddleware(req, res, next) {
     try {
-      const initData = req.get('X-Telegram-Init-Data') || req.query.initData || (req.body && req.body.initData) || '';
+      const initData = req.get('X-Telegram-Init-Data') || (req.body && req.body.initData) || '';
       const verified = verifyInitData(initData, botToken);
 
       if (!verified || !verified.user) {

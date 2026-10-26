@@ -93,6 +93,10 @@ let dailyCheckinTimer = null;
 /* ================= DOM HELPERS ================= */
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+function findByData(selector, key, value) {
+  const expected = String(value ?? "");
+  return $$(selector).find(element => element.dataset[key] === expected) || null;
+}
 
 /* ================= TELEGRAM INIT DATA ================= */
 function getInitData() {
@@ -997,7 +1001,7 @@ async function claimReferralTask(taskId) {
   const task = state.referralTasks.find(item => item.id === taskId);
   if (!task || task.status !== "claimable") return;
 
-  const button = document.querySelector(`[data-referral-claim="${taskId}"]`);
+  const button = findByData("[data-referral-claim]", "referralClaim", taskId);
   if (button) {
     button.disabled = true;
     button.textContent = t("referral_claiming");
@@ -1305,6 +1309,42 @@ function openTaskLinkOnly(url) {
 window.openTaskLinkOnly = openTaskLinkOnly;
 
 document.addEventListener("click", event => {
+  const vipClaimButton = event.target?.closest?.("[data-vip-claim]");
+  if (vipClaimButton) {
+    event.preventDefault();
+    void claimVipReward(vipClaimButton.dataset.vipClaim);
+    return;
+  }
+  const referralButton = event.target?.closest?.("[data-referral-claim]");
+  if (referralButton) {
+    event.preventDefault();
+    void claimReferralTask(referralButton.dataset.referralClaim);
+    return;
+  }
+  const latestPostCheckButton = event.target?.closest?.("[data-latest-post-check]");
+  if (latestPostCheckButton) {
+    event.preventDefault();
+    void verifyLatestPostTask(latestPostCheckButton.dataset.latestPostCheck);
+    return;
+  }
+  const verifyButton = event.target?.closest?.("[data-verify]");
+  if (verifyButton) {
+    event.preventDefault();
+    void verifyTelegramTask(verifyButton.dataset.verify);
+    return;
+  }
+  const screenshotButton = event.target?.closest?.("[data-upload-screenshot]");
+  if (screenshotButton) {
+    event.preventDefault();
+    chooseScreenshotFile(screenshotButton.dataset.uploadScreenshot);
+    return;
+  }
+  const withdrawalButton = event.target?.closest?.("[data-withdrawal-id]");
+  if (withdrawalButton) {
+    event.preventDefault();
+    void openWithdrawalDetail(withdrawalButton.dataset.withdrawalId);
+    return;
+  }
   const button = event.target?.closest?.("[data-task-open-url]");
   if (!button) return;
   event.preventDefault();
@@ -1319,7 +1359,7 @@ async function openLatestPostTask(url, taskId) {
   if (!id || !url || latestPostOpeningTaskIds.has(id)) return;
 
   latestPostOpeningTaskIds.add(id);
-  const button = document.querySelector(`[data-latest-post-open="${id}"]`);
+  const button = findByData("[data-latest-post-open]", "latestPostOpen", id);
   if (button) button.disabled = true;
   const openRequest = api(`/api/tasks/${encodeURIComponent(id)}/engagement/open`, { method: "POST" });
 
@@ -1359,9 +1399,15 @@ document.addEventListener("visibilitychange", refreshLatestPostTasksOnReturn);
 window.addEventListener("pageshow", refreshLatestPostTasksOnReturn);
 
 function chooseScreenshotFile(taskId) {
-  document.getElementById(`screenshot-file-${taskId}`)?.click();
+  findByData('input[data-screenshot-task]', 'screenshotTask', taskId)?.click();
 }
 window.chooseScreenshotFile = chooseScreenshotFile;
+
+document.addEventListener("change", event => {
+  const input = event.target?.closest?.("input[data-screenshot-task]");
+  if (!input) return;
+  void submitScreenshotTask(input.dataset.screenshotTask, input.files?.[0], input);
+});
 
 async function submitScreenshotTask(taskId, file, input) {
   if (!file) return;
@@ -1376,7 +1422,7 @@ async function submitScreenshotTask(taskId, file, input) {
     return;
   }
 
-  const button = document.querySelector(`[data-upload-screenshot="${taskId}"]`);
+  const button = findByData("[data-upload-screenshot]", "uploadScreenshot", taskId);
   const previousText = button?.textContent || "";
   if (button) { button.disabled = true; button.textContent = t("task_action_uploading"); }
   try {
@@ -1420,11 +1466,11 @@ const taskHints = {};
 
 /** تسک‌های تلگرامی: بررسی خودکار عضویت با API ربات */
 async function verifyTelegramTask(taskId) {
-  const button = document.querySelector(`[data-verify="${taskId}"]`);
+  const button = findByData("[data-verify]", "verify", taskId);
   if (button) { button.disabled = true; button.textContent = t("task_action_verifying"); }
 
   try {
-    const result = await api(`/api/tasks/${taskId}/claim`, { method: "POST" });
+    const result = await api(`/api/tasks/${encodeURIComponent(taskId)}/claim`, { method: "POST" });
     haptic("success");
     toast(result.message, "success");
     delete taskHints[taskId];
@@ -1458,7 +1504,7 @@ async function verifyTelegramTask(taskId) {
 window.verifyTelegramTask = verifyTelegramTask;
 
 async function verifyLatestPostTask(taskId) {
-  const button = document.querySelector(`[data-latest-post-check="${taskId}"]`);
+  const button = findByData("[data-latest-post-check]", "latestPostCheck", taskId);
   if (button) {
     button.disabled = true;
     button.dataset.taskState = "VERIFYING";
@@ -1704,7 +1750,7 @@ function renderTasks() {
             : 0;
           actionHtml = remaining > 0
             ? `<button class="taskAction pending" data-task-state="COOLDOWN" data-bio-link-cooldown="true" data-until="${escapeHTML(nextAvailableAt.toISOString())}" disabled>${t("task_latest_post_available_in", { time: formatCountdown(remaining) })}</button>`
-            : `<button class="taskAction" data-verify="${escapeHTML(task._id)}" onclick="verifyTelegramTask('${escapeHTML(task._id)}')">${t("bio_link_task_verify")}</button>`;
+            : `<button type="button" class="taskAction" data-verify="${escapeHTML(task._id)}">${t("bio_link_task_verify")}</button>`;
         } else if (task.verifyType === "latest_post") {
           const completion = completionRecord(task._id);
           const nextAvailableAt = completion?.nextAvailableAt ? new Date(completion.nextAvailableAt) : null;
@@ -1721,7 +1767,7 @@ function renderTasks() {
           if (remaining > 0) {
             actionButton = `<button class="taskAction pending" data-task-state="COOLDOWN" data-latest-post-cooldown data-task-id="${escapeHTML(task._id)}" data-until="${escapeHTML(nextAvailableAt.toISOString())}" disabled>${t("task_latest_post_available_in", { time: formatCountdown(remaining) })}</button>`;
           } else if (waitingForCheck) {
-            actionButton = `<button class="taskAction" data-task-state="WAITING_FOR_CHECK" data-latest-post-check="${escapeHTML(task._id)}" onclick="verifyLatestPostTask('${escapeHTML(task._id)}')">${t("task_action_claim")}</button>`;
+            actionButton = `<button type="button" class="taskAction" data-task-state="WAITING_FOR_CHECK" data-latest-post-check="${escapeHTML(task._id)}">${t("task_action_claim")}</button>`;
           } else if (latestPostOpenedTaskIds.has(String(task._id)) && openWaitRemaining > 0) {
             actionButton = `<button class="taskAction pending" data-latest-post-wait="true" data-opened-at="${escapeHTML(String(openedAtMs))}" disabled>${t("task_latest_post_check_in", { time: formatCountdown(openWaitRemaining) })}</button>`;
           } else {
@@ -1742,14 +1788,14 @@ function renderTasks() {
           actionHtml = `
             <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
               ${safeUrl ? `<button class="taskAction" data-task-open-url="${escapeHTML(safeUrl)}" style="background:var(--surface-3);color:var(--text)">${t("task_action_open")}</button>` : ""}
-              <input class="hidden" id="screenshot-file-${task._id}" type="file" accept="image/jpeg,image/png,image/webp" onchange="submitScreenshotTask('${task._id}', this.files[0], this)">
-              <button class="taskAction" data-upload-screenshot="${task._id}" onclick="chooseScreenshotFile('${task._id}')">📸 ${t("task_action_upload")}</button>
+              <input class="hidden" data-screenshot-task="${escapeHTML(task._id)}" type="file" accept="image/jpeg,image/png,image/webp">
+              <button type="button" class="taskAction" data-upload-screenshot="${escapeHTML(task._id)}">📸 ${t("task_action_upload")}</button>
             </div>${rejectedNote}`;
         } else {
           actionHtml = `
             <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
               ${safeUrl ? `<button class="taskAction" data-task-open-url="${escapeHTML(safeUrl)}" style="background:var(--surface-3);color:var(--text)">${t("task_action_open")}</button>` : ""}
-              <button class="taskAction" data-verify="${task._id}" onclick="verifyTelegramTask('${task._id}')">${t("task_action_verify")}</button>
+              <button type="button" class="taskAction" data-verify="${escapeHTML(task._id)}">${t("task_action_verify")}</button>
             </div>`;
         }
 
@@ -2361,7 +2407,7 @@ function renderWallet() {
     list.innerHTML = walletHistory.map(item => {
       const statusInfo = WITHDRAW_STATUS_UI[item.status] || { cls: "" };
       return `
-        <button type="button" class="historyItem historyItemBtn" onclick="openWithdrawalDetail('${item._id}')">
+        <button type="button" class="historyItem historyItemBtn" data-withdrawal-id="${escapeHTML(item._id)}">
           <div>
             <div class="historyAmount">${formatNumber(item.cryptoAmount, 6)} ${escapeHTML(item.token || "GRAM")}</div>
             <div class="historyMeta">${timeAgo(item.createdAt)}</div>
@@ -2433,7 +2479,7 @@ async function openWithdrawalDetail(id) {
   el.innerHTML = `<div class="modalBox withdrawBox" role="dialog" aria-modal="true"><div class="loading" style="height:120px"></div></div>`;
 
   try {
-    const data = await api(`/api/points/withdrawals/${id}`);
+    const data = await api(`/api/points/withdrawals/${encodeURIComponent(id)}`);
     if (requestId !== withdrawalDetailRequestSequence || el.style.display === "none") return;
     const w = data.withdrawal;
     const statusInfo = WITHDRAW_STATUS_UI[w.status] || { cls: "" };
@@ -2753,7 +2799,7 @@ function renderReferralRewardTasks() {
     if (task.status === "claimed") {
       action = `<button class="taskAction done" type="button" disabled>${t("referral_task_claimed")}</button>`;
     } else if (task.status === "claimable") {
-      action = `<button class="taskAction" type="button" data-referral-claim="${escapeHTML(task.id)}" onclick="claimReferralTask('${escapeHTML(task.id)}')">${t("referral_claim_button")}</button>`;
+      action = `<button class="taskAction" type="button" data-referral-claim="${escapeHTML(task.id)}">${t("referral_claim_button")}</button>`;
     }
 
     return `
@@ -3337,7 +3383,7 @@ function renderProfileVip() {
     let claimMarkup = "";
     if (isActive && subscription.canClaim) {
       const claiming = vipClaimingIds.has(subscription.id) || vipClaimAllBusy;
-      claimMarkup = `<button type="button" class="primary" ${claiming ? "disabled" : ""} onclick="claimVipReward('${escapeHTML(subscription.id)}')">${claiming ? t("vip_loading") : t("vip_claim_button", { n: nextReward })}</button>`;
+      claimMarkup = `<button type="button" class="primary" data-vip-claim="${escapeHTML(subscription.id)}" ${claiming ? "disabled" : ""}>${claiming ? t("vip_loading") : t("vip_claim_button", { n: nextReward })}</button>`;
     } else if (isActive && subscription.nextClaimAt) {
       const claimTime = Date.parse(subscription.nextClaimAt);
       const serverNow = Date.now() + Number(state.vipServerOffsetMs || 0);
