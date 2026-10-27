@@ -2176,6 +2176,83 @@ router.post('/vip/reserve/fund', async (req, res) => {
   return res.json({ success: true, reserve: vipReserveSnapshot(reserve), warning: 'این عملیات فقط موجودی Reserve حسابداری را ثبت می‌کند؛ انتقال خارجی وجه را انجام نمی‌دهد.' });
 });
 
+router.get('/vip/reserve/dashboard', async (req, res) => {
+  const now = new Date();
+  const [reserve, subscriptionTotals, payoutTotals, settings] = await Promise.all([
+    VipReserve.findOne({ key: 'global' }).lean(),
+    VipSubscription.aggregate([
+      { $match: { policyVersion: 'v2_100d' } },
+      { $group: {
+        _id: null,
+        subscriptions: { $sum: 1 },
+        activeSubscriptions: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'active'] }, { $gt: ['$endAt', now] }] }, 1, 0] } },
+        completedSubscriptions: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+        cancelledSubscriptions: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+        liabilityCents: { $sum: { $ifNull: ['$reserveLiabilityCents', 0] } },
+        paidCents: { $sum: { $ifNull: ['$reservePaidCents', 0] } },
+        activeRemainingLiabilityCents: { $sum: { $cond: [
+          { $and: [{ $eq: ['$status', 'active'] }, { $gt: ['$endAt', now] }] },
+          { $max: [{ $subtract: [{ $ifNull: ['$reserveLiabilityCents', 0] }, { $ifNull: ['$reservePaidCents', 0] }] }, 0] },
+          0
+        ] } },
+        dailyRewardPoints: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'active'] }, { $gt: ['$endAt', now] }] }, { $ifNull: ['$dailyRewardAveragePoints', 0] }, 0] } },
+        dailyPrincipalCents: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'active'] }, { $gt: ['$endAt', now] }] }, { $divide: [{ $multiply: [{ $ifNull: ['$pricePoints', 0] }, { $ifNull: ['$principalDailyBps', 0] }] }, 10000] }, 0] } }
+      } }
+    ]),
+    PointsLedger.aggregate([
+      { $match: { type: { $in: ['vip_daily_principal', 'vip_daily_reward'] }, currency: 'points' } },
+      { $group: { _id: '$type', totalPoints: { $sum: '$amount' }, events: { $sum: 1 } } }
+    ]),
+    Settings.getGlobal()
+  ]);
+  const totals = subscriptionTotals[0] || {};
+  const rawReserve = reserve || { availablePointsCents: 0, reservedPointsCents: 0, paidPointsCents: 0, fundedPointsCents: 0 };
+  const reserveData = vipReserveSnapshot(rawReserve);
+  const activeRemainingLiabilityCents = Number(totals.activeRemainingLiabilityCents) || 0;
+  const reservedPointsCents = Number(rawReserve.reservedPointsCents) || 0;
+  const coveragePercent = activeRemainingLiabilityCents > 0
+    ? Number(((reservedPointsCents / activeRemainingLiabilityCents) * 100).toFixed(2))
+    : null;
+  const reconciliationDifferencePoints = Number(((reservedPointsCents - activeRemainingLiabilityCents) / 100).toFixed(2));
+  const ledger = Object.fromEntries(payoutTotals.map(row => [row._id, { points: Number(row.totalPoints) || 0, events: Number(row.events) || 0 }]));
+  return res.json({
+    success: true,
+    asOf: now.toISOString(),
+    reserve: reserveData,
+    reserveCents: {
+      available: Number(rawReserve.availablePointsCents) || 0,
+      reserved: reservedPointsCents,
+      paid: Number(rawReserve.paidPointsCents) || 0,
+      funded: Number(rawReserve.fundedPointsCents) || 0
+    },
+    liabilities: {
+      allV2Points: Number(((Number(totals.liabilityCents) || 0) / 100).toFixed(2)),
+      paidV2Points: Number(((Number(totals.paidCents) || 0) / 100).toFixed(2)),
+      activeRemainingPoints: Number((activeRemainingLiabilityCents / 100).toFixed(2)),
+      reconciliationDifferencePoints,
+      coveragePercent
+    },
+    subscriptions: {
+      total: Number(totals.subscriptions) || 0,
+      active: Number(totals.activeSubscriptions) || 0,
+      completed: Number(totals.completedSubscriptions) || 0,
+      cancelled: Number(totals.cancelledSubscriptions) || 0
+    },
+    dailyPayout: {
+      rewardPointsAverage: Number(totals.dailyRewardPoints) || 0,
+      principalPointsAverage: Number(totals.dailyPrincipalCents) || 0,
+      totalPointsAverage: (Number(totals.dailyRewardPoints) || 0) + (Number(totals.dailyPrincipalCents) || 0)
+    },
+    ledger,
+    policy: {
+      version: settings.vipPolicyVersion || 'legacy_v1',
+      effectiveAt: settings.vipPolicyEffectiveAt || null,
+      newPurchasesEnabled: settings.vipNewPurchasesEnabled === true,
+      payoutsEnabled: settings.vipPayoutsEnabled === true
+    }
+  });
+});
+
 router.get('/settings', async (req, res) => {
   const settings = await Settings.getGlobal();
   res.json({

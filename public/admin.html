@@ -477,6 +477,22 @@
       </div>
 
       <div class="card">
+        <div class="flexBetween"><b>VIP Reserve Dashboard</b><button type="button" class="secondary" onclick="loadVipReserveDashboard()">Refresh</button></div>
+        <p class="small">نمایش حسابداری Reserve و تعهدات VIP v2. این داشبورد فقط از داده‌های ثبت‌شده استفاده می‌کند و موجودی واقعی خارج از سیستم را ادعا نمی‌کند.</p>
+        <div id="vipReserveDashboard"><div class="empty">Loading reserve dashboard…</div></div>
+        <div style="border-top:1px solid var(--line);margin-top:16px;padding-top:14px">
+          <b>ثبت تأمین حسابداری Reserve</b>
+          <p class="small">این عملیات فقط مبلغ اعلام‌شده را در Reserve داخلی ثبت می‌کند و هیچ انتقال خارجی وجه انجام نمی‌دهد.</p>
+          <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px;align-items:end">
+            <label>مقدار Points<input id="vipReserveFundAmount" type="number" min="0.01" step="0.01" placeholder="مثلاً 10000"></label>
+            <label>دلیل ثبت<input id="vipReserveFundReason" type="text" maxlength="500" placeholder="مثلاً تأمین سرمایه دوره جدید"></label>
+            <button type="button" onclick="fundVipReserveAdmin()">ثبت تأمین</button>
+          </div>
+          <div id="vipReserveFundStatus" class="small" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="flexBetween"><b>VIP Subscriptions</b><span id="vipSubscriptionsStatus" class="small"></span></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px">
           <input id="vipFilterSearch" placeholder="User ID / username / name" onkeydown="if(event.key==='Enter')loadVipSubscriptionsAdmin(1)">
@@ -2039,9 +2055,71 @@ function vipAdminStatusLabel(status) {
 }
 
 async function loadVipManagement() {
-  await Promise.all([loadVipSummaryAdmin(), loadVipSubscriptionsAdmin(1), loadVipPlansAdmin()]);
+  await Promise.all([loadVipSummaryAdmin(), loadVipReserveDashboard(), loadVipSubscriptionsAdmin(1), loadVipPlansAdmin()]);
 }
-
+function reserveNumber(value, maximumFractionDigits = 2) {
+  return (Number(value) || 0).toLocaleString(undefined, { maximumFractionDigits });
+}
+function reserveCoverageLabel(value) {
+  if (value == null) return "—";
+  return `${reserveNumber(value)}%`;
+}
+async function loadVipReserveDashboard() {
+  const container = document.getElementById("vipReserveDashboard");
+  if (!container) return;
+  container.innerHTML = '<div class="empty">Loading reserve dashboard…</div>';
+  try {
+    const data = await api("/api/admin/vip/reserve/dashboard");
+    const r = data.reserve || {};
+    const l = data.liabilities || {};
+    const s = data.subscriptions || {};
+    const p = data.policy || {};
+    const daily = data.dailyPayout || {};
+    const ledger = data.ledger || {};
+    const tone = Number(l.reconciliationDifferencePoints || 0) < 0 ? "var(--danger)" : "var(--success)";
+    container.innerHTML = `
+      <div class="statsGrid" style="margin-top:12px">
+        <div class="card" style="margin:0"><div class="small">Reserve قابل استفاده</div><strong style="font-size:20px">${reserveNumber(r.availablePoints)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">Reserve رزروشده</div><strong style="font-size:20px">${reserveNumber(r.reservedPoints)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">Reserve تأمین‌شده</div><strong style="font-size:20px">${reserveNumber(r.fundedPoints)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">تعهد باقی‌مانده فعال</div><strong style="font-size:20px">${reserveNumber(l.activeRemainingPoints)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">پوشش Reserve</div><strong style="font-size:20px;color:${l.coveragePercent == null || Number(l.coveragePercent) >= 100 ? "var(--success)" : "var(--danger)"}">${reserveCoverageLabel(l.coveragePercent)}</strong></div>
+        <div class="card" style="margin:0"><div class="small">اختلاف تطبیق</div><strong style="font-size:20px;color:${tone}">${reserveNumber(l.reconciliationDifferencePoints)} Points</strong></div>
+      </div>
+      <div class="statsGrid" style="margin-top:12px">
+        <div class="card" style="margin:0"><div class="small">اشتراک‌های v2 فعال / کل</div><strong style="font-size:18px">${reserveNumber(s.active)} / ${reserveNumber(s.total)}</strong></div>
+        <div class="card" style="margin:0"><div class="small">پرداخت روزانه مورد انتظار</div><strong style="font-size:18px">${reserveNumber(daily.totalPointsAverage)} Points</strong><div class="small">برآورد میانگین روزانه</div></div>
+        <div class="card" style="margin:0"><div class="small">پرداخت اصل ثبت‌شده</div><strong style="font-size:18px">${reserveNumber(ledger.vip_daily_principal?.points)} Points</strong><div class="small">${reserveNumber(ledger.vip_daily_principal?.events)} رویداد</div></div>
+        <div class="card" style="margin:0"><div class="small">پرداخت سود ثبت‌شده</div><strong style="font-size:18px">${reserveNumber(ledger.vip_daily_reward?.points)} Points</strong><div class="small">${reserveNumber(ledger.vip_daily_reward?.events)} رویداد</div></div>
+      </div>
+      <div class="small" style="margin-top:12px">سیاست: ${escapeHtml(p.version || "—")} · خرید جدید: ${p.newPurchasesEnabled ? "فعال" : "خاموش"} · پرداخت: ${p.payoutsEnabled ? "فعال" : "خاموش"} · آخرین بروزرسانی: ${escapeHtml(formatVipAdminDate(data.asOf))}</div>`;
+  } catch (error) {
+    container.innerHTML = `<div class="empty" style="color:var(--danger)">${escapeHtml(error.message)}</div>`;
+  }
+}
+async function fundVipReserveAdmin() {
+  const status = document.getElementById("vipReserveFundStatus");
+  const amountPoints = Number(document.getElementById("vipReserveFundAmount")?.value);
+  const reason = String(document.getElementById("vipReserveFundReason")?.value || "").trim();
+  if (!Number.isFinite(amountPoints) || amountPoints <= 0 || reason.length < 5) {
+    status.textContent = "مقدار مثبت و دلیل حداقل ۵ کاراکتر وارد کنید.";
+    status.style.color = "var(--danger)";
+    return;
+  }
+  if (!confirm("این عملیات فقط Reserve حسابداری را افزایش می‌دهد و انتقال وجه انجام نمی‌دهد. ادامه؟")) return;
+  status.textContent = "در حال ثبت...";
+  try {
+    await api("/api/admin/vip/reserve/fund", { method: "POST", body: JSON.stringify({ amountPoints, reason }) });
+    status.textContent = "تأمین حسابداری Reserve ثبت شد.";
+    status.style.color = "var(--success)";
+    document.getElementById("vipReserveFundAmount").value = "";
+    document.getElementById("vipReserveFundReason").value = "";
+    await loadVipReserveDashboard();
+  } catch (error) {
+    status.textContent = error.message;
+    status.style.color = "var(--danger)";
+  }
+}
 async function loadVipSummaryAdmin() {
   const grid = document.getElementById("vipSummaryGrid");
   if (!grid) return;
