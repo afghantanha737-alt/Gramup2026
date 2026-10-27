@@ -27,6 +27,7 @@ const pointsLedgerSchema = new mongoose.Schema(
         'withdraw',        // کسر GRAM بابت درخواست برداشت
         'deposit',         // واریز تاییدشده GRAM روی TON Mainnet
         'vip_purchase',    // خرید اشتراک VIP با پوینت
+        'vip_daily_principal', // پرداخت روزانه اصل سرمایه از Reserve VIP
         'vip_daily_reward', // پاداش روزانه‌ی دوره VIP
         'vip_principal_return', // بازگشت اصل پوینت پس از پایان دوره VIP
         'admin_adjust'     // اصلاح دستی توسط ادمین (مثلاً بازگشت وجه بعد از رد برداشت)

@@ -18,6 +18,10 @@ const vipSubscriptionSchema = new mongoose.Schema({
   principalPaidDays: { type: Number, default: 0, min: 0 },
   principalPaidPoints: { type: Number, default: 0, min: 0 },
   lastPrincipalPaidAt: { type: Date, default: null },
+  // v2 subscriptions reserve the full principal + reward liability at purchase.
+  reserveLiabilityCents: { type: Number, default: 0, min: 0 },
+  reservePaidCents: { type: Number, default: 0, min: 0 },
+  reserveReleasedAt: { type: Date, default: null },
   totalRewardCents: { type: Number, required: true, min: 0 },
   totalRewardPoints: { type: Number, required: true, min: 0 },
   dailyRewardAveragePoints: { type: Number, required: true, min: 0 },

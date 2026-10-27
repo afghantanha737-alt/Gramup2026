@@ -31,6 +31,7 @@ const BroadcastJob = require('../models/BroadcastJob');
 const IdempotencyOperation = require('../models/IdempotencyOperation');
 const VipPlan = require('../models/VipPlan');
 const VipSubscription = require('../models/VipSubscription');
+const VipReserve = require('../models/VipReserve');
 const { isValidAdminKey } = require('../utils/adminKey');
 const RequiredChannel = require('../models/RequiredChannel');
 const { membership, validateChannelRef, normalizeChannelInput } = require('../utils/membership');
@@ -49,6 +50,7 @@ const { validateLatestPostConfig } = require('../utils/latestPostEngagement');
 const { getTelegramWebhookMetrics } = require('../utils/telegramWebhookMetrics');
 const { calculateTotalRewardCents } = require('../utils/vipRewards');
 const { toVipAdminRecord } = require('../utils/vipAdminReadModel');
+const { toCents: vipReserveToCents, fundReserve: fundVipReserve, reserveSnapshot: vipReserveSnapshot } = require('../utils/vipReserve');
 const { isTestEnvironment, normalizeAllowedTelegramIds } = require('../utils/maintenance');
 const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
 const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/depositFinance');
@@ -2148,6 +2150,32 @@ router.put('/vip/plans', async (req, res) => {
   });
 });
 
+router.get('/vip/reserve', async (req, res) => {
+  const reserve = await VipReserve.findOne({ key: 'global' }).lean();
+  return res.json({ success: true, reserve: vipReserveSnapshot(reserve) || {
+    availablePoints: 0, reservedPoints: 0, paidPoints: 0, fundedPoints: 0, updatedAt: null
+  } });
+});
+
+router.post('/vip/reserve/fund', async (req, res) => {
+  const amountPoints = Number(req.body?.amountPoints);
+  const reason = String(req.body?.reason || '').trim();
+  const amountCents = vipReserveToCents(amountPoints);
+  if (!amountCents || amountPoints > 1000000000 || reason.length < 5 || reason.length > 500) {
+    return res.status(400).json({ success: false, code: 'VIP_RESERVE_FUND_INVALID', message: 'مقدار Reserve مثبت و Reason حداقل ۵ کاراکتر باشد.' });
+  }
+  const reserve = await withMongoTransaction(async session => fundVipReserve(amountCents, session));
+  if (!reserve) return res.status(503).json({ success: false, code: 'VIP_RESERVE_UNAVAILABLE', message: 'Reserve در دسترس نیست.' });
+  recordAdminLog({
+    actor: req.adminActor,
+    action: 'vip_reserve_fund_declaration',
+    targetType: 'vip_reserve',
+    targetId: 'global',
+    details: `declared=${amountPoints} points; reason=${reason}`
+  });
+  return res.json({ success: true, reserve: vipReserveSnapshot(reserve), warning: 'این عملیات فقط موجودی Reserve حسابداری را ثبت می‌کند؛ انتقال خارجی وجه را انجام نمی‌دهد.' });
+});
+
 router.get('/settings', async (req, res) => {
   const settings = await Settings.getGlobal();
   res.json({
@@ -2280,6 +2308,24 @@ router.put('/settings', async (req, res) => {
   }
   if (Object.prototype.hasOwnProperty.call(body, 'weeklyLeaderboardEnabled')) {
     changes.weeklyLeaderboardEnabled = body.weeklyLeaderboardEnabled === true || body.weeklyLeaderboardEnabled === 'true';
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'vipPolicyVersion')) {
+    if (!['legacy_v1', 'v2_100d'].includes(body.vipPolicyVersion)) {
+      return res.status(400).json({ success: false, message: 'نسخه سیاست VIP نامعتبر است.' });
+    }
+    changes.vipPolicyVersion = body.vipPolicyVersion;
+  }
+  for (const key of ['vipNewPurchasesEnabled', 'vipPayoutsEnabled']) {
+    if (Object.prototype.hasOwnProperty.call(body, key)) {
+      changes[key] = body[key] === true || body[key] === 'true';
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'vipPolicyEffectiveAt')) {
+    const effectiveAt = body.vipPolicyEffectiveAt ? new Date(body.vipPolicyEffectiveAt) : null;
+    if (effectiveAt && Number.isNaN(effectiveAt.getTime())) {
+      return res.status(400).json({ success: false, message: 'زمان فعال‌سازی سیاست VIP نامعتبر است.' });
+    }
+    changes.vipPolicyEffectiveAt = effectiveAt;
   }
   if (Object.prototype.hasOwnProperty.call(body, 'weeklyLeaderboardPrizes')) {
     const prizes = Array.isArray(body.weeklyLeaderboardPrizes) ? body.weeklyLeaderboardPrizes.map(Number) : null;

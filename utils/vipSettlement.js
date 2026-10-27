@@ -19,6 +19,7 @@ async function settleOne(subscriptionId, now) {
     const subscription = await VipSubscription.findOne({
       _id: subscriptionId,
       status: 'active',
+      policyVersion: { $in: [null, 'legacy_v1'] },
       principalReturnedAt: null,
       endAt: { $lte: now }
     }).session(session);
@@ -61,7 +62,7 @@ async function settleOne(subscriptionId, now) {
 }
 
 async function settleMaturedVipSubscriptions({ userId = null, now = new Date(), limit = 100 } = {}) {
-  const filter = { status: 'active', principalReturnedAt: null, endAt: { $lte: now } };
+  const filter = { status: 'active', policyVersion: { $in: [null, 'legacy_v1'] }, principalReturnedAt: null, endAt: { $lte: now } };
   if (userId) filter.user = userId;
   const rows = await VipSubscription.find(filter).select('_id').sort({ endAt: 1 }).limit(Math.min(500, Math.max(1, limit))).lean();
   const results = [];

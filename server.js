@@ -232,7 +232,7 @@ async function startServer() {
       './models/IdempotencyOperation', './models/TelegramWebhookUpdate', './models/RateLimitBucket',
       './models/AdminSession', './models/TelegramAdminConversation', './models/AdminLog', './models/DistributedJobLock',
       './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit',
-      './models/VipPlan', './models/VipSubscription', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent'
+      './models/VipPlan', './models/VipSubscription', './models/VipReserve', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent'
     ]) await require(modelPath).init();
 
     // Route imports register every application model. Await all indexes too;
@@ -251,6 +251,7 @@ async function startServer() {
     const VipPlan = require('./models/VipPlan');
     await VipPlan.init();
     await require('./models/VipSubscription').init();
+    await require('./models/VipReserve').init();
     await VipPlan.ensureDefaults();
     await require('./utils/bioLinkTask').ensureBioLinkTask();
 
