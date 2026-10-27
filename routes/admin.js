@@ -54,6 +54,7 @@ const { toCents: vipReserveToCents, fundReserve: fundVipReserve, reserveSnapshot
 const { isTestEnvironment, normalizeAllowedTelegramIds } = require('../utils/maintenance');
 const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
 const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/depositFinance');
+const { buildVipReserveReport, buildVipReserveWorkbook } = require('../utils/vipReserveReport');
 
 const MAX_REQUIRED_CHANNELS = 5;
 
@@ -2251,6 +2252,35 @@ router.get('/vip/reserve/dashboard', async (req, res) => {
       payoutsEnabled: settings.vipPayoutsEnabled === true
     }
   });
+});
+
+router.get('/vip/reserve/report', async (req, res) => {
+  try {
+    const report = await buildVipReserveReport(req.query || {});
+    return res.json({ success: true, report });
+  } catch (error) {
+    const status = ['VIP_REPORT_DATE_RANGE_INVALID', 'VIP_REPORT_DATE_RANGE_TOO_LARGE'].includes(error.code) ? 400 : 500;
+    if (status === 500) console.error('VIP Reserve report failed:', error);
+    return res.status(status).json({ success: false, code: error.code || 'VIP_REPORT_FAILED', message: error.message || 'گزارش Reserve ساخته نشد.' });
+  }
+});
+
+router.get('/vip/reserve/export.xlsx', async (req, res) => {
+  try {
+    const report = await buildVipReserveReport(req.query || {});
+    const workbook = await buildVipReserveWorkbook(report);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const safeFrom = String(report.range.from).replace(/[^0-9-]/g, '');
+    const safeTo = String(report.range.to).replace(/[^0-9-]/g, '');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="gramup-vip-reserve-${safeFrom}-to-${safeTo}.xlsx"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(buffer);
+  } catch (error) {
+    const status = ['VIP_REPORT_DATE_RANGE_INVALID', 'VIP_REPORT_DATE_RANGE_TOO_LARGE'].includes(error.code) ? 400 : 500;
+    if (status === 500) console.error('VIP Reserve export failed:', error);
+    return res.status(status).json({ success: false, code: error.code || 'VIP_EXPORT_FAILED', message: error.message || 'خروجی Excel ساخته نشد.' });
+  }
 });
 
 router.get('/settings', async (req, res) => {

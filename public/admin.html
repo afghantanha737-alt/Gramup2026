@@ -493,6 +493,18 @@
       </div>
 
       <div class="card">
+        <div class="flexBetween"><b>Advanced Reserve Reports</b><span id="vipReserveReportStatus" class="small"></span></div>
+        <p class="small">گزارش تجمیعی و بدون اطلاعات شخصی کاربران؛ شامل روند روزانه Ledger، Cohort پلن‌ها و ثبت‌های تأمین Reserve.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end">
+          <label class="small">از تاریخ<input id="vipReserveReportFrom" type="date"></label>
+          <label class="small">تا تاریخ<input id="vipReserveReportTo" type="date"></label>
+          <button type="button" onclick="loadVipReserveReport()">نمایش گزارش</button>
+          <button type="button" class="secondary" onclick="downloadVipReserveExcel()">دانلود Excel</button>
+        </div>
+        <div id="vipReserveReport"><div class="empty">برای بارگذاری گزارش، بازه زمانی را انتخاب کنید.</div></div>
+      </div>
+
+      <div class="card">
         <div class="flexBetween"><b>VIP Subscriptions</b><span id="vipSubscriptionsStatus" class="small"></span></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px">
           <input id="vipFilterSearch" placeholder="User ID / username / name" onkeydown="if(event.key==='Enter')loadVipSubscriptionsAdmin(1)">
@@ -2055,7 +2067,7 @@ function vipAdminStatusLabel(status) {
 }
 
 async function loadVipManagement() {
-  await Promise.all([loadVipSummaryAdmin(), loadVipReserveDashboard(), loadVipSubscriptionsAdmin(1), loadVipPlansAdmin()]);
+  await Promise.all([loadVipSummaryAdmin(), loadVipReserveDashboard(), loadVipReserveReport(), loadVipSubscriptionsAdmin(1), loadVipPlansAdmin()]);
 }
 function reserveNumber(value, maximumFractionDigits = 2) {
   return (Number(value) || 0).toLocaleString(undefined, { maximumFractionDigits });
@@ -2115,6 +2127,67 @@ async function fundVipReserveAdmin() {
     document.getElementById("vipReserveFundAmount").value = "";
     document.getElementById("vipReserveFundReason").value = "";
     await loadVipReserveDashboard();
+  } catch (error) {
+    status.textContent = error.message;
+    status.style.color = "var(--danger)";
+  }
+}
+function vipReserveReportQuery() {
+  const params = new URLSearchParams();
+  const from = document.getElementById("vipReserveReportFrom")?.value;
+  const to = document.getElementById("vipReserveReportTo")?.value;
+  if (from) params.set("dateFrom", from);
+  if (to) params.set("dateTo", to);
+  return params;
+}
+async function loadVipReserveReport() {
+  const container = document.getElementById("vipReserveReport");
+  const status = document.getElementById("vipReserveReportStatus");
+  if (!container) return;
+  container.innerHTML = '<div class="empty">در حال ساخت گزارش...</div>';
+  status.textContent = "در حال بارگذاری...";
+  try {
+    const data = await api(`/api/admin/vip/reserve/report?${vipReserveReportQuery().toString()}`);
+    const report = data.report || {};
+    const totals = report.period?.ledgerTotals || {};
+    const daily = Array.isArray(report.daily) ? report.daily : [];
+    const plans = Array.isArray(report.plans) ? report.plans : [];
+    const funding = Array.isArray(report.funding) ? report.funding : [];
+    const fmt = value => reserveNumber(value);
+    container.innerHTML = `
+      <div class="statsGrid" style="margin-top:12px">
+        <div class="card" style="margin:0"><div class="small">Ledger اصل</div><strong>${fmt(totals.vip_daily_principal?.points)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">Ledger سود</div><strong>${fmt(totals.vip_daily_reward?.points)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">بازگشت اصل نهایی</div><strong>${fmt(totals.vip_principal_return?.points)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">اشتراک‌های ایجادشده</div><strong>${fmt(report.period?.subscriptions)} مورد</strong></div>
+      </div>
+      <h4 style="margin:18px 0 8px">روند روزانه Ledger</h4>
+      <div style="overflow:auto"><table><thead><tr><th>تاریخ UTC</th><th>اصل</th><th>سود</th><th>بازگشت اصل</th><th>مجموع</th><th>رویداد</th></tr></thead><tbody>${daily.map(row => `<tr><td>${escapeHtml(row.date)}</td><td>${fmt(row.principal)}</td><td>${fmt(row.reward)}</td><td>${fmt(row.principalReturn)}</td><td><b>${fmt(row.total)}</b></td><td>${fmt(row.events)}</td></tr>`).join("") || '<tr><td colspan="6" class="empty">داده‌ای در این بازه وجود ندارد.</td></tr>'}</tbody></table></div>
+      <h4 style="margin:18px 0 8px">Cohort پلن‌ها</h4>
+      <div style="overflow:auto"><table><thead><tr><th>پلن</th><th>تعداد</th><th>تعهد</th><th>پرداخت</th><th>Reward مورد انتظار</th></tr></thead><tbody>${plans.map(row => `<tr><td>${fmt(row.planNumber)}</td><td>${fmt(row.subscriptions)}</td><td>${fmt(row.liabilityPoints)}</td><td>${fmt(row.paidPoints)}</td><td>${fmt(row.rewardPoints)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">داده‌ای در این بازه وجود ندارد.</td></tr>'}</tbody></table></div>
+      <div class="small" style="margin-top:12px">ثبت‌های تأمین حسابداری در بازه: ${fmt(funding.length)} · بازه: ${escapeHtml(report.range?.from || "—")} تا ${escapeHtml(report.range?.to || "—")}</div>`;
+    status.textContent = `گزارش آماده شد: ${report.range?.days || 0} روز`;
+    status.style.color = "";
+  } catch (error) {
+    status.textContent = "گزارش ناموفق بود";
+    status.style.color = "var(--danger)";
+    container.innerHTML = `<div class="empty" style="color:var(--danger)">${escapeHtml(error.message)}</div>`;
+  }
+}
+async function downloadVipReserveExcel() {
+  const status = document.getElementById("vipReserveReportStatus");
+  status.textContent = "در حال ساخت فایل Excel...";
+  try {
+    const response = await fetch(`/api/admin/vip/reserve/export.xlsx?${vipReserveReportQuery().toString()}`, { headers: { "x-admin-session": ADMIN_SESSION } });
+    if (!response.ok) {
+      let payload = {}; try { payload = await response.json(); } catch {}
+      throw new Error(payload.message || "خروجی Excel ساخته نشد.");
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = "gramup-vip-reserve-report.xlsx"; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    status.textContent = "فایل Excel آماده شد.";
+    status.style.color = "var(--success)";
   } catch (error) {
     status.textContent = error.message;
     status.style.color = "var(--danger)";
