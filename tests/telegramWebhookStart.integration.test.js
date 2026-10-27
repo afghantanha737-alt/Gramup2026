@@ -141,6 +141,20 @@ app.use('/api/telegram', telegramRouter);
     assert.strictEqual(completedDuplicate.status, 200, 'completed update duplicates are acknowledged');
     assert.strictEqual(sentMessages.length, 4, 'completed update duplicates do not repeat side effects');
 
+    bot.sendPhoto = async () => { throw new Error('ETELEGRAM: 400 Bad Request: chat not found'); };
+    const permanentDeliveryFailure = await postUpdate({
+      update_id: 1009,
+      message: { message_id: 9, chat: { id: 999 }, from: { id: 999 }, text: '/start' }
+    });
+    assert.strictEqual(permanentDeliveryFailure.status, 200, 'a permanent Telegram chat-not-found failure is acknowledged instead of retried');
+    assert.strictEqual(claimedUpdates.get(1009).status, 'completed', 'permanent delivery failure is durably finalized');
+    const permanentFailureDuplicate = await postUpdate({
+      update_id: 1009,
+      message: { message_id: 9, chat: { id: 999 }, from: { id: 999 }, text: '/start' }
+    });
+    assert.strictEqual(permanentFailureDuplicate.status, 200, 'duplicate permanent delivery failures are acknowledged');
+    assert.strictEqual(sentMessages.length, 4, 'permanent failures do not create duplicate welcome messages');
+
     const invalidSecret = await postUpdate({
       update_id: 1006,
       message: { message_id: 6, chat: { id: 555 }, from: { id: 555 }, text: '/start' }

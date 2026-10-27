@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
-const { bot, broadcastCopyToActiveUsers } = require('../utils/bot');
+const { bot, broadcastCopyToActiveUsers, isTelegramDeliveryBlocked } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const User = require('../models/User');
 const Task = require('../models/Task');
@@ -359,6 +359,19 @@ router.post('/webhook', async (req, res) => {
     await finishWebhookUpdate(updateId, 'completed', '', claim.processingToken);
     return res.sendStatus(200);
   } catch (error) {
+    if (isTelegramDeliveryBlocked(error)) {
+      const errorCode = error?.response?.body?.error_code || error?.response?.statusCode || null;
+      await finishWebhookUpdate(updateId, 'completed', 'TELEGRAM_PERMANENT_DELIVERY_FAILURE', claim.processingToken).catch(logError => {
+        console.error('Could not persist terminal Telegram delivery failure:', logError.message || logError);
+      });
+      console.warn('Telegram webhook update acknowledged after permanent delivery failure:', {
+        updateId,
+        updateType,
+        errorCode,
+        error: String(error?.message || error).slice(0, 200)
+      });
+      return res.sendStatus(200);
+    }
     recordWebhookProcessingFailure();
     if (updateType === 'start') recordStartHandlerFailure();
     await finishWebhookUpdate(updateId, 'failed', error?.code || 'PROCESSING_FAILED', claim.processingToken).catch(logError => {
