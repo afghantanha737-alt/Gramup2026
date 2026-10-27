@@ -1,12 +1,17 @@
 'use strict';
 
 const mongoose = require('mongoose');
+const { LEGACY_VIP_POLICY_VERSION } = require('../utils/vipPolicy');
 
 const vipPlanSchema = new mongoose.Schema({
   planNumber: { type: Number, required: true, min: 1, max: 10, unique: true, index: true },
   pricePoints: { type: Number, required: true, min: 0, max: 100000000 },
   monthlyRewardPercent: { type: Number, required: true, min: 0, max: 100 },
   durationDays: { type: Number, required: true, min: 1, max: 3650 },
+  policyVersion: { type: String, enum: ['legacy_v1', 'v2_100d'], default: LEGACY_VIP_POLICY_VERSION, index: true },
+  productGroup: { type: String, enum: ['legacy', 'start', 'professional', 'final'], default: 'legacy' },
+  principalDailyBps: { type: Number, min: 0, max: 10000, default: 0 },
+  rewardDailyBps: { type: Number, min: 0, max: 10000, default: 0 },
   enabled: { type: Boolean, default: false, index: true },
   comingSoon: { type: Boolean, default: true }
 }, { timestamps: true });

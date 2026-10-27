@@ -27,6 +27,7 @@ const {
   calculateDaysCompleted
 } = require('../utils/vipRewards');
 const { settleMaturedVipSubscriptions } = require('../utils/vipSettlement');
+const { LEGACY_VIP_POLICY_VERSION, NEW_VIP_POLICY_VERSION, newVipPolicyForPlan, dailyPointsCentsFromBps } = require('../utils/vipPolicy');
 const {
   normalizeTonAddress,
   normalizeTonTxHash,
@@ -51,15 +52,22 @@ function vipError(code, message, statusCode = 400, extra = {}) {
 }
 
 function publicVipPlan(plan) {
-  const totalRewardCents = calculateTotalRewardCents(plan.pricePoints, plan.monthlyRewardPercent, plan.durationDays);
+  const policy = String(plan.policyVersion || LEGACY_VIP_POLICY_VERSION) === NEW_VIP_POLICY_VERSION
+    ? newVipPolicyForPlan(plan.planNumber)
+    : null;
+  const totalRewardCents = policy
+    ? dailyPointsCentsFromBps(plan.pricePoints, policy.rewardDailyBps) * policy.durationDays
+    : calculateTotalRewardCents(plan.pricePoints, plan.monthlyRewardPercent, plan.durationDays);
   const totalRewardPoints = totalRewardCents == null ? 0 : pointsFromCents(totalRewardCents);
   return {
     planNumber: plan.planNumber,
     pricePoints: plan.pricePoints,
     monthlyRewardPercent: plan.monthlyRewardPercent,
-    durationDays: plan.durationDays,
+    durationDays: policy?.durationDays || plan.durationDays,
     totalRewardPoints,
-    dailyRewardAveragePoints: plan.durationDays > 0 ? Number((totalRewardPoints / plan.durationDays).toFixed(2)) : 0,
+    dailyRewardAveragePoints: (policy?.durationDays || plan.durationDays) > 0 ? Number((totalRewardPoints / (policy?.durationDays || plan.durationDays)).toFixed(2)) : 0,
+    policyVersion: plan.policyVersion || LEGACY_VIP_POLICY_VERSION,
+    productGroup: plan.productGroup || 'legacy',
     enabled: Boolean(plan.enabled),
     comingSoon: Boolean(plan.comingSoon),
     status: plan.comingSoon ? 'coming_soon' : plan.enabled ? 'active' : 'inactive'
@@ -97,6 +105,11 @@ function publicVipSubscription(subscription, now = new Date()) {
     claimsCompleted: claimIndex,
     totalClaims: subscription.durationDays,
     claimedRewardPoints: subscription.claimedRewardPoints,
+    policyVersion: subscription.policyVersion || LEGACY_VIP_POLICY_VERSION,
+    productGroup: subscription.productGroup || 'legacy',
+    principalPaidDays: Number(subscription.principalPaidDays) || 0,
+    principalPaidPoints: Number(subscription.principalPaidPoints) || 0,
+    lastPrincipalPaidAt: subscription.lastPrincipalPaidAt ? new Date(subscription.lastPrincipalPaidAt).toISOString() : null,
     nextRewardPoints: todayRewardCents == null ? 0 : pointsFromCents(todayRewardCents),
     nextClaimAt: active && claimIndex < subscription.durationDays ? nextClaimAt.toISOString() : null,
     canClaim,
@@ -1052,8 +1065,23 @@ router.post('/vip/purchase', auth, async (req, res) => {
           throw vipError('VIP_PLAN_UNAVAILABLE', 'این پلن VIP در حال حاضر برای خرید فعال نیست.', 409);
         }
         const pricePoints = Number(plan.pricePoints);
-        const totalRewardCents = calculateTotalRewardCents(pricePoints, plan.monthlyRewardPercent, plan.durationDays);
-        if (!Number.isInteger(pricePoints) || pricePoints < 1 || totalRewardCents == null || totalRewardCents < plan.durationDays) {
+        const settings = await Settings.findOne({ key: 'global' }).session(session).lean();
+        const policyVersion = String(plan.policyVersion || LEGACY_VIP_POLICY_VERSION);
+        if (policyVersion === NEW_VIP_POLICY_VERSION && (!settings?.vipNewPurchasesEnabled || !settings?.vipPolicyEffectiveAt || new Date() < new Date(settings.vipPolicyEffectiveAt))) {
+          throw vipError('VIP_NEW_POLICY_NOT_ACTIVE', 'نسخه جدید VIP هنوز برای خرید فعال نشده است.', 409);
+        }
+        const newPolicy = policyVersion === NEW_VIP_POLICY_VERSION
+          ? newVipPolicyForPlan(planNumber, settings.vipPolicyEffectiveAt)
+          : null;
+        if (policyVersion === NEW_VIP_POLICY_VERSION && !newPolicy) {
+          throw vipError('VIP_POLICY_INVALID', 'گروه سیاست VIP معتبر نیست.', 409);
+        }
+        const durationDays = newPolicy?.durationDays || Number(plan.durationDays);
+        const legacyRewardCents = calculateTotalRewardCents(pricePoints, plan.monthlyRewardPercent, plan.durationDays);
+        const totalRewardCents = newPolicy
+          ? dailyPointsCentsFromBps(pricePoints, newPolicy.rewardDailyBps) * durationDays
+          : legacyRewardCents;
+        if (!Number.isInteger(pricePoints) || pricePoints < 1 || totalRewardCents == null || totalRewardCents < durationDays) {
           throw vipError('VIP_PLAN_INVALID', 'تنظیمات پاداش این پلن معتبر نیست؛ با مدیریت تماس بگیرید.', 409);
         }
 
@@ -1065,17 +1093,22 @@ router.post('/vip/purchase', auth, async (req, res) => {
         if (!user) throw vipError('VIP_INSUFFICIENT_POINTS', 'موجودی Points برای خرید این پلن کافی نیست.', 400);
 
         const startAt = new Date();
-        const endAt = new Date(startAt.getTime() + Number(plan.durationDays) * DAY_MS);
+        const endAt = new Date(startAt.getTime() + durationDays * DAY_MS);
         const totalRewardPoints = pointsFromCents(totalRewardCents);
         const subscription = new VipSubscription({
           user: user._id,
           planNumber: plan.planNumber,
           pricePoints,
           monthlyRewardPercent: plan.monthlyRewardPercent,
-          durationDays: plan.durationDays,
+          durationDays,
+          policyVersion,
+          policyEffectiveAt: newPolicy?.policyEffectiveAt || null,
+          productGroup: newPolicy?.productGroup || 'legacy',
+          principalDailyBps: newPolicy?.principalDailyBps || 0,
+          rewardDailyBps: newPolicy?.rewardDailyBps || 0,
           totalRewardCents,
           totalRewardPoints,
-          dailyRewardAveragePoints: Number((totalRewardPoints / plan.durationDays).toFixed(2)),
+          dailyRewardAveragePoints: Number((totalRewardPoints / durationDays).toFixed(2)),
           startAt,
           endAt,
           status: 'active'
