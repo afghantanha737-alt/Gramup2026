@@ -901,10 +901,8 @@ async function requestPhoneContact() {
       else window.open(data.botUrl, "_blank", "noopener");
     }
   } catch (error) {
-    const message = error.code === "PHONE_CONTACT_REQUEST_COOLDOWN"
-      ? t("phone_gate_sent") : t("phone_gate_error");
     const node = $("#phoneGateMessage");
-    if (node) node.textContent = message;
+    if (node) node.textContent = t("phone_gate_error");
   }
 }
 window.requestPhoneContact = requestPhoneContact;

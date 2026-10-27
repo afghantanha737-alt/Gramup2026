@@ -14,7 +14,6 @@ const { sendWelcomeMessage, welcomeTriggerKey } = require('../utils/telegramStar
 const { getMaintenanceState, isAllowedTelegramId } = require('../utils/maintenance');
 
 const auth = requireTelegramAuth(process.env.BOT_TOKEN);
-const PHONE_CONTACT_COOLDOWN_MS = 30 * 1000;
 
 // GET /api/auth/me — بوت اولیه کاربر + اعمال کد رفرال از URL (fallback وقتی startapp نداریم)
 router.get('/me', auth, async (req, res) => {
@@ -86,12 +85,7 @@ router.post('/request-phone-contact', auth, async (req, res) => {
   if (!username || !/^[A-Za-z0-9_]{5,32}$/.test(username)) {
     return res.status(503).json({ success: false, code: 'PHONE_CONTACT_BOT_UNAVAILABLE', message: 'ربات برای تأیید شماره در دسترس نیست.' });
   }
-  const lastRequestAt = req.dbUser.phoneContactRequestedAt ? new Date(req.dbUser.phoneContactRequestedAt).getTime() : 0;
-  const elapsed = Date.now() - lastRequestAt;
   const botUrl = `https://t.me/${username}`;
-  if (elapsed < PHONE_CONTACT_COOLDOWN_MS) {
-    return res.json({ success: true, alreadyRequested: true, retryAfterMs: PHONE_CONTACT_COOLDOWN_MS - elapsed, botUrl });
-  }
   const previousRequestAt = req.dbUser.phoneContactRequestedAt;
   req.dbUser.phoneContactRequestedAt = new Date();
   await req.dbUser.save();

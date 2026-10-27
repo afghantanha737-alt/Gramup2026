@@ -26,9 +26,9 @@ const MESSAGES = {
     en: () => 'Please share your own contact using Telegram’s share button. Someone else’s number cannot be used.'
   },
   phoneContactUnsupported: {
-    fa: () => 'ورود فقط با شماره‌های +93 یا +98 ممکن است. Contact با شمارهٔ مجاز خودتان را بفرستید.',
-    ps: () => 'ننوتل یوازې د +93 یا +98 شمېرې سره ممکن دي. د خپل منل شوي شمېرې Contact واستوئ.',
-    en: () => 'Sign-in is only available for +93 or +98 numbers. Please share your own contact with an allowed number.'
+    fa: () => 'استفاده از Gramup فقط برای شماره‌های +93 و +98 امکان‌پذیر است. این شماره تأیید نمی‌شود و حساب شما مسدود نشده است؛ اگر شمارهٔ مجاز دیگری دارید، Contact خودتان را دوباره با دکمهٔ زیر بفرستید.',
+    ps: () => 'Gramup یوازې د +93 او +98 شمېرو لپاره کار کوي. دا شمېره نه تاییدېږي او ستاسو حساب نه دی بند شوی؛ که بله منل شوې شمېره لرئ، خپل Contact د لاندې تڼۍ له لارې بیا واستوئ.',
+    en: () => 'Gramup is available only for +93 and +98 numbers. This number cannot be verified, but your account has not been blocked; if you have another eligible number, share your own contact again with the button below.'
   },
   phoneContactVerified: {
     fa: () => '✅ شمارهٔ شما با موفقیت تأیید شد. حالا می‌توانید به Gramup برگردید.',

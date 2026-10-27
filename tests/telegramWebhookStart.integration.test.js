@@ -186,6 +186,30 @@ app.use('/api/telegram', telegramRouter);
       delete require.cache[require.resolve('../routes/telegramWebhook')];
     }
 
+    const retryUser = {
+      _id: 'user-777', telegramId: '777', language: 'en', phoneCountryCode: '', phoneVerifiedAt: null,
+      isBanned: false, pendingReferralIdentifier: ''
+    };
+    users.set('777', retryUser);
+    const unsupported = await postUpdate({
+      update_id: 1010,
+      message: { message_id: 10, chat: { id: 777 }, from: { id: 777 }, contact: { user_id: 777, phone_number: '+1 202 555 0100' } }
+    });
+    assert.strictEqual(unsupported.status, 200, 'unsupported contacts are handled and acknowledged without failing the webhook');
+    assert.strictEqual(retryUser.phoneCountryCode, '', 'unsupported country codes are not recorded as verified');
+    assert.strictEqual(retryUser.phoneVerifiedAt, null, 'an unsupported attempt does not create a verification timestamp');
+    assert.strictEqual(retryUser.isBanned, false, 'an unsupported attempt does not permanently ban or restrict the account');
+    assert.ok(sentMessages.at(-1).text.includes('account has not been blocked'), 'the denial explains that retry remains possible');
+    assert.strictEqual(sentMessages.at(-1).options.reply_markup.keyboard[0][0].request_contact, true, 'the reply offers another self-contact attempt');
+
+    const eligibleRetry = await postUpdate({
+      update_id: 1011,
+      message: { message_id: 11, chat: { id: 777 }, from: { id: 777 }, contact: { user_id: 777, phone_number: '+98 912 123 4567' } }
+    });
+    assert.strictEqual(eligibleRetry.status, 200, 'a later eligible contact can be verified');
+    assert.strictEqual(retryUser.phoneCountryCode, '+98');
+    assert.ok(retryUser.phoneVerifiedAt instanceof Date);
+
     console.log('ALL PASS — webhook secret validation, /start side effects, durable-claim contract and duplicate delivery handling');
   } finally {
     await new Promise(resolve => server.close(resolve));

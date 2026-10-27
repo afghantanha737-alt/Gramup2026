@@ -76,8 +76,9 @@ function signedInitData() {
     assert.strictEqual(sentBotMessages.length, 1, 'the request sends one localized contact prompt to the Telegram user');
     assert.strictEqual(sentBotMessages[0][2].reply_markup.keyboard[0][0].request_contact, true);
     const repeatRequest = await send('/api/auth/request-phone-contact', 'POST');
-    assert.strictEqual(repeatRequest.status, 200, 'the cooldown still returns a usable Telegram link');
-    assert.strictEqual(sentBotMessages.length, 1, 'the cooldown prevents duplicate contact prompts');
+    assert.strictEqual(repeatRequest.status, 200, 'users can retry the contact request at any time');
+    assert.strictEqual((await repeatRequest.json()).botUrl, 'https://t.me/Gram_up_bot');
+    assert.strictEqual(sentBotMessages.length, 2, 'a repeated request sends a fresh contact prompt instead of locking the user out');
     assert.strictEqual((await send('/api/auth/language', 'PATCH', { language: 'en' })).status, 200, 'users can change the gate-page language');
     response = await send('/api/auth/referral-message-consent', 'PATCH', { consent: 'granted' });
     assert.strictEqual(response.status, 403, 'unverified users cannot change messaging preferences');
