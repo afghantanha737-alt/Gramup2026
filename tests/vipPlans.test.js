@@ -11,6 +11,7 @@ const {
   calculateDaysRemaining,
   calculateDaysCompleted
 } = require('../utils/vipRewards');
+const { VIP_PRICE_GRAMS, pricePointsForVipPlan } = require('../utils/vipPricing');
 
 function sum(values) { return values.reduce((total, value) => total + value, 0); }
 
@@ -80,6 +81,8 @@ assert.ok(vipPurchaseSection.indexOf("type: 'vip_purchase'") < vipPurchaseSectio
   'the purchase debit ledger must be recorded before the activation reward ledger');
 assert.match(adminRoute, /router\.put\('\/vip\/plans'/);
 assert.match(adminRoute, /input\.length !== 10/);
+assert.match(adminRoute, /pricePointsForVipPlan/);
+assert.match(adminRoute, /durationDays !== 100/);
 assert.match(ledgerModel, /'vip_purchase'/);
 assert.match(ledgerModel, /'vip_daily_reward'/);
 assert.match(ledgerModel, /'vip_principal_return'/);
@@ -101,8 +104,11 @@ assert.match(app, /function claimAllVipRewards\(\)/);
 assert.match(app, /await claimVipReward\(subscriptionId, \{ silent: true, bulk: true \}\)/);
 assert.strictEqual((translations.match(/vip_claim_all:/g) || []).length, 3, 'Claim All label must exist in English, Persian, and Pashto');
 assert.strictEqual((translations.match(/vip_subscription_filter_expired:/g) || []).length, 3, 'expired filter label must exist in all supported locales');
-assert.match(vipPlanModel, /planNumber: 10, pricePoints: 100000, monthlyRewardPercent: 15/, 'catalog seed must include VIP 10');
-assert.match(vipPlanModel, /planNumber: 1, pricePoints: 1000, monthlyRewardPercent: 5/);
+assert.deepStrictEqual(VIP_PRICE_GRAMS, [1, 3, 5, 10, 20, 35, 50, 70, 85, 100]);
+assert.strictEqual(pricePointsForVipPlan(1, 0.0001), 10000);
+assert.strictEqual(pricePointsForVipPlan(10, 0.0001), 1000000, 'VIP 10 must equal 100 GRAM at the default rate');
+assert.match(vipPlanModel, /planNumber: 10, pricePoints: 1000000, monthlyRewardPercent: 15/, 'catalog seed must include VIP 10');
+assert.match(vipPlanModel, /planNumber: 1, pricePoints: 10000, monthlyRewardPercent: 5/);
 assert.match(indexHtml, /data-tab="vip"/);
 assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|vip|wallet|profile)"/g) || []).length, 5);
 assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'vip', 'wallet', 'profile']);

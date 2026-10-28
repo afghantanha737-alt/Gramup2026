@@ -55,6 +55,7 @@ const { isTestEnvironment, normalizeAllowedTelegramIds } = require('../utils/mai
 const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
 const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/depositFinance');
 const { buildVipReserveReport, buildVipReserveWorkbook } = require('../utils/vipReserveReport');
+const { pricingForVipPlan, pricePointsForVipPlan } = require('../utils/vipPricing');
 
 const MAX_REQUIRED_CHANNELS = 5;
 
@@ -2097,8 +2098,20 @@ router.get('/vip/subscriptions/:id', async (req, res) => {
 });
 
 router.get('/vip/plans', async (req, res) => {
-  const plans = await VipPlan.find({}).sort({ planNumber: 1 }).lean();
-  res.json({ success: true, plans });
+  const [plans, settings] = await Promise.all([
+    VipPlan.find({}).sort({ planNumber: 1 }).lean(),
+    Settings.getGlobal()
+  ]);
+  const rate = Number(settings.rate);
+  res.json({
+    success: true,
+    rate,
+    plans: plans.map(plan => ({
+      ...plan,
+      pricing: pricingForVipPlan(plan.planNumber, rate),
+      priceMatchesPolicy: Number(plan.pricePoints) === pricePointsForVipPlan(plan.planNumber, rate)
+    }))
+  });
 });
 
 router.put('/vip/plans', async (req, res) => {
@@ -2109,20 +2122,33 @@ router.put('/vip/plans', async (req, res) => {
 
   const seen = new Set();
   const plans = [];
+  const settings = await Settings.getGlobal();
+  const rate = Number(settings.rate);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return res.status(503).json({ success: false, code: 'VIP_RATE_UNAVAILABLE', message: 'نرخ تبدیل GRAM به Points معتبر نیست؛ ابتدا rate را در تنظیمات اصلاح کنید.' });
+  }
   for (const item of input) {
     const planNumber = Number(item?.planNumber);
-    const pricePoints = Number(item?.pricePoints);
+    const expectedPricePoints = pricePointsForVipPlan(planNumber, rate);
+    const submittedPricePoints = Number(item?.pricePoints);
+    const pricePoints = expectedPricePoints;
     const monthlyRewardPercent = Number(item?.monthlyRewardPercent);
     const durationDays = Number(item?.durationDays);
     const enabled = item?.enabled === true;
     const comingSoon = item?.comingSoon === true;
     if (!Number.isInteger(planNumber) || planNumber < 1 || planNumber > 10 || seen.has(planNumber)
       || !Number.isInteger(pricePoints) || pricePoints < 0 || pricePoints > 100000000
+      || submittedPricePoints !== expectedPricePoints
       || !Number.isFinite(monthlyRewardPercent) || monthlyRewardPercent < 0 || monthlyRewardPercent > 100
       || !Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650
+      || durationDays !== 100
       || (enabled && comingSoon)
       || (enabled && (pricePoints < 1 || monthlyRewardPercent <= 0))) {
-      return res.status(400).json({ success: false, code: 'VIP_PLAN_INVALID', message: `مقادیر پلن شماره ${planNumber || '?'} معتبر نیست.` });
+      const pricing = pricingForVipPlan(planNumber, rate);
+      const message = submittedPricePoints !== expectedPricePoints
+        ? `قیمت پلن ${planNumber || '?'} باید ${expectedPricePoints || 0} Points معادل ${pricing?.grams || '?'} GRAM باشد.`
+        : `مقادیر پلن شماره ${planNumber || '?'} معتبر نیست؛ پلن‌های سیاست جدید باید ۱۰۰ روزه باشند.`;
+      return res.status(400).json({ success: false, code: 'VIP_PLAN_INVALID', message, expectedPricePoints, expectedGrams: pricing?.grams || null, rate });
     }
     if (enabled) {
       const totalRewardCents = calculateTotalRewardCents(pricePoints, monthlyRewardPercent, durationDays);
@@ -2142,7 +2168,11 @@ router.put('/vip/plans', async (req, res) => {
     }
   })), { ordered: true });
   const savedPlans = await VipPlan.find({}).sort({ planNumber: 1 }).lean();
-  res.json({ success: true, plans: savedPlans });
+  res.json({
+    success: true,
+    rate,
+    plans: savedPlans.map(plan => ({ ...plan, pricing: pricingForVipPlan(plan.planNumber, rate), priceMatchesPolicy: true }))
+  });
   recordAdminLog({
     actor: req.adminActor,
     action: 'vip_plan_catalog_update',
