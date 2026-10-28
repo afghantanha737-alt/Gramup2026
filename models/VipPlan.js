@@ -2,6 +2,7 @@
 
 const mongoose = require('mongoose');
 const { NEW_VIP_POLICY_VERSION } = require('../utils/vipPolicy');
+const { pricePointsForVipPlan } = require('../utils/vipPricing');
 
 const vipPlanSchema = new mongoose.Schema({
   planNumber: { type: Number, required: true, min: 1, max: 10, unique: true, index: true },
@@ -19,16 +20,16 @@ const vipPlanSchema = new mongoose.Schema({
 vipPlanSchema.index({ enabled: 1, comingSoon: 1, planNumber: 1 });
 
 const DEFAULT_VIP_PLANS = [
-  { planNumber: 1, pricePoints: 10000, monthlyRewardPercent: 5, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
-  { planNumber: 2, pricePoints: 30000, monthlyRewardPercent: 6, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
-  { planNumber: 3, pricePoints: 50000, monthlyRewardPercent: 7, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
-  { planNumber: 4, pricePoints: 100000, monthlyRewardPercent: 8, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'professional', principalDailyBps: 100, rewardDailyBps: 15, enabled: false, comingSoon: true },
-  { planNumber: 5, pricePoints: 200000, monthlyRewardPercent: 9, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'professional', principalDailyBps: 100, rewardDailyBps: 15, enabled: false, comingSoon: true },
-  { planNumber: 6, pricePoints: 350000, monthlyRewardPercent: 10, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'professional', principalDailyBps: 100, rewardDailyBps: 15, enabled: false, comingSoon: true },
-  { planNumber: 7, pricePoints: 500000, monthlyRewardPercent: 11, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'professional', principalDailyBps: 100, rewardDailyBps: 15, enabled: false, comingSoon: true },
-  { planNumber: 8, pricePoints: 700000, monthlyRewardPercent: 12, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'final', principalDailyBps: 100, rewardDailyBps: 20, enabled: false, comingSoon: true },
-  { planNumber: 9, pricePoints: 850000, monthlyRewardPercent: 13, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'final', principalDailyBps: 100, rewardDailyBps: 20, enabled: false, comingSoon: true },
-  { planNumber: 10, pricePoints: 1000000, monthlyRewardPercent: 15, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'final', principalDailyBps: 100, rewardDailyBps: 20, enabled: false, comingSoon: true }
+  { planNumber: 1, pricePoints: pricePointsForVipPlan(1), monthlyRewardPercent: 5, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
+  { planNumber: 2, pricePoints: pricePointsForVipPlan(2), monthlyRewardPercent: 6, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
+  { planNumber: 3, pricePoints: pricePointsForVipPlan(3), monthlyRewardPercent: 7, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
+  { planNumber: 4, pricePoints: pricePointsForVipPlan(4), monthlyRewardPercent: 8, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'professional', principalDailyBps: 100, rewardDailyBps: 15, enabled: false, comingSoon: true },
+  { planNumber: 5, pricePoints: pricePointsForVipPlan(5), monthlyRewardPercent: 9, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'professional', principalDailyBps: 100, rewardDailyBps: 15, enabled: false, comingSoon: true },
+  { planNumber: 6, pricePoints: pricePointsForVipPlan(6), monthlyRewardPercent: 10, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'professional', principalDailyBps: 100, rewardDailyBps: 15, enabled: false, comingSoon: true },
+  { planNumber: 7, pricePoints: pricePointsForVipPlan(7), monthlyRewardPercent: 11, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'professional', principalDailyBps: 100, rewardDailyBps: 15, enabled: false, comingSoon: true },
+  { planNumber: 8, pricePoints: pricePointsForVipPlan(8), monthlyRewardPercent: 12, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'final', principalDailyBps: 100, rewardDailyBps: 20, enabled: false, comingSoon: true },
+  { planNumber: 9, pricePoints: pricePointsForVipPlan(9), monthlyRewardPercent: 13, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'final', principalDailyBps: 100, rewardDailyBps: 20, enabled: false, comingSoon: true },
+  { planNumber: 10, pricePoints: pricePointsForVipPlan(10), monthlyRewardPercent: 15, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'final', principalDailyBps: 100, rewardDailyBps: 20, enabled: false, comingSoon: true }
 ];
 
 vipPlanSchema.statics.ensureDefaults = async function ensureDefaults() {

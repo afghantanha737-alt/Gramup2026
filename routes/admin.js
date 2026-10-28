@@ -2124,9 +2124,6 @@ router.put('/vip/plans', async (req, res) => {
   const plans = [];
   const settings = await Settings.getGlobal();
   const rate = Number(settings.rate);
-  if (!Number.isFinite(rate) || rate <= 0) {
-    return res.status(503).json({ success: false, code: 'VIP_RATE_UNAVAILABLE', message: 'نرخ تبدیل GRAM به Points معتبر نیست؛ ابتدا rate را در تنظیمات اصلاح کنید.' });
-  }
   for (const item of input) {
     const planNumber = Number(item?.planNumber);
     const expectedPricePoints = pricePointsForVipPlan(planNumber, rate);
