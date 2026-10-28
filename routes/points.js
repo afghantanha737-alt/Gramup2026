@@ -59,6 +59,8 @@ function publicVipPlan(plan) {
   const totalRewardCents = policy
     ? dailyPointsCentsFromBps(plan.pricePoints, policy.rewardDailyBps) * policy.durationDays
     : calculateTotalRewardCents(plan.pricePoints, plan.monthlyRewardPercent, plan.durationDays);
+  const dailyPrincipalCents = policy ? dailyPointsCentsFromBps(plan.pricePoints, policy.principalDailyBps) : 0;
+  const dailyRewardCents = policy ? dailyPointsCentsFromBps(plan.pricePoints, policy.rewardDailyBps) : 0;
   const totalRewardPoints = totalRewardCents == null ? 0 : pointsFromCents(totalRewardCents);
   return {
     planNumber: plan.planNumber,
@@ -67,6 +69,11 @@ function publicVipPlan(plan) {
     durationDays: policy?.durationDays || plan.durationDays,
     totalRewardPoints,
     dailyRewardAveragePoints: (policy?.durationDays || plan.durationDays) > 0 ? Number((totalRewardPoints / (policy?.durationDays || plan.durationDays)).toFixed(2)) : 0,
+    principalDailyPercent: policy ? policy.principalDailyBps / 100 : null,
+    rewardDailyPercent: policy ? policy.rewardDailyBps / 100 : null,
+    dailyPrincipalPoints: dailyPrincipalCents == null ? 0 : pointsFromCents(dailyPrincipalCents),
+    dailyRewardPoints: dailyRewardCents == null ? 0 : pointsFromCents(dailyRewardCents),
+    totalPrincipalPoints: policy ? pointsFromCents(dailyPrincipalCents * policy.durationDays) : 0,
     policyVersion: plan.policyVersion || LEGACY_VIP_POLICY_VERSION,
     productGroup: plan.productGroup || 'legacy',
     enabled: Boolean(plan.enabled),
