@@ -3355,8 +3355,8 @@ function renderProfileVip() {
     const totalRewardPoints = plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100);
     const dailyAveragePoints = plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays));
     const isNewVipPolicy = plan.policyVersion === "v2_100d";
-    const dailyPrincipalPoints = Number(plan.dailyPrincipalPoints || 0);
-    const dailyRewardPoints = Number(plan.dailyRewardPoints || dailyAveragePoints);
+    const dailyTotalPayoutPoints = Number(plan.dailyTotalPayoutPoints || 0);
+    const totalReceivedPoints = Number(plan.totalReceivedPoints || 0);
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
       <article class="vipPlanCard vipPlanCard--${theme}">
@@ -3367,11 +3367,11 @@ function renderProfileVip() {
         </div>
         <div class="vipPlanStats">
           <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${formatPoints(plan.pricePoints)}</b></div>
-          <div class="vipPlanStat"><span>${t(isNewVipPolicy ? "vip_plan_daily_profit_label" : "vip_plan_profit_label")}</span><b>${formatNumber(isNewVipPolicy ? plan.rewardDailyPercent : plan.monthlyRewardPercent, 2)}%</b></div>
+          <div class="vipPlanStat"><span>${t(isNewVipPolicy ? "vip_daily_total_label" : "vip_plan_profit_label")}</span><b>${isNewVipPolicy ? `${formatPoints(dailyTotalPayoutPoints)} ${t("vip_points_unit")}` : `${formatNumber(plan.monthlyRewardPercent, 2)}%`}</b></div>
           <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(plan.durationDays) })}</b></div>
         </div>
-        <div class="vipPlanReward"><span>${t("vip_total_reward_label")}</span><b>${formatPoints(totalRewardPoints)} ${t("vip_points_unit")}</b></div>
-        <div class="vipPlanDaily">${isNewVipPolicy ? `${t("vip_principal_daily", { n: formatPoints(dailyPrincipalPoints) })} · ${t("vip_reward_daily", { n: formatPoints(dailyRewardPoints) })}` : t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>
+        <div class="vipPlanReward"><span>${t(isNewVipPolicy ? "vip_total_received_label" : "vip_total_reward_label")}</span><b>${formatPoints(isNewVipPolicy ? totalReceivedPoints : totalRewardPoints)} ${t("vip_points_unit")}</b></div>
+        ${isNewVipPolicy ? "" : `<div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>`}
         <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})">${isPurchasing ? t("vip_buying") : buttonLabel}</button>
       </article>`;
   }).join("");

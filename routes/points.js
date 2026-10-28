@@ -74,6 +74,8 @@ function publicVipPlan(plan) {
     dailyPrincipalPoints: dailyPrincipalCents == null ? 0 : pointsFromCents(dailyPrincipalCents),
     dailyRewardPoints: dailyRewardCents == null ? 0 : pointsFromCents(dailyRewardCents),
     totalPrincipalPoints: policy ? pointsFromCents(dailyPrincipalCents * policy.durationDays) : 0,
+    dailyTotalPayoutPoints: policy ? pointsFromCents(dailyPrincipalCents + dailyRewardCents) : null,
+    totalReceivedPoints: policy ? pointsFromCents((dailyPrincipalCents + dailyRewardCents) * policy.durationDays) : null,
     policyVersion: plan.policyVersion || LEGACY_VIP_POLICY_VERSION,
     productGroup: plan.productGroup || 'legacy',
     enabled: Boolean(plan.enabled),
