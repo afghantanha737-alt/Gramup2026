@@ -12,6 +12,7 @@ const {
   calculateDaysCompleted
 } = require('../utils/vipRewards');
 const { VIP_PRICE_GRAMS, VIP_PRICE_POINTS, pricePointsForVipPlan } = require('../utils/vipPricing');
+const { newVipPolicyForPlan, dailyPointsCentsFromBps, periodRewardPercentForPlan } = require('../utils/vipPolicy');
 
 function sum(values) { return values.reduce((total, value) => total + value, 0); }
 
@@ -109,8 +110,28 @@ assert.deepStrictEqual(VIP_PRICE_POINTS, [10000, 30000, 50000, 100000, 200000, 3
 assert.deepStrictEqual(VIP_PRICE_POINTS.map((_, index) => pricePointsForVipPlan(index + 1)), VIP_PRICE_POINTS, 'all 10 plans must use the published fixed Points prices');
 assert.strictEqual(pricePointsForVipPlan(1, 10), 10000, 'conversion-rate changes must not alter catalog prices');
 assert.strictEqual(pricePointsForVipPlan(10, 0.0001), 1000000, 'VIP 10 must remain fixed at 1,000,000 Points');
-assert.match(vipPlanModel, /planNumber: 10, pricePoints: pricePointsForVipPlan\(10\), monthlyRewardPercent: 15/, 'catalog seed must use the fixed VIP 10 price');
-assert.match(vipPlanModel, /planNumber: 1, pricePoints: pricePointsForVipPlan\(1\), monthlyRewardPercent: 5/);
+assert.match(vipPlanModel, /planNumber: 10, pricePoints: pricePointsForVipPlan\(10\), monthlyRewardPercent: periodRewardPercentForPlan\(10\)/, 'catalog seed must use the fixed VIP 10 price');
+assert.match(vipPlanModel, /planNumber: 1, pricePoints: pricePointsForVipPlan\(1\), monthlyRewardPercent: 10/);
+assert.match(vipPlanModel, /planNumber: 2, pricePoints: pricePointsForVipPlan\(2\), monthlyRewardPercent: 10/);
+assert.match(vipPlanModel, /planNumber: 3, pricePoints: pricePointsForVipPlan\(3\), monthlyRewardPercent: 10/);
+assert.match(vipPlanModel, /pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps/);
+assert.deepStrictEqual([1, 2, 3].map(periodRewardPercentForPlan), [10, 10, 10]);
+assert.deepStrictEqual([4, 5, 6, 7].map(periodRewardPercentForPlan), [15, 15, 15, 15]);
+assert.deepStrictEqual([8, 9, 10].map(periodRewardPercentForPlan), [20, 20, 20]);
+assert.match(adminRoute, /expectedPeriodYieldPercent = periodRewardPercentForPlan\(planNumber\)/);
+assert.match(adminUi, /VIP 1–3/);
+assert.match(adminUi, /VIP 4–7/);
+assert.match(adminUi, /VIP 8–10/);
+assert.match(adminUi, /بازدهی دوره \(۱۰۰ روزه/);
+assert.match(adminUi, /function setVipAdminCategory\(category\)/);
+assert.match(pointsRoute, /res\.set\('Cache-Control', 'no-store'\)/);
+assert.match(adminRoute, /res\.set\('Cache-Control', 'no-store'\)/);
+for (const [planNumber, pricePoints] of [[1, 10000], [2, 30000], [3, 50000]]) {
+  const policy = newVipPolicyForPlan(planNumber);
+  const dailyCents = dailyPointsCentsFromBps(pricePoints, policy.principalDailyBps) + dailyPointsCentsFromBps(pricePoints, policy.rewardDailyBps);
+  assert.strictEqual(dailyCents / 100, pricePoints / 100 + pricePoints / 1000, `VIP ${planNumber} daily payout includes principal plus 10% period yield`);
+  assert.strictEqual((dailyCents * 100) / 100, pricePoints + pricePoints / 10, `VIP ${planNumber} total 100-day payout`);
+}
 assert.match(indexHtml, /data-tab="vip"/);
 assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|vip|wallet|profile)"/g) || []).length, 5);
 assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'vip', 'wallet', 'profile']);

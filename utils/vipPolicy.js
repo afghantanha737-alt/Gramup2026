@@ -28,6 +28,11 @@ function newVipPolicyForPlan(planNumber, effectiveAt = null) {
   };
 }
 
+function periodRewardPercentForPlan(planNumber) {
+  const policy = newVipPolicyForPlan(planNumber);
+  if (!policy) return null;
+  return policy.rewardDailyBps * policy.durationDays / 100;
+}
 function policyForSubscription(subscription) {
   const version = String(subscription?.policyVersion || LEGACY_VIP_POLICY_VERSION);
   if (version !== NEW_VIP_POLICY_VERSION) {
@@ -56,6 +61,7 @@ module.exports = {
   NEW_VIP_GROUPS,
   groupForPlan,
   newVipPolicyForPlan,
+  periodRewardPercentForPlan,
   policyForSubscription,
   dailyPointsCentsFromBps
 };

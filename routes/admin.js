@@ -56,6 +56,7 @@ const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
 const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/depositFinance');
 const { buildVipReserveReport, buildVipReserveWorkbook } = require('../utils/vipReserveReport');
 const { pricingForVipPlan, pricePointsForVipPlan } = require('../utils/vipPricing');
+const { newVipPolicyForPlan, dailyPointsCentsFromBps, periodRewardPercentForPlan } = require('../utils/vipPolicy');
 
 const MAX_REQUIRED_CHANNELS = 5;
 
@@ -2098,6 +2099,7 @@ router.get('/vip/subscriptions/:id', async (req, res) => {
 });
 
 router.get('/vip/plans', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   const [plans, settings] = await Promise.all([
     VipPlan.find({}).sort({ planNumber: 1 }).lean(),
     Settings.getGlobal()
@@ -2108,8 +2110,8 @@ router.get('/vip/plans', async (req, res) => {
     rate,
     plans: plans.map(plan => ({
       ...plan,
-      pricing: pricingForVipPlan(plan.planNumber, rate),
-      priceMatchesPolicy: Number(plan.pricePoints) === pricePointsForVipPlan(plan.planNumber, rate)
+      pricing: pricingForVipPlan(plan.planNumber),
+      priceMatchesPolicy: Number(plan.pricePoints) === pricePointsForVipPlan(plan.planNumber)
     }))
   });
 });
@@ -2126,7 +2128,8 @@ router.put('/vip/plans', async (req, res) => {
   const rate = Number(settings.rate);
   for (const item of input) {
     const planNumber = Number(item?.planNumber);
-    const expectedPricePoints = pricePointsForVipPlan(planNumber, rate);
+    const expectedPricePoints = pricePointsForVipPlan(planNumber);
+    const expectedPeriodYieldPercent = periodRewardPercentForPlan(planNumber);
     const submittedPricePoints = Number(item?.pricePoints);
     const pricePoints = expectedPricePoints;
     const monthlyRewardPercent = Number(item?.monthlyRewardPercent);
@@ -2137,6 +2140,7 @@ router.put('/vip/plans', async (req, res) => {
       || !Number.isInteger(pricePoints) || pricePoints < 0 || pricePoints > 100000000
       || submittedPricePoints !== expectedPricePoints
       || !Number.isFinite(monthlyRewardPercent) || monthlyRewardPercent < 0 || monthlyRewardPercent > 100
+      || monthlyRewardPercent !== expectedPeriodYieldPercent
       || !Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650
       || durationDays !== 100
       || (enabled && comingSoon)
@@ -2148,7 +2152,9 @@ router.put('/vip/plans', async (req, res) => {
       return res.status(400).json({ success: false, code: 'VIP_PLAN_INVALID', message, expectedPricePoints, expectedGrams: pricing?.grams || null, rate });
     }
     if (enabled) {
-      const totalRewardCents = calculateTotalRewardCents(pricePoints, monthlyRewardPercent, durationDays);
+      const vipPolicy = newVipPolicyForPlan(planNumber);
+      const dailyRewardCents = vipPolicy ? dailyPointsCentsFromBps(pricePoints, vipPolicy.rewardDailyBps) : null;
+      const totalRewardCents = dailyRewardCents === null ? null : dailyRewardCents * durationDays;
       if (totalRewardCents == null || totalRewardCents < durationDays) {
         return res.status(400).json({ success: false, code: 'VIP_REWARD_TOO_SMALL', message: `پاداش پلن ${planNumber} باید حداقل ۰٫۰۱ پوینت برای هر دریافت روزانه داشته باشد.` });
       }
@@ -2168,7 +2174,7 @@ router.put('/vip/plans', async (req, res) => {
   res.json({
     success: true,
     rate,
-    plans: savedPlans.map(plan => ({ ...plan, pricing: pricingForVipPlan(plan.planNumber, rate), priceMatchesPolicy: true }))
+    plans: savedPlans.map(plan => ({ ...plan, pricing: pricingForVipPlan(plan.planNumber), priceMatchesPolicy: Number(plan.pricePoints) === pricePointsForVipPlan(plan.planNumber) }))
   });
   recordAdminLog({
     actor: req.adminActor,

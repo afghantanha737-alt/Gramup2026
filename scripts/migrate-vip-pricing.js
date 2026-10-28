@@ -1,9 +1,9 @@
 'use strict';
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Settings = require('../models/Settings');
 const VipPlan = require('../models/VipPlan');
 const { pricingForVipPlan } = require('../utils/vipPricing');
+const { NEW_VIP_POLICY_VERSION, groupForPlan, newVipPolicyForPlan, periodRewardPercentForPlan } = require('../utils/vipPolicy');
 const { verifyMongoTransactionCapability } = require('../utils/mongoTransaction');
 
 function parseArgs(argv) {
@@ -23,24 +23,34 @@ function printHelp() {
     'Dry run (default): npm run migrate:vip-pricing',
     'Apply after backup/review: npm run migrate:vip-pricing -- --apply',
     '',
-    'The migration uses Settings.rate, updates only VipPlan.pricePoints, and never reprices VipSubscription documents.'
+    'The migration syncs the 10 fixed Points prices, 100-day policy and catalog reward settings. It never modifies VipSubscription documents.'
   ].join('\n'));
 }
 
 async function inspectCatalog() {
-  const [plans, settings] = await Promise.all([
-    VipPlan.find({}).sort({ planNumber: 1 }).lean(),
-    Settings.findOne({ key: 'global' }).lean()
-  ]);
+  const plans = await VipPlan.find({}).sort({ planNumber: 1 }).lean();
   if (plans.length !== 10) throw new Error(`Expected exactly 10 VIP plans; found ${plans.length}.`);
-  const rate = Number(settings?.rate);
-  if (!Number.isFinite(rate) || rate <= 0) throw new Error('Settings.rate must be a positive number.');
-  const updates = plans.map(plan => {
-    const pricing = pricingForVipPlan(plan.planNumber, rate);
-    if (!pricing) throw new Error(`No pricing policy exists for VIP ${plan.planNumber}.`);
-    return { planNumber: plan.planNumber, oldPricePoints: plan.pricePoints, ...pricing };
+  const byNumber = new Map(plans.map(plan => [Number(plan.planNumber), plan]));
+  const updates = Array.from({ length: 10 }, (_, index) => {
+    const planNumber = index + 1;
+    const prior = byNumber.get(planNumber);
+    const pricing = pricingForVipPlan(planNumber);
+    const policy = newVipPolicyForPlan(planNumber);
+    if (!prior || !pricing || !policy) throw new Error(`No catalog entry/policy exists for VIP ${planNumber}.`);
+    return {
+      planNumber,
+      oldPricePoints: prior.pricePoints,
+      oldPeriodYieldPercent: prior.monthlyRewardPercent,
+      ...pricing,
+      monthlyRewardPercent: periodRewardPercentForPlan(planNumber),
+      durationDays: 100,
+      policyVersion: NEW_VIP_POLICY_VERSION,
+      productGroup: groupForPlan(planNumber),
+      principalDailyBps: policy.principalDailyBps,
+      rewardDailyBps: policy.rewardDailyBps
+    };
   });
-  return { rate, updates };
+  return { updates };
 }
 
 async function applyPricing(report) {
@@ -50,7 +60,15 @@ async function applyPricing(report) {
       for (const update of report.updates) {
         await VipPlan.updateOne(
           { planNumber: update.planNumber },
-          { $set: { pricePoints: update.pricePoints } },
+          { $set: {
+            pricePoints: update.pricePoints,
+            monthlyRewardPercent: update.monthlyRewardPercent,
+            durationDays: update.durationDays,
+            policyVersion: update.policyVersion,
+            productGroup: update.productGroup,
+            principalDailyBps: update.principalDailyBps,
+            rewardDailyBps: update.rewardDailyBps
+          } },
           { session }
         );
       }

@@ -524,8 +524,13 @@
       </div>
 
       <div class="card">
-        <div class="flexBetween"><b>VIP Plan Settings</b><span class="small">The existing plan API and validation are unchanged.</span></div>
-        <p class="small">The purchase amount is deducted from Points. Existing plan changes continue to affect new purchases only.</p>
+        <div class="flexBetween"><b>VIP Plan Settings</b><span class="small">قیمت‌ها و سیاست پاداش کاتالوگ در راه‌اندازی سرور همگام می‌شوند.</span></div>
+        <p class="small">قیمت خرید از پوینت کسر می‌شود. تغییر کاتالوگ روی خریدهای جدید اثر دارد؛ اشتراک‌های قبلی کاربران تغییر نمی‌کنند.</p>
+        <div role="tablist" aria-label="VIP plan categories" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
+          <button type="button" class="secondary" data-vip-admin-tab="starter" aria-selected="true" onclick="setVipAdminCategory('starter')">Starter · VIP 1–3</button>
+          <button type="button" class="secondary" data-vip-admin-tab="pro" aria-selected="false" onclick="setVipAdminCategory('pro')">Pro · VIP 4–7</button>
+          <button type="button" class="secondary" data-vip-admin-tab="ultimate" aria-selected="false" onclick="setVipAdminCategory('ultimate')">Ultimate · VIP 8–10</button>
+        </div>
         <div id="vipPlansAdminStatus" class="small" style="margin:8px 0"></div>
         <div id="vipPlansAdminList"></div>
         <button type="button" class="secondary" onclick="saveVipPlansAdmin()" style="margin-top:10px">ذخیره پلن‌های VIP</button>
@@ -2305,6 +2310,17 @@ function closeVipDetails() {
   document.getElementById("vipDetailOverlay").style.display = "none";
 }
 
+let vipAdminSelectedCategory = "starter";
+function setVipAdminCategory(category) {
+  if (!["starter", "pro", "ultimate"].includes(category)) return;
+  vipAdminSelectedCategory = category;
+  document.querySelectorAll("[data-vip-admin-tab]").forEach(button => {
+    button.setAttribute("aria-selected", String(button.dataset.vipAdminTab === category));
+  });
+  document.querySelectorAll("[data-vip-admin-panel]").forEach(panel => {
+    panel.hidden = panel.dataset.vipAdminPanel !== category;
+  });
+}
 async function loadVipPlansAdmin() {
   const list = document.getElementById("vipPlansAdminList");
   const status = document.getElementById("vipPlansAdminStatus");
@@ -2313,20 +2329,27 @@ async function loadVipPlansAdmin() {
   try {
     const data = await api("/api/admin/vip/plans");
     const plans = Array.isArray(data.plans) ? data.plans : [];
-    list.innerHTML = plans.map(plan => `
-      <div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:var(--surface)">
-        <b>پلن ${Number(plan.planNumber)}</b>
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px">
-          <div><label>قیمت محاسبه‌شده (${Number(plan.pricing?.grams) || 0} GRAM → Points)</label><input id="vipPlanPrice${Number(plan.planNumber)}" type="number" min="0" step="1" value="${Number(plan.pricing?.pricePoints ?? plan.pricePoints) || 0}" readonly></div>
-          <div><label>بازده ماهانه (%)</label><input id="vipPlanRate${Number(plan.planNumber)}" type="number" min="0" max="100" step="0.01" value="${Number(plan.monthlyRewardPercent) || 0}"></div>
-          <div><label>مدت (روز)</label><input id="vipPlanDays${Number(plan.planNumber)}" type="number" min="1" max="3650" step="1" value="${Number(plan.durationDays) || 30}"></div>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:28px"><input id="vipPlanEnabled${Number(plan.planNumber)}" type="checkbox" style="width:auto" ${plan.enabled ? "checked" : ""}> فعال برای خرید</label>
-        </div>
-        <label style="display:flex;align-items:center;gap:8px;margin:4px 0"><input id="vipPlanSoon${Number(plan.planNumber)}" type="checkbox" style="width:auto" ${plan.comingSoon ? "checked" : ""}> به‌زودی / فعلاً غیرقابل خرید</label>
-      </div>`).join("");
+    const categoryForPlan = number => Number(number) <= 3 ? "starter" : Number(number) <= 7 ? "pro" : "ultimate";
+    list.innerHTML = ["starter", "pro", "ultimate"].map(category => {
+      const categoryPlans = plans.filter(plan => categoryForPlan(plan.planNumber) === category);
+      return `<section data-vip-admin-panel="${category}" ${category === vipAdminSelectedCategory ? "" : "hidden"}>
+        ${categoryPlans.map(plan => `
+          <div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:var(--surface)">
+            <b>پلن ${Number(plan.planNumber)}</b>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px">
+              <div><label>هزینه (${Number(plan.pricing?.grams) || 0} GRAM، پوینت ثابت)</label><input id="vipPlanPrice${Number(plan.planNumber)}" type="number" min="0" step="1" value="${Number(plan.pricing?.pricePoints ?? plan.pricePoints) || 0}" readonly></div>
+              <div><label>بازدهی دوره (۱۰۰ روزه، %)</label><input id="vipPlanRate${Number(plan.planNumber)}" type="number" min="0" max="100" step="0.01" value="${Number(plan.monthlyRewardPercent) || 0}" readonly></div>
+              <div><label>مدت (روز)</label><input id="vipPlanDays${Number(plan.planNumber)}" type="number" min="1" max="3650" step="1" value="${Number(plan.durationDays) || 100}" readonly></div>
+              <label style="display:flex;align-items:center;gap:8px;margin-top:28px"><input id="vipPlanEnabled${Number(plan.planNumber)}" type="checkbox" style="width:auto" ${plan.enabled ? "checked" : ""}> فعال برای خرید</label>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;margin:4px 0"><input id="vipPlanSoon${Number(plan.planNumber)}" type="checkbox" style="width:auto" ${plan.comingSoon ? "checked" : ""}> به‌زودی / فعلاً غیرقابل خرید</label>
+          </div>`).join("")}
+      </section>`;
+    }).join("");
+    setVipAdminCategory(vipAdminSelectedCategory);
     status.textContent = plans.length === 10
-      ? `تنظیمات هر ۱۰ پلن بارگذاری شد. نرخ فعلی: ${Number(data.rate) || 0} GRAM برای هر Point.`
-      : "Catalog باید شامل هر ۱۰ پلن باشد؛ مقادیر را ذخیره کنید تا ایجاد/تکمیل شود.";
+      ? "تنظیمات هر ۱۰ پلن بارگذاری شد؛ قیمت‌ها و مدت دوره از کاتالوگ ثابت می‌آیند."
+      : "Catalog باید شامل هر ۱۰ پلن باشد؛ با به‌روزرسانی کاتالوگ سرور تکمیل می‌شود.";
   } catch (error) {
     status.textContent = `خطا در بارگذاری VIP Plans: ${error.message}`;
     status.style.color = "var(--danger)";

@@ -1049,6 +1049,7 @@ router.post('/swap/gram-to-points/intents/:id/verify', auth, async (req, res) =>
 // the server-side catalog; no price, duration, or reward amount is accepted
 // from the client.
 router.get('/vip/plans', auth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   const now = new Date();
   await settleMaturedVipSubscriptions({ userId: req.dbUser._id, now });
   const [plans, subscriptions, user] = await Promise.all([
