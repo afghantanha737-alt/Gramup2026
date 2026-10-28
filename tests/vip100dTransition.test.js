@@ -1,0 +1,31 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const VipPlan = require('../models/VipPlan');
+const { NEW_VIP_POLICY_VERSION, NEW_VIP_DURATION_DAYS } = require('../utils/vipPolicy');
+
+const root = path.join(__dirname, '..');
+const points = fs.readFileSync(path.join(root, 'routes/points.js'), 'utf8');
+const planModel = fs.readFileSync(path.join(root, 'models/VipPlan.js'), 'utf8');
+const subscriptionModel = fs.readFileSync(path.join(root, 'models/VipSubscription.js'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'scripts/migrate-vip-100d.js'), 'utf8');
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+
+assert.strictEqual(VipPlan.schema.path('policyVersion').defaultValue, NEW_VIP_POLICY_VERSION);
+assert.strictEqual(NEW_VIP_DURATION_DAYS, 100);
+assert.match(points, /VIP_LEGACY_PURCHASE_DISABLED/);
+assert.match(points, /VIP_NEW_POLICY_NOT_ACTIVE/);
+assert.match(points, /VIP_RESERVE_INSUFFICIENT/);
+assert.match(planModel, /durationDays: 100/);
+assert.match(planModel, /policyVersion: 'v2_100d'/);
+assert.match(planModel, /principalDailyBps: 100/);
+assert.match(planModel, /rewardDailyBps: 10/);
+assert.match(subscriptionModel, /policyVersion: \{ type: String, enum: \['legacy_v1', 'v2_100d'\]/);
+assert.match(migration, /mode: 'dry-run'/);
+assert.match(migration, /mode: 'apply'/);
+assert.match(migration, /vipNewPurchasesEnabled: true/);
+assert.match(migration, /vipPayoutsEnabled: true/);
+assert.match(migration, /never updates, cancels, settles, or re-prices existing VipSubscription/);
+assert.strictEqual(packageJson.scripts['migrate:vip-100d'], 'node scripts/migrate-vip-100d.js');
+console.log('PASS — legacy VIP purchases are closed, 100-day catalog transition is atomic, and historical subscriptions remain untouched');

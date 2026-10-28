@@ -38,7 +38,7 @@ assert.deepStrictEqual({
 assert.strictEqual(dailyPointsCentsFromBps(1000, 100), 1000, '1% of 1000 Points = 10.00 Points, stored as cents');
 assert.strictEqual(dailyPointsCentsFromBps(1000, 10), 100, '0.10% of 1000 Points = 1.00 Point, stored as cents');
 assert.strictEqual(policyForSubscription({ durationDays: 30 }).policyVersion, LEGACY_VIP_POLICY_VERSION);
-assert.strictEqual(VipPlan.schema.path('policyVersion').defaultValue, LEGACY_VIP_POLICY_VERSION);
+assert.strictEqual(VipPlan.schema.path('policyVersion').defaultValue, NEW_VIP_POLICY_VERSION);
 assert.strictEqual(VipSubscription.schema.path('policyVersion').defaultValue, LEGACY_VIP_POLICY_VERSION);
 
 const points = fs.readFileSync('routes/points.js', 'utf8');
@@ -47,6 +47,7 @@ assert.ok(points.includes('policyEffectiveAt'));
 assert.ok(points.includes('principalDailyBps'));
 assert.ok(points.includes('rewardDailyBps'));
 assert.ok(points.includes('policyVersion'));
+assert.ok(points.includes('VIP_LEGACY_PURCHASE_DISABLED'));
 const settings = fs.readFileSync('models/Settings.js', 'utf8');
 assert.ok(settings.includes('vipNewPurchasesEnabled: { type: Boolean, default: false }'));
 assert.ok(settings.includes("vipPolicyVersion: { type: String, enum: ['legacy_v1', 'v2_100d']"));

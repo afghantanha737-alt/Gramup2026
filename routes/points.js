@@ -1077,6 +1077,9 @@ router.post('/vip/purchase', auth, async (req, res) => {
         const pricePoints = Number(plan.pricePoints);
         const settings = await Settings.findOne({ key: 'global' }).session(session).lean();
         const policyVersion = String(plan.policyVersion || LEGACY_VIP_POLICY_VERSION);
+        if (policyVersion === LEGACY_VIP_POLICY_VERSION) {
+          throw vipError('VIP_LEGACY_PURCHASE_DISABLED', 'خرید پلن‌های ۳۰ روزه برای کاربران جدید غیرفعال شده است.', 409);
+        }
         if (policyVersion === NEW_VIP_POLICY_VERSION && (settings?.vipPolicyVersion !== NEW_VIP_POLICY_VERSION || !settings?.vipNewPurchasesEnabled || !settings?.vipPolicyEffectiveAt || new Date() < new Date(settings.vipPolicyEffectiveAt))) {
           throw vipError('VIP_NEW_POLICY_NOT_ACTIVE', 'نسخه جدید VIP هنوز برای خرید فعال نشده است.', 409);
         }

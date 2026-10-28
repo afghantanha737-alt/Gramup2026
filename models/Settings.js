@@ -37,7 +37,7 @@ const settingsSchema = new mongoose.Schema(
     // Fixed by the current referral policy; retained for backwards compatibility.
     referralInitialRewardPoints: { type: Number, default: DEFAULT_REFERRAL_INITIAL_REWARD_POINTS, min: 0, max: 1000000 },
     referralLevelRates: { type: [Number], default: () => [...DEFAULT_REFERRAL_LEVEL_RATES] },
-    // VIP v2 is intentionally disabled until reserve and payout readiness are approved.
+    // VIP v2 is enabled only by the controlled migration after Reserve readiness review.
     vipPolicyVersion: { type: String, enum: ['legacy_v1', 'v2_100d'], default: 'legacy_v1' },
     vipPolicyEffectiveAt: { type: Date, default: null },
     vipNewPurchasesEnabled: { type: Boolean, default: false },
