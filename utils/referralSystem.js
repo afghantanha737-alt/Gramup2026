@@ -17,6 +17,8 @@ const {
   reviewStatusOf
 } = require('./referralCore');
 
+const DEFAULT_REFERRAL_WELCOME_REWARD_POINTS = 5;
+
 function sessionQuery(query, session) {
   return session ? query.session(session) : query;
 }
@@ -39,7 +41,10 @@ async function getReferralSettings(session) {
     rates: safeRates(settings),
     // Exact current policy: each newly linked eligible direct invite credits 10 Points.
     // The persisted setting is intentionally not read, so stale admin values cannot alter it.
-    initialRewardPoints: DEFAULT_REFERRAL_INITIAL_REWARD_POINTS
+    initialRewardPoints: DEFAULT_REFERRAL_INITIAL_REWARD_POINTS,
+    welcomeRewardPoints: Number.isSafeInteger(Number(settings?.referralWelcomeRewardPoints))
+      ? Math.max(0, Number(settings.referralWelcomeRewardPoints))
+      : DEFAULT_REFERRAL_WELCOME_REWARD_POINTS
   };
 }
 
@@ -69,10 +74,15 @@ function relationStatus(users) {
   return 'active';
 }
 
-async function createOrUpdateRelationship({ referrerId, referredUserId, level, status, source, session, initialRewardStatus }) {
+async function createOrUpdateRelationship({ referrerId, referredUserId, level, status, source, session, initialRewardStatus, welcomeRewardStatus }) {
   const update = {
     $set: { level, status, statusReason: status === 'active' ? '' : status, source },
-    $setOnInsert: { referrerId, referredUserId, ...(initialRewardStatus ? { initialRewardStatus } : {}) }
+    $setOnInsert: {
+      referrerId,
+      referredUserId,
+      ...(initialRewardStatus ? { initialRewardStatus } : {}),
+      ...(welcomeRewardStatus ? { welcomeRewardStatus } : {})
+    }
   };
   return ReferralRelationship.findOneAndUpdate(
     { referrerId, referredUserId },
@@ -121,7 +131,7 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
       await User.updateOne({ _id: referrer._id }, { $inc: { invitedCount: 1 } }, { session });
     }
 
-    const { rates, initialRewardPoints } = await getReferralSettings(session);
+    const { rates, initialRewardPoints, welcomeRewardPoints } = await getReferralSettings(session);
     let currentAncestor = referrer;
     const relationshipPath = [invitee];
     const seen = new Set([String(invitee._id)]);
@@ -139,7 +149,8 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
         status: chainStatus,
         source,
         session,
-        initialRewardStatus: level === 1 ? (linkedNow || invitee.referralInitialRewardEligible ? 'pending' : 'legacy_exempt') : 'not_applicable'
+        initialRewardStatus: level === 1 ? (linkedNow || invitee.referralInitialRewardEligible ? 'pending' : 'legacy_exempt') : 'not_applicable',
+        welcomeRewardStatus: level === 1 ? (linkedNow || invitee.referralInitialRewardEligible ? 'pending' : 'legacy_exempt') : 'not_applicable'
       });
       if (level === 1) directRelationship = relationship;
       if (!currentAncestor.referredBy) break;
@@ -148,6 +159,8 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
 
     let initialPaid = false;
     let initialCreditCreated = false;
+    let welcomePaid = false;
+    let welcomeCreditCreated = false;
     referralDiagnostic('relationship_registered', {
       directRelationshipStatus: directRelationship?.status || null,
       initialRewardStatus: directRelationship?.initialRewardStatus || null
@@ -225,9 +238,64 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
       }
     }
 
+    // The invitee welcome credit is separate from the inviter's fixed +10 and
+    // is not an eligible original earning for downstream commissions.
+    if (linkedNow && directRelationship?.status === 'active' && directRelationship.welcomeRewardStatus === 'pending') {
+      const welcomeSourceId = `referral-welcome:${invitee._id}`;
+      const welcomeTransactionId = deterministicTransactionId('RW', invitee._id);
+      const welcomeClaim = await ReferralRelationship.findOneAndUpdate(
+        { _id: directRelationship._id, referrerId: referrer._id, referredUserId: invitee._id, welcomeRewardStatus: 'pending' },
+        { $set: {
+          status: directRelationship.status,
+          welcomeRewardStatus: 'paid',
+          welcomeRewardTransactionId: welcomeTransactionId
+        } },
+        { new: true, session }
+      );
+      if (welcomeClaim) {
+        if (welcomeRewardPoints > 0) {
+          const PointsLedger = require('../models/PointsLedger');
+          const existingLedger = await sessionQuery(PointsLedger.findOne({ sourceId: welcomeSourceId }).select('_id'), session);
+          if (!existingLedger) {
+            const updatedInvitee = await User.findByIdAndUpdate(
+              invitee._id,
+              { $inc: { points: welcomeRewardPoints } },
+              { new: true, session }
+            );
+            if (!updatedInvitee) throw new Error('دریافت‌کننده برای پاداش خوش‌آمدگویی Referral پیدا نشد.');
+            const { recordLedgerRequired } = require('./ledger');
+            const ledgerResult = await recordLedgerRequired({
+              user: updatedInvitee._id,
+              type: 'referral_welcome',
+              amount: welcomeRewardPoints,
+              description: `پاداش خوش‌آمدگویی دعوت توسط کاربر ${referrer._id}`,
+              balanceAfter: updatedInvitee.points,
+              sourceId: welcomeSourceId,
+              transactionId: welcomeTransactionId,
+              sourceUserId: referrer._id,
+              recipientUserId: updatedInvitee._id,
+              session
+            });
+            if (!ledgerResult.created) {
+              const error = new Error('Referral welcome reward was concurrently recorded; abort to preserve idempotency.');
+              error.code = 'REFERRAL_WELCOME_DUPLICATE_RACE';
+              throw error;
+            }
+            welcomeCreditCreated = true;
+          }
+        }
+        directRelationship.welcomeRewardStatus = 'paid';
+        directRelationship.welcomeRewardTransactionId = welcomeTransactionId;
+        if (typeof directRelationship.save === 'function') await directRelationship.save({ session });
+        welcomePaid = true;
+      }
+    }
+
     referralDiagnostic('transaction_work_complete', {
       initialPaid,
+      welcomePaid,
       initialRewardStatus: directRelationship?.initialRewardStatus || null,
+      welcomeRewardStatus: directRelationship?.welcomeRewardStatus || null,
       referralInitialRewardEligible: Boolean(invitee.referralInitialRewardEligible)
     });
 
@@ -243,6 +311,8 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
       linked: linkedNow || Boolean(invitee.referredBy),
       created: linkedNow,
       initialPaid,
+      welcomePaid,
+      welcomeRewardPoints: welcomeCreditCreated ? welcomeRewardPoints : 0,
       referrerId: referrer._id,
       referredUserId: invitee._id,
       notification: initialCreditCreated && initialPaid && Number(initialRewardPoints) === 10
@@ -350,7 +420,7 @@ async function distributeReferralCommissions(earningEntry, session) {
   const seen = new Set([String(origin._id)]);
   let child = origin;
   for (let level = 1; level <= rates.length && child?.referredBy; level += 1) {
-    const ancestor = await sessionQuery(User.findById(child.referredBy).select('_id telegramId referredBy isBanned accountReviewStatus referralRiskBlocked referralRiskScore'), session);
+    const ancestor = await sessionQuery(User.findById(child.referredBy).select('_id telegramId referredBy isBanned accountReviewStatus referralRiskBlocked referralRiskScore phoneCountryCode phoneVerifiedAt referralMessageConsent telegramBlockedAt language'), session);
     if (!ancestor || seen.has(String(ancestor._id))) break;
     seen.add(String(ancestor._id));
     pathUsers.push(ancestor);
@@ -394,6 +464,20 @@ async function distributeReferralCommissions(earningEntry, session) {
           error.code = 'REFERRAL_COMMISSION_DUPLICATE_RACE';
           throw error;
         }
+        const { enqueueReferralCommissionNotification } = require('./retentionNotifications');
+        await enqueueReferralCommissionNotification({
+          entry: ledgerResult.entry || {
+            user: ancestor._id,
+            amount: points,
+            currency: 'points',
+            sourceId,
+            transactionId,
+            referralLevel: level,
+            commissionRatePercent: rates[level - 1]
+          },
+          user: updatedReferrer,
+          session
+        });
         paid.push({ level, recipientId: ancestor._id, amount: points, transactionId });
       }
     }
@@ -402,4 +486,12 @@ async function distributeReferralCommissions(earningEntry, session) {
   return paid;
 }
 
-module.exports = { linkReferral, findReferrerByIdentifier, linkReferralByIdentifier, linkReferralByCode, distributeReferralCommissions, deterministicTransactionId };
+module.exports = {
+  DEFAULT_REFERRAL_WELCOME_REWARD_POINTS,
+  linkReferral,
+  findReferrerByIdentifier,
+  linkReferralByIdentifier,
+  linkReferralByCode,
+  distributeReferralCommissions,
+  deterministicTransactionId
+};

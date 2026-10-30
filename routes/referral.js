@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
 const { requireUnifiedAuth } = require('../utils/unifiedAuth');
+const { sensitiveRateLimit } = require('../utils/apiSecurity');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 const PointsLedger = require('../models/PointsLedger');
@@ -20,7 +21,7 @@ const { buildReferralViewData, calculateReferralEarningsTotal } = require('../ut
 
 const { withMembership } = require('../utils/membership');
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
-const REFERRAL_LEDGER_TYPES = ['referral_initial', 'referral_bonus', 'referral_commission'];
+const REFERRAL_LEDGER_TYPES = ['referral_initial', 'referral_bonus', 'referral_commission', 'referral_welcome'];
 const HISTORY_LIMIT = 40;
 
 function utcMonthStart(date = new Date()) {
@@ -92,12 +93,13 @@ router.get('/me', auth, async (req, res) => {
   const ledgerTotals = Object.fromEntries(referralLedgerRows.map(row => [row._id, Number(row.total) || 0]));
   const initialInviteRewardPoints = ledgerTotals.referral_initial || 0;
   const milestoneRewardPoints = ledgerTotals.referral_bonus || 0;
+  const welcomeRewardPoints = ledgerTotals.referral_welcome || 0;
   const totalTeamCommissionPoints = ledgerTotals.referral_commission || 0;
   const totalReferralEarningsPoints = calculateReferralEarningsTotal({
     initialInviteRewardPoints,
     milestoneRewardPoints,
     teamCommissionPoints: totalTeamCommissionPoints
-  });
+  }) + welcomeRewardPoints;
 
   const activeCounts = {};
   for (const person of descendants) {
@@ -144,6 +146,7 @@ router.get('/me', auth, async (req, res) => {
       : null;
     const kind = row.type === 'referral_initial' ? 'direct_invite'
       : row.type === 'referral_bonus' ? 'milestone'
+        : row.type === 'referral_welcome' ? 'welcome'
         : 'commission';
     return {
       id: String(row._id),
@@ -179,7 +182,8 @@ router.get('/me', auth, async (req, res) => {
       totalReferralCommissionPoints: totalTeamCommissionPoints,
       initialInviteRewardPoints,
       milestoneRewardPoints,
-      totalInviteRewardsPoints: initialInviteRewardPoints + milestoneRewardPoints,
+      welcomeRewardPoints,
+      totalInviteRewardsPoints: initialInviteRewardPoints + milestoneRewardPoints + welcomeRewardPoints,
       totalTeamCommissionPoints,
       levelCounts: referralView.levelCounts,
       activeLevelCounts: activeCounts,
@@ -200,7 +204,7 @@ router.get('/me', auth, async (req, res) => {
 });
 
 // POST /api/referral/claim — اتمیک و تکرارنشدنی؛ سوابق milestone قبلی حفظ می‌شوند.
-router.post('/claim', auth, async (req, res) => {
+router.post('/claim', auth, sensitiveRateLimit('claim'), async (req, res) => {
   const taskId = referralTaskId(req.body && req.body.taskId);
   if (!taskId) {
     return res.status(400).json({ success: false, message: 'تسک ریفرال نامعتبر است.', code: 'INVALID_REFERRAL_TASK' });

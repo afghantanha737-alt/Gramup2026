@@ -18,8 +18,11 @@ const pointsLedgerSchema = new mongoose.Schema(
         'daily_chest',     // صندوق پاداش روزانه
         'ad_reward',       // legacy historical records; new ad rewards are disabled
         'spin',            // برد پوینت از گردونه شانس
+        'mining_claim',    // تسویه‌ی پوینت استخراج‌شده
+        'mining_upgrade',  // هزینه‌ی ارتقای ماینر
         'referral_bonus',  // پاداش دعوت دوست (وقتی دعوت‌شده به حد نصاب تسک برسد)
         'referral_initial', // پاداش اولیه‌ی اتصال Referral
+        'referral_welcome', // welcome credit created by the retention flow
         'referral_commission', // کمیسیون چندسطحی بر درآمد اصلی
         'leaderboard_reward', // جایزه رتبه برتر leaderboard هفتگی
         'exchange_out',    // کسر شده در تبدیل (پوینت->GRAM یا GRAM->پوینت)
@@ -58,5 +61,41 @@ pointsLedgerSchema.index({ user: 1, currency: 1, createdAt: 1 });
 pointsLedgerSchema.index({ currency: 1, type: 1, createdAt: 1 });
 pointsLedgerSchema.index({ sourceId: 1 }, { unique: true, sparse: true });
 pointsLedgerSchema.index({ transactionId: 1 }, { unique: true, sparse: true });
+
+const IMMUTABLE_ERROR = 'PointsLedger records are append-only and cannot be mutated.';
+
+function rejectMutation(next) {
+  const error = new Error(IMMUTABLE_ERROR);
+  error.code = 'POINTS_LEDGER_APPEND_ONLY';
+  next(error);
+}
+
+// Ledger history is an accounting record. Updates/deletes must be represented
+// by a new signed entry (for example, an admin adjustment), never by rewriting
+// history. Collection-level Mongo privileges are still required to prevent a
+// privileged raw-driver writer from bypassing these application hooks.
+for (const method of [
+  'updateOne', 'updateMany', 'findOneAndUpdate', 'findByIdAndUpdate',
+  'replaceOne', 'findOneAndReplace', 'findOneAndDelete', 'findByIdAndDelete',
+  'deleteOne', 'deleteMany', 'findOneAndRemove', 'remove'
+]) {
+  pointsLedgerSchema.pre(method, rejectMutation);
+}
+
+pointsLedgerSchema.pre('bulkWrite', function rejectBulkMutation(next, operations) {
+  const mutating = (operations || []).some(operation => {
+    const name = Object.keys(operation || {})[0];
+    return name && name !== 'insertOne';
+  });
+  if (mutating) return rejectMutation(next);
+  return next();
+});
+
+pointsLedgerSchema.pre('save', function rejectResave(next) {
+  if (!this.isNew) return rejectMutation(next);
+  return next();
+});
+
+pointsLedgerSchema.statics.APPEND_ONLY_ERROR = IMMUTABLE_ERROR;
 
 module.exports = mongoose.model('PointsLedger', pointsLedgerSchema);

@@ -80,5 +80,6 @@ userSchema.index({ referralRiskScore: -1, createdAt: -1 });
 userSchema.index({ referredBy: 1, createdAt: -1 });
 userSchema.index({ referredBy: 1, referralEligibilityStatus: 1, createdAt: -1 });
 userSchema.index({ isBanned: 1, telegramBlockedAt: 1 });
+userSchema.index({ lastCheckIn: 1, streak: 1, isBanned: 1, telegramBlockedAt: 1, referralMessageConsent: 1 });
 
 module.exports = mongoose.model('User', userSchema);

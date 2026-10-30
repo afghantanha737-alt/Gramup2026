@@ -16,6 +16,7 @@ const modelPaths = {
   Settings: require.resolve('../models/Settings'),
   ReferralRelationship: require.resolve('../models/ReferralRelationship'),
   PointsLedger: require.resolve('../models/PointsLedger'),
+  Transaction: require.resolve('../models/Transaction'),
   NotificationDelivery: require.resolve('../utils/notificationDelivery'),
   MongoTransaction: require.resolve('../utils/mongoTransaction')
 };
@@ -57,10 +58,24 @@ FakePointsLedger.prototype.save = async function save() {
 };
 FakePointsLedger.findOne = filter => query(entries.has(filter.sourceId) ? { _id: filter.sourceId } : null);
 
+const journalEntries = new Map();
+function FakeTransaction(payload) { this.payload = payload; }
+FakeTransaction.prototype.save = async function save({ session } = {}) {
+  assert.ok(session, 'journal must use the same financial transaction');
+  if (journalEntries.has(this.payload.sourceId)) throw Object.assign(new Error('duplicate journal'), { code: 11000 });
+  const row = { ...this.payload };
+  journalEntries.set(row.sourceId, row);
+  return row;
+};
+FakeTransaction.findOne = filter => query([...journalEntries.values()].find(row =>
+  row.user === filter.user && row.currency === filter.currency && filter.$or.some(term =>
+    term.sourceId === row.sourceId || term.transactionId === row.transactionId)) || null);
+
 require.cache[modelPaths.User] = { id: modelPaths.User, filename: modelPaths.User, loaded: true, exports: fakeUser };
 require.cache[modelPaths.Settings] = { id: modelPaths.Settings, filename: modelPaths.Settings, loaded: true, exports: fakeSettings };
 require.cache[modelPaths.ReferralRelationship] = { id: modelPaths.ReferralRelationship, filename: modelPaths.ReferralRelationship, loaded: true, exports: fakeRelationship };
 require.cache[modelPaths.PointsLedger] = { id: modelPaths.PointsLedger, filename: modelPaths.PointsLedger, loaded: true, exports: FakePointsLedger };
+require.cache[modelPaths.Transaction] = { id: modelPaths.Transaction, filename: modelPaths.Transaction, loaded: true, exports: FakeTransaction };
 require.cache[modelPaths.NotificationDelivery] = { id: modelPaths.NotificationDelivery, filename: modelPaths.NotificationDelivery, loaded: true, exports: { sendNotificationOnce: async () => { notificationCount += 1; return { status: 'sent' }; } } };
 require.cache[modelPaths.MongoTransaction] = { id: modelPaths.MongoTransaction, filename: modelPaths.MongoTransaction, loaded: true, exports: { withMongoTransaction: async work => work({ id: 'tx-test' }) } };
 
@@ -77,6 +92,7 @@ const { distributeReferralCommissions } = require('../utils/referralSystem');
   assert.deepStrictEqual([parent1, parent2, parent3, parent4].map(user => user.points), [10, 5, 3, 1]);
   assert.ok(paid.every(entry => entry.currency === 'points'));
   assert.deepStrictEqual(relationships.map(row => row.level), [1, 2, 3, 4]);
+  assert.strictEqual(journalEntries.size, entries.size, 'every earning and commission must have a Transactions mirror');
 
   const duplicate = await distributeReferralCommissions(earning, { id: 'tx-2' });
   assert.deepStrictEqual(duplicate, []);

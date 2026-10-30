@@ -4,6 +4,7 @@ const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
 const { requireUnifiedAuth } = require('../utils/unifiedAuth');
 const { withMembership } = require('../utils/membership');
+const { sensitiveRateLimit } = require('../utils/apiSecurity');
 const User = require('../models/User');
 const TonProofChallenge = require('../models/TonProofChallenge');
 const { createProofPayload, verifyTonProof, SUPPORTED_NETWORK, PROOF_MAX_AGE_SEC } = require('../utils/tonProof');
@@ -32,7 +33,7 @@ function publicWallet(user) {
   };
 }
 
-router.post('/payload', auth, async (req, res) => {
+router.post('/payload', auth, sensitiveRateLimit('wallet_proof', { ipMaxRequests: 30, userMaxRequests: 10 }), async (req, res) => {
   const domain = expectedDomain(req);
   if (!domain) return res.status(503).json({ success: false, code: 'TON_PROOF_DOMAIN_NOT_CONFIGURED', message: 'TON Proof هنوز برای این محیط پیکربندی نشده است.' });
   const payload = createProofPayload();
@@ -41,7 +42,7 @@ router.post('/payload', auth, async (req, res) => {
   res.json({ success: true, payload, domain, network: SUPPORTED_NETWORK, expiresAt: expiresAt.toISOString() });
 });
 
-router.post('/verify', auth, async (req, res) => {
+router.post('/verify', auth, sensitiveRateLimit('wallet_proof', { ipMaxRequests: 30, userMaxRequests: 10 }), async (req, res) => {
   const domain = expectedDomain(req);
   if (!domain) return res.status(503).json({ success: false, code: 'TON_PROOF_DOMAIN_NOT_CONFIGURED', message: 'TON Proof هنوز برای این محیط پیکربندی نشده است.' });
   const proof = req.body?.proof;

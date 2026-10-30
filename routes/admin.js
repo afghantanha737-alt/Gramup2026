@@ -1688,19 +1688,21 @@ router.delete('/users/:id', async (req, res) => {
       const dependentCount = await User.countDocuments({ referredBy: user._id }).session(session);
       if (dependentCount > 0) return { hasDependents: true, dependentCount };
 
+      const financialLinks = { $or: [
+        { user: user._id }, { sourceUserId: user._id }, { recipientUserId: user._id }
+      ] };
+      const [ledgerHistory, transactionHistory] = await Promise.all([
+        PointsLedger.exists(financialLinks).session(session),
+        require('../models/Transaction').exists(financialLinks).session(session)
+      ]);
+      if (ledgerHistory || transactionHistory) return { hasFinancialHistory: true };
+
       const referrer = user.referredBy
         ? await User.findById(user.referredBy).session(session)
         : null;
 
       await ReferralRelationship.deleteMany({
         $or: [{ referrerId: user._id }, { referredUserId: user._id }]
-      }).session(session);
-      await PointsLedger.deleteMany({
-        $or: [
-          { user: user._id },
-          { sourceUserId: user._id },
-          { recipientUserId: user._id }
-        ]
       }).session(session);
       await TaskCompletion.deleteMany({ user: user._id }).session(session);
       await LatestPostEngagementState.deleteMany({ user: user._id }).session(session);
@@ -1740,6 +1742,10 @@ router.delete('/users/:id', async (req, res) => {
     });
 
     if (outcome.missing) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
+    if (outcome.hasFinancialHistory) {
+      return res.status(409).json({ success: false, code: 'FINANCIAL_HISTORY_IMMUTABLE',
+        message: 'این حساب سابقه مالی دارد؛ برای حفظ دفتر کل حذف نمی‌شود. حساب را مسدود کنید.' });
+    }
     if (outcome.hasDependents) {
       return res.status(409).json({
         success: false,
@@ -2429,6 +2435,7 @@ router.put('/settings', async (req, res) => {
     dailyCheckInPoints: v => v >= 0,
     streakBonusPoints: v => v >= 0,
     gramUsdPrice: v => v >= 0,
+    referralWelcomeRewardPoints: v => Number.isSafeInteger(v) && v >= 0 && v <= 1000000,
     dailyReminderLocalHour: v => Number.isInteger(v) && v >= 0 && v <= 23,
     dailyReminderLocalMinute: v => Number.isInteger(v) && v >= 0 && v <= 59
   };

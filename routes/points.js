@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
 const { requireUnifiedAuth } = require('../utils/unifiedAuth');
+const { sensitiveRateLimit } = require('../utils/apiSecurity');
 const { recordLedgerRequired } = require('../utils/ledger');
 const Settings = require('../models/Settings');
 const User = require('../models/User');
@@ -336,7 +337,7 @@ router.post('/daily-chest', auth, async (req, res) => {
   res.status(410).json({ success: false, code: 'DAILY_CHEST_DISABLED', message: 'Daily Bonus Chest is currently disabled.' });
 });
 // POST /api/points/checkin
-router.post('/checkin', auth, async (req, res) => {
+router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
   const result = await claimDailyCheckin(req.dbUser._id, { now: new Date() });
   if (result.status === 'already_claimed') {
     return res.status(400).json({ success: false, message: 'امروز قبلاً ورود روزانه ثبت شده است.', code: 'ALREADY_CHECKED_IN' });
@@ -362,20 +363,27 @@ const round6 = n => Number(Number(n).toFixed(6));
  * body: { direction: 'points_to_gram' | 'gram_to_points', amount }
  * برای سازگاری با نسخه‌ی قبلی، body.points هم به‌عنوان amount برای points_to_gram پذیرفته می‌شود.
  */
-router.post('/exchange', auth, async (req, res) => {
+router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
   const body = req.body || {};
+  if (body.direction != null && !['points_to_gram', 'gram_to_points'].includes(body.direction)) {
+    return res.status(400).json({ success: false, code: 'INVALID_DIRECTION', message: 'جهت تبدیل معتبر نیست.' });
+  }
+  const rawAmount = body.amount != null ? body.amount : body.points;
+  if (!['number', 'string'].includes(typeof rawAmount)) {
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار تبدیل نامعتبر است.' });
+  }
   const direction = body.direction === 'gram_to_points' ? 'gram_to_points' : 'points_to_gram';
 
-  if (!settings.rate || settings.rate <= 0) {
+  if (!Number.isFinite(settings.rate) || settings.rate <= 0) {
     return res.status(400).json({ success: false, message: 'نرخ تبدیل نامعتبر است.', code: 'INVALID_RATE' });
   }
 
   if (direction === 'points_to_gram') {
     const points = Math.floor(Number(body.amount != null ? body.amount : body.points) || 0);
 
-    if (!Number.isFinite(points) || points <= 0) {
+    if (!Number.isSafeInteger(points) || points <= 0) {
       return res.status(400).json({ success: false, message: 'مقدار پوینت نامعتبر است.', code: 'INVALID_AMOUNT' });
     }
 
@@ -428,7 +436,7 @@ router.post('/exchange', auth, async (req, res) => {
 
   const pointsGained = Math.floor(gram / settings.rate);
 
-  if (pointsGained <= 0) {
+  if (!Number.isSafeInteger(pointsGained) || pointsGained <= 0) {
     return res.status(400).json({ success: false, message: 'مقدار GRAM برای تبدیل بسیار کم است.', code: 'INVALID_AMOUNT' });
   }
 
@@ -475,10 +483,13 @@ router.post('/exchange', auth, async (req, res) => {
 });
 
 // POST /api/points/withdraw — برداشت از موجودی GRAM (نه مستقیم از پوینت)
-router.post('/withdraw', auth, async (req, res) => {
+router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
   const { gram, address } = req.body || {};
+  if (!['number', 'string'].includes(typeof gram) || typeof address !== 'string') {
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار برداشت یا آدرس نامعتبر است.' });
+  }
   const amount = round6(gram);
   const walletAddress = String(address || '').trim();
   const minWithdrawGram = round6(settings.minWithdrawPoints * settings.rate);
@@ -640,7 +651,7 @@ router.get('/deposits', auth, async (req, res) => {
   res.json({ success: true, deposits: deposits.map(publicDepositRecord) });
 });
 
-router.post('/deposits', auth, async (req, res) => {
+router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) => {
   const settings = await Settings.getGlobal();
   const config = getDepositSettingsStatus(settings);
   if (!config.ready) {
@@ -718,7 +729,7 @@ router.post('/deposits', auth, async (req, res) => {
   } });
 });
 
-router.post('/deposits/:id/verify', auth, async (req, res) => {
+router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) {
     return res.status(404).json({ success: false, message: 'درخواست Deposit پیدا نشد.' });
   }
@@ -905,7 +916,7 @@ function publicSwapIntent(intent) {
 // Creates a server-priced, single-pending Swap intent. The wallet signs the
 // transaction; no points are credited until the receiving transaction is
 // found, finalized and matched to this exact reference and source wallet.
-router.post('/swap/gram-to-points/intents', auth, async (req, res) => {
+router.post('/swap/gram-to-points/intents', auth, sensitiveRateLimit('general'), async (req, res) => {
   const settings = await Settings.getGlobal();
   const config = getDepositSettingsStatus(settings);
   const wallet = req.dbUser.connectedWallet || {};
@@ -958,7 +969,7 @@ router.get('/swap/gram-to-points/intents/:id', auth, async (req, res) => {
   return res.json({ success: true, intent: publicSwapIntent(intent) });
 });
 
-router.post('/swap/gram-to-points/intents/:id/verify', auth, async (req, res) => {
+router.post('/swap/gram-to-points/intents/:id/verify', auth, sensitiveRateLimit('general'), async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
   const intent = await GramSwapIntent.findOne({ _id: req.params.id, user: req.dbUser._id });
   if (!intent) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
@@ -1029,7 +1040,10 @@ router.get('/vip/plans', auth, async (req, res) => {
   });
 });
 
-router.post('/vip/purchase', auth, async (req, res) => {
+router.post('/vip/purchase', auth, sensitiveRateLimit('claim'), async (req, res) => {
+  if (!['number', 'string'].includes(typeof req.body?.planNumber)) {
+    return res.status(400).json({ success: false, code: 'VIP_PLAN_INVALID', message: 'پلن VIP نامعتبر است.' });
+  }
   const planNumber = Number(req.body?.planNumber);
   if (!Number.isInteger(planNumber) || planNumber < 1 || planNumber > 10) {
     return res.status(400).json({ success: false, code: 'VIP_PLAN_INVALID', message: 'پلن VIP نامعتبر است.' });
@@ -1192,7 +1206,7 @@ router.post('/vip/purchase', auth, async (req, res) => {
   return res.status(operation.status).json(operation.body);
 });
 
-router.post('/vip/:subscriptionId/claim', auth, async (req, res) => {
+router.post('/vip/:subscriptionId/claim', auth, sensitiveRateLimit('claim'), async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.subscriptionId)) {
     return res.status(400).json({ success: false, code: 'VIP_SUBSCRIPTION_INVALID', message: 'شناسه اشتراک VIP نامعتبر است.' });
   }

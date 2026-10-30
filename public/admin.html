@@ -625,6 +625,9 @@
           <p class="small">پاداش مستقیم برای هر دعوت معتبر دقیقاً ۱۰ Points است. کمیسیون فقط از Points واقعاً کسب‌شده در task، check-in و leaderboard محاسبه می‌شود؛ تبدیل موجودی و پاداش‌های Referral کمیسیون ایجاد نمی‌کنند.</p>
           <label>پاداش ثابت دعوت مستقیم (Points)</label>
           <input id="setReferralInitialReward" type="number" value="10" disabled>
+          <label>پاداش یک‌بارۀ خوش‌آمدگویی دعوت‌شده (Points)</label>
+          <input id="setReferralWelcomeReward" type="number" value="5" min="0" max="1000000" step="1">
+          <p class="small">پیش‌فرض ۵ پوینت است؛ مقدار صفر این پاداش را برای دعوت‌های جدید غیرفعال می‌کند. موجودی قبلی کاربران تغییر نمی‌کند.</p>
           <label>نرخ ثابت کمیسیون Referral (قابل‌گسترش تا ۱۰ Level)</label>
           <div id="referralLevelRates"></div>
         </div>
@@ -2496,6 +2499,7 @@ async function loadSettings() {
     document.getElementById("setDaily").value = s.dailyCheckInPoints ?? "";
     document.getElementById("setStreakBonus").value = s.streakBonusPoints ?? "";
     document.getElementById("setReferralInitialReward").value = s.referralInitialRewardPoints ?? 10;
+    document.getElementById("setReferralWelcomeReward").value = s.referralWelcomeRewardPoints ?? 5;
     renderReferralRates();
     document.getElementById("setWeeklyLeaderboardEnabled").checked = s.weeklyLeaderboardEnabled !== false;
     [0, 1, 2].forEach(i => { document.getElementById(`setWeeklyPrize${i + 1}`).value = s.weeklyLeaderboardPrizes?.[i] ?? [500, 250, 100][i]; });
@@ -2524,6 +2528,7 @@ async function saveSettings() {
     weeklyLeaderboardEnabled: document.getElementById("setWeeklyLeaderboardEnabled").checked,
     weeklyLeaderboardPrizes: [1, 2, 3].map(i => Number(document.getElementById(`setWeeklyPrize${i}`).value) || 0),
     referralInitialRewardPoints: Number(document.getElementById("setReferralInitialReward").value),
+    referralWelcomeRewardPoints: Number(document.getElementById("setReferralWelcomeReward").value),
     referralLevelRates: [10, 5, 3, 1, 1, 1, 1, 1, 1, 1],
     depositEnabled: document.getElementById("setDepositEnabled").checked,
     depositNetwork: "TON_MAINNET",

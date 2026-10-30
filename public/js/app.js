@@ -82,13 +82,82 @@ const state = {
   vipServerOffsetMs: 0,
   captchaA: 0,
   captchaB: 0,
-  initialized: false
+  initialized: false,
+  readModelCacheHydrated: false,
+  readModelStale: false,
+  readModelProfileConfirmed: false,
+  readModelTasksConfirmed: false,
+  financialDataConfirmed: false,
+  membershipDataConfirmed: false,
+  verifiedSessionUserId: ""
 };
 window.state = state;
 const latestPostOpenedTaskIds = new Set();
 const latestPostOpenedAt = new Map();
 const latestPostOpeningTaskIds = new Set();
 let dailyCheckinTimer = null;
+
+const readModelCache = window.GramupReadModelCache
+  ? window.GramupReadModelCache({ ttlMs: 2 * 60 * 1000 })
+  : null;
+window.gramupReadModelCache = readModelCache;
+
+function updateReadModelFreshness() {
+  state.readModelStale = !(state.readModelProfileConfirmed && state.readModelTasksConfirmed);
+  document.body.classList.toggle("read-model-stale", state.readModelStale);
+  document.body.dataset.readModelState = state.readModelStale ? "stale" : "fresh";
+  const content = document.querySelector("#content");
+  if (content) {
+    content.dataset.readModelState = state.readModelStale ? "stale" : "fresh";
+    content.setAttribute("aria-busy", state.readModelStale ? "true" : "false");
+  }
+  const protectedSelectors = [
+    "#checkinBtn", "#submitWithdraw", "#submitExchange", "#depositVerifyButton",
+    "[data-verify]", "[data-latest-post-open]", "[data-latest-post-check]",
+    "[data-upload-screenshot]", "[data-referral-claim]", "[data-vip-claim]", ".vipClaimAll"
+  ].join(",");
+  document.querySelectorAll(protectedSelectors).forEach(element => {
+    if (state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed) {
+      element.disabled = true;
+      element.setAttribute("aria-disabled", "true");
+      element.dataset.readModelDisabled = "true";
+    } else if (element.dataset.readModelDisabled === "true") {
+      element.disabled = false;
+      element.removeAttribute("aria-disabled");
+      delete element.dataset.readModelDisabled;
+    }
+  });
+}
+
+function invalidateReadModelCache() {
+  try { readModelCache?.deactivate(); } catch (error) { console.warn("Read-model cache invalidation failed:", error); }
+  state.readModelCacheHydrated = false;
+  state.readModelProfileConfirmed = false;
+  state.readModelTasksConfirmed = false;
+  state.financialDataConfirmed = false;
+  state.membershipDataConfirmed = false;
+  state.verifiedSessionUserId = "";
+  updateReadModelFreshness();
+}
+window.clearReadModelCacheOnLogout = invalidateReadModelCache;
+
+function readModelActionAllowed() {
+  if (!state.readModelStale && state.financialDataConfirmed && state.membershipDataConfirmed) return true;
+  toast(t("read_model_refreshing"), "warning");
+  updateReadModelFreshness();
+  return false;
+}
+function guardReadModelAction(event) {
+  if (!state.readModelStale && state.financialDataConfirmed && state.membershipDataConfirmed) return;
+  const target = event.target?.closest?.(
+    "#checkinBtn,#submitWithdraw,#submitExchange,#depositVerifyButton,[data-verify],[data-latest-post-open],[data-latest-post-check],[data-upload-screenshot],[data-referral-claim],[data-vip-claim],.vipClaimAll"
+  );
+  if (!target) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  toast(t("read_model_refreshing"), "warning");
+}
+document.addEventListener("click", guardReadModelAction, true);
 
 /* ================= DOM HELPERS ================= */
 const $ = (selector) => document.querySelector(selector);
@@ -316,6 +385,7 @@ async function api(url, options = {}) {
       });
     }
     const authFailure = response.status === 401 || response.status === 403;
+    if (authFailure) invalidateReadModelCache();
     const err = new Error(response.status === 401 ? t('auth_error') : response.status === 403 ? t('auth_forbidden') : (data?.message || t("error_generic")));
     err.code = data?.code || (response.status === 401 ? 'AUTH_REQUIRED' : response.status === 403 ? 'AUTH_FORBIDDEN' : null);
     err.status = response.status;
@@ -579,13 +649,19 @@ async function enforceMembership() {
   try {
     const data = await fetchMembership(false);
     if (data.verified) {
+      state.membershipDataConfirmed = true;
+      updateReadModelFreshness();
       if (state.gateActive) hideMembershipGate();
       return true;
     }
+    state.membershipDataConfirmed = false;
+    updateReadModelFreshness();
     showMembershipGate(data);
     return false;
   } catch (error) {
     // اگر نتوانستیم عضویت را بررسی کنیم، اجازه‌ی ورود نمی‌دهیم
+    state.membershipDataConfirmed = false;
+    updateReadModelFreshness();
     if (!state.gateActive) {
       showMembershipGate({ required: true, verified: false, unavailable: true, fetchFailed: true, channels: [] });
     }
@@ -849,6 +925,93 @@ async function setReferralMessageConsent(consent) {
 window.setReferralMessageConsent = setReferralMessageConsent;
 
 /* ================= DATA LOADERS ================= */
+function applyCachedReadModel(entry) {
+  if (!entry || !state.verifiedSessionUserId || entry.userId !== state.verifiedSessionUserId) return false;
+  const profile = entry.profile || {};
+  state.points = Number(profile.points) || 0;
+  state.gramBalance = Number(profile.gramBalance) || 0;
+  state.rate = Number(profile.rate) || 0;
+  state.streak = Number(profile.streak) || 0;
+  state.canCheckIn = Boolean(profile.canCheckIn);
+  state.totalCheckins = Number(profile.totalCheckins) || 0;
+  state.minWithdrawGram = Number(profile.minWithdrawGram) || 0;
+  state.nextResetAt = Number(profile.nextResetAt) || 0;
+  state.totalEarnedPoints = Number(profile.totalEarnedPoints) || 0;
+  state.level = profile.level || null;
+  state.withdrawalProgress = Number(profile.withdrawalProgress) || 0;
+  state.withdrawalRemainingGram = Number(profile.withdrawalRemainingGram) || 0;
+  state.gramUsdPrice = Number(profile.gramUsdPrice) || 0;
+  if (profile.firstName) state.user = { ...(state.user || {}), first_name: profile.firstName };
+  const tasks = entry.tasks || {};
+  state.tasks = Array.isArray(tasks.tasks) ? tasks.tasks : [];
+  state.completions = Array.isArray(tasks.completions) ? tasks.completions : [];
+  latestPostOpenedTaskIds.clear();
+  latestPostOpenedAt.clear();
+  (Array.isArray(tasks.latestPostStates) ? tasks.latestPostStates : []).forEach(item => {
+    if (item?.task && item.openedAt) {
+      latestPostOpenedTaskIds.add(String(item.task));
+      const openedAt = new Date(item.openedAt).getTime();
+      if (Number.isFinite(openedAt)) latestPostOpenedAt.set(String(item.task), openedAt);
+    }
+  });
+  const serverNow = Number(tasks.serverNow);
+  state.tasksServerOffsetMs = Number.isFinite(serverNow) && serverNow > 0 ? serverNow - Date.now() : 0;
+  state.readModelCacheHydrated = true;
+  state.readModelStale = true;
+  state.readModelProfileConfirmed = false;
+  state.readModelTasksConfirmed = false;
+  state.financialDataConfirmed = false;
+  updateHeader();
+  updateReadModelFreshness();
+  return true;
+}
+
+function persistReadModelCache() {
+  if (!readModelCache || !state.verifiedSessionUserId) return;
+  readModelCache.write(state.verifiedSessionUserId, {
+    profile: {
+      points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
+      canCheckIn: state.canCheckIn, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
+      nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
+      withdrawalProgress: state.withdrawalProgress, withdrawalRemainingGram: state.withdrawalRemainingGram,
+      gramUsdPrice: state.gramUsdPrice, firstName: state.user?.first_name || ""
+    },
+    tasks: {
+      tasks: state.tasks, completions: state.completions,
+      latestPostStates: Array.from(latestPostOpenedTaskIds).map(task => ({ task, openedAt: new Date(latestPostOpenedAt.get(task) || Date.now()).toISOString() })),
+      serverNow: Date.now() + Number(state.tasksServerOffsetMs || 0)
+    }
+  });
+}
+
+async function hydrateReadModelAfterAuth() {
+  const userId = String(state.user?.telegramId || state.user?.id || "").trim();
+  if (!readModelCache || !userId) return false;
+  if (state.verifiedSessionUserId && state.verifiedSessionUserId !== userId) invalidateReadModelCache();
+  state.verifiedSessionUserId = userId;
+  readModelCache.activate(userId);
+  const entry = readModelCache.read(userId);
+  return applyCachedReadModel(entry);
+}
+
+let readModelRefreshPromise = null;
+async function refreshReadModelInBackground() {
+  if (!state.verifiedSessionUserId || readModelRefreshPromise) return readModelRefreshPromise;
+  readModelRefreshPromise = Promise.all([
+    loadUserData({ force: true }),
+    loadTasks({ force: true })
+  ]).then(() => {
+    persistReadModelCache();
+    updateReadModelFreshness();
+    rerenderActiveUserDataView();
+  }).catch(error => {
+    console.warn("Background read-model refresh failed:", error);
+    updateReadModelFreshness();
+  }).finally(() => { readModelRefreshPromise = null; });
+  return readModelRefreshPromise;
+}
+window.refreshReadModelInBackground = refreshReadModelInBackground;
+
 async function bootstrapAuth() {
   const params = new URLSearchParams(location.search);
   const ref = params.get("ref") || "";
@@ -863,8 +1026,11 @@ async function bootstrapAuth() {
       ? data.referralMessageConsent : "unset";
     state.user = { ...(state.user || {}), id: data.telegramId, telegramId: data.telegramId };
     if (data.firstName) state.user.first_name = data.firstName;
+    if (!data.telegramId) throw Object.assign(new Error("Verified identity missing"), { authFailure: true, status: 401 });
+    await hydrateReadModelAfterAuth();
   } catch (error) {
     console.warn("Bootstrap auth failed:", error);
+    if (error?.authFailure || error?.status === 401 || error?.status === 403) invalidateReadModelCache();
     state.language = localStorage.getItem("appLanguage") || "fa";
   }
 }
@@ -937,7 +1103,7 @@ const CLIENT_DATA_TTL_MS = 15000;
 let userDataRequestSequence = 0;
 async function loadUserData({ force = false } = {}) {
   const requestId = ++userDataRequestSequence;
-  if (!force && state.userDataLoadedAt && Date.now() - state.userDataLoadedAt < CLIENT_DATA_TTL_MS) return;
+  if (!force && !state.readModelStale && state.userDataLoadedAt && Date.now() - state.userDataLoadedAt < CLIENT_DATA_TTL_MS) return;
   const data = await api("/api/points/me");
   if (requestId !== userDataRequestSequence) return;
   state.points = Number(data?.points) || 0;
@@ -954,7 +1120,11 @@ async function loadUserData({ force = false } = {}) {
   state.withdrawalRemainingGram = Number(data?.withdrawalRemainingGram) || 0;
   state.gramUsdPrice = Number(data?.gramUsdPrice) || 0;
   state.userDataLoadedAt = Date.now();
+  state.readModelProfileConfirmed = true;
+  state.financialDataConfirmed = true;
+  updateReadModelFreshness();
   if (data?.firstName) state.user = { ...(state.user || {}), first_name: data.firstName };
+  persistReadModelCache();
   updateHeader();
 }
 
@@ -1037,6 +1207,7 @@ async function loadReferralData({ force = false } = {}) {
 }
 
 async function claimReferralTask(taskId) {
+  if (!readModelActionAllowed()) return;
   const task = state.referralTasks.find(item => item.id === taskId);
   if (!task || task.status !== "claimable") return;
 
@@ -1081,7 +1252,7 @@ let tasksRequestSequence = 0;
 let tasksLoadError = null;
 async function loadTasks({ force = false } = {}) {
   const requestId = ++tasksRequestSequence;
-  if (!force && state.tasksLoadedAt && Date.now() - state.tasksLoadedAt < CLIENT_DATA_TTL_MS) return state.tasks;
+  if (!force && !state.readModelStale && state.tasksLoadedAt && Date.now() - state.tasksLoadedAt < CLIENT_DATA_TTL_MS) return state.tasks;
   try {
     const data = await api("/api/tasks");
     if (requestId !== tasksRequestSequence) return state.tasks;
@@ -1096,6 +1267,9 @@ async function loadTasks({ force = false } = {}) {
     const serverNow = Number(data?.serverNow);
     state.tasksServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
     state.tasksLoadedAt = Date.now();
+    state.readModelTasksConfirmed = true;
+    updateReadModelFreshness();
+    persistReadModelCache();
     return state.tasks;
   } catch (error) {
     console.warn("Tasks failed:", error);
@@ -1394,6 +1568,7 @@ document.addEventListener("click", event => {
 });
 
 async function openLatestPostTask(url, taskId) {
+  if (!readModelActionAllowed()) return;
   const id = String(taskId || "");
   if (!id || !url || latestPostOpeningTaskIds.has(id)) return;
 
@@ -1449,6 +1624,7 @@ document.addEventListener("change", event => {
 });
 
 async function submitScreenshotTask(taskId, file, input) {
+  if (!readModelActionAllowed()) return;
   if (!file) return;
   if (file.size > 5 * 1024 * 1024) {
     toast(t("task_submission_too_large"), "error");
@@ -1505,6 +1681,7 @@ const taskHints = {};
 
 /** تسک‌های تلگرامی: بررسی خودکار عضویت با API ربات */
 async function verifyTelegramTask(taskId) {
+  if (!readModelActionAllowed()) return;
   const button = findByData("[data-verify]", "verify", taskId);
   if (button) { button.disabled = true; button.textContent = t("task_action_verifying"); }
 
@@ -1543,6 +1720,7 @@ async function verifyTelegramTask(taskId) {
 window.verifyTelegramTask = verifyTelegramTask;
 
 async function verifyLatestPostTask(taskId) {
+  if (!readModelActionAllowed()) return;
   const button = findByData("[data-latest-post-check]", "latestPostCheck", taskId);
   if (button) {
     button.disabled = true;
@@ -1683,6 +1861,7 @@ function renderDailyCheckinCard() {
   </section>`;
 }
 async function doCheckIn() {
+  if (!readModelActionAllowed()) return;
   const button = document.querySelector("#checkinBtn");
   if (button) { button.disabled = true; button.textContent = t("checkin_processing"); }
   try {
@@ -1888,6 +2067,7 @@ window.retryTasks = retryTasks;
 
 /* ================= WALLET ================= */
 function showWithdraw() {
+  if (!readModelActionAllowed()) return;
   if (state.gramBalance < state.minWithdrawGram) {
     toast(t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawGram, 6) }), "warning");
     return;
@@ -1915,6 +2095,7 @@ function hideWithdraw() {
 window.hideWithdraw = hideWithdraw;
 
 async function submitWithdraw() {
+  if (!readModelActionAllowed()) return;
   const gramInput = $("#withdrawPoints");
   const addressInput = $("#withdrawAddress");
   const error = $("#withdrawError");
@@ -1956,6 +2137,7 @@ window.submitWithdraw = submitWithdraw;
 let exchangeDirection = "points_to_gram"; // "points_to_gram" | "gram_to_points"
 
 function showExchange() {
+  if (!readModelActionAllowed()) return;
   if (state.points <= 0 && state.gramBalance <= 0) {
     toast(t("error_generic"), "warning");
     return;
@@ -2021,6 +2203,7 @@ function updateExchangePreview() {
 window.updateExchangePreview = updateExchangePreview;
 
 async function submitExchange() {
+  if (!readModelActionAllowed()) return;
   const input = $("#exchangePoints");
   const error = $("#exchangeError");
   const button = $("#submitExchange");
@@ -2182,6 +2365,7 @@ async function retryDepositHistory() { try { await refreshDepositHistory(); } ca
 window.retryDepositHistory = retryDepositHistory;
 
 function showDeposit() {
+  if (!readModelActionAllowed()) return;
   const overlay = $("#depositOverlay");
   const panel = $("#depositPanel");
   const disabled = $("#depositDisabledMessage");
@@ -2250,6 +2434,7 @@ async function loadDepositPanel() {
 }
 
 async function submitGramDeposit() {
+  if (!readModelActionAllowed()) return;
   const button = $("#depositVerifyButton");
   const input = $("#depositAmount");
   const amount = Number(input?.value || 0);
@@ -3020,6 +3205,7 @@ function renderProfileReferral() {
   const historyRows = history.map(item => {
     const kindKey = item.kind === "commission" ? "referral_history_commission"
       : item.kind === "milestone" ? "referral_history_milestone"
+        : item.kind === "welcome" ? "referral_history_welcome"
         : "referral_history_direct_invite";
     const title = t(kindKey);
     const sourceLabel = item.kind === "commission" ? t(`referral_source_${item.source || "other"}`) : "";
@@ -3568,6 +3754,7 @@ async function purchaseVipPlan(planNumber) {
 window.purchaseVipPlan = purchaseVipPlan;
 
 async function claimVipReward(subscriptionId, options = {}) {
+  if (!readModelActionAllowed()) return false;
   if (!subscriptionId || vipClaimingIds.has(subscriptionId) || (vipClaimAllBusy && !options.bulk)) return false;
   vipClaimingIds.add(subscriptionId);
   const scope = `vip_claim_${subscriptionId}`;
@@ -3719,34 +3906,63 @@ async function renderCurrentTab(requestId = navigationSequence) {
   const tab = state.activeTab;
   const isCurrentRender = () => requestId === navigationSequence && state.activeTab === tab;
   showLoading();
+  const cachedReadModelAvailable = state.readModelCacheHydrated && state.readModelStale;
   try {
     if (tab === "home") {
-      await Promise.all([loadUserData(), loadTasks()]);
-      if (!isCurrentRender()) return;
-      renderHome();
+      if (cachedReadModelAvailable) {
+        renderHome();
+        void refreshReadModelInBackground();
+      } else {
+        await Promise.all([loadUserData(), loadTasks()]);
+        if (!isCurrentRender()) return;
+        renderHome();
+      }
       void loadReferralData();
     } else if (tab === "tasks") {
-      await Promise.all([loadTasks(), loadUserData()]);
-      if (!isCurrentRender()) return;
-      renderTasks();
+      if (cachedReadModelAvailable) {
+        renderTasks();
+        void refreshReadModelInBackground();
+      } else {
+        await Promise.all([loadTasks(), loadUserData()]);
+        if (!isCurrentRender()) return;
+        renderTasks();
+      }
       void loadReferralData();
     } else if (tab === "vip") {
-      await loadUserData();
-      if (!isCurrentRender()) return;
-      await renderVipTab();
+      if (cachedReadModelAvailable) {
+        const content = $("#content");
+        if (content) content.innerHTML = renderProfileVip();
+        startVipCountdown();
+        void refreshReadModelInBackground();
+      } else {
+        await loadUserData();
+        if (!isCurrentRender()) return;
+        await renderVipTab();
+      }
     } else if (tab === "wallet") {
-      await loadUserData();
-      if (!isCurrentRender()) return;
-      renderWallet();
+      if (cachedReadModelAvailable) {
+        renderWallet();
+        void refreshReadModelInBackground();
+      } else {
+        await loadUserData();
+        if (!isCurrentRender()) return;
+        renderWallet();
+      }
     } else if (tab === "profile") {
       profileView = pendingProfileView || "menu";
       pendingProfileView = null;
-      await loadUserData();
-      if (!isCurrentRender()) return;
-      await renderProfile();
+      if (cachedReadModelAvailable) {
+        await renderProfile();
+        void refreshReadModelInBackground();
+      } else {
+        await loadUserData();
+        if (!isCurrentRender()) return;
+        await renderProfile();
+      }
       if (!isCurrentRender()) return;
       if (profileView === "referral") void loadReferralData();
     }
+    updateReadModelFreshness();
   } catch (error) {
     if (!isCurrentRender()) return;
     console.error("Render tab failed:", error);
@@ -3796,6 +4012,14 @@ async function boot() {
   }
 
   state.initialized = true;
+
+  // Auth is verified, but membership/financial data are not yet confirmed.
+  // Paint only the cached read model; all protected controls remain disabled.
+  if (state.readModelCacheHydrated) {
+    state.activeTab = "home";
+    renderHome();
+    updateReadModelFreshness();
+  }
 
   // عضویت اجباری: هر بار که مینی‌اپ باز می‌شود، عضویت «فعلی» کاربر از تلگرام بررسی می‌شود
   const allowed = await enforceMembership();

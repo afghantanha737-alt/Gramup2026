@@ -6,24 +6,25 @@ const MobileSession = require('../models/MobileSession');
 const { createMobileChallenge, findChallenge, consumeMobileChallenge, getMobileSession, hashToken } = require('../utils/mobileAuth');
 const User = require('../models/User');
 const { isVerifiedAllowedPhone } = require('../utils/telegramPhoneContact');
+const { mobileBootstrapRateLimit } = require('../utils/apiSecurity');
 
 function botDeepLink(token) {
   const username = String(process.env.BOT_USERNAME || '').replace(/^@/, '').trim();
   return username ? `https://t.me/${username}?start=mobile_${encodeURIComponent(token)}` : '';
 }
 
-router.post('/challenge', async (req, res) => {
+router.post('/challenge', mobileBootstrapRateLimit('challenge'), async (req, res) => {
   const challenge = await createMobileChallenge();
   res.json({ success: true, challengeId: challenge.challengeId, token: challenge.token, expiresAt: challenge.expiresAt, deepLink: botDeepLink(challenge.token) });
 });
 
-router.get('/challenge/:challengeId', async (req, res) => {
+router.get('/challenge/:challengeId', mobileBootstrapRateLimit('poll'), async (req, res) => {
   const challenge = await findChallenge(req.params.challengeId, String(req.query.token || ''));
   if (!challenge) return res.status(404).json({ success: false, code: 'MOBILE_CHALLENGE_INVALID', message: 'چالش ورود منقضی یا نامعتبر است.' });
   res.json({ success: true, status: challenge.status, telegramId: challenge.status === 'verified' ? challenge.telegramId : undefined, expiresAt: challenge.expiresAt });
 });
 
-router.post('/consume', async (req, res) => {
+router.post('/consume', mobileBootstrapRateLimit('consume'), async (req, res) => {
   const { challengeId, token } = req.body || {};
   const challenge = await findChallenge(String(challengeId || ''), String(token || ''));
   if (challenge?.status === 'verified' && challenge.telegramId) {

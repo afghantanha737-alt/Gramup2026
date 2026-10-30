@@ -2,7 +2,8 @@
 const express = require('express');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
-const { requireTelegramAuth, generateReferralCode } = require('../utils/telegramAuth');
+const { requireUnifiedAuth, isNativeSessionRequest } = require('../utils/unifiedAuth');
+const { requireTelegramAuth } = require('../utils/telegramAuth');
 const User = require('../models/User');
 const { hashNetworkIdentifier, hashDeviceIdentifier, assessReferralRisk } = require('../utils/referralRisk');
 const { linkReferral } = require('../utils/referralSystem');
@@ -13,7 +14,8 @@ const { botText } = require('../utils/botMessages');
 const { sendWelcomeMessage, welcomeTriggerKey } = require('../utils/telegramStart');
 const { getMaintenanceState, isAllowedTelegramId } = require('../utils/maintenance');
 
-const auth = requireTelegramAuth(process.env.BOT_TOKEN);
+const auth = requireUnifiedAuth(process.env.BOT_TOKEN);
+const telegramAuth = requireTelegramAuth(process.env.BOT_TOKEN);
 
 // GET /api/auth/me — بوت اولیه کاربر + اعمال کد رفرال از URL (fallback وقتی startapp نداریم)
 router.get('/me', auth, async (req, res) => {
@@ -37,7 +39,9 @@ router.get('/me', auth, async (req, res) => {
   }
 
   const autoWelcomeIdentifier = String(req.telegramStartParam || refFromUrl || '').trim();
-  if (autoWelcomeIdentifier && bot) {
+  // Native mobile sessions have no Telegram initData/start parameter. Never
+  // attempt a bot action with an unauthenticated/absent Telegram user object.
+  if (autoWelcomeIdentifier && bot && req.tgUser && !isNativeSessionRequest(req)) {
     try {
       await sendWelcomeMessage({
         message: { chat: { id: u.telegramId }, from: req.tgUser },
@@ -79,7 +83,9 @@ router.get('/me', auth, async (req, res) => {
   });
 });
 
-router.post('/request-phone-contact', auth, async (req, res) => {
+// Telegram-only bootstrap: requireTelegramAuth deliberately permits this route
+// before phone verification so the bot can receive the user's Contact.
+router.post('/request-phone-contact', telegramAuth, async (req, res) => {
   if (isVerifiedAllowedPhone(req.dbUser)) return res.json({ success: true, alreadyVerified: true });
   const username = String(process.env.BOT_USERNAME || '').replace(/^@/, '').trim();
   if (!username || !/^[A-Za-z0-9_]{5,32}$/.test(username)) {

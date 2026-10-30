@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
 const { requireUnifiedAuth } = require('../utils/unifiedAuth');
+const { sensitiveRateLimit } = require('../utils/apiSecurity');
 const { bot, checkChatMembership } = require('../utils/bot');
 const { recordLedgerRequired } = require('../utils/ledger');
 const Task = require('../models/Task');
@@ -134,7 +135,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 /** POST /api/tasks/:id/submission — screenshot proof for generic manual-verification tasks. */
-router.post('/:id/submission', auth, parseScreenshot, async (req, res) => {
+router.post('/:id/submission', auth, sensitiveRateLimit('task'), parseScreenshot, async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(404).json({ success: false, message: 'تسک پیدا نشد.', code: 'TASK_NOT_FOUND' });
@@ -216,7 +217,7 @@ router.post('/:id/submission', auth, parseScreenshot, async (req, res) => {
 });
 
 /** POST /api/tasks/:id/engagement/open — server-side Open→Check authorization. */
-router.post('/:id/engagement/open', auth, async (req, res) => {
+router.post('/:id/engagement/open', auth, sensitiveRateLimit('task'), async (req, res) => {
   const user = req.dbUser;
   const now = new Date();
   try {
@@ -276,7 +277,7 @@ router.post('/:id/engagement/open', auth, async (req, res) => {
 });
 
 /** POST /api/tasks/:id/engagement/check — pays only after a server-recorded Open and outside cooldown. */
-router.post('/:id/engagement/check', auth, async (req, res) => {
+router.post('/:id/engagement/check', auth, sensitiveRateLimit('claim'), async (req, res) => {
   const user = req.dbUser;
   const fail = (code, message, status = 409) => Object.assign(new Error(message), { code, status });
 
@@ -523,12 +524,15 @@ async function claimBioLinkTask(req, res, task) {
  * ارتباط" دیده می‌شود. این تغییر تضمین می‌کند همیشه یک پاسخ JSON
  * برگردد، هرچه که خطا باشد.
  */
-router.post('/:id/claim', auth, async (req, res) => {
+router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) => {
   try {
     const u = req.dbUser;
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'تسک پیدا نشد.', code: 'TASK_NOT_FOUND' });
+    }
     const task = await Task.findById(req.params.id);
 
-    if (!task || !task.isActive) {
+    if (!task || !task.isActive || (task.expiresAt && task.expiresAt <= new Date())) {
       return res.status(404).json({ success: false, message: 'تسک پیدا نشد.', code: 'TASK_NOT_FOUND' });
     }
     if (task.taskKind === BIO_LINK_TASK_KIND) return claimBioLinkTask(req, res, task);
@@ -568,6 +572,9 @@ router.post('/:id/claim', auth, async (req, res) => {
         const error = new Error('تسک پیدا نشد یا منقضی شده است.');
         error.code = 'TASK_FULL';
         throw error;
+      }
+      if (!Number.isFinite(currentTask.reward) || currentTask.reward <= 0) {
+        throw Object.assign(new Error('Task reward configuration is invalid.'), { code: 'TASK_SETUP_INCOMPLETE' });
       }
 
       const currentCompletion = await TaskCompletion.findOne({ user: u._id, task: currentTask._id }).session(session);
@@ -654,9 +661,12 @@ router.post('/:id/claim', auth, async (req, res) => {
     if (error.code === 'ALREADY_DONE' || error.code === 'TASK_FULL' || error?.code === 11000) {
       return res.status(409).json({ success: false, message: error.message || 'این تسک قبلاً ثبت شده است؛ وضعیت را تازه کنید.', code: error.code === 11000 ? 'ALREADY_DONE' : error.code });
     }
+    if (error.code === 'TASK_SETUP_INCOMPLETE') {
+      return res.status(503).json({ success: false, code: error.code, message: 'تنظیمات پاداش این تسک معتبر نیست؛ پرداختی انجام نشد.' });
+    }
     res.status(500).json({
       success: false,
-      message: `خطای سرور: ${error.message}`,
+      message: 'ثبت پاداش انجام نشد؛ دوباره تلاش کنید.',
       code: 'SERVER_ERROR'
     });
   }

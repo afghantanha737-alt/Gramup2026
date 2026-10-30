@@ -12,6 +12,8 @@ function validateIdempotencyKey(value) {
 }
 
 function stableValue(value) {
+  if (value instanceof Date) return { __type: 'date', value: value.toISOString() };
+  if (Buffer.isBuffer(value)) return { __type: 'buffer', value: value.toString('base64') };
   if (Array.isArray(value)) return value.map(stableValue);
   if (value && typeof value === 'object') {
     return Object.keys(value).sort().reduce((result, key) => {
@@ -19,12 +21,14 @@ function stableValue(value) {
       return result;
     }, {});
   }
+  if (typeof value === 'number' && !Number.isFinite(value)) return { __type: 'number', value: String(value) };
+  if (typeof value === 'undefined') return { __type: 'undefined' };
   return value;
 }
 
 function hashIdempotencyRequest(scope, body) {
   return crypto.createHash('sha256')
-    .update(JSON.stringify({ scope: String(scope), body: stableValue(body || {}) }))
+    .update(JSON.stringify({ scope: String(scope), body: stableValue(body == null ? {} : body) }))
     .digest('hex');
 }
 

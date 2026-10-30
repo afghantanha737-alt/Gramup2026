@@ -94,6 +94,16 @@ const MESSAGES = {
       return `🎉 New invitation confirmed! ${name} joined Gramup and exactly ${points} points were added to your account.\nReferral level: ${level} (Level ${level}) — this relationship's rate: ${commission}%\nEffective commission rates: L1 ${l1}%, L2 ${l2}%, L3 ${l3}%, L4 and deeper ${l4}%.\nEligible-income scope: only original earnings from approved tasks, daily check-ins, and leaderboard rewards; referral rewards/commissions, spins, conversions, withdrawals, and admin adjustments are excluded.\nRegistered: ${formatKabulDateTime(registeredAt, 'en')}`;
     }
   },
+  referralCommissionEarned: {
+    fa: (points, level, rate) => `کمیسیون دعوت به موجودی شما اضافه شد: ${points} پوینت.\nسطح دعوت: ${level} — نرخ: ${rate}٪.\nاین کمیسیون فقط از درآمد اصلی واجد شرایط محاسبه شده است.`,
+    ps: (points, level, rate) => `د بلنې کمېسیون ستاسو بیلانس ته زیات شو: ${points} پوائنټونه.\nد بلنې کچه: ${level} — نرخ: ${rate}٪.\nدا کمېسیون یوازې له وړ اصلي عاید څخه محاسبه شوی دی.`,
+    en: (points, level, rate) => `Referral commission added: ${points} points.\nReferral level: ${level} — rate: ${rate}%.\nThis commission was calculated only from eligible original earnings.`
+  },
+  dailyStreakExpiryWarning: {
+    fa: (day, points, streak) => `کمتر از یک ساعت تا پایان روز UTC باقی مانده است.\nپاداش ورود روزانه امروز ${points} پوینت است (روز ${day} چرخه).\nبا ثبت دستی ورود، استریک ${streak} روزهٔ خود را حفظ کنید. این پیام هیچ پاداشی را خودکار ثبت نمی‌کند.`,
+    ps: (day, points, streak) => `د UTC ورځې تر پای ته له یو ساعت څخه کم وخت پاتې دی.\nستاسو د نن ورځې د ننوتلو انعام ${points} پوائنټونه دی (د دورې ${day}مه ورځ).\nپه لاسي ننوتلو خپل ${streak} ورځنی سټریک وساتئ. دا پیغام په خپله هېڅ انعام نه ثبتوي.`,
+    en: (day, points, streak) => `Less than one hour remains before the UTC day resets.\nToday's daily check-in reward is ${points} points (cycle day ${day}).\nClaim manually to keep your ${streak}-day streak. This message never claims a reward automatically.`
+  },
   dailyCheckinReady: {
     fa: (day, points, streak) => `⏰ پاداش ورود روزانه آماده است.\nامروز روز ${day} چرخهٔ شماست و با ثبت ورود ${points} پوینت دریافت می‌کنید.\nاستریک فعلی: ${streak} روز.`,
     ps: (day, points, streak) => `⏰ ستاسو د ورځني ننوتلو انعام چمتو دی.\nنن ستاسو د دورې ${day} ورځ ده او د ننوتلو په ثبتولو ${points} پوائنټونه ترلاسه کوئ.\nاوسنی سټریک: ${streak} ورځې.`,

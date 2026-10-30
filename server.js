@@ -69,6 +69,16 @@ app.use(
 app.use(express.json({ limit: '150kb' }));
 app.use(express.urlencoded({ extended: false, limit: '150kb' }));
 
+// Infrastructure probes must not depend on API authentication, database writes
+// from rate limiting, or the maintenance gate. They reveal no secret values.
+const { createHealthHandlers } = require('./utils/healthStatus');
+const healthHandlers = createHealthHandlers({
+  databaseReady: () => mongoose.connection.readyState === 1,
+  transactionReady: () => getMongoTransactionStatus().supported
+});
+app.get('/healthz', healthHandlers.liveness);
+app.get('/readyz', healthHandlers.readiness);
+
 /* TEST-only Maintenance Mode: Admin and the access probe remain available. */
 app.use('/api', async (req, res, next) => {
   if (req.path === '/maintenance/access' || req.path === '/health' || req.path === '/ready' || req.path.startsWith('/admin')) return next();
@@ -228,7 +238,7 @@ async function startServer() {
     // Build and verify durable constraints before accepting financial or webhook requests.
     // These are schema indexes only; no existing financial records are rewritten or dropped.
     for (const modelPath of [
-      './models/Settings', './models/PointsLedger', './models/Withdrawal', './models/TaskCompletion',
+      './models/Settings', './models/PointsLedger', './models/Transaction', './models/Withdrawal', './models/TaskCompletion',
       './models/IdempotencyOperation', './models/TelegramWebhookUpdate', './models/RateLimitBucket',
       './models/AdminSession', './models/TelegramAdminConversation', './models/AdminLog', './models/DistributedJobLock',
       './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit',
@@ -273,6 +283,20 @@ async function startServer() {
     void runJob(REFERRAL_NOTIFICATION_RETRY_LOCK_KEY, 'Initial referral notification retry', runReferralNotificationRetrySweep);
     setInterval(() => {
       void runJob(REFERRAL_NOTIFICATION_RETRY_LOCK_KEY, 'Referral notification retry', runReferralNotificationRetrySweep);
+    }, 60 * 1000);
+
+    const { runRetentionNotificationSweep, RETENTION_NOTIFICATION_TYPES,
+      REFERRAL_COMMISSION_NOTIFICATION_TYPE } = require('./utils/retentionNotifications');
+    const runRetentionNotifications = async () => {
+      const preferences = await Settings.getGlobal();
+      return runRetentionNotificationSweep({ settings: preferences,
+        enqueueWarnings: preferences.dailyReminderEnabled !== false,
+        types: preferences.dailyReminderEnabled === false
+          ? [REFERRAL_COMMISSION_NOTIFICATION_TYPE] : RETENTION_NOTIFICATION_TYPES });
+    };
+    void runJob('retention-notification-sweep', 'Initial retention notification sweep', runRetentionNotifications);
+    setInterval(() => {
+      void runJob('retention-notification-sweep', 'Retention notification sweep', runRetentionNotifications);
     }, 60 * 1000);
 
     // Shared database leases prevent each app instance from sending the same reminders.
@@ -355,4 +379,7 @@ process.on('uncaughtException', error => {
   shutdown('uncaughtException').catch(() => process.exit(1));
 });
 
-startServer();
+// Importing the Express app for local integration tests must not connect to a
+// database or launch jobs. The production `node server.js` entrypoint is unchanged.
+if (require.main === module) startServer();
+module.exports = { app, startServer };

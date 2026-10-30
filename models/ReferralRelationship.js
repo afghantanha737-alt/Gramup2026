@@ -8,6 +8,8 @@ const referralRelationshipSchema = new mongoose.Schema({
   status: { type: String, enum: ['active', 'under_review', 'restricted', 'fraud_review', 'blocked'], default: 'active', index: true },
   initialRewardStatus: { type: String, enum: ['not_applicable', 'pending', 'paid', 'legacy_exempt'], default: 'not_applicable' },
   initialRewardTransactionId: { type: String, default: '' },
+  welcomeRewardStatus: { type: String, enum: ['not_applicable', 'pending', 'paid', 'legacy_exempt'], default: 'not_applicable' },
+  welcomeRewardTransactionId: { type: String, default: '' },
   statusReason: { type: String, default: '' },
   source: { type: String, enum: ['signup', 'migration', 'earning'], default: 'signup' }
 }, { timestamps: true });
