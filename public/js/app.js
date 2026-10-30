@@ -97,8 +97,11 @@ const latestPostOpenedAt = new Map();
 const latestPostOpeningTaskIds = new Set();
 let dailyCheckinTimer = null;
 
+// The browser bundle exports an already-created cache instance (the CommonJS
+// factory is only for tests). Optional cache failure must never stop boot.
 const readModelCache = window.GramupReadModelCache
-  ? window.GramupReadModelCache({ ttlMs: 2 * 60 * 1000 })
+  && ["read", "write", "activate", "deactivate"].every(method => typeof window.GramupReadModelCache[method] === "function")
+  ? window.GramupReadModelCache
   : null;
 window.gramupReadModelCache = readModelCache;
 
