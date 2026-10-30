@@ -2351,7 +2351,8 @@ router.get('/daily-reminder/status', async (req, res) => {
     success: true,
     scheduler: 'application_poll_with_optional_render_cron',
     schedule: { cron: '30 2 * * *', timezone: 'UTC', localTimezone: 'Asia/Kabul', localTime: '07:00' },
-    automaticCreditEnabled: settings.dailyAutoCheckinEnabled === true,
+    automaticCreditEnabled: false,
+    rewardMode: 'manual_claim',
     deliveryHealth: { exhausted: exhaustedDeliveries, pending: pendingDeliveries },
     enabled: settings.dailyReminderEnabled === true,
     lastRun: {
@@ -2445,6 +2446,13 @@ router.put('/settings', async (req, res) => {
   if (Object.prototype.hasOwnProperty.call(body, 'dailyAutoCheckinEnabled')) {
     if (typeof body.dailyAutoCheckinEnabled !== 'boolean') {
       return res.status(400).json({ success: false, message: 'وضعیت دیلی خودکار باید boolean باشد.' });
+    }
+    if (body.dailyAutoCheckinEnabled === true) {
+      return res.status(400).json({
+        success: false,
+        code: 'DAILY_MANUAL_CLAIM_ONLY',
+        message: 'پاداش روزانه فقط با Claim دستی کاربر ثبت می‌شود و پرداخت خودکار فعال نیست.'
+      });
     }
     changes.dailyAutoCheckinEnabled = body.dailyAutoCheckinEnabled;
   }

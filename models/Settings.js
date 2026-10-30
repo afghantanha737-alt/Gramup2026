@@ -10,16 +10,15 @@ const settingsSchema = new mongoose.Schema(
     dailyCheckInPoints: { type: Number, default: 10 },
     streakBonusPoints: { type: Number, default: 2 },
     gramUsdPrice: { type: Number, default: 0, min: 0 },
-    // Explicit v3 policy: automatic daily credit shares the manual check-in day.
-    // Administrators can turn it off without disabling manual claims.
-    dailyAutoCheckinEnabled: { type: Boolean, default: true },
+    // Retained for compatibility; v4 only credits on an authenticated manual Claim.
+    dailyAutoCheckinEnabled: { type: Boolean, default: false },
     dailyReminderEnabled: { type: Boolean, default: true },
     dailyReminderHourUtc: { type: Number, default: 2, min: 0, max: 23 },
     dailyReminderMinuteUtc: { type: Number, default: 30, min: 0, max: 59 },
     dailyReminderTimezone: { type: String, default: 'Asia/Kabul' },
     dailyReminderLocalHour: { type: Number, default: 7, min: 0, max: 23 },
     dailyReminderLocalMinute: { type: Number, default: 0, min: 0, max: 59 },
-    dailyReminderPolicyVersion: { type: Number, default: 3, min: 1 },
+    dailyReminderPolicyVersion: { type: Number, default: 4, min: 1 },
     dailyReminderAudience: { type: String, enum: ['all', 'active'], default: 'all' },
     dailyReminderMessage: { type: String, default: '' },
     dailyReminderLastRunAt: { type: Date, default: null },

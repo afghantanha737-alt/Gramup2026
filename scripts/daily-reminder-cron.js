@@ -14,11 +14,11 @@ async function main() {
   const startedAt = new Date();
   try {
     const capability = await verifyMongoTransactionCapability();
-    if (!capability.supported) throw new Error('Daily auto credit requires MongoDB transactions.');
+    if (!capability.supported) throw new Error('The application requires MongoDB transactions.');
     for (const name of ['User', 'Settings', 'PointsLedger', 'NotificationDelivery', 'DistributedJobLock']) {
       await require(`../models/${name}`).init();
     }
-    await require('../utils/dailyPolicy').applyDailyPolicyV3();
+    await require('../utils/dailyPolicy').applyDailyManualPolicy();
     const result = await withDistributedJobLock(
       'daily-reminder-sweep',
       () => runDailySchedule(startedAt)

@@ -98,8 +98,7 @@ function normalizeLedgerResult(result) {
 }
 
 /**
- * Claim one UTC-day check-in. This function is intentionally usable by both
- * the automatic worker and the authenticated manual route. The User update
+ * Claim one UTC-day check-in from the authenticated manual route. The User update
  * and unique PointsLedger insert must be performed in the same transaction.
  */
 async function claimDailyCheckin(userId, options = {}) {
@@ -279,128 +278,15 @@ async function claimNotificationDelivery({ eventKey, user, amount, cycleDay, str
   return { status: 'failed', error: deliveryError || 'Telegram delivery failed.', text, attempts: delivery.attempts };
 }
 
-async function* userBatches(User, batchSize) {
-  let query = User.find({});
-  if (query && typeof query.select === 'function') query = query.select('_id telegramId language');
-  if (query && typeof query.cursor === 'function') {
-    const cursor = query.lean().cursor();
-    let batch = [];
-    try {
-      for await (const user of cursor) {
-        batch.push(user);
-        if (batch.length >= batchSize) { yield batch; batch = []; }
-      }
-      if (batch.length) yield batch;
-    } finally {
-      await cursor.close();
-    }
-    return;
-  }
-  // Lightweight adapters used by offline tests may not implement cursors.
-  if (query && typeof query.lean === 'function') query = query.lean();
-  const users = (await query) || [];
-  for (let offset = 0; offset < users.length; offset += batchSize) yield users.slice(offset, offset + batchSize);
-}
-
-/**
- * Run after the 07:00 Asia/Kabul boundary (02:30 UTC). It is safe to run
- * repeatedly or from several workers: the UTC sourceId plus conditional User
- * update makes each account receive at most one credit for that UTC date.
- * `enabled:false` is the explicit application-setting kill switch.
- */
+// Retired compatibility entrypoints. Never scan accounts, touch balances or
+// call claimDailyCheckin, even if an old script passes enabled:true.
 async function runDailyAutoCheckin(now = new Date(), options = {}) {
   const current = assertValidDate(now, 'now');
-  if (options.enabled === false) return { credited: 0, skipped: 'disabled', at: current.toISOString() };
-  if (!isAutomaticCheckinDue(current)) {
-    return { credited: 0, skipped: 'before_schedule', nextRunAt: automaticCheckinTarget(current).toISOString(), at: current.toISOString() };
-  }
-
-  const User = options.User || require('../models/User');
-  const NotificationDelivery = options.NotificationDelivery || require('../models/NotificationDelivery');
-  await require('./notificationExhaustion').finalizeExhaustedNotifications(NOTIFICATION_TYPE, NotificationDelivery, current);
-  const batchSize = Number.isSafeInteger(options.batchSize) && options.batchSize > 0 ? options.batchSize : DEFAULT_BATCH_SIZE;
-  const result = {
-    credited: 0,
-    pointsCredited: 0,
-    alreadyClaimed: 0,
-    banned: 0,
-    missing: 0,
-    failed: 0,
-    notificationsSent: 0,
-    notificationsFailed: 0,
-    notificationsSkipped: 0,
-    total: 0,
-    errors: []
-  };
-
-  for await (const batch of userBatches(User, batchSize)) {
-    result.total += batch.length;
-    const outcomes = await Promise.all(batch.map(async candidate => {
-      try {
-        const claim = await claimDailyCheckin(candidate._id, { ...options, now, User, queueNotification: true });
-        if (claim.status === 'credited' || claim.status === 'already_claimed') {
-          if (claim.status === 'credited') { result.credited += 1; result.pointsCredited += claim.amount; }
-          // A user may have completed the manual claim earlier in this UTC
-          // day. The receipt is still safe to attempt because its durable
-          // event key is the same as the credit source and sent deliveries
-          // cannot be claimed again.
-          if (!claim.amount || !claim.cycleDay || !claim.streak || !claim.user) return { claim };
-          const delivery = await claimNotificationDelivery({
-            eventKey: `daily-checkin:${claim.sourceId}`,
-            user: { ...candidate, ...(typeof claim.user?.toObject === 'function' ? claim.user.toObject() : claim.user || {}) },
-            amount: claim.amount,
-            cycleDay: claim.cycleDay,
-            streak: claim.streak
-          }, { ...options, now });
-          return { claim, delivery };
-        }
-        return { claim };
-      } catch (error) {
-        return { error };
-      }
-    }));
-
-    for (const outcome of outcomes) {
-      if (outcome.error) {
-        result.failed += 1;
-        result.errors.push(String(outcome.error?.message || outcome.error).slice(0, 300));
-        continue;
-      }
-      const status = outcome.claim.status;
-      if (status === 'already_claimed') result.alreadyClaimed += 1;
-      else if (status === 'banned') result.banned += 1;
-      else if (status === 'missing') result.missing += 1;
-      const deliveryStatus = outcome.delivery?.status;
-      if (deliveryStatus === 'sent') result.notificationsSent += 1;
-      else if (deliveryStatus === 'failed') result.notificationsFailed += 1;
-      else if (deliveryStatus) result.notificationsSkipped += 1;
-    }
-    if (batch.length >= batchSize) {
-      const sleep = options.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
-      await sleep(1100);
-    }
-  }
-
-  return { ...result, at: current.toISOString() };
+  return { credited: 0, skipped: 'manual_claim_only', at: current.toISOString() };
 }
 
-/**
- * Application-facing entrypoint. The parent scheduler should call this
- * function under its distributed `daily-reminder-sweep` lock. It deliberately
- * requires the explicit Settings flag; the lower-level runner remains useful
- * for tests and controlled maintenance calls.
- */
 async function runDailyAutoCheckinSweep(now = new Date(), options = {}) {
-  if (options.settings?.dailyAutoCheckinEnabled !== undefined) {
-    if (options.settings.dailyAutoCheckinEnabled !== true) return { credited: 0, skipped: 'disabled', at: assertValidDate(now, 'now').toISOString() };
-    return runDailyAutoCheckin(now, { ...options, enabled: true });
-  }
-  const Settings = options.Settings || require('../models/Settings');
-  const settings = await Settings.getGlobal();
-  if (settings?.dailyAutoCheckinEnabled !== true) {
-    return { credited: 0, skipped: 'disabled', at: assertValidDate(now, 'now').toISOString() };
-  }
-  return runDailyAutoCheckin(now, { ...options, enabled: true, settings });
+  return runDailyAutoCheckin(now, options);
 }
 
 module.exports = {

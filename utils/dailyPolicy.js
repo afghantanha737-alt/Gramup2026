@@ -1,29 +1,28 @@
 'use strict';
 
-const DAILY_POLICY_VERSION = 3;
+const DAILY_POLICY_VERSION = 4;
 const DAILY_POLICY_SETTINGS = Object.freeze({
-  dailyAutoCheckinEnabled: true,
-  dailyReminderEnabled: true,
-  dailyReminderHourUtc: 2,
-  dailyReminderMinuteUtc: 30,
-  dailyReminderTimezone: 'Asia/Kabul',
-  dailyReminderLocalHour: 7,
-  dailyReminderLocalMinute: 0,
-  dailyReminderAudience: 'all',
+  dailyAutoCheckinEnabled: false,
   dailyReminderPolicyVersion: DAILY_POLICY_VERSION
 });
 
-// Query the stored version, not a hydrated Mongoose default: old documents
-// without a version must migrate, while a later admin opt-out stays intact.
-async function applyDailyPolicyV3(Settings = require('../models/Settings')) {
+// Disable the former v3 credit flag on both existing and new installations.
+// Do not touch reminder preferences, user balances, streaks or historical ledgers.
+async function applyDailyManualPolicy(Settings = require('../models/Settings')) {
   await Settings.getGlobal();
   return Settings.updateOne({
     key: 'global',
     $or: [
+      { dailyAutoCheckinEnabled: true },
+      { dailyAutoCheckinEnabled: { $exists: false } },
       { dailyReminderPolicyVersion: { $lt: DAILY_POLICY_VERSION } },
       { dailyReminderPolicyVersion: { $exists: false } }
     ]
   }, { $set: { ...DAILY_POLICY_SETTINGS } });
 }
 
-module.exports = { DAILY_POLICY_VERSION, DAILY_POLICY_SETTINGS, applyDailyPolicyV3 };
+module.exports = {
+  DAILY_POLICY_VERSION, DAILY_POLICY_SETTINGS, applyDailyManualPolicy,
+  // Compatibility for an old script import; it can no longer enable credits.
+  applyDailyPolicyV3: applyDailyManualPolicy
+};

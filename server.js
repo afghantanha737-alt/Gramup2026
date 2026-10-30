@@ -261,11 +261,9 @@ async function startServer() {
     const runJob = (key, label, job) => withDistributedJobLock(key, job)
       .catch(error => console.error(`${label} failed:`, error.message || error));
 
-    // Explicit v3 request: automatic daily check-in at 07:00 Asia/Kabul (02:30 UTC).
-    // Apply once to existing installations while
-    // preserving any later admin changes.
+    // v4: daily rewards require a manual Claim. Keep reminder preferences intact.
     const Settings = require('./models/Settings');
-    await require('./utils/dailyPolicy').applyDailyPolicyV3(Settings);
+    await require('./utils/dailyPolicy').applyDailyManualPolicy(Settings);
 
     const runReferralSweep = require('./utils/referralSweep');
     void runJob('referral-sweep', 'Referral sweep', runReferralSweep);

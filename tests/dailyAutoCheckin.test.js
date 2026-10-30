@@ -160,27 +160,32 @@ const at = (dayOffset, hour, minute) => new Date(Date.UTC(2026, 0, 1 + dayOffset
   };
 
   const before = await runDailyAutoCheckin(at(0, 2, 29), dependencies);
-  assert.strictEqual(before.skipped, 'before_schedule');
+  assert.strictEqual(before.skipped, 'manual_claim_only');
   assert.strictEqual(db.state.users.get('u1').points, 0);
 
-  const first = await runDailyAutoCheckin(at(0, 2, 30), dependencies);
-  assert.strictEqual(first.credited, 2);
-  assert.strictEqual(first.banned, 1);
-  assert.strictEqual(first.notificationsSent, 1);
-  assert.strictEqual(first.notificationsSkipped, 1);
+  const scheduled = await runDailyAutoCheckin(at(0, 2, 30), { ...dependencies, enabled: true });
+  assert.strictEqual(scheduled.skipped, 'manual_claim_only');
+  assert.strictEqual(db.state.users.get('u1').points, 0);
+  assert.strictEqual(db.state.ledger.size, 0);
+  assert.strictEqual(db.state.deliveries.size, 0);
+  assert.strictEqual(notifyCalls.length, 0);
+  const first = await claimDailyCheckin('u1', { ...dependencies, now: at(0, 2, 30) });
+  assert.strictEqual(first.status, 'credited');
+  const banned = await claimDailyCheckin('u2', { ...dependencies, now: at(0, 2, 30) });
+  assert.strictEqual(banned.status, 'banned');
+  await claimDailyCheckin('u3', { ...dependencies, now: at(0, 2, 30) });
   assert.strictEqual(db.state.users.get('u1').points, 5);
   assert.strictEqual(db.state.users.get('u3').points, 5);
   assert.strictEqual(db.state.users.get('u2').points, 50);
   assert.strictEqual(db.state.ledger.size, 2);
-  assert.match(notifyCalls[0].text, /\+5/);
+  assert.strictEqual(notifyCalls.length, 0, 'manual Claim does not automatically send a new receipt');
 
-  const repeat = await runDailyAutoCheckin(at(0, 2, 31), dependencies);
-  assert.strictEqual(repeat.credited, 0);
-  assert.strictEqual(repeat.alreadyClaimed, 2);
+  const repeat = await claimDailyCheckin('u1', { ...dependencies, now: at(0, 2, 31) });
+  assert.strictEqual(repeat.status, 'already_claimed');
   assert.strictEqual(db.state.ledger.size, 2);
 
-  const nextDay = await runDailyAutoCheckin(at(1, 2, 30), dependencies);
-  assert.strictEqual(nextDay.credited, 2);
+  const nextDay = await claimDailyCheckin('u1', { ...dependencies, now: at(1, 2, 30) });
+  assert.strictEqual(nextDay.status, 'credited');
   assert.strictEqual(db.state.users.get('u1').points, 12);
   assert.strictEqual(db.state.users.get('u1').streak, 2);
   assert.strictEqual(db.state.ledger.has(dailyCheckinSourceId('u1', Math.floor(at(1, 0, 0).getTime() / DAY_MS))), true);
@@ -254,7 +259,7 @@ const at = (dayOffset, hour, minute) => new Date(Date.UTC(2026, 0, 1 + dayOffset
     ...db,
     Settings: { getGlobal: async () => ({ dailyAutoCheckinEnabled: false }) }
   });
-  assert.strictEqual(disabledSweep.skipped, 'disabled');
+  assert.strictEqual(disabledSweep.skipped, 'manual_claim_only');
 
   const manualReceiptDb = createFakeDatabase([
     { _id: 'manual', telegramId: '400', language: 'en', points: 0, streak: 0, totalCheckins: 0, lastCheckIn: null, isBanned: false }
@@ -267,9 +272,9 @@ const at = (dayOffset, hour, minute) => new Date(Date.UTC(2026, 0, 1 + dayOffset
     notifyUser: async () => { receiptSent += 1; return true; }
   });
   assert.strictEqual(enabledSweep.credited, 0);
-  assert.strictEqual(enabledSweep.alreadyClaimed, 1);
-  assert.strictEqual(enabledSweep.notificationsSent, 1);
-  assert.strictEqual(receiptSent, 1);
+  assert.strictEqual(enabledSweep.skipped, 'manual_claim_only');
+  assert.strictEqual(receiptSent, 0);
+  assert.strictEqual(manualReceiptDb.state.users.get('manual').points, 5);
 
   const blocked = await claimNotificationDelivery({
     eventKey: 'blocked', user: { _id: 'blocked', telegramId: '600', telegramBlockedAt: at(5, 1, 0) },
@@ -282,7 +287,7 @@ const at = (dayOffset, hour, minute) => new Date(Date.UTC(2026, 0, 1 + dayOffset
   }, { ...notificationOptions, settings: { dailyReminderEnabled: false } });
   assert.strictEqual(noMessage.reason, 'notifications_disabled');
 
-  console.log('ALL PASS — automatic daily check-in schedule, atomic idempotency, cycle, rollback, and notification retry');
+  console.log('ALL PASS — manual-only daily check-in, retired automatic entrypoints, atomic idempotency, cycle, rollback and historical receipt retry');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
