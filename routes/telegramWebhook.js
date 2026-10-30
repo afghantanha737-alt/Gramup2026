@@ -4,6 +4,8 @@ const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
 const { bot, broadcastCopyToActiveUsers, isTelegramDeliveryBlocked } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
+const { safelySendTelegram } = require('../utils/telegramNotification');
+const sendMessage = (...args) => safelySendTelegram(() => bot.sendMessage(...args), { context: 'webhook_reply' });
 const User = require('../models/User');
 const Task = require('../models/Task');
 const TaskReactionState = require('../models/TaskReactionState');
@@ -36,7 +38,7 @@ const ADMIN_MENU_KEYBOARD = {
 };
 
 async function sendAdminMenu(chatId) {
-  await bot.sendMessage(chatId, '🛠 پنل مدیریت Gramup — یکی را انتخاب کن:', { reply_markup: ADMIN_MENU_KEYBOARD });
+  await sendMessage(chatId, '🛠 پنل مدیریت Gramup — یکی را انتخاب کن:', { reply_markup: ADMIN_MENU_KEYBOARD });
 }
 
 async function handlePhoneContactMessage(message) {
@@ -45,11 +47,11 @@ async function handlePhoneContactMessage(message) {
   if (!senderId || chatId == null) return;
   const user = await User.findOne({ telegramId: senderId });
   if (!user) {
-    await bot.sendMessage(chatId, botText('phoneContactNotRegistered', 'fa'));
+    await sendMessage(chatId, botText('phoneContactNotRegistered', 'fa'));
     return;
   }
   if (isVerifiedAllowedPhone(user)) {
-    await bot.sendMessage(chatId, botText('phoneContactVerified', user.language || 'fa'));
+    await sendMessage(chatId, botText('phoneContactVerified', user.language || 'fa'));
     return;
   }
 
@@ -57,7 +59,7 @@ async function handlePhoneContactMessage(message) {
   if (!verification.ok) {
     const key = verification.reason === 'unsupported_country' ? 'phoneContactUnsupported' : 'phoneContactNotSelf';
     const language = user.language || 'fa';
-    await bot.sendMessage(chatId, botText(key, language), {
+    await sendMessage(chatId, botText(key, language), {
       reply_markup: contactRequestKeyboard(botText('phoneShareButton', language))
     });
     return;
@@ -85,7 +87,7 @@ async function handlePhoneContactMessage(message) {
       console.error('Pending referral completion failed:', error.message || error);
     }
   }
-  await bot.sendMessage(chatId, botText('phoneContactVerified', user.language || 'fa'), {
+  await sendMessage(chatId, botText('phoneContactVerified', user.language || 'fa'), {
     reply_markup: { remove_keyboard: true }
   });
 }
@@ -100,7 +102,7 @@ async function handleAdminStats(chatId) {
     ])
   ]);
   const pendingSum = pendingAgg.map(row => `${row.total} ${row._id || 'GRAM'}`).join(' + ') || '0';
-  await bot.sendMessage(
+  await sendMessage(
     chatId,
     `📊 آمار سریع
 
@@ -117,7 +119,7 @@ async function handleAdminPending(chatId) {
     .sort({ createdAt: 1 })
     .limit(10);
   if (!list.length) {
-    await bot.sendMessage(chatId, '✅ در حال حاضر برداشت در انتظاری وجود ندارد.');
+    await sendMessage(chatId, '✅ در حال حاضر برداشت در انتظاری وجود ندارد.');
     return;
   }
   const STATUS_FA = { pending: 'در انتظار بررسی', approved: 'تاییدشده', processing: 'در حال پردازش' };
@@ -125,12 +127,12 @@ async function handleAdminPending(chatId) {
     `• ${w.cryptoAmount} ${w.token} — ${w.user?.firstName || w.user?.username || 'کاربر'} — ${STATUS_FA[w.status] || w.status}\n  شناسه: ${w._id}`
   );
   const body = `💰 برداشت‌های در انتظار (حداکثر ۱۰ مورد اول):\n\n${lines.join('\n\n')}\n\nتایید نهایی (وارد کردن Transaction Hash) فقط از پنل وب ممکن است، چون به بررسی روی زنجیره نیاز دارد.`;
-  await bot.sendMessage(chatId, body);
+  await sendMessage(chatId, body);
 }
 
 async function handleAdminBroadcastPrompt(telegramId, chatId) {
   adminSessions.setAwaitingContent(telegramId);
-  await bot.sendMessage(
+  await sendMessage(
     chatId,
     `📢 پیامی که می‌خواهی برای همه‌ی کاربران فعال ارسال شود را بفرست (متن، عکس، یا حتی یک پست از کانالت را فوروارد کن).\n\nبرای انصراف: /cancel`
   );
@@ -139,8 +141,8 @@ async function handleAdminBroadcastPrompt(telegramId, chatId) {
 async function handleBroadcastContent(telegramId, chatId, message) {
   adminSessions.clearAwaitingContent(telegramId);
   adminSessions.setPendingConfirm(telegramId, chatId, message.message_id);
-  await bot.copyMessage(chatId, chatId, message.message_id); // پیش‌نمایش دقیقاً همان چیزی که کاربران می‌بینند
-  await bot.sendMessage(chatId, '⬆️ این پیام برای همه‌ی کاربران فعال ارسال شود؟', {
+  await safelySendTelegram(() => bot.copyMessage(chatId, chatId, message.message_id), { context: 'broadcast_preview' }); // پیش‌نمایش دقیقاً همان چیزی که کاربران می‌بینند
+  await sendMessage(chatId, '⬆️ این پیام برای همه‌ی کاربران فعال ارسال شود؟', {
     reply_markup: {
       inline_keyboard: [[
         { text: '✅ بله، ارسال کن', callback_data: 'admin_broadcast_confirm' },
@@ -153,12 +155,12 @@ async function handleBroadcastContent(telegramId, chatId, message) {
 async function handleBroadcastConfirm(telegramId, chatId) {
   const pending = adminSessions.takePendingConfirm(telegramId);
   if (!pending) {
-    await bot.sendMessage(chatId, 'چیزی برای ارسال در انتظار نیست. از «📢 ارسال پیام همگانی» دوباره شروع کن.');
+    await sendMessage(chatId, 'چیزی برای ارسال در انتظار نیست. از «📢 ارسال پیام همگانی» دوباره شروع کن.');
     return;
   }
-  await bot.sendMessage(chatId, '⏳ در حال ارسال...');
+  await sendMessage(chatId, '⏳ در حال ارسال...');
   const sent = await broadcastCopyToActiveUsers(User, pending.fromChatId, pending.messageId);
-  await bot.sendMessage(chatId, `✅ پیام برای ${sent} کاربر ارسال شد.`);
+  await sendMessage(chatId, `✅ پیام برای ${sent} کاربر ارسال شد.`);
 }
 
 async function handleCallbackQuery(callbackQuery) {
@@ -166,7 +168,7 @@ async function handleCallbackQuery(callbackQuery) {
   const callbackChat = callbackQuery.message && callbackQuery.message.chat;
   const chatId = callbackChat && callbackChat.id;
   if (bot.answerCallbackQuery) {
-    bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+    void safelySendTelegram(() => bot.answerCallbackQuery(callbackQuery.id), { context: 'callback_ack' });
   }
   if (!isAdminTelegramId(telegramId) || !chatId || callbackChat.type !== 'private') return;
 
@@ -177,7 +179,7 @@ async function handleCallbackQuery(callbackQuery) {
   if (data === 'admin_broadcast_confirm') return handleBroadcastConfirm(telegramId, chatId);
   if (data === 'admin_broadcast_cancel') {
     adminSessions.takePendingConfirm(telegramId);
-    return bot.sendMessage(chatId, 'لغو شد.');
+    return sendMessage(chatId, 'لغو شد.');
   }
 }
 
@@ -312,7 +314,7 @@ router.post('/webhook', async (req, res) => {
           if (!isVerifiedAllowedPhone(user)) {
             update.message.text = '/start phone_contact';
           } else {
-            await bot.sendMessage(update.message.chat.id, '✅ هویت شما برای اپ Gramup تأیید شد. حالا به اپلیکیشن برگردید.');
+            await sendMessage(update.message.chat.id, '✅ هویت شما برای اپ Gramup تأیید شد. حالا به اپلیکیشن برگردید.');
             update.message.text = '/start';
           }
         } else {
@@ -347,10 +349,10 @@ router.post('/webhook', async (req, res) => {
         await handlePhoneContactMessage(message);
       } else if (isPrivateChat && text === '/admin') {
         if (isAdminTelegramId(senderId)) await sendAdminMenu(chatId);
-        else await bot.sendMessage(chatId, `آیدی عددی شما: ${senderId}\n\nبرای دسترسی مدیریتی از تلگرام، این عدد را به متغیر محیطی ADMIN_TELEGRAM_IDS در تنظیمات سرور اضافه کنید.`);
+        else await sendMessage(chatId, `آیدی عددی شما: ${senderId}\n\nبرای دسترسی مدیریتی از تلگرام، این عدد را به متغیر محیطی ADMIN_TELEGRAM_IDS در تنظیمات سرور اضافه کنید.`);
       } else if (isPrivateChat && isAdminTelegramId(senderId) && text === '/cancel' && (await adminSessions.isAwaitingContent(senderId))) {
         await adminSessions.clearAwaitingContent(senderId);
-        await bot.sendMessage(chatId, 'ارسال پیام همگانی لغو شد.');
+        await sendMessage(chatId, 'ارسال پیام همگانی لغو شد.');
       } else if (isPrivateChat && isAdminTelegramId(senderId) && (await adminSessions.isAwaitingContent(senderId))) {
         await handleBroadcastContent(senderId, chatId, message);
       }

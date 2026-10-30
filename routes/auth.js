@@ -13,6 +13,7 @@ const { bot } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { sendWelcomeMessage, welcomeTriggerKey } = require('../utils/telegramStart');
 const { getMaintenanceState, isAllowedTelegramId } = require('../utils/maintenance');
+const { safelySendTelegram } = require('../utils/telegramNotification');
 
 const auth = requireUnifiedAuth(process.env.BOT_TOKEN);
 const telegramAuth = requireTelegramAuth(process.env.BOT_TOKEN);
@@ -42,8 +43,9 @@ router.get('/me', auth, async (req, res) => {
   // Native mobile sessions have no Telegram initData/start parameter. Never
   // attempt a bot action with an unauthenticated/absent Telegram user object.
   if (autoWelcomeIdentifier && bot && req.tgUser && !isNativeSessionRequest(req)) {
-    try {
-      await sendWelcomeMessage({
+    // Best-effort delivery must not hold the bootstrap response open. The
+    // helper handles both sync errors and rejected background promises.
+    void safelySendTelegram(() => sendWelcomeMessage({
         message: { chat: { id: u.telegramId }, from: req.tgUser },
         user: u,
         bot,
@@ -52,11 +54,7 @@ router.get('/me', auth, async (req, res) => {
         payload: autoWelcomeIdentifier,
         botText,
         triggerKey: welcomeTriggerKey(autoWelcomeIdentifier)
-      });
-    } catch (error) {
-      // Welcome delivery must not prevent the Mini App from bootstrapping.
-      console.warn('Automatic startapp welcome delivery failed:', error.message || error);
-    }
+      }), { context: 'bootstrap_welcome' });
   }
 
   const maintenanceState = await getMaintenanceState();

@@ -1,6 +1,8 @@
 'use strict';
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
+const TELEGRAM_DELIVERY_TIMEOUT_MS = 8000;
+const DELIVERY_METHODS = new Set(['sendMessage', 'sendPhoto', 'copyMessage', 'answerCallbackQuery']);
 
 class TelegramApiError extends Error {
   constructor(message, statusCode, body) {
@@ -14,6 +16,23 @@ function buildTelegramWebhookPayload(url, options = {}) {
   return { url, ...options };
 }
 
+async function withTelegramDeliveryDeadline(operation, timeoutMs = TELEGRAM_DELIVERY_TIMEOUT_MS) {
+  const controller = new AbortController();
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new TelegramApiError('Telegram notification timed out', 504, { error_code: 504 }));
+    }, timeoutMs);
+  });
+  try {
+    // Promise.race also bounds test/custom transports that ignore AbortSignal.
+    return await Promise.race([Promise.resolve().then(() => operation(controller.signal)), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 class TelegramBotClient {
   constructor(token) {
     this.token = token;
@@ -21,17 +40,22 @@ class TelegramBotClient {
   }
 
   async call(method, payload = {}, options = {}) {
-    const response = await fetch(`${this.baseUrl}/${method}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(options.headers || {}) },
-      body: JSON.stringify(payload)
-    });
-    let body = {};
-    try { body = await response.json(); } catch { body = {}; }
-    if (!response.ok || body.ok === false) {
-      throw new TelegramApiError(body.description || `Telegram API ${method} failed`, response.status, body);
-    }
-    return body.result;
+    const delivery = DELIVERY_METHODS.has(method);
+    const request = async signal => {
+      const response = await fetch(`${this.baseUrl}/${method}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+        body: JSON.stringify(payload),
+        ...(signal ? { signal } : {})
+      });
+      let body = {};
+      try { body = await response.json(); } catch { body = {}; }
+      if (!response.ok || body.ok === false || (delivery && body.ok !== true)) {
+        throw new TelegramApiError(body.description || `Telegram API ${method} failed`, response.status, body);
+      }
+      return body.result;
+    };
+    return delivery ? withTelegramDeliveryDeadline(request) : request();
   }
 
   sendMessage(chatId, text, options = {}) {
@@ -45,13 +69,15 @@ class TelegramBotClient {
     for (const [key, value] of Object.entries(options || {})) {
       if (value !== undefined && value !== null) form.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
     }
-    const response = await fetch(`${this.baseUrl}/sendPhoto`, { method: 'POST', body: form });
-    let body = {};
-    try { body = await response.json(); } catch { body = {}; }
-    if (!response.ok || body.ok === false) {
-      throw new TelegramApiError(body.description || 'Telegram sendPhoto failed', response.status, body);
-    }
-    return body.result;
+    return withTelegramDeliveryDeadline(async signal => {
+      const response = await fetch(`${this.baseUrl}/sendPhoto`, { method: 'POST', body: form, signal });
+      let body = {};
+      try { body = await response.json(); } catch { body = {}; }
+      if (!response.ok || body.ok !== true) {
+        throw new TelegramApiError(body.description || 'Telegram sendPhoto failed', response.status, body);
+      }
+      return body.result;
+    });
   }
 
   copyMessage(chatId, fromChatId, messageId, options = {}) {
@@ -206,4 +232,4 @@ async function broadcastCopyToActiveUsers(User, fromChatId, messageId) {
   return sent;
 }
 
-module.exports = { bot, buildTelegramWebhookPayload, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, broadcastToActiveUsers, broadcastCopyToActiveUsers };
+module.exports = { bot, buildTelegramWebhookPayload, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, broadcastToActiveUsers, broadcastCopyToActiveUsers, withTelegramDeliveryDeadline };

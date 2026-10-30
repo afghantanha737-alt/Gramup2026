@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { contactRequestKeyboard } = require('./telegramPhoneContact');
 const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
+const { safelySendTelegram, logTelegramNotificationFailure } = require('./telegramNotification');
 const START_COMMAND = /^\/start(?:@[A-Za-z0-9_]+)?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/;
 const DEFAULT_WELCOME_IMAGE_PATH = path.join(__dirname, '..', 'public', 'img', 'welcome-bot.jpg');
 
@@ -75,10 +76,12 @@ async function claimWelcomeTrigger(User, user, triggerKey) {
 
 async function releaseWelcomeTrigger(User, user, triggerKey) {
   if (!triggerKey || !User || !user?._id || typeof User.updateOne !== 'function') return;
-  await User.updateOne(
-    { _id: user._id, lastAutoWelcomeKey: triggerKey },
-    { $set: { lastAutoWelcomeKey: '' } }
-  ).catch(() => {});
+  try {
+    await User.updateOne(
+      { _id: user._id, lastAutoWelcomeKey: triggerKey },
+      { $set: { lastAutoWelcomeKey: '' } }
+    );
+  } catch { /* Optional welcome metadata must not interrupt registration. */ }
 }
 
 async function sendWelcomeMessage({
@@ -94,36 +97,33 @@ async function sendWelcomeMessage({
   triggerKey = '',
   logger = console
 }) {
-  const claimed = await claimWelcomeTrigger(User, user, triggerKey);
-  if (!claimed) return { sent: false, hasMiniAppButton: Boolean(appUrl) };
-
-  const language = user?.language || 'fa';
-  const webAppUrl = buildMiniAppUrl(appUrl, payload, isNewUser);
-  const replyMarkup = buildWelcomeReplyMarkup(webAppUrl);
-  const fallbackName = language === 'en' ? 'friend' : 'دوست عزیز';
-  const name = message?.from?.first_name || user?.firstName || fallbackName;
-  const options = replyMarkup ? { reply_markup: replyMarkup } : {};
-  const welcomeText = botText('welcome', language, name);
-  let welcomeImage = null;
-  if (welcomeImagePath) {
-    try {
-      welcomeImage = fs.readFileSync(welcomeImagePath);
-    } catch (error) {
-      logger.warn?.('Telegram welcome image could not be read; using text fallback:', error.message || error);
-    }
-  }
-
+  let claimed = false;
   try {
+    claimed = await claimWelcomeTrigger(User, user, triggerKey);
+    if (!claimed) return { sent: false, hasMiniAppButton: Boolean(appUrl) };
+    const language = user?.language || 'fa';
+    const webAppUrl = buildMiniAppUrl(appUrl, payload, isNewUser);
+    const replyMarkup = buildWelcomeReplyMarkup(webAppUrl);
+    const fallbackName = language === 'en' ? 'friend' : 'دوست عزیز';
+    const name = message?.from?.first_name || user?.firstName || fallbackName;
+    const options = replyMarkup ? { reply_markup: replyMarkup } : {};
+    const welcomeText = botText('welcome', language, name);
+    let welcomeImage = null;
+    if (welcomeImagePath) {
+      try { welcomeImage = fs.readFileSync(welcomeImagePath); }
+      catch (error) { logTelegramNotificationFailure(error, 'welcome_image_text_fallback', logger); }
+    }
     if (welcomeImage && typeof bot.sendPhoto === 'function') {
       await bot.sendPhoto(message.chat.id, welcomeImage, { caption: welcomeText, ...options });
     } else {
       await bot.sendMessage(message.chat.id, welcomeText, options);
     }
+    return { sent: true, hasMiniAppButton: Boolean(replyMarkup) };
   } catch (error) {
-    await releaseWelcomeTrigger(User, user, triggerKey);
-    throw error;
+    if (claimed) await releaseWelcomeTrigger(User, user, triggerKey);
+    logTelegramNotificationFailure(error, 'welcome', logger);
+    return { sent: false, hasMiniAppButton: false };
   }
-  return { sent: true, hasMiniAppButton: Boolean(replyMarkup) };
 }
 
 async function handleTelegramStart({
@@ -167,16 +167,14 @@ async function handleTelegramStart({
 
   const language = user.language || 'fa';
   if (command.payload === 'phone_contact') {
-    if (isVerifiedAllowedPhone(user)) {
-      await bot.sendMessage(message.chat.id, botText('phoneContactVerified', language), { reply_markup: { remove_keyboard: true } });
-    } else {
-      await bot.sendMessage(
-        message.chat.id,
-        botText('phoneContactRequest', language),
-        { reply_markup: contactRequestKeyboard(botText('phoneShareButton', language)) }
-      );
-    }
-    return { isNewUser, hadReferralPayload: false, welcomeSent: true, hasMiniAppButton: false, phoneContactRequested: true };
+    const delivered = await safelySendTelegram(() => {
+      if (isVerifiedAllowedPhone(user)) {
+        return bot.sendMessage(message.chat.id, botText('phoneContactVerified', language), { reply_markup: { remove_keyboard: true } });
+      }
+      return bot.sendMessage(message.chat.id, botText('phoneContactRequest', language),
+        { reply_markup: contactRequestKeyboard(botText('phoneShareButton', language)) });
+    }, { context: 'start_phone_contact', logger });
+    return { isNewUser, hadReferralPayload: false, welcomeSent: delivered, hasMiniAppButton: false, phoneContactRequested: true };
   }
 
   if (isNewUser && command.payload) {
@@ -201,7 +199,7 @@ async function handleTelegramStart({
   return {
     isNewUser,
     hadReferralPayload: Boolean(command.payload),
-    welcomeSent: true,
+    welcomeSent: sentWelcome.sent,
     hasMiniAppButton: sentWelcome.hasMiniAppButton
   };
 }

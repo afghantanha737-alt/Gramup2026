@@ -81,7 +81,7 @@ function fixture(existingUser = null) {
     ...fresh.dependencies,
     message: { text: '/start inviter_42', from: { id: 123, first_name: 'Ava' }, chat: { id: 123 } }
   });
-  assert.strictEqual(duplicateStart.welcomeSent, true);
+  assert.strictEqual(duplicateStart.welcomeSent, false, 'duplicate delivery is not reported as a newly sent welcome');
   assert.strictEqual(fresh.sent.length, 1, 'the same start payload must not send a duplicate welcome');
 
   const contactRequest = fixture();
@@ -117,13 +117,12 @@ function fixture(existingUser = null) {
 
   const failedSend = fixture();
   failedSend.dependencies.bot.sendMessage = async () => { throw new Error('Telegram sendMessage failed'); };
-  await assert.rejects(
-    handleTelegramStart({
+  const failedResult = await handleTelegramStart({
       ...failedSend.dependencies,
       message: { text: '/start', from: { id: 321 }, chat: { id: 321 } }
-    }),
-    /sendMessage failed/
-  );
+    });
+  assert.strictEqual(failedResult.welcomeSent, false);
+  assert.strictEqual(failedSend.users.has('321'), true, 'notification failure must not abort user registration');
 
   recordWebhookUpdate('start');
   recordStartWelcomeSent();

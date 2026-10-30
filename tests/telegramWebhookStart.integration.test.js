@@ -129,14 +129,20 @@ app.use('/api/telegram', telegramRouter);
       update_id: 1004,
       message: { message_id: 4, chat: { id: 333 }, from: { id: 333 }, text: '/start' }
     });
-    assert.strictEqual(failed.status, 500, 'Telegram should retry /start if the Welcome could not be sent');
+    assert.strictEqual(failed.status, 200, 'optional welcome failure must not fail completed registration');
+    assert.strictEqual(users.has('333'), true, 'registration persists when welcome sending fails');
+    assert.strictEqual(claimedUpdates.get(1004).status, 'completed');
 
     const duplicateFailureRetry = await postUpdate({
       update_id: 1004,
       message: { message_id: 4, chat: { id: 333 }, from: { id: 333 }, text: '/start' }
     });
     assert.strictEqual(duplicateFailureRetry.status, 200, 'failed update retry should be processed and acknowledged');
-    assert.strictEqual(sentMessages.length, 4, 'failed update is retried and its welcome is sent');
+    assert.strictEqual(sentMessages.length, 3, 'same completed update does not repeat registration or notification');
+    const explicitStartRetry = await postUpdate({ update_id: 1012,
+      message: { message_id: 12, chat: { id: 333 }, from: { id: 333 }, text: '/start' } });
+    assert.strictEqual(explicitStartRetry.status, 200);
+    assert.strictEqual(sentMessages.length, 4, 'a new manual /start can retry the optional welcome');
     const completedDuplicate = await postUpdate({ update_id: 1004, message: { message_id: 4, chat: { id: 333 }, from: { id: 333 }, text: '/start' } });
     assert.strictEqual(completedDuplicate.status, 200, 'completed update duplicates are acknowledged');
     assert.strictEqual(sentMessages.length, 4, 'completed update duplicates do not repeat side effects');

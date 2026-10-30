@@ -1,6 +1,7 @@
 'use strict';
 
 const { cycleDayForStreak, DAILY_CHECKIN_REWARDS } = require('./dailyCheckin');
+const { safelySendTelegram } = require('./telegramNotification');
 
 const DEFAULT_HOUR_UTC = 4;
 const BATCH_SIZE = 20;
@@ -70,7 +71,8 @@ async function runDailyCheckinNotificationSweep(now = new Date(), dependencies =
 
       if (!claim.modifiedCount) return 'already_sent';
       const day = nextCheckinDay(user, now);
-      const delivered = await notifyUser(user.telegramId, notificationText(day));
+      const delivered = await safelySendTelegram(() => notifyUser(user.telegramId, notificationText(day)),
+        { context: 'daily_checkin_reminder' });
       return delivered ? 'sent' : 'failed';
     }));
 

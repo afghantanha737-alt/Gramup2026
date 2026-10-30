@@ -1,6 +1,7 @@
 'use strict';
 
 const { dailyRewardCents, pointsFromCents } = require('./vipRewards');
+const { safelySendTelegram } = require('./telegramNotification');
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 1100;
@@ -83,7 +84,8 @@ async function runVipRewardNotificationSweep(now = new Date(), dependencies = {}
         return;
       }
 
-      const delivered = await notifyUser(user.telegramId, vipRewardNotificationText(subscription, claim.rewardPoints));
+      const delivered = await safelySendTelegram(() => notifyUser(user.telegramId, vipRewardNotificationText(subscription, claim.rewardPoints)),
+        { context: 'vip_reward_reminder' });
       if (delivered) sent += 1;
       else failed += 1;
     }));
