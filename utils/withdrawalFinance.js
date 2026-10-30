@@ -50,7 +50,7 @@ async function transitionWithdrawalWithRefund({ withdrawalId, targetStatus, reas
       throw error;
     }
 
-    await recordLedgerRequired({
+    const refundLedger = await recordLedgerRequired({
       user: refunded._id,
       type: 'admin_adjust',
       currency: 'gram',
@@ -62,6 +62,11 @@ async function transitionWithdrawalWithRefund({ withdrawalId, targetStatus, reas
       sourceId: `withdrawal-refund:${withdrawal._id}`,
       session
     });
+    if (!refundLedger.created) {
+      const error = new Error('بازگشت وجه قبلاً در Ledger ثبت شده است؛ تراکنش لغو شد.');
+      error.code = 'WITHDRAWAL_REFUND_DUPLICATE';
+      throw error;
+    }
 
     if (audit) await recordAdminLogRequired({ ...audit, targetId: withdrawal._id }, session);
 

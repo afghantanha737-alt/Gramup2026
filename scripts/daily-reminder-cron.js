@@ -3,7 +3,8 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const { withDistributedJobLock } = require('../utils/distributedJobLock');
-const { runDailyReminderSweep } = require('../utils/dailyReminder');
+const { runDailySchedule } = require('../utils/dailySchedule');
+const { verifyMongoTransactionCapability } = require('../utils/mongoTransaction');
 
 async function main() {
   if (!process.env.MONGO_URI) throw new Error('MONGO_URI is not configured.');
@@ -12,16 +13,25 @@ async function main() {
   await mongoose.connect(process.env.MONGO_URI);
   const startedAt = new Date();
   try {
+    const capability = await verifyMongoTransactionCapability();
+    if (!capability.supported) throw new Error('Daily auto credit requires MongoDB transactions.');
+    for (const name of ['User', 'Settings', 'PointsLedger', 'NotificationDelivery', 'DistributedJobLock']) {
+      await require(`../models/${name}`).init();
+    }
+    await require('../utils/dailyPolicy').applyDailyPolicyV3();
     const result = await withDistributedJobLock(
       'daily-reminder-sweep',
-      () => runDailyReminderSweep(startedAt, { force: true })
+      () => runDailySchedule(startedAt)
     );
+    const receiptRetry = await withDistributedJobLock('daily-receipt-retry',
+      () => require('../utils/dailyReceiptRetry').runDailyReceiptRetrySweep());
     console.log(JSON.stringify({
       event: 'daily_reminder_cron_completed',
-      schedule: '0 4 * * *',
+      schedule: '30 2 * * *',
       timezone: 'UTC',
-      localTime: '08:30 Asia/Kabul',
+      localTime: '07:00 Asia/Kabul',
       ...result,
+      receiptRetry,
       at: new Date().toISOString()
     }));
   } finally {
@@ -32,7 +42,7 @@ async function main() {
 main().catch(error => {
   console.error(JSON.stringify({
     event: 'daily_reminder_cron_failed',
-    schedule: '0 4 * * *',
+    schedule: '30 2 * * *',
     timezone: 'UTC',
     error: String(error?.message || error).slice(0, 500),
     at: new Date().toISOString()

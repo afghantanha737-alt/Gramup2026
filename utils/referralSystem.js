@@ -5,11 +5,12 @@ const User = require('../models/User');
 const Settings = require('../models/Settings');
 const ReferralRelationship = require('../models/ReferralRelationship');
 const { withMongoTransaction } = require('./mongoTransaction');
-const { sendNotificationOnce } = require('./notificationDelivery');
+const notificationDelivery = require('./notificationDelivery');
 const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 const {
   DEFAULT_REFERRAL_LEVEL_RATES,
   DEFAULT_REFERRAL_INITIAL_REWARD_POINTS,
+  ELIGIBLE_ORIGINAL_EARN_TYPES,
   normalizeReferralRates,
   referralIdentifierQuery,
   calculateReferralCommission,
@@ -46,6 +47,19 @@ function deterministicTransactionId(prefix, stableId) {
   return `${prefix}-${crypto.createHash('sha256').update(String(stableId)).digest('hex')}`;
 }
 
+function referralNotificationText(notification) {
+  return require('./botMessages').botText(
+    'referralInitial',
+    notification.language,
+    notification.referredName,
+    notification.rewardPoints,
+    notification.referralLevel,
+    notification.commissionRatePercent,
+    notification.registeredAt,
+    notification.referralLevelRates
+  );
+}
+
 function relationStatus(users) {
   const statuses = users.map(reviewStatusOf);
   if (statuses.includes('blocked')) return 'blocked';
@@ -71,8 +85,9 @@ async function createOrUpdateRelationship({ referrerId, referredUserId, level, s
  * Attaches a referred user exactly once. Only a newly-created parent-child link can
  * unlock the one-time initial reward; pre-existing links are marked legacy-exempt.
  */
-async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFlags = [], source = 'signup' }) {
+async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFlags = [], source = 'signup' }, dependencies = {}) {
   if (!referredUserId || !referrerId || String(referredUserId) === String(referrerId)) return { linked: false, reason: 'invalid_link' };
+  const deliveryApi = dependencies.notificationDelivery || notificationDelivery;
 
   const result = await withMongoTransaction(async session => {
     let invitee = await sessionQuery(User.findById(referredUserId), session);
@@ -132,6 +147,7 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
     }
 
     let initialPaid = false;
+    let initialCreditCreated = false;
     referralDiagnostic('relationship_registered', {
       directRelationshipStatus: directRelationship?.status || null,
       initialRewardStatus: directRelationship?.initialRewardStatus || null
@@ -197,6 +213,7 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
               error.code = 'REFERRAL_INITIAL_DUPLICATE_RACE';
               throw error;
             }
+            initialCreditCreated = true;
           }
         }
         if (directRelationship) {
@@ -222,13 +239,13 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
     const referredName = invitee.username
       ? `@${invitee.username}`
       : [invitee.firstName, invitee.lastName].filter(Boolean).join(' ') || '—';
-    return {
+    const result = {
       linked: linkedNow || Boolean(invitee.referredBy),
       created: linkedNow,
       initialPaid,
       referrerId: referrer._id,
       referredUserId: invitee._id,
-      notification: linkedNow && initialPaid && Number(initialRewardPoints) === 10
+      notification: initialCreditCreated && initialPaid && Number(initialRewardPoints) === 10
         && isVerifiedAllowedPhone(referrer)
         && referrer.referralMessageConsent === 'granted' ? {
         eventKey: `referral-initial:${invitee._id}`,
@@ -240,9 +257,27 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
         rewardPoints: initialRewardPoints,
         referralLevel: 1,
         commissionRatePercent: rates[0] || 10,
+        referralLevelRates: rates.slice(0, 4),
+        eligibleIncomeTypes: [...ELIGIBLE_ORIGINAL_EARN_TYPES],
         registeredAt: new Date()
       } : null
     };
+    if (result.notification) {
+      result.notification.text = referralNotificationText(result.notification);
+      // This helper is deliberately optional for older unit-test doubles that
+      // only mock sendNotificationOnce. Production always has the outbox helper.
+      if (typeof deliveryApi.enqueuePendingNotification === 'function') {
+        await deliveryApi.enqueuePendingNotification({
+          eventKey: result.notification.eventKey,
+          type: result.notification.type,
+          user: result.notification.user,
+          telegramId: result.notification.telegramId,
+          text: result.notification.text,
+          session
+        });
+      }
+    }
+    return result;
   });
 
   referralDiagnostic('commit', { committed: true, initialPaid: Boolean(result.initialPaid) });
@@ -250,21 +285,26 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
   if (result.notification) {
     referralDiagnostic('notification_trigger', { triggered: true });
     const notification = result.notification;
-    sendNotificationOnce({
-      eventKey: notification.eventKey,
-      type: notification.type,
-      user: notification.user,
-      telegramId: notification.telegramId,
-      text: require('./botMessages').botText(
-        'referralInitial',
-        notification.language,
-        notification.referredName,
-        notification.rewardPoints,
-        notification.referralLevel,
-        notification.commissionRatePercent,
-        notification.registeredAt
-      )
-    }).catch(error => console.error('Referral notification failed:', error.message || error));
+    try {
+      const delivery = await deliveryApi.sendNotificationOnce({
+        eventKey: notification.eventKey,
+        type: notification.type,
+        user: notification.user,
+        telegramId: notification.telegramId,
+        text: notification.text
+      });
+      referralDiagnostic('notification_delivery', {
+        status: delivery?.status || 'unknown',
+        eventKey: notification.eventKey
+      });
+    } catch (error) {
+      referralDiagnostic('notification_delivery', {
+        status: 'failed',
+        eventKey: notification.eventKey,
+        error: String(error?.message || error).slice(0, 300)
+      });
+      console.error('Referral notification failed:', error.message || error);
+    }
   } else {
     referralDiagnostic('notification_trigger', { triggered: false });
   }

@@ -36,22 +36,25 @@ vipPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
   // Seed missing catalog entries first, then reconcile only published catalog
   // policy fields. Admin-controlled enabled/comingSoon flags are deliberately
   // preserved, and user subscription snapshots are never rewritten here.
-  await this.bulkWrite(DEFAULT_VIP_PLANS.map(plan => ({
-    updateOne: {
-      filter: { planNumber: plan.planNumber },
-      update: { $setOnInsert: plan },
-      upsert: true
-    }
-  })), { ordered: true });
-  await this.bulkWrite(DEFAULT_VIP_PLANS.map(plan => {
-    const { planNumber, pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps } = plan;
-    return {
+  const { withMongoTransaction } = require('../utils/mongoTransaction');
+  await withMongoTransaction(async session => {
+    await this.bulkWrite(DEFAULT_VIP_PLANS.map(plan => ({
       updateOne: {
-        filter: { planNumber },
-        update: { $set: { pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps } }
+        filter: { planNumber: plan.planNumber },
+        update: { $setOnInsert: plan },
+        upsert: true
       }
-    };
-  }), { ordered: true });
+    })), { ordered: true, session });
+    await this.bulkWrite(DEFAULT_VIP_PLANS.map(plan => {
+      const { planNumber, pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps } = plan;
+      return {
+        updateOne: {
+          filter: { planNumber },
+          update: { $set: { pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps } }
+        }
+      };
+    }), { ordered: true, session });
+  });
 };
 
 module.exports = mongoose.model('VipPlan', vipPlanSchema);

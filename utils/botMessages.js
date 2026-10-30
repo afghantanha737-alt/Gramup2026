@@ -42,7 +42,7 @@ const MESSAGES = {
   },
   taskNew: {
     fa: (title, reward, sponsorName) => `🎯 ${sponsorName ? 'تسک اسپانسری جدید' : 'تسک جدید'} اضافه شد!\n\n${title}${sponsorName ? `\nاسپانسر: ${sponsorName}` : ''}\nپاداش: ${reward} پوینت\n\nهمین حالا از تب «تسک‌ها» انجامش بده.`,
-    ps: (title, reward, sponsorName) => `🎯 ${sponsorName ? 'نوې سپانسر شوې دنده' : 'نوې دنده'} اضافه شوه!\n\n${title}${sponsorName ? `\nسپانسر: ${sponsorName}` : ''}\nپاداش: ${reward} پوائنټ\n\nاوس مهال یې د «دندې» ټب څخه ترسره کړئ.`,
+    ps: (title, reward, sponsorName) => `🎯 ${sponsorName ? 'نوې سپانسر شوې دنده' : 'نوې دنده'} اضافه شوه!\n\n${title}${sponsorName ? `\nاسپانسر: ${sponsorName}` : ''}\nپاداش: ${reward} پوائنټ\n\nاوس مهال یې د «دندې» ټب څخه ترسره کړئ.`,
     en: (title, reward, sponsorName) => `🎯 ${sponsorName ? 'New sponsored task' : 'New task'} added!\n\n${title}${sponsorName ? `\nSponsor: ${sponsorName}` : ''}\nReward: ${reward} points\n\nDo it now from the Tasks tab.`
   },
   withdrawalApproved: {
@@ -81,13 +81,27 @@ const MESSAGES = {
     en: (name, points, balance) => `🎉 Congrats! ${name} completed the required tasks and you earned ${points} referral bonus points.\nCurrent balance: ${balance} points.`
   },
   referralInitial: {
-    fa: (name, points, level = 1, commission = 10, registeredAt = new Date()) => `🎉 دعوت جدید ثبت شد! ${name} عضو Gramup شد و پاداش اولیهٔ ${points} پوینتی به حسابت اضافه شد.\nسطح دعوت: ${level} (Level ${level})\nاز فعالیت‌ها و تسک‌های این کاربر همیشه ${commission}٪ کمیسیون دریافت می‌کنید.\nزمان ثبت: ${formatKabulDateTime(registeredAt, 'fa')}`,
-    ps: (name, points, level = 1, commission = 10, registeredAt = new Date()) => `🎉 نوې بلنه ثبت شوه! ${name} د Gramup غړی شو او ستاسو حساب ته د ${points} پوائنټ لومړنی انعام اضافه شو.\nد بلنې کچه: ${level} (Level ${level})\nد دې کاروونکي له فعالیتونو او دندو څخه به تل ${commission}٪ کمېشن ترلاسه کوئ.\nد ثبت وخت: ${formatKabulDateTime(registeredAt, 'ps')}`,
-    en: (name, points, level = 1, commission = 10, registeredAt = new Date()) => `🎉 New invitation confirmed! ${name} joined Gramup and the initial ${points}-point reward was added to your account.\nReferral level: ${level} (Level ${level})\nYou will always receive ${commission}% commission from this user's activities and tasks.\nRegistered: ${formatKabulDateTime(registeredAt, 'en')}`
+    fa: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
+      const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
+      return `🎉 دعوت جدید ثبت شد! ${name} عضو Gramup شد و ${points} پوینت واقعاً به حسابت اضافه شد.\nسطح دعوت: ${level} (Level ${level}) — نرخ این رابطه: ${commission}٪\nنرخ‌های واقعی کمیسیون: L1 ${l1}٪، L2 ${l2}٪، L3 ${l3}٪، L4 و عمیق‌تر ${l4}٪.\nدامنه درآمد واجد شرایط: فقط درآمد اصلی از تسک‌های تأییدشده، ورود روزانه و جایزهٔ لیدربورد؛ پاداش‌ها و کمیسیون‌های Referral، گردونه، تبدیل، برداشت و تعدیل ادمین شامل نیستند.\nزمان ثبت: ${formatKabulDateTime(registeredAt, 'fa')}`;
+    },
+    ps: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
+      const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
+      return `🎉 نوې بلنه ثبت شوه! ${name} د Gramup غړی شو او ${points} پوائنټونه واقعاً ستاسو حساب ته زیات شول.\nد بلنې کچه: ${level} (Level ${level}) — د دې اړیکې نرخ: ${commission}٪\nد کمېسیون واقعي نرخونه: L1 ${l1}٪، L2 ${l2}٪، L3 ${l3}٪، L4 او ژورې کچې ${l4}٪.\nد وړ عاید ساحه: یوازې د تایید شویو دندو، ورځني ننوتلو او غوره‌لیست اصلي عاید؛ د بلنې انعامونه او کمېسیونونه، چرخ، بدلون، ایستل او د اډمین تعدیل نه شاملېږي.\nد ثبت وخت: ${formatKabulDateTime(registeredAt, 'ps')}`;
+    },
+    en: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
+      const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
+      return `🎉 New invitation confirmed! ${name} joined Gramup and exactly ${points} points were added to your account.\nReferral level: ${level} (Level ${level}) — this relationship's rate: ${commission}%\nEffective commission rates: L1 ${l1}%, L2 ${l2}%, L3 ${l3}%, L4 and deeper ${l4}%.\nEligible-income scope: only original earnings from approved tasks, daily check-ins, and leaderboard rewards; referral rewards/commissions, spins, conversions, withdrawals, and admin adjustments are excluded.\nRegistered: ${formatKabulDateTime(registeredAt, 'en')}`;
+    }
+  },
+  dailyCheckinReady: {
+    fa: (day, points, streak) => `⏰ پاداش ورود روزانه آماده است.\nامروز روز ${day} چرخهٔ شماست و با ثبت ورود ${points} پوینت دریافت می‌کنید.\nاستریک فعلی: ${streak} روز.`,
+    ps: (day, points, streak) => `⏰ ستاسو د ورځني ننوتلو انعام چمتو دی.\nنن ستاسو د دورې ${day} ورځ ده او د ننوتلو په ثبتولو ${points} پوائنټونه ترلاسه کوئ.\nاوسنی سټریک: ${streak} ورځې.`,
+    en: (day, points, streak) => `⏰ Your daily check-in reward is ready.\nToday is Day ${day} of your cycle and checking in will award ${points} points.\nCurrent streak: ${streak} days.`
   },
   dailyReminder: {
     fa: () => `⏰ یادت نره امروز وارد Gramup بشی و پاداش روزانه‌ت رو بگیری!\nاستریکت رو از دست نده — پاداش‌های هفت‌روزه‌ات را کامل کن.`,
-    ps: () => `⏰ مه هېروئ چې نن Gramup ته ننوځئ او خپله ورځنۍ ګټه ترلاسه کړئ!\nخپل پرله‌پسې ورځې مه ورکوئ — هره ۷ ورځې یو وړیا د ګردونې چانس ترلاسه کوئ.`,
+    ps: () => `⏰ مه هېروئ چې نن Gramup ته ننوځئ او خپله ورځنۍ ګټه ترلاسه کړئ!\nخپل پرله‌پسې ورځې مه ورکوئ — د اوو ورځو د انعام پړاو بشپړ کړئ.`,
     en: () => `⏰ Don't forget to check in on Gramup today and claim your daily reward!\nKeep your streak alive — complete the seven-day reward cycle.`
   },
   dailyReminderPersonalized: {

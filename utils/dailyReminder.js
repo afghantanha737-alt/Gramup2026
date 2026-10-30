@@ -25,13 +25,15 @@ function kabulDayStart(date = new Date()) {
 }
 
 function kabulReminderTarget(date = new Date()) {
-  // 08:30 Asia/Kabul == 04:00 UTC; Kabul has no DST transitions.
-  return new Date(kabulDayStart(date).getTime() + (8 * 60 + 30) * 60 * 1000);
+  // 07:00 Asia/Kabul == 02:30 UTC; Kabul has no DST transitions.
+  return new Date(kabulDayStart(date).getTime() + 7 * 60 * 60 * 1000);
 }
 
 function isCatchUpDue(settings, now = new Date()) {
   if (!settings?.dailyReminderEnabled) return false;
-  const target = kabulReminderTarget(now);
+  const hour = Number(settings.dailyReminderHourUtc ?? 2);
+  const minute = Number(settings.dailyReminderMinuteUtc ?? 30);
+  const target = new Date(utcDayKey(now) * 86400000 + (hour * 60 + minute) * 60000);
   const lastRun = settings.dailyReminderLastRunAt ? new Date(settings.dailyReminderLastRunAt) : null;
   return now >= target && (!lastRun || lastRun < target);
 }
@@ -40,9 +42,10 @@ function isCatchUpDue(settings, now = new Date()) {
 function reminderMessageFor(settings, lang, streak = 0, lastCheckIn = null, now = new Date()) {
   const { botText } = require('./botMessages');
   const { DAILY_CHECKIN_REWARDS, cycleDayForStreak } = require('./dailyCheckin');
-  const currentDayStart = kabulDayStart(now).getTime();
-  const lastDayStart = lastCheckIn ? kabulDayStart(new Date(lastCheckIn)).getTime() : null;
-  const nextStreak = lastDayStart === currentDayStart - 86400000 ? Number(streak || 0) + 1 : 1;
+  const currentDayStart = utcDayKey(now) * 86400000;
+  const lastDayStart = lastCheckIn ? utcDayKey(new Date(lastCheckIn)) * 86400000 : null;
+  const nextStreak = lastDayStart === currentDayStart ? Number(streak || 1)
+    : lastDayStart === currentDayStart - 86400000 ? Number(streak || 0) + 1 : 1;
   const day = cycleDayForStreak(nextStreak) || 1;
   const points = DAILY_CHECKIN_REWARDS[day - 1];
   const custom = String(settings.dailyReminderMessage || '').trim();
@@ -88,7 +91,7 @@ async function runDailyReminderSweep(now = new Date(), dependencies = {}) {
   if (!settings.dailyReminderEnabled) return { sent: 0, failed: 0, skipped: 'disabled' };
   if (!shouldRunNow(settings, now) && !dependencies.force) return { sent: 0, failed: 0, skipped: 'wrong_hour' };
 
-  const startOfToday = kabulDayStart(now);
+  const startOfToday = new Date(utcDayKey(now) * 86400000);
 
   const filter = {
     isBanned: false,

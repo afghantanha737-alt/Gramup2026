@@ -36,7 +36,7 @@ const { isValidAdminKey } = require('../utils/adminKey');
 const RequiredChannel = require('../models/RequiredChannel');
 const { membership, validateChannelRef, normalizeChannelInput } = require('../utils/membership');
 const { canTransition, requiresReason, shouldRefund, synthesizeHistory, isTerminal } = require('../utils/withdrawalStatus');
-const { COMMON_TIMEZONES, isValidTimezone, targetUtcHour } = require('../utils/timezones');
+const { COMMON_TIMEZONES, isValidTimezone, targetUtcTime } = require('../utils/timezones');
 const { sendTestReminder, sendTestReminderToAll, kabulReminderTarget } = require('../utils/dailyReminder');
 const { normalizeSponsorInput, marginInfo, rewardCostUsd } = require('../utils/sponsor');
 const { startOfUtcWeek, endOfUtcWeek, weekKey } = require('../utils/weeklyLeaderboard');
@@ -2160,27 +2160,31 @@ router.put('/vip/plans', async (req, res) => {
       }
     }
     seen.add(planNumber);
-    plans.push({ planNumber, pricePoints, monthlyRewardPercent, durationDays, enabled, comingSoon });
+    const { policyVersion, productGroup, principalDailyBps, rewardDailyBps } = newVipPolicyForPlan(planNumber);
+    plans.push({ planNumber, pricePoints, monthlyRewardPercent, durationDays, enabled, comingSoon,
+      policyVersion, productGroup, principalDailyBps, rewardDailyBps });
   }
 
-  await VipPlan.bulkWrite(plans.map(plan => ({
-    updateOne: {
-      filter: { planNumber: plan.planNumber },
-      update: { $set: plan },
-      upsert: true
-    }
-  })), { ordered: true });
+  await withMongoTransaction(async session => {
+    await VipPlan.bulkWrite(plans.map(plan => ({
+      updateOne: {
+        filter: { planNumber: plan.planNumber },
+        update: { $set: plan },
+        upsert: true
+      }
+    })), { ordered: true, session });
+    await recordAdminLogRequired({
+      actor: req.adminActor,
+      action: 'vip_plan_catalog_update',
+      targetType: 'vip_plan_catalog',
+      details: plans.map(plan => `${plan.planNumber}:${plan.enabled ? 'active' : plan.comingSoon ? 'soon' : 'off'}`).join(', ')
+    }, session);
+  });
   const savedPlans = await VipPlan.find({}).sort({ planNumber: 1 }).lean();
   res.json({
     success: true,
     rate,
     plans: savedPlans.map(plan => ({ ...plan, pricing: pricingForVipPlan(plan.planNumber), priceMatchesPolicy: Number(plan.pricePoints) === pricePointsForVipPlan(plan.planNumber) }))
-  });
-  recordAdminLog({
-    actor: req.adminActor,
-    action: 'vip_plan_catalog_update',
-    targetType: 'vip_plan_catalog',
-    details: plans.map(plan => `${plan.planNumber}:${plan.enabled ? 'active' : plan.comingSoon ? 'soon' : 'off'}`).join(', ')
   });
 });
 
@@ -2198,15 +2202,19 @@ router.post('/vip/reserve/fund', async (req, res) => {
   if (!amountCents || amountPoints > 1000000000 || reason.length < 5 || reason.length > 500) {
     return res.status(400).json({ success: false, code: 'VIP_RESERVE_FUND_INVALID', message: 'مقدار Reserve مثبت و Reason حداقل ۵ کاراکتر باشد.' });
   }
-  const reserve = await withMongoTransaction(async session => fundVipReserve(amountCents, session));
-  if (!reserve) return res.status(503).json({ success: false, code: 'VIP_RESERVE_UNAVAILABLE', message: 'Reserve در دسترس نیست.' });
-  recordAdminLog({
-    actor: req.adminActor,
-    action: 'vip_reserve_fund_declaration',
-    targetType: 'vip_reserve',
-    targetId: 'global',
-    details: `declared=${amountPoints} points; reason=${reason}`
+  const reserve = await withMongoTransaction(async session => {
+    const funded = await fundVipReserve(amountCents, session);
+    if (!funded) return null;
+    await recordAdminLogRequired({
+      actor: req.adminActor,
+      action: 'vip_reserve_fund_declaration',
+      targetType: 'vip_reserve',
+      targetId: 'global',
+      details: `declared=${amountPoints} points; reason=${reason}`
+    }, session);
+    return funded;
   });
+  if (!reserve) return res.status(503).json({ success: false, code: 'VIP_RESERVE_UNAVAILABLE', message: 'Reserve در دسترس نیست.' });
   return res.json({ success: true, reserve: vipReserveSnapshot(reserve), warning: 'این عملیات فقط موجودی Reserve حسابداری را ثبت می‌کند؛ انتقال خارجی وجه را انجام نمی‌دهد.' });
 });
 
@@ -2331,19 +2339,31 @@ router.get('/settings', async (req, res) => {
 
 router.get('/daily-reminder/status', async (req, res) => {
   const settings = await Settings.getGlobal();
+  const NotificationDelivery = require('../models/NotificationDelivery');
+  const [exhaustedDeliveries, pendingDeliveries] = await Promise.all([
+    NotificationDelivery.countDocuments({ type: { $in: ['daily_checkin', 'referral_initial'] }, status: 'exhausted' }),
+    NotificationDelivery.countDocuments({ type: { $in: ['daily_checkin', 'referral_initial'] }, status: { $in: ['pending', 'sending', 'unknown'] } })
+  ]);
   const now = new Date();
   const lastRunAt = settings.dailyReminderLastRunAt ? new Date(settings.dailyReminderLastRunAt) : null;
   const lastRunAgeSeconds = lastRunAt ? Math.max(0, Math.floor((now.getTime() - lastRunAt.getTime()) / 1000)) : null;
   return res.json({
     success: true,
-    scheduler: 'render_cron',
-    schedule: { cron: '0 4 * * *', timezone: 'UTC', localTimezone: 'Asia/Kabul', localTime: '08:30' },
+    scheduler: 'application_poll_with_optional_render_cron',
+    schedule: { cron: '30 2 * * *', timezone: 'UTC', localTimezone: 'Asia/Kabul', localTime: '07:00' },
+    automaticCreditEnabled: settings.dailyAutoCheckinEnabled === true,
+    deliveryHealth: { exhausted: exhaustedDeliveries, pending: pendingDeliveries },
     enabled: settings.dailyReminderEnabled === true,
     lastRun: {
       at: lastRunAt,
       ageSeconds: lastRunAgeSeconds,
       sent: Number(settings.dailyReminderLastSentCount || 0),
       failed: Number(settings.dailyReminderLastFailedCount || 0),
+      creditedAccounts: Number(settings.dailyAutoCheckinLastCreditedCount || 0),
+      creditedPoints: Number(settings.dailyAutoCheckinLastCreditedPoints || 0),
+      creditFailures: Number(settings.dailyAutoCheckinLastFailedCount || 0),
+      alreadyClaimed: Number(settings.dailyAutoCheckinLastAlreadyClaimedCount || 0),
+      bannedAccounts: Number(settings.dailyAutoCheckinLastBannedCount || 0),
       status: settings.dailyReminderLastStatus || 'never',
       error: settings.dailyReminderLastError || ''
     },
@@ -2422,6 +2442,12 @@ router.put('/settings', async (req, res) => {
     changes[key] = value;
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'dailyAutoCheckinEnabled')) {
+    if (typeof body.dailyAutoCheckinEnabled !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'وضعیت دیلی خودکار باید boolean باشد.' });
+    }
+    changes.dailyAutoCheckinEnabled = body.dailyAutoCheckinEnabled;
+  }
   // dailyReminderEnabled یک boolean است، نه یک عدد؛ جدا از قاعده‌ی بالا پردازش می‌شود
   if (Object.prototype.hasOwnProperty.call(body, 'dailyReminderEnabled')) {
     changes.dailyReminderEnabled = body.dailyReminderEnabled === true || body.dailyReminderEnabled === 'true';
@@ -2529,14 +2555,19 @@ router.put('/settings', async (req, res) => {
     }
   }
 
-  // ساعت واقعی اجرا (UTC) از روی «ساعت محلی + منطقه‌ی زمانی» محاسبه می‌شود، نه مستقیم از ادمین
-  if (changes.dailyReminderLocalHour !== undefined || changes.dailyReminderTimezone !== undefined) {
+  // Include local minutes: Kabul 07:00 is 02:30 UTC, not a rounded UTC hour.
+  if (changes.dailyReminderLocalHour !== undefined || changes.dailyReminderTimezone !== undefined
+    || changes.dailyReminderLocalMinute !== undefined) {
     const localHour = changes.dailyReminderLocalHour !== undefined ? changes.dailyReminderLocalHour : settings.dailyReminderLocalHour;
+    const localMinute = changes.dailyReminderLocalMinute !== undefined ? changes.dailyReminderLocalMinute : settings.dailyReminderLocalMinute;
     const timezone = changes.dailyReminderTimezone !== undefined ? changes.dailyReminderTimezone : settings.dailyReminderTimezone;
-    changes.dailyReminderHourUtc = targetUtcHour(localHour, timezone);
-  }
-  if (changes.dailyReminderLocalMinute !== undefined) {
-    changes.dailyReminderMinuteUtc = changes.dailyReminderLocalMinute;
+    try {
+      const target = targetUtcTime(localHour, localMinute, timezone);
+      changes.dailyReminderHourUtc = target.hour;
+      changes.dailyReminderMinuteUtc = target.minute;
+    } catch (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
   }
 
 

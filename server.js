@@ -261,39 +261,32 @@ async function startServer() {
     const runJob = (key, label, job) => withDistributedJobLock(key, job)
       .catch(error => console.error(`${label} failed:`, error.message || error));
 
-    // GramUp daily reminder policy: all users who started the bot, every day at
-    // 08:30 Asia/Kabul (04:00 UTC). Apply once to existing installations while
+    // Explicit v3 request: automatic daily check-in at 07:00 Asia/Kabul (02:30 UTC).
+    // Apply once to existing installations while
     // preserving any later admin changes.
     const Settings = require('./models/Settings');
-    const reminderSettings = await Settings.getGlobal();
-    if (Number(reminderSettings.dailyReminderPolicyVersion || 0) < 2) {
-      Object.assign(reminderSettings, {
-        dailyReminderEnabled: true,
-        dailyReminderHourUtc: 4,
-        dailyReminderMinuteUtc: 0,
-        dailyReminderTimezone: 'Asia/Kabul',
-        dailyReminderLocalHour: 8,
-        dailyReminderLocalMinute: 30,
-        dailyReminderAudience: 'all',
-        dailyReminderPolicyVersion: 2
-      });
-      await reminderSettings.save();
-    }
+    await require('./utils/dailyPolicy').applyDailyPolicyV3(Settings);
 
     const runReferralSweep = require('./utils/referralSweep');
     void runJob('referral-sweep', 'Referral sweep', runReferralSweep);
     setInterval(() => { void runJob('referral-sweep', 'Scheduled referral sweep', runReferralSweep); }, 15 * 60 * 1000);
 
+    const { runReferralNotificationRetrySweep, REFERRAL_NOTIFICATION_RETRY_LOCK_KEY } = require('./utils/referralNotificationRetry');
+    void runJob(REFERRAL_NOTIFICATION_RETRY_LOCK_KEY, 'Initial referral notification retry', runReferralNotificationRetrySweep);
+    setInterval(() => {
+      void runJob(REFERRAL_NOTIFICATION_RETRY_LOCK_KEY, 'Referral notification retry', runReferralNotificationRetrySweep);
+    }, 60 * 1000);
+
     // Shared database leases prevent each app instance from sending the same reminders.
-    const { runDailyReminderSweep, isCatchUpDue } = require('./utils/dailyReminder');
-    const runScheduledDailyReminder = async () => {
-      const currentSettings = await Settings.getGlobal();
-      const forceCatchUp = isCatchUpDue(currentSettings, new Date());
-      return runDailyReminderSweep(new Date(), { force: forceCatchUp });
-    };
-    // Run once on boot to recover a missed 04:00 UTC window, then poll every minute.
+    const { runDailySchedule } = require('./utils/dailySchedule');
+    const runScheduledDailyReminder = () => runDailySchedule(new Date());
+    // Recover a missed 02:30 UTC run on boot, then poll every minute.
     void runJob('daily-reminder-sweep', 'Initial daily reminder sweep', runScheduledDailyReminder);
     setInterval(() => { void runJob('daily-reminder-sweep', 'Daily reminder sweep', runScheduledDailyReminder); }, 60 * 1000);
+
+    const { runDailyReceiptRetrySweep } = require('./utils/dailyReceiptRetry');
+    void runJob('daily-receipt-retry', 'Initial daily receipt retry', runDailyReceiptRetrySweep);
+    setInterval(() => { void runJob('daily-receipt-retry', 'Daily receipt retry', runDailyReceiptRetrySweep); }, 60 * 1000);
 
     const { settleClosedWeeks } = require('./utils/weeklyLeaderboardSettlement');
     void runJob('weekly-leaderboard-settlement', 'Initial weekly settlement', settleClosedWeeks);

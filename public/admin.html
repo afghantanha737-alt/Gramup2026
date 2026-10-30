@@ -568,19 +568,25 @@
         <label>قیمت هر ۱ GRAM به دلار (برای نمایش ≈ USD؛ صفر = مخفی)</label>
         <input id="setGramUsd" type="number" step="0.0001" min="0">
         <div style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:4px 0 12px;background:var(--surface2)">
-          <b>⏰ Daily Check Reminder (یادآوری ورود روزانه)</b>
-          <p class="small" style="margin:8px 0">به کاربرانی که آن روز هنوز ورود روزانه نزده‌اند، یک‌بار در روز پیام یادآوری فرستاده می‌شود (به زبان خودشان، مگر متن سفارشی زیر را پر کنید). سرور هر ۱۰ دقیقه چک می‌کند و فقط در همان ساعتی که اینجا تنظیم می‌شود ارسال می‌شود؛ بعد از ذخیره، زمان‌بندی خودش از تنظیمات جدید استفاده می‌کند و نیازی به ری‌استارت نیست.</p>
+          <b>دیلی چک‌این و پیام روزانه</b>
+          <p class="small" style="margin:8px 0">دیلی خودکار هر روز ساعت ۷ صبح کابل پاداش استریک را بدون نیاز به ورود کاربر ثبت می‌کند؛ پاداش دستی و خودکار در یک روز تکرار نمی‌شود. این حالت هزینه پاداش همه حساب‌های غیرمسدود را ایجاد می‌کند. سرور هر دقیقه بررسی و اجرای عقب‌افتاده همان روز را بازیابی می‌کند؛ خاموش‌کردن آن روی Claim دستی اثر ندارد.</p>
+          <label style="display:flex;align-items:center;gap:8px;margin:10px 0">
+            <input type="checkbox" id="setAutoCheckinEnabled" style="width:auto">
+            <b>پرداخت خودکار دیلی ساعت ۷ صبح کابل</b>
+          </label>
 
           <label style="display:flex;align-items:center;gap:8px;margin:10px 0 0">
             <input type="checkbox" id="setReminderEnabled" style="width:auto">
-            <b>فعال باشد</b>
+            <b>پیام روزانه فعال باشد (خاموش‌کردن پیام، پرداخت خودکار را متوقف نمی‌کند)</b>
           </label>
 
           <label>منطقه‌ی زمانی</label>
           <select id="setReminderTz" onchange="updateReminderUtcHint()"></select>
 
-          <label>ساعت ارسال (به وقت محلی همین منطقه‌ی زمانی)</label>
+          <label>ساعت ارسال در حالت فقط یادآور (دیلی خودکار همیشه ۷ صبح کابل است)</label>
           <input id="setReminderLocalHour" type="number" min="0" max="23" step="1" oninput="updateReminderUtcHint()">
+          <label>دقیقه محلی</label>
+          <input id="setReminderLocalMinute" type="number" min="0" max="59" step="1" oninput="updateReminderUtcHint()">
           <p class="small" id="reminderUtcHint" style="margin-top:4px"></p>
 
           <label>مخاطبان</label>
@@ -1993,7 +1999,7 @@ async function loadTaskFormSettings() {
 }
 
 let reminderTimezones = [];
-const REMINDER_STATUS_FA = { ok: 'موفق ✅', error: 'خطا ❌', '': 'هنوز اجرا نشده' };
+const REMINDER_STATUS_FA = { ok: 'موفق', partial: 'تکمیل با خطای جزئی', error: 'خطا', '': 'هنوز اجرا نشده' };
 
 function updateReminderPreview() {
   const custom = document.getElementById("setReminderMessage").value.trim();
@@ -2004,10 +2010,12 @@ function updateReminderPreview() {
 function updateReminderUtcHint() {
   const tz = document.getElementById("setReminderTz").value;
   const hour = Number(document.getElementById("setReminderLocalHour").value) || 0;
+  const minute = Number(document.getElementById("setReminderLocalMinute").value) || 0;
   const box = document.getElementById("reminderUtcHint");
-  if (tz === "UTC") { box.textContent = ""; return; }
-  // فقط یک تخمین نمایشی برای ادمین؛ محاسبه‌ی دقیق و واقعی سمت سرور هنگام ذخیره انجام می‌شود
-  box.textContent = `این تقریباً معادل ساعت ${hour}:۰۰ در «${(reminderTimezones.find(z => z.id === tz) || {}).label || tz}» است.`;
+  const local = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  box.textContent = tz === "Asia/Kabul" && hour === 7 && minute === 0
+    ? "۷ صبح کابل دقیقاً برابر 02:30 UTC است."
+    : `${local} در ${tz}؛ معادل UTC با دقیقه دقیق هنگام ذخیره محاسبه می‌شود.`;
 }
 
 async function sendReminderTest() {
@@ -2041,7 +2049,8 @@ function renderReminderStatus(s) {
   if (!s.dailyReminderLastRunAt) { box.textContent = "هنوز اجرا نشده."; return; }
   const when = new Date(s.dailyReminderLastRunAt).toLocaleString("fa-IR");
   const statusLabel = REMINDER_STATUS_FA[s.dailyReminderLastStatus] || s.dailyReminderLastStatus;
-  box.innerHTML = `آخرین اجرا: ${when}<br>وضعیت: ${statusLabel}<br>تعداد کاربرانی که پیام گرفتند: <b>${s.dailyReminderLastSentCount ?? 0}</b>` +
+  box.innerHTML = `آخرین اجرا: ${escapeHtml(when)}<br>وضعیت: ${escapeHtml(statusLabel)}<br>تعداد کاربرانی که پیام گرفتند: <b>${Number(s.dailyReminderLastSentCount) || 0}</b>` +
+    (s.dailyAutoCheckinEnabled ? `<br>پاداش ثبت‌شده در آخرین اجرا: ${Number(s.dailyAutoCheckinLastCreditedCount) || 0} حساب، ${Number(s.dailyAutoCheckinLastCreditedPoints) || 0} پوینت` : '') +
     (s.dailyReminderLastError ? `<br><span style="color:var(--danger)">خطا: ${escapeHtml(s.dailyReminderLastError)}</span>` : "");
 }
 
@@ -2479,9 +2488,11 @@ async function loadSettings() {
       .map(z => `<option value="${escapeHtml(z.id)}">${escapeHtml(z.label)}</option>`).join("");
     document.getElementById("setRate").value = s.rate ?? "";
     document.getElementById("setGramUsd").value = s.gramUsdPrice ?? 0;
+    document.getElementById("setAutoCheckinEnabled").checked = s.dailyAutoCheckinEnabled === true;
     document.getElementById("setReminderEnabled").checked = !!s.dailyReminderEnabled;
     document.getElementById("setReminderTz").value = s.dailyReminderTimezone || "UTC";
-    document.getElementById("setReminderLocalHour").value = s.dailyReminderLocalHour ?? 15;
+    document.getElementById("setReminderLocalHour").value = s.dailyReminderLocalHour ?? 7;
+    document.getElementById("setReminderLocalMinute").value = s.dailyReminderLocalMinute ?? 0;
     document.getElementById("setReminderAudience").value = s.dailyReminderAudience || "all";
     document.getElementById("setReminderMessage").value = s.dailyReminderMessage || "";
     updateReminderPreview();
@@ -2507,9 +2518,11 @@ async function saveSettings() {
   const body = {
     rate: Number(document.getElementById("setRate").value),
     gramUsdPrice: Number(document.getElementById("setGramUsd").value) || 0,
+    dailyAutoCheckinEnabled: document.getElementById("setAutoCheckinEnabled").checked,
     dailyReminderEnabled: document.getElementById("setReminderEnabled").checked,
     dailyReminderTimezone: document.getElementById("setReminderTz").value,
     dailyReminderLocalHour: Number(document.getElementById("setReminderLocalHour").value) || 0,
+    dailyReminderLocalMinute: Number(document.getElementById("setReminderLocalMinute").value) || 0,
     dailyReminderAudience: document.getElementById("setReminderAudience").value,
     dailyReminderMessage: document.getElementById("setReminderMessage").value.trim(),
     minWithdrawPoints: Number(document.getElementById("setMinWithdraw").value),

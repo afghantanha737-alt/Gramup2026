@@ -51,7 +51,7 @@ const state = {
   referralFilter: "all",
   invitedCount: 0,
   activeInvitedCount: 0,
-  referralInitialRewardPoints: 10,
+  referralInitialRewardPoints: 0,
   gateActive: false,
   totalEarnedPoints: 0,
   level: null,
@@ -631,6 +631,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !state.initialized || state.gateActive) return;
   if (Date.now() - lastGateCheckAt < 15000) return;
   enforceMembership();
+  void refreshUserDataOnReturn();
 });
 
 /* ================= TERMS ================= */
@@ -957,6 +958,46 @@ async function loadUserData({ force = false } = {}) {
   updateHeader();
 }
 
+function rerenderActiveUserDataView() {
+  if (state.activeTab === "home") renderHome();
+  else if (state.activeTab === "tasks") renderTasks();
+  else if (state.activeTab === "wallet") renderWallet();
+  else if (state.activeTab === "vip") {
+    const content = $("#content");
+    if (content) content.innerHTML = state.vipError
+      ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondaryBtn" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
+      : renderProfileVip();
+    startVipCountdown();
+  } else if (state.activeTab === "profile") {
+    void renderProfile();
+  }
+}
+
+let lastUserDataReturnRefreshAt = 0;
+let userDataReturnRefreshPromise = null;
+async function refreshUserDataOnReturn() {
+  if (document.visibilityState !== "visible" || !state.initialized || state.gateActive) return;
+  const now = Date.now();
+  if (now - lastUserDataReturnRefreshAt < CLIENT_DATA_TTL_MS) return;
+  if (userDataReturnRefreshPromise) return userDataReturnRefreshPromise;
+  lastUserDataReturnRefreshAt = now;
+  userDataReturnRefreshPromise = (async () => {
+    try {
+      await loadUserData({ force: true });
+      rerenderActiveUserDataView();
+    } catch (error) {
+      // This is a read-only return refresh; keep the current view on network failure.
+      console.warn("User data refresh on return failed:", error);
+    } finally {
+      userDataReturnRefreshPromise = null;
+    }
+  })();
+  return userDataReturnRefreshPromise;
+}
+window.refreshUserDataOnReturn = refreshUserDataOnReturn;
+window.addEventListener("focus", () => { void refreshUserDataOnReturn(); });
+window.addEventListener("pageshow", () => { void refreshUserDataOnReturn(); });
+
 let referralDataRequestSequence = 0;
 async function loadReferralData({ force = false } = {}) {
   const requestId = ++referralDataRequestSequence;
@@ -1186,7 +1227,7 @@ function renderHome() {
           <div class="tbAmount"><span class="tbAmountNum">${formatFixed(state.gramBalance, 3)}</span><span class="tbAmountUnit">GRAM</span></div>
           <div class="tbPills">
             <span class="tbPill tbPillPurple">${t("tb_points_chip", { n: formatPoints(state.points) })}</span>
-            <span class="tbPill tbPillOrange">${level.badge} ${escapeHTML(level.name)}</span>
+            <span class="tbPill tbPillOrange">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
           </div>
         </div>
         <div class="tbGemRing"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#2f9bf0"/><path d="M20 24h24l6 8-18 20L14 32z" fill="#fff"/><path d="M32 30v10M27 35h10" stroke="#2f9bf0" stroke-width="3" stroke-linecap="round"/></svg></div>
@@ -1654,8 +1695,31 @@ async function doCheckIn() {
     updateHeader();
     haptic("success");
     toast(`+${formatPoints(result.earned)} ${t("points_unit")} 🎉`, "success");
-    renderTasks();
+    rerenderActiveUserDataView();
+    try {
+      await loadUserData({ force: true });
+    } catch (refreshError) {
+      // The check-in was accepted; a read-model refresh failure must not undo it.
+      console.warn("Check-in read-model refresh failed:", refreshError);
+    }
+    rerenderActiveUserDataView();
   } catch (error) {
+    if (error?.code === "ALREADY_CHECKED_IN") {
+      try {
+        await loadUserData({ force: true });
+        rerenderActiveUserDataView();
+      } catch (refreshError) {
+        // The server already owns the claim; retain the current view if refresh is unavailable.
+        console.warn("Already-checked-in read-model refresh failed:", refreshError);
+      }
+      haptic("warning");
+      toast(translateServerMessage(error.code, error.message), "warning");
+      if (button) {
+        button.disabled = true;
+        button.textContent = t("checkin_done_button");
+      }
+      return;
+    }
     haptic("error");
     toast(translateServerMessage(error.code, error.message), "error");
     if (button) { button.disabled = false; button.textContent = t("checkin_button"); }
@@ -1829,7 +1893,7 @@ function showWithdraw() {
     return;
   }
   if (!window.gramupWallet?.isConnected()) {
-    toast("ابتدا Wallet خود را متصل کنید.", "warning");
+    toast(t("wallet_connect_required"), "warning");
     void window.gramupWallet?.connect();
     return;
   }
@@ -1977,7 +2041,7 @@ async function submitExchange() {
     const result = exchangeDirection === "gram_to_points" && !useInternalGramBalance
       ? (typeof window.gramupWallet?.swapGramToPoints === "function"
         ? await window.gramupWallet.swapGramToPoints(amount)
-        : Promise.reject(Object.assign(new Error("Wallet connection is unavailable."), { code: "WALLET_PROOF_REQUIRED" })))
+        : Promise.reject(Object.assign(new Error(t("wallet_connection_unavailable")), { code: "WALLET_PROOF_REQUIRED" })))
       : await api("/api/points/exchange", {
         method: "POST",
         headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) },
@@ -1987,7 +2051,7 @@ async function submitExchange() {
     state.points = Number(result.points) ?? state.points;
     if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
     haptic("success");
-    toast(result.message || `${result.pointsGained || 0} Point added after TON confirmation.`, "success");
+    toast(result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) }), "success");
     hideExchange();
     updateHeader();
     renderWallet();
@@ -2306,7 +2370,7 @@ async function loadWalletChainBalance(renderRequestId = walletRenderSequence) {
   const meta = document.getElementById('walletChainBalanceMeta');
   if (!value || !meta) return;
   value.textContent = t('wallet_chain_balance_loading');
-  meta.textContent = 'TON Mainnet';
+  meta.textContent = t('deposit_network_ton_mainnet');
   try {
     const result = await api('/api/points/wallet/chain-balance');
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
@@ -2315,7 +2379,7 @@ async function loadWalletChainBalance(renderRequestId = walletRenderSequence) {
   } catch (error) {
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
     value.textContent = t('wallet_chain_balance_unavailable');
-    meta.textContent = error?.code === 'WALLET_NOT_CONNECTED' ? t('wallet_connected_withdraw_hint') : 'TON Mainnet';
+    meta.textContent = error?.code === 'WALLET_NOT_CONNECTED' ? t('wallet_connected_withdraw_hint') : t('deposit_network_ton_mainnet');
   }
 }
 window.refreshWalletChainBalance = () => loadWalletChainBalance(walletRenderSequence);
@@ -2334,7 +2398,7 @@ function renderWallet() {
     </section>
     <div id="tonWalletConnection" aria-live="polite"></div>
     <section class="walletChainBalance" aria-live="polite">
-      <div><span class="walletChainBalanceLabel">${t("wallet_chain_balance_title")}</span><strong id="walletChainBalanceValue">${t("wallet_chain_balance_loading")}</strong><small id="walletChainBalanceMeta">TON Mainnet</small></div>
+      <div><span class="walletChainBalanceLabel">${t("wallet_chain_balance_title")}</span><strong id="walletChainBalanceValue">${t("wallet_chain_balance_loading")}</strong><small id="walletChainBalanceMeta">${t("deposit_network_ton_mainnet")}</small></div>
       <button type="button" class="walletChainRefresh" onclick="refreshWalletChainBalance()">↻ ${t("wallet_chain_balance_refresh")}</button>
     </section>
 
@@ -2671,7 +2735,7 @@ function renderProfileMenu() {
         <div class="tbPills">
           <span class="tbPill tbPillPurple tbPillSm">${t("tb_points_chip", { n: formatPoints(state.points) })}</span>
           <span class="tbPill tbPillOrange tbPillSm">${formatPoints(state.invitedCount)} ${t("tb_referrals")}</span>
-          <span class="tbPill tbPillGreen tbPillSm">${level.badge} ${escapeHTML(level.name)}</span>
+          <span class="tbPill tbPillGreen tbPillSm">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
         </div>
       </div>
       <div class="profileBalanceMini"><span>${t("tb_total_balance")}</span><strong>${formatNumber(state.gramBalance, 3)} <small>GRAM</small></strong></div>
@@ -2924,24 +2988,29 @@ function renderProfileReferral() {
   const rawNetwork = Array.isArray(state.referralNetworkLevels) ? state.referralNetworkLevels : [];
   const configuredRates = Array.isArray(state.referralLevelRates) ? state.referralLevelRates : [];
   const buckets = [
-      { key: "1", label: t("referral_level_label", { n: 1 }), min: 1, max: 1, rate: 10 },
-    { key: "2", label: t("referral_level_label", { n: 2 }), min: 2, max: 2, rate: 5 },
-    { key: "3", label: t("referral_level_label", { n: 3 }), min: 3, max: 3, rate: 3 },
-    { key: "4plus", label: t("referral_level_4_plus"), min: 4, max: 4, rate: 2 }
+    { key: "1", label: t("referral_level_label", { n: 1 }), min: 1, max: 1 },
+    { key: "2", label: t("referral_level_label", { n: 2 }), min: 2, max: 2 },
+    { key: "3", label: t("referral_level_label", { n: 3 }), min: 3, max: 3 },
+    { key: "4plus", label: t("referral_level_4_plus"), min: 4, max: Infinity }
   ].map(bucket => {
     const rows = rawNetwork.filter(row => Number(row.level) >= bucket.min && Number(row.level) <= bucket.max);
+    const configuredRateValues = bucket.key === "4plus"
+      ? configuredRates.slice(3)
+      : [configuredRates[bucket.min - 1]];
+    const rateValues = configuredRateValues.filter(Number.isFinite);
     return {
       ...bucket,
       members: rows.reduce((sum, row) => sum + (Number(row.members) || 0), 0),
       active: rows.reduce((sum, row) => sum + (Number(row.activeMembers) || 0), 0),
       earned: rows.reduce((sum, row) => sum + (Number(row.commissionPoints) || 0), 0),
-      rate: bucket.key === "4plus" ? 2 : Number(configuredRates[bucket.min - 1]) || bucket.rate
+      rate: rateValues[0] ?? null,
+      rateLabel: rateValues.length ? `${rateValues.map(value => formatNumber(value)).join(" / ")}%` : "—"
     };
   });
   const maxMembers = Math.max(1, ...buckets.map(row => row.members));
   const levelCards = buckets.map((row, index) => `
     <article class="rf-level-card rf-level-${Math.min(index + 1, 4)}">
-      <div class="rf-level-top"><span>${escapeHTML(row.label)}</span><strong>${formatNumber(row.rate)}%</strong></div>
+      <div class="rf-level-top"><span>${escapeHTML(row.label)}</span><strong>${row.rateLabel}</strong></div>
       <small class="rf-level-desc">${t(`referral_level_relationship_${row.key}`)}</small>
       <div class="rf-level-bar"><i style="width:${Math.min(100, row.members / maxMembers * 100)}%"></i></div>
       <div class="rf-level-foot"><span>${formatNumber(row.active)} / ${formatNumber(row.members)} ${t("referral_active_short")}</span><b>+${formatPoints(row.earned)}</b></div>
@@ -2968,7 +3037,10 @@ function renderProfileReferral() {
       </li>`;
   }).join("");
   const currentLevelLabel = currentLevel > 0 ? t("referral_level_label", { n: formatPoints(currentLevel) }) : "—";
-  const rewardPoints = 10;
+  const rewardPoints = Number(state.referralInitialRewardPoints);
+  const rewardDisplay = Number.isFinite(rewardPoints) && rewardPoints > 0
+    ? formatPoints(rewardPoints)
+    : t("referral_reward_unconfigured");
 
   return `
     <div class="referralPage referralDashboard">
@@ -2976,7 +3048,7 @@ function renderProfileReferral() {
 
       <section class="rf-hero" aria-labelledby="rfHeroTitle">
         <div class="rf-hero-orbit" aria-hidden="true"></div>
-        <div class="rf-hero-top"><span class="rf-overline">${t("referral_hero_eyebrow")}</span><span class="rf-hero-badge">${t("referral_reward_direct_badge", { n: formatPoints(rewardPoints) })}</span></div>
+        <div class="rf-hero-top"><span class="rf-overline">${t("referral_hero_eyebrow")}</span><span class="rf-hero-badge">${t("referral_reward_direct_badge", { n: rewardDisplay })}</span></div>
         <h2 class="rf-hero-title" id="rfHeroTitle">${t("referral_total_earnings_title")}</h2>
         <div class="rf-hero-total"><span class="rf-hero-coin" aria-hidden="true">◇</span><strong>${formatPoints(totalEarnings)}</strong><span>${t("points_unit")}</span></div>
         <div class="rf-hero-bottom"><span>${t("referral_this_month")}</span><strong>+${formatPoints(monthlyEarnings)} ${t("points_unit")}</strong></div>
@@ -3016,7 +3088,7 @@ function renderProfileReferral() {
         <div class="rf-section-heading"><div><span class="rf-overline">${t("referral_how_eyebrow")}</span><h2 id="rfHowTitle">${t("referral_how_title")}</h2></div><span class="rf-section-glyph">✦</span></div>
         <ol class="rf-how-list">
           <li><span>01</span><p>${t("referral_how_step_1")}</p></li>
-          <li><span>02</span><p>${t("referral_how_step_2", { n: formatPoints(rewardPoints) })}</p></li>
+          <li><span>02</span><p>${t("referral_how_step_2", { n: rewardDisplay })}</p></li>
           <li><span>03</span><p>${t("referral_how_step_3")}</p></li>
           <li><span>04</span><p>${t("referral_how_step_4")}</p></li>
         </ol>

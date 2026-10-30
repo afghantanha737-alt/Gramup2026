@@ -18,6 +18,7 @@ const TaskCompletion = require('../models/TaskCompletion');
 const { vipActivationTaskDefinition } = require('../utils/vipActivationTasks');
 const { idempotencyTransactionId, executeIdempotently } = require('../utils/idempotency');
 const { utcDayKey, wasUtcYesterday } = require('../utils/utcDay');
+const { claimDailyCheckin } = require('../utils/dailyAutoCheckin');
 const {
   DAY_MS,
   calculateTotalRewardCents,
@@ -336,56 +337,18 @@ router.post('/daily-chest', auth, async (req, res) => {
 });
 // POST /api/points/checkin
 router.post('/checkin', auth, async (req, res) => {
-  const todayKey = utcDayKey(new Date());
-  let result;
-  try {
-    result = await withMongoTransaction(async session => {
-      const current = await User.findById(req.dbUser._id).session(session);
-      if (!current) throw new Error('کاربر پیدا نشد.');
-      if (current.lastCheckIn && utcDayKey(current.lastCheckIn) === todayKey) {
-        const error = new Error('امروز قبلاً ورود روزانه ثبت شده است.');
-        error.code = 'ALREADY_CHECKED_IN';
-        throw error;
-      }
-
-      const wasYesterday = current.lastCheckIn && wasUtcYesterday(current.lastCheckIn, todayKey * DAY_MS);
-      // The streak remains historical, while payment follows the seven-day cycle.
-      const newStreak = wasYesterday ? current.streak + 1 : 1;
-      const earned = dailyCheckinReward(newStreak);
-      const cycleDay = cycleDayForStreak(newStreak);
-      const inc = { points: earned, totalCheckins: 1 };
-
-      const updated = await User.findOneAndUpdate(
-        { _id: current._id, lastCheckIn: current.lastCheckIn || null },
-        { $set: { streak: newStreak, lastCheckIn: new Date() }, $inc: inc },
-        { new: true, session }
-      );
-      if (!updated) {
-        const error = new Error('امروز قبلاً ورود روزانه ثبت شده است.');
-        error.code = 'ALREADY_CHECKED_IN';
-        throw error;
-      }
-      await recordLedgerRequired({
-        user: updated._id,
-        type: 'checkin',
-        amount: earned,
-        description: `ورود روزانه (روز ${cycleDay} از چرخه ۷روزه)`,
-        balanceAfter: updated.points,
-        sourceId: `checkin:${updated._id}:${todayKey}`,
-        session
-      });
-      return { updated, earned, cycleDay };
-    });
-  } catch (error) {
-    if (error.code === 'ALREADY_CHECKED_IN') return res.status(400).json({ success: false, message: error.message, code: error.code });
-    throw error;
+  const result = await claimDailyCheckin(req.dbUser._id, { now: new Date() });
+  if (result.status === 'already_claimed') {
+    return res.status(400).json({ success: false, message: 'امروز قبلاً ورود روزانه ثبت شده است.', code: 'ALREADY_CHECKED_IN' });
   }
+  if (result.status === 'banned') return res.status(403).json({ success: false, code: 'USER_BANNED', message: 'این حساب مسدود است.' });
+  if (result.status !== 'credited') throw new Error('کاربر برای چک‌این پیدا نشد.');
 
   res.json({
     success: true,
-    earned: result.earned,
-    points: result.updated.points,
-    streak: result.updated.streak,
+    earned: result.amount,
+    points: result.user.points,
+    streak: result.streak,
     cycleDay: result.cycleDay,
     nextResetAt: nextResetTimestamp()
   });

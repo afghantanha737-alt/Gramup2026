@@ -59,4 +59,22 @@ function targetUtcHour(localHour, timeZone, referenceDate = new Date()) {
   return best;
 }
 
-module.exports = { COMMON_TIMEZONES, isValidTimezone, localHourAt, targetUtcHour };
+function targetUtcTime(localHour, localMinute, timeZone, referenceDate = new Date()) {
+  if (!Number.isInteger(localHour) || localHour < 0 || localHour > 23
+    || !Number.isInteger(localMinute) || localMinute < 0 || localMinute > 59
+    || !isValidTimezone(timeZone)) throw new Error('Invalid local reminder time');
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  });
+  const start = Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), referenceDate.getUTCDate());
+  for (let minutes = 0; minutes < 1440; minutes += 1) {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(start + minutes * 60000))
+      .filter(p => p.type !== 'literal').map(p => [p.type, Number(p.value)]));
+    if (parts.hour === localHour && parts.minute === localMinute) {
+      return { hour: Math.floor(minutes / 60), minute: minutes % 60 };
+    }
+  }
+  throw new Error('The selected local time does not exist on this date');
+}
+
+module.exports = { COMMON_TIMEZONES, isValidTimezone, localHourAt, targetUtcHour, targetUtcTime };
