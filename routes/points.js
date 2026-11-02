@@ -23,14 +23,13 @@ const { claimDailyCheckin } = require('../utils/dailyAutoCheckin');
 const {
   DAY_MS,
   calculateTotalRewardCents,
-  dailyRewardCents,
   pointsFromCents,
   calculateDaysRemaining,
   calculateDaysCompleted
 } = require('../utils/vipRewards');
-const { settleMaturedVipSubscriptions } = require('../utils/vipSettlement');
 const { LEGACY_VIP_POLICY_VERSION, NEW_VIP_POLICY_VERSION, newVipPolicyForPlan, dailyPointsCentsFromBps } = require('../utils/vipPolicy');
 const { reserveForSubscription, releaseForPayout, pointsFromCents: reservePointsFromCents } = require('../utils/vipReserve');
+const { calculateVipAccrual, centsFromPoints } = require('../utils/vipAccrual');
 const {
   normalizeTonAddress,
   normalizeTonTxHash,
@@ -64,19 +63,23 @@ function publicVipPlan(plan) {
   const dailyPrincipalCents = policy ? dailyPointsCentsFromBps(plan.pricePoints, policy.principalDailyBps) : 0;
   const dailyRewardCents = policy ? dailyPointsCentsFromBps(plan.pricePoints, policy.rewardDailyBps) : 0;
   const totalRewardPoints = totalRewardCents == null ? 0 : pointsFromCents(totalRewardCents);
+  const dailyRewardAveragePoints = (policy?.durationDays || plan.durationDays) > 0
+    ? Number((totalRewardPoints / (policy?.durationDays || plan.durationDays)).toFixed(2))
+    : 0;
   return {
     planNumber: plan.planNumber,
     pricePoints: plan.pricePoints,
     monthlyRewardPercent: plan.monthlyRewardPercent,
     durationDays: policy?.durationDays || plan.durationDays,
     totalRewardPoints,
-    dailyRewardAveragePoints: (policy?.durationDays || plan.durationDays) > 0 ? Number((totalRewardPoints / (policy?.durationDays || plan.durationDays)).toFixed(2)) : 0,
+    dailyRewardAveragePoints,
     principalDailyPercent: policy ? policy.principalDailyBps / 100 : null,
     rewardDailyPercent: policy ? policy.rewardDailyBps / 100 : null,
     dailyPrincipalPoints: dailyPrincipalCents == null ? 0 : pointsFromCents(dailyPrincipalCents),
     dailyRewardPoints: dailyRewardCents == null ? 0 : pointsFromCents(dailyRewardCents),
     totalPrincipalPoints: policy ? pointsFromCents(dailyPrincipalCents * policy.durationDays) : 0,
     dailyTotalPayoutPoints: policy ? pointsFromCents(dailyPrincipalCents + dailyRewardCents) : null,
+    dailyMiningRatePoints: policy ? pointsFromCents(dailyPrincipalCents + dailyRewardCents) : dailyRewardAveragePoints,
     totalReceivedPoints: policy ? pointsFromCents((dailyPrincipalCents + dailyRewardCents) * policy.durationDays) : null,
     policyVersion: plan.policyVersion || LEGACY_VIP_POLICY_VERSION,
     productGroup: plan.productGroup || 'legacy',
@@ -89,24 +92,13 @@ function publicVipPlan(plan) {
 function publicVipSubscription(subscription, now = new Date()) {
   const startAt = new Date(subscription.startAt);
   const endAt = new Date(subscription.endAt);
-  const lastClaimAt = subscription.lastClaimAt ? new Date(subscription.lastClaimAt) : null;
-  const nextClaimAt = lastClaimAt
-    ? new Date(lastClaimAt.getTime() + DAY_MS)
-    : startAt;
   const active = subscription.status === 'active';
   const claimIndex = Number(subscription.claimsCompleted || 0);
-  const canClaim = active
-    && now < endAt
-    && claimIndex < subscription.durationDays
-    && now >= nextClaimAt;
-  const todayRewardCents = active && claimIndex < subscription.durationDays
-    ? dailyRewardCents(subscription.totalRewardCents, subscription.durationDays, claimIndex)
-    : 0;
   const isNewPolicy = String(subscription.policyVersion || LEGACY_VIP_POLICY_VERSION) === NEW_VIP_POLICY_VERSION;
-  const todayPrincipalCents = isNewPolicy && active && claimIndex < subscription.durationDays
-    ? dailyPointsCentsFromBps(subscription.pricePoints, subscription.principalDailyBps)
-    : 0;
-  const todayTotalCents = (todayRewardCents || 0) + (todayPrincipalCents || 0);
+  const accrual = calculateVipAccrual(subscription, now);
+  const rewardPoints = accrual?.rewardPoints || 0;
+  const principalPoints = accrual?.principalPoints || 0;
+  const unclaimedPoints = accrual?.unclaimedPoints || 0;
   return {
     id: String(subscription._id),
     planNumber: subscription.planNumber,
@@ -127,13 +119,20 @@ function publicVipSubscription(subscription, now = new Date()) {
     principalPaidDays: Number(subscription.principalPaidDays) || 0,
     principalPaidPoints: Number(subscription.principalPaidPoints) || 0,
     lastPrincipalPaidAt: subscription.lastPrincipalPaidAt ? new Date(subscription.lastPrincipalPaidAt).toISOString() : null,
-    nextRewardPoints: todayRewardCents == null ? 0 : pointsFromCents(todayRewardCents),
-    nextPrincipalPoints: todayPrincipalCents == null ? 0 : reservePointsFromCents(todayPrincipalCents),
-    nextTotalPayoutPoints: todayTotalCents > 0 ? reservePointsFromCents(todayTotalCents) : 0,
+    nextRewardPoints: rewardPoints,
+    nextPrincipalPoints: principalPoints,
+    nextTotalPayoutPoints: unclaimedPoints,
+    unclaimedPoints,
+    estimatedUnclaimedPoints: accrual?.estimatedUnclaimedPoints || 0,
+    unclaimedEstimateCapPoints: accrual?.unclaimedEstimateCapPoints || 0,
+    principalAtMaturityPoints: !isNewPolicy && !subscription.principalReturnedAt ? Number(subscription.pricePoints) || 0 : 0,
+    dailyMiningRatePoints: accrual?.dailyMiningRatePoints || 0,
+    accrualAsOf: now.toISOString(),
+    accrualEnded: now >= endAt,
     reserveLiabilityPoints: reservePointsFromCents(Number(subscription.reserveLiabilityCents || 0)),
     reservePaidPoints: reservePointsFromCents(Number(subscription.reservePaidCents || 0)),
-    nextClaimAt: active && claimIndex < subscription.durationDays ? nextClaimAt.toISOString() : null,
-    canClaim,
+    nextClaimAt: null,
+    canClaim: Boolean(active && accrual?.canClaim),
     status: subscription.status,
     principalReturnedAt: subscription.principalReturnedAt ? new Date(subscription.principalReturnedAt).toISOString() : null
   };
@@ -1025,7 +1024,6 @@ router.post('/swap/gram-to-points/intents/:id/verify', auth, sensitiveRateLimit(
 router.get('/vip/plans', auth, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const now = new Date();
-  await settleMaturedVipSubscriptions({ userId: req.dbUser._id, now });
   const [plans, subscriptions, user] = await Promise.all([
     VipPlan.find({}).sort({ planNumber: 1 }).lean(),
     VipSubscription.find({ user: req.dbUser._id }).sort({ createdAt: -1 }).limit(30).lean(),
@@ -1215,156 +1213,139 @@ router.post('/vip/:subscriptionId/claim', auth, sensitiveRateLimit('claim'), asy
   try {
     operation = await executeIdempotently({
       userId: req.dbUser._id,
-      scope: 'vip_daily_claim',
+      scope: 'vip_partial_claim',
       key: req.get('Idempotency-Key'),
       body: { subscriptionId: String(req.params.subscriptionId) },
       execute: async session => {
         const now = new Date();
         const subscription = await VipSubscription.findOne({ _id: req.params.subscriptionId, user: req.dbUser._id }).session(session);
         if (!subscription) throw vipError('VIP_SUBSCRIPTION_NOT_FOUND', 'اشتراک VIP پیدا نشد.', 404);
-        if (subscription.status !== 'active' || now >= subscription.endAt) {
+        if (subscription.status !== 'active') {
           throw vipError('VIP_PLAN_COMPLETED', 'دوره این پلن به پایان رسیده است.', 409);
         }
-        const claimIndex = Number(subscription.claimsCompleted || 0);
-        if (claimIndex >= subscription.durationDays) throw vipError('VIP_REWARDS_COMPLETE', 'پاداش روزانه این پلن کامل شده است.', 409);
-        const nextClaimAt = subscription.lastClaimAt
-          ? new Date(subscription.lastClaimAt.getTime() + DAY_MS)
-          : new Date(subscription.startAt);
-        if (now < nextClaimAt) {
-          throw vipError('VIP_CLAIM_NOT_READY', 'پاداش بعدی پس از گذشت ۲۴ ساعت قابل دریافت است.', 409, { retryAt: nextClaimAt });
+
+        const accrual = calculateVipAccrual(subscription, now);
+        if (!accrual) throw vipError('VIP_PAYOUT_INVALID', 'مقدار پرداخت VIP معتبر نیست؛ با مدیریت تماس بگیرید.', 409);
+        const rewardCents = accrual.rewardPendingCents;
+        const principalCents = accrual.principalPendingCents;
+        const totalPayoutCents = rewardCents + principalCents;
+        if (!Number.isSafeInteger(totalPayoutCents) || totalPayoutCents <= 0) {
+          throw vipError('VIP_CLAIM_NO_ACCRUAL', 'هنوز یک صدم پوینت قابل دریافت جمع نشده است.', 409);
         }
 
-        const rewardCents = dailyRewardCents(subscription.totalRewardCents, subscription.durationDays, claimIndex);
-        const rewardPoints = pointsFromCents(rewardCents);
-        if (!rewardCents || rewardPoints == null) throw vipError('VIP_REWARD_INVALID', 'مقدار پاداش روزانه معتبر نیست.', 409);
-        const isNewPolicy = String(subscription.policyVersion || LEGACY_VIP_POLICY_VERSION) === NEW_VIP_POLICY_VERSION;
+        const isNewPolicy = accrual.isNewPolicy;
+        const isMatured = accrual.matured;
         if (isNewPolicy) {
           const settings = await Settings.findOne({ key: 'global' }).session(session).lean();
           if (settings?.vipPayoutsEnabled !== true) {
             throw vipError('VIP_PAYOUTS_DISABLED', 'پرداخت‌های این نسخه VIP موقتاً فعال نیست.', 409);
           }
-          const principalCents = dailyPointsCentsFromBps(subscription.pricePoints, subscription.principalDailyBps);
-          const totalPayoutCents = Number.isSafeInteger(principalCents) ? principalCents + rewardCents : null;
-          const principalPoints = principalCents == null ? null : reservePointsFromCents(principalCents);
-          const totalPayoutPoints = totalPayoutCents == null ? null : reservePointsFromCents(totalPayoutCents);
-          if (!Number.isSafeInteger(principalCents) || !Number.isSafeInteger(totalPayoutCents) || principalPoints == null || totalPayoutPoints == null) {
-            throw vipError('VIP_PAYOUT_INVALID', 'مقدار پرداخت روزانه معتبر نیست؛ با مدیریت تماس بگیرید.', 409);
+          const reserveLiabilityCents = Number(subscription.reserveLiabilityCents || 0);
+          const reservePaidCents = Number(subscription.reservePaidCents || 0);
+          if (!Number.isSafeInteger(reserveLiabilityCents) || !Number.isSafeInteger(reservePaidCents)
+            || totalPayoutCents > reserveLiabilityCents - reservePaidCents) {
+            throw vipError('VIP_RESERVE_UNAVAILABLE', 'Reserve قابل پرداخت برای این مقدار کافی نیست؛ پرداخت انجام نشد.', 409);
           }
           const reserve = await releaseForPayout(totalPayoutCents, session);
-          if (!reserve) {
-            throw vipError('VIP_RESERVE_UNAVAILABLE', 'Reserve قابل پرداخت برای این روز کافی نیست؛ پرداخت انجام نشد.', 409);
-          }
-          const isFinalClaim = claimIndex + 1 >= subscription.durationDays;
-          const claimedRewardPoints = pointsFromCents(
-            Math.round((Number(subscription.claimedRewardPoints || 0) * 100) + 1e-8) + rewardCents
-          );
-          const updatedSubscription = await VipSubscription.findOneAndUpdate(
-            {
-              _id: subscription._id,
-              user: req.dbUser._id,
-              status: 'active',
-              endAt: { $gt: now },
-              claimsCompleted: claimIndex,
-              principalPaidDays: claimIndex,
-              lastClaimAt: subscription.lastClaimAt || null
-            },
-            {
-              $set: {
-                claimsCompleted: claimIndex + 1,
-                claimedRewardPoints,
-                lastClaimAt: now,
-                lastPrincipalPaidAt: now,
-                ...(isFinalClaim ? { status: 'completed', reserveReleasedAt: now } : {})
-              },
-              $inc: {
-                principalPaidDays: 1,
-                principalPaidPoints: principalPoints,
-                reservePaidCents: totalPayoutCents
-              }
-            },
-            { new: true, session }
-          );
-          if (!updatedSubscription) throw vipError('VIP_CLAIM_CONFLICT', 'این پاداش هم‌زمان در درخواست دیگری ثبت شده است؛ وضعیت را تازه‌سازی کنید.', 409);
-          const user = await User.findByIdAndUpdate(
-            req.dbUser._id,
-            { $inc: { points: totalPayoutPoints } },
-            { new: true, session }
-          );
-          if (!user) throw new Error('VIP subscriber no longer exists.');
-          const principalLedger = await recordLedgerRequired({
-            user: user._id,
-            type: 'vip_daily_principal',
-            currency: 'points',
-            amount: principalPoints,
-            description: 'VIP daily principal payout',
-            balanceAfter: user.points - rewardPoints,
-            sourceId: `vip:${subscription._id}:principal-day:${claimIndex + 1}`,
-            transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_daily_claim', key: req.get('Idempotency-Key'), leg: `${subscription._id}-principal-${claimIndex + 1}` }),
-            session
-          });
-          if (!principalLedger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'پرداخت اصل قبلاً ثبت شده است.', 409);
-          const rewardLedger = await recordLedgerRequired({
-            user: user._id,
-            type: 'vip_daily_reward',
-            currency: 'points',
-            amount: rewardPoints,
-            description: 'VIP daily reward payout',
-            balanceAfter: user.points,
-            sourceId: `vip:${subscription._id}:claim:${claimIndex + 1}`,
-            transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_daily_claim', key: req.get('Idempotency-Key'), leg: `${subscription._id}-reward-${claimIndex + 1}` }),
-            session
-          });
-          if (!rewardLedger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'پاداش روزانه قبلاً ثبت شده است.', 409);
-          return { body: {
-            success: true,
-            rewardPoints,
-            principalPoints,
-            totalPayoutPoints,
-            points: user.points,
-            subscription: publicVipSubscription(updatedSubscription, now)
-          } };
+          if (!reserve) throw vipError('VIP_RESERVE_UNAVAILABLE', 'Reserve قابل پرداخت کافی نیست؛ پرداخت انجام نشد.', 409);
         }
-        const claimedRewardPoints = pointsFromCents(
-          Math.round((Number(subscription.claimedRewardPoints || 0) * 100) + 1e-8) + rewardCents
-        );
+
+        const claimIndex = Number(subscription.claimsCompleted || 0);
+        const previousRewardCents = centsFromPoints(subscription.claimedRewardPoints || 0);
+        const previousPrincipalCents = centsFromPoints(subscription.principalPaidPoints || 0);
+        if (previousRewardCents == null || previousPrincipalCents == null) {
+          throw vipError('VIP_PAYOUT_INVALID', 'موجودی پرداخت قبلی اشتراک معتبر نیست.', 409);
+        }
+        const claimedRewardPoints = pointsFromCents(previousRewardCents + rewardCents);
+        const principalPaidPoints = pointsFromCents(previousPrincipalCents + principalCents);
+        const reservePaidCents = Number(subscription.reservePaidCents || 0) + (isNewPolicy ? totalPayoutCents : 0);
+        const effectiveNow = new Date(Math.min(now.getTime(), new Date(subscription.endAt).getTime()));
+        const elapsedDays = Math.max(0, Math.floor((effectiveNow.getTime() - new Date(subscription.startAt).getTime()) / DAY_MS));
+        const completesContract = isMatured;
         const updatedSubscription = await VipSubscription.findOneAndUpdate(
           {
             _id: subscription._id,
             user: req.dbUser._id,
             status: 'active',
-            endAt: { $gt: now },
             claimsCompleted: claimIndex,
+            claimedRewardPoints: subscription.claimedRewardPoints || 0,
+            principalPaidPoints: subscription.principalPaidPoints || 0,
+            reservePaidCents: subscription.reservePaidCents || 0,
             lastClaimAt: subscription.lastClaimAt || null
           },
-          { $set: { claimsCompleted: claimIndex + 1, claimedRewardPoints, lastClaimAt: now } },
+          {
+            $set: {
+              claimsCompleted: claimIndex + 1,
+              claimedRewardPoints,
+              principalPaidPoints,
+              lastClaimAt: now,
+              ...(isNewPolicy ? {
+                principalPaidDays: Math.min(Number(subscription.durationDays) || 0, elapsedDays),
+                reservePaidCents,
+                ...(principalCents > 0 ? { lastPrincipalPaidAt: now } : {})
+              } : {}),
+              ...(completesContract ? {
+                status: 'completed',
+                ...(isNewPolicy ? { reserveReleasedAt: now } : { principalReturnedAt: now })
+              } : {})
+            }
+          },
           { new: true, session }
         );
-        if (!updatedSubscription) throw vipError('VIP_CLAIM_CONFLICT', 'این پاداش هم‌زمان در درخواست دیگری ثبت شده است؛ وضعیت را تازه‌سازی کنید.', 409);
+        if (!updatedSubscription) {
+          throw vipError('VIP_CLAIM_CONFLICT', 'پوینت‌ها هم‌زمان از درخواست دیگری دریافت شدند؛ وضعیت را تازه‌سازی کنید.', 409);
+        }
 
+        const rewardPoints = pointsFromCents(rewardCents);
+        const principalPoints = pointsFromCents(principalCents);
+        const totalPayoutPoints = pointsFromCents(totalPayoutCents);
         const user = await User.findOneAndUpdate(
           { _id: req.dbUser._id },
-          { $inc: { points: rewardPoints } },
+          { $inc: { points: totalPayoutPoints } },
           { new: true, session }
         );
         if (!user) throw new Error('VIP subscriber no longer exists.');
 
-        const sourceId = `vip:${subscription._id}:claim:${claimIndex + 1}`;
-        const ledger = await recordLedgerRequired({
-          user: user._id,
-          type: 'vip_daily_reward',
-          currency: 'points',
-          amount: rewardPoints,
-          description: '',
-          balanceAfter: user.points,
-          sourceId,
-          transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_daily_claim', key: req.get('Idempotency-Key'), leg: `${subscription._id}-claim-${claimIndex + 1}` }),
-          session
-        });
-        if (!ledger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'این پاداش قبلاً ثبت شده است.', 409);
+        const ledgerSequence = claimIndex + 1;
+        const key = req.get('Idempotency-Key');
+        if (principalPoints > 0) {
+          const principalType = isNewPolicy ? 'vip_daily_principal' : 'vip_principal_return';
+          const principalSourceId = isNewPolicy
+            ? `vip:${subscription._id}:partial-claim:${ledgerSequence}:principal`
+            : `vip:${subscription._id}:principal`;
+          const principalLedger = await recordLedgerRequired({
+            user: user._id,
+            type: principalType,
+            currency: 'points',
+            amount: principalPoints,
+            description: isNewPolicy ? 'VIP principal accrual payout' : 'VIP principal return at maturity',
+            balanceAfter: user.points - rewardPoints,
+            sourceId: principalSourceId,
+            transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_partial_claim', key, leg: `${subscription._id}-principal-${ledgerSequence}` }),
+            session
+          });
+          if (!principalLedger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'پرداخت اصل قبلاً ثبت شده است.', 409);
+        }
+        if (rewardPoints > 0) {
+          const rewardLedger = await recordLedgerRequired({
+            user: user._id,
+            type: 'vip_daily_reward',
+            currency: 'points',
+            amount: rewardPoints,
+            description: 'VIP continuous mining payout',
+            balanceAfter: user.points,
+            sourceId: `vip:${subscription._id}:partial-claim:${ledgerSequence}:reward`,
+            transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_partial_claim', key, leg: `${subscription._id}-reward-${ledgerSequence}` }),
+            session
+          });
+          if (!rewardLedger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'پاداش قبلاً ثبت شده است.', 409);
+        }
 
         return { body: {
           success: true,
           rewardPoints,
+          principalPoints,
+          totalPayoutPoints,
           points: user.points,
           subscription: publicVipSubscription(updatedSubscription, now)
         } };

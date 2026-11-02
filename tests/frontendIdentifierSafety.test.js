@@ -19,7 +19,10 @@ for (const marker of [
 assert.ok(app.includes('data-screenshot-task="${escapeHTML(task._id)}"'));
 assert.ok(app.includes('data-upload-screenshot="${escapeHTML(task._id)}"'));
 assert.ok(app.includes('data-withdrawal-id="${escapeHTML(item._id)}"'));
-assert.ok(app.includes('data-vip-claim="${escapeHTML(subscription.id)}"'));
+assert.ok(app.includes('const id = escapeHTML(subscription.id);'));
+assert.ok(app.includes('data-vip-live-sub="${id}"'));
+assert.ok(app.includes('data-vip-live-rate="${id}"'));
+assert.ok(app.includes('data-vip-claim-all'));
 assert.ok(!app.includes('onclick="verifyTelegramTask(\'${task._id}'));
 assert.ok(!app.includes('onchange="submitScreenshotTask(\'${task._id}'));
 assert.ok(!app.includes('onclick="openWithdrawalDetail(\'${item._id}'));

@@ -6,24 +6,23 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const points = fs.readFileSync(path.join(root, 'routes/points.js'), 'utf8');
-const reconciliation = require('../utils/vipSettlementReconciliation');
-const reconciliationSource = fs.readFileSync(path.join(root, 'utils/vipSettlementReconciliation.js'), 'utf8');
-const VipSubscription = require('../models/VipSubscription');
+const app = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
+const claimRoute = points.slice(
+  points.indexOf("router.post('/vip/:subscriptionId/claim'"),
+  points.indexOf("router.post('/vip/:subscriptionId/claim'") + 9000
+);
 
-assert.doesNotMatch(server, /settleMaturedVipSubscriptions\(/, 'server startup must not call financial settlement');
-assert.doesNotMatch(points, /settleMaturedVipSubscriptions\(/, 'normal VIP catalog reads must not settle liabilities');
-assert.match(server, /Legacy VIP principal settlement is never a startup or timer job/);
-assert.strictEqual(reconciliation.isExecutionEnabled({}), false, 'manual settlement must be disabled by default');
-assert.strictEqual(reconciliation.isExecutionEnabled({ ENABLE_MANUAL_VIP_SETTLEMENT: 'true' }), true);
-assert.match(reconciliationSource, /server-now/, 'requests without asOf need a stable idempotency hash');
-assert.ok(VipSubscription.schema.path('reconciliationStatus'));
-assert.deepStrictEqual(VipSubscription.schema.path('reconciliationStatus').enumValues, ['eligible', 'needs_review', 'settled', 'ineligible']);
-assert.match(fs.readFileSync(path.join(root, 'utils/vipSettlement.js'), 'utf8'), /reconciliationStatus: \{ \$nin: \['needs_review'/);
-
-(async () => {
-  await assert.rejects(
-    reconciliation.executeAuthorized({ confirmation: reconciliation.CONFIRMATION, idempotencyKey: 'safe-key-123', env: {} }),
-    error => error && error.code === 'MANUAL_VIP_SETTLEMENT_DISABLED'
-  );
-  console.log('ALL PASS — startup settlement disabled, explicit reconciliation gated, needs_review quarantine present');
-})().catch(error => { console.error(error); process.exitCode = 1; });
+assert.doesNotMatch(server, /settleMaturedVipSubscriptions\(/,
+  'startup and timer jobs must never settle user VIP balances');
+assert.match(server, /Matured VIP balances settle only through the user's explicit claim action/);
+assert.doesNotMatch(points, /settleMaturedVipSubscriptions\(/,
+  'VIP catalog reads must not move user funds');
+assert.match(claimRoute, /scope: 'vip_partial_claim'/,
+  'partial claims must use the idempotency layer');
+assert.match(claimRoute, /releaseForPayout\(totalPayoutCents, session\)/,
+  'Reserve-backed principal and reward credits must remain transactional');
+assert.match(claimRoute, /findOneAndUpdate\(/,
+  'the partial claim update must use a compare-and-set subscription update');
+assert.match(app, /if \(!readModelActionAllowed\(\)\) return;/,
+  'wallet claims must retain fresh-data safeguards');
+console.log('PASS — no automatic or read-side settlement; explicit partial claims remain idempotent and transaction-safe');

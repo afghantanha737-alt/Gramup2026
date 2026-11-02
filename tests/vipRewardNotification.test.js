@@ -11,28 +11,31 @@ const now = new Date('2026-10-24T08:00:00.000Z');
 const day = 24 * 60 * 60 * 1000;
 const readySub = {
   _id: 'sub-1', user: 'user-1', planNumber: 3, status: 'active',
-  startAt: new Date(now.getTime() - day * 2), endAt: new Date(now.getTime() + day * 28),
+  policyVersion: 'legacy_v1', pricePoints: 1000,
+  startAt: new Date(now.getTime() - day), endAt: new Date(now.getTime() + day * 29),
   lastClaimAt: new Date(now.getTime() - day), claimsCompleted: 1, durationDays: 30,
-  totalRewardCents: 21000
+  totalRewardCents: 21000, claimedRewardPoints: 0, principalPaidPoints: 0, principalReturnedAt: null
 };
 
 assert.deepStrictEqual(claimReadiness(readySub, now), {
   claimNumber: 2,
   rewardPoints: 7,
-  nextClaimAt: now
+  principalPoints: 0,
+  totalPayoutPoints: 7,
+  nextClaimAt: null
 });
-assert.strictEqual(claimReadiness({ ...readySub, lastClaimAt: new Date(now.getTime() - 12 * 60 * 60 * 1000) }, now), null,
-  'reward is not ready until 24 hours after the preceding claim');
+assert.ok(claimReadiness({ ...readySub, lastClaimAt: new Date(now.getTime() - 12 * 60 * 60 * 1000) }, now),
+  'partial mining claims are ready before a full day has elapsed');
 assert.strictEqual(claimReadiness({ ...readySub, status: 'completed' }, now), null);
-assert.strictEqual(claimReadiness({ ...readySub, claimsCompleted: 30 }, now), null);
+assert.ok(claimReadiness({ ...readySub, claimsCompleted: 30 }, now), 'claim operations no longer stop at the number of contract days');
 assert.strictEqual(vipRewardNotificationText(readySub, 7),
-  'Your VIP reward for VIP Plan 3 (7 Points) is ready to claim! Head over to your VIP dashboard and claim your reward.');
+  'Your unclaimed mining balance for VIP Plan 3 is 7 Points. Claim it to your wallet any time from the VIP dashboard.');
 
 async function testSweep() {
   const subscriptions = [
     readySub,
-    { ...readySub, _id: 'sub-not-ready', lastClaimAt: new Date(now.getTime() - 1000) },
-    { ...readySub, _id: 'sub-complete', claimsCompleted: 30 }
+    { ...readySub, _id: 'sub-not-ready', startAt: new Date(now.getTime() - 1000), endAt: new Date(now.getTime() + day * 30) },
+    { ...readySub, _id: 'sub-complete', status: 'completed', claimsCompleted: 30 }
   ];
   const user = { _id: 'user-1', telegramId: '123456' };
   const deliveryKeys = new Set();
@@ -61,23 +64,23 @@ async function testSweep() {
 
   const first = await runVipRewardNotificationSweep(now, deps);
   assert.strictEqual(first.sent, 1);
-  assert.strictEqual(first.totalReady, 1, 'only the currently claimable subscription is notified');
+  assert.strictEqual(first.totalReady, 1, 'only subscriptions with at least 0.01 unclaimed Points are notified');
   assert.strictEqual(sent.length, 1);
   assert.strictEqual(sent[0].telegramId, user.telegramId);
-  assert.match(sent[0].text, /VIP Plan 3 \(7 Points\)/);
+  assert.match(sent[0].text, /VIP Plan 3 is 7 Points/);
 
   const repeated = await runVipRewardNotificationSweep(now, deps);
   assert.strictEqual(repeated.duplicate, 1);
-  assert.strictEqual(sent.length, 1, 'same plan claim receives at most one reminder per UTC day');
+  assert.strictEqual(sent.length, 1, 'same miner receives at most one reminder per UTC day');
 
   const nextDay = new Date(now.getTime() + day);
   const nextDayResult = await runVipRewardNotificationSweep(nextDay, deps);
-  assert.strictEqual(nextDayResult.sent, 2, 'unclaimed rewards may be reminded again on a later day and newly-ready plans are included');
+  assert.strictEqual(nextDayResult.sent, 2, 'unclaimed balances may be reminded again on a later day');
   assert.strictEqual(sent.length, 3);
 }
 
 testSweep().then(() => {
-  console.log('PASS — VIP reminders only target ready claims, use server reward math, and deduplicate per subscription/day');
+  console.log('PASS — VIP reminders target continuously accrued balances and deduplicate per subscription/day');
 }).catch(error => {
   console.error(error);
   process.exitCode = 1;

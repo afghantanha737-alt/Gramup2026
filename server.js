@@ -324,9 +324,8 @@ async function startServer() {
       void runJob('weekly-campaign-notification', 'Scheduled weekly campaign notification', runWeeklyCampaignNotification);
     }, 60 * 1000);
 
-    const { settleMaturedVipSubscriptions } = require('./utils/vipSettlement');
-    void runJob('vip-principal-settlement', 'Initial VIP principal settlement', () => settleMaturedVipSubscriptions());
-    setInterval(() => { void runJob('vip-principal-settlement', 'Scheduled VIP principal settlement', () => settleMaturedVipSubscriptions()); }, 60 * 1000);
+    // Legacy VIP principal settlement is never a startup or timer job.
+    // Matured VIP balances settle only through the user's explicit claim action.
 
     const { runVipRewardNotificationSweep } = require('./utils/vipRewardNotification');
     void runJob('vip-reward-notification-sweep', 'Initial VIP reward notification sweep', runVipRewardNotificationSweep);

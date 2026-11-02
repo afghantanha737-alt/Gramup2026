@@ -2304,7 +2304,7 @@ async function openVipDetails(id) {
       ["Total Expected Earning", `${formatVipAdminNumber(item.totalExpectedEarningPoints)} Points`],
       ["Earned to Date", `${formatVipAdminNumber(item.earnedToDatePoints)} Points`],
       ["Remaining Earning", `${formatVipAdminNumber(item.remainingEarningPoints)} Points`],
-      ["Claims", `${formatVipAdminNumber(item.claimsCompleted)} / ${formatVipAdminNumber(item.totalClaims)}`],
+      ["Partial Claims", formatVipAdminNumber(item.claimsCompleted)],
       ["Remaining Days", formatVipAdminNumber(item.remainingDays)], ["Current Status", vipAdminStatusLabel(item.status)]
     ];
     content.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">${fields.map(([label, value]) => `<div class="card" style="margin:0"><div class="small">${escapeHtml(label)}</div><b>${escapeHtml(value)}</b></div>`).join("")}</div>`;

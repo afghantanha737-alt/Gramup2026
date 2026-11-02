@@ -2515,3 +2515,102 @@ html[data-theme="light"] .vipRedesign .vipPlanCard { color: #f7f7ff; }
 .vipRedesign .vipPlanFinancialMeta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; color: #9baabd; font-size: 7px; line-height: 1.45; }
 .vipRedesign .vipPlanFinancialMeta b { color: #cbd8e7; font-weight: 750; }
 @media (max-width: 380px) { .vipRedesign .vipPlanFinancialMeta { gap: 3px 6px; font-size: 6px; } }
+
+
+/* VIP Cloud Mining dashboard — animated hero, running miners, live accrual. */
+.vipRedesign .vipMiningHero {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  border-color: rgba(52, 211, 153, .30);
+  background: radial-gradient(circle at 88% 8%, rgba(16,185,129,.20), transparent 35%), linear-gradient(145deg, #092b2a 0%, #101a24 55%, #151328 100%);
+}
+.vipRedesign .vipMinerVisual {
+  position: absolute;
+  top: 54px;
+  right: 22px;
+  display: grid;
+  place-items: center;
+  width: 82px;
+  height: 82px;
+  pointer-events: none;
+  opacity: .92;
+}
+.vipRedesign .vipMinerOrbit {
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(110,231,183,.34);
+  border-radius: 50%;
+  box-shadow: 0 0 24px rgba(16,185,129,.18), inset 0 0 16px rgba(16,185,129,.10);
+  animation: vip-orbit-pulse 3.2s ease-in-out infinite;
+}
+.vipRedesign .vipMinerCoin {
+  display: grid;
+  place-items: center;
+  width: 51px;
+  height: 51px;
+  border: 1px solid rgba(167,243,208,.72);
+  border-radius: 50%;
+  color: #dcfff1;
+  background: radial-gradient(circle at 32% 25%, #5eead4, #059669 58%, #064e3b);
+  box-shadow: 0 0 14px rgba(52,211,153,.55), inset 0 2px 8px rgba(255,255,255,.28), inset 0 -5px 9px rgba(3,30,24,.4);
+  font-size: 28px;
+  font-weight: 950;
+  text-shadow: 0 1px 9px rgba(255,255,255,.42);
+  animation: vip-coin-float 2.6s ease-in-out infinite;
+}
+.vipRedesign .vipMinerSpark { position: absolute; color: #a7f3d0; text-shadow: 0 0 9px rgba(110,231,183,.9); }
+.vipRedesign .vipMinerSpark--one { top: 2px; right: 15px; font-size: 13px; animation: vip-spark 1.8s ease-in-out infinite; }
+.vipRedesign .vipMinerSpark--two { bottom: 4px; left: 11px; font-size: 25px; animation: vip-spark 2.3s ease-in-out infinite reverse; }
+@keyframes vip-orbit-pulse { 50% { transform: scale(1.07) rotate(12deg); opacity: .66; } }
+@keyframes vip-coin-float { 50% { transform: translateY(-3px) rotateY(10deg); } }
+@keyframes vip-spark { 50% { opacity: .35; transform: scale(.72); } }
+.vipRedesign .vipHeroKicker { color: #8ee7c5; }
+.vipRedesign .vipBalanceLabel { color: #d8f8ec; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.vipRedesign .vipBalanceValue { position: relative; z-index: 1; margin: 13px 0 16px; padding-right: 74px; }
+.vipRedesign .vipBalanceValue strong { color: #edfff7; text-shadow: 0 0 21px rgba(52,211,153,.18); }
+.vipRedesign .vipBalanceValue span { color: #6ee7b7; }
+.vipRedesign .vipHeroMetrics > div:first-child b { color: #83f3c4; }
+.vipRedesign .vipAccrualHint { margin-top: 10px; color: #93a7aa; font-size: 9px; line-height: 1.55; }
+.vipRedesign .vipHeroClaimButton { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 50px; padding: 11px 15px; }
+.vipRedesign .vipHeroClaimButton > span { font-size: 12px; }
+.vipRedesign .vipHeroClaimButton > b { color: #063327; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vipRedesign .vipRunningSection { margin: 20px 0 0; }
+.vipRedesign .vipSectionHeading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 4px 9px; }
+.vipRedesign .vipSectionHeading h3 { margin: 0; color: #eaf7f2; font-size: 16px; font-weight: 900; }
+.vipRedesign .vipSectionHeading > span { color: #8bcbb3; font-size: 10px; font-weight: 750; }
+.vipRedesign .vipActivePlanList { display: grid; gap: 8px; }
+.vipRedesign .vipActivePlanRow { display: grid; grid-template-columns: 8px minmax(0,1fr) auto auto; align-items: center; gap: 10px; min-width: 0; padding: 12px; border: 1px solid rgba(110,231,183,.12); border-radius: 16px; background: linear-gradient(110deg, rgba(16,185,129,.08), rgba(13,20,31,.78) 38%); }
+.vipRedesign .vipActivePlanDot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 0 rgba(74,222,128,.55); animation: vip-dot-pulse 1.8s infinite; }
+@keyframes vip-dot-pulse { 70% { box-shadow: 0 0 0 6px rgba(74,222,128,0); } 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); } }
+.vipRedesign .vipActivePlanName { min-width: 0; display: grid; gap: 3px; color: #f1f7f5; font-size: 11px; }
+.vipRedesign .vipActivePlanName b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vipRedesign .vipActivePlanName small,.vipRedesign .vipActivePlanReward small,.vipRedesign .vipActivePlanAccrued small { color: #98a9aa; font-size: 8px; font-weight: 600; }
+.vipRedesign .vipMinerStatus { width: fit-content; color: #6ee7b7; font-size: 8px; font-weight: 800; }
+.vipRedesign .vipActivePlanReward,.vipRedesign .vipActivePlanAccrued { display: grid; gap: 3px; text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vipRedesign .vipActivePlanReward b { color: #8df0c3; font-size: 11px; }
+.vipRedesign .vipActivePlanAccrued b { color: #d6fff0; font-size: 10px; }
+.vipRedesign .vipActivePlanRow.isMatured { border-color: rgba(250,204,21,.2); background: linear-gradient(110deg, rgba(234,179,8,.08), rgba(13,20,31,.78) 38%); }
+.vipRedesign .vipActivePlanRow.isMatured .vipActivePlanDot { background: #facc15; animation: none; box-shadow: 0 0 8px rgba(250,204,21,.55); }
+.vipRedesign .vipActivePlanRow.isMatured .vipMinerStatus { color: #fde68a; }
+.vipRedesign .vipActivePlanEmpty { padding: 15px; border: 1px dashed rgba(255,255,255,.13); border-radius: 15px; color: #a8aec2; font-size: 11px; text-align: center; }
+.vipRedesign .vipPastPlans { margin-top: 12px; padding: 11px 12px; border: 1px solid rgba(255,255,255,.09); border-radius: 14px; background: rgba(255,255,255,.025); }
+.vipRedesign .vipPastPlans summary { color: #b5c2cf; cursor: pointer; font-size: 10px; font-weight: 800; }
+.vipRedesign .vipPastPlanRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,.06); color: #d5dee7; font-size: 10px; }
+.vipRedesign .vipPastPlanRow:first-of-type { margin-top: 8px; }
+.vipRedesign .vipPastPlanRow small { color: #95a1b2; }
+.vipRedesign .vipPastPlanRow b { color: #9de7c5; font-variant-numeric: tabular-nums; }
+.vipRedesign .vipCatalog { margin-top: 24px; }
+.vipRedesign .vipCatalogHeading small { display: block; margin-top: 5px; color: #84949e; font-size: 9px; line-height: 1.5; }
+.vipRedesign .vipPlanFact b { direction: ltr; font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) {
+  .vipRedesign .vipActivePlanRow { grid-template-columns: 7px minmax(0,1fr) auto; gap: 8px; padding: 10px; }
+  .vipRedesign .vipActivePlanAccrued { grid-column: 2 / 4; display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.06); }
+  .vipRedesign .vipActivePlanReward { grid-column: 3; grid-row: 1; }
+  .vipRedesign .vipBalanceValue { padding-right: 62px; }
+  .vipRedesign .vipMinerVisual { right: 15px; width: 70px; height: 70px; }
+  .vipRedesign .vipMinerCoin { width: 44px; height: 44px; font-size: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vipRedesign .vipMinerOrbit,.vipRedesign .vipMinerCoin,.vipRedesign .vipMinerSpark,.vipRedesign .vipActivePlanDot { animation: none !important; }
+}
