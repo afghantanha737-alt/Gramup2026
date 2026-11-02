@@ -65,8 +65,10 @@ const vipPurchaseSection = pointsRoute.slice(
 
 assert.match(pointsRoute, /router\.get\('\/vip\/plans'/);
 assert.match(pointsRoute, /router\.post\('\/vip\/purchase'/);
+assert.match(pointsRoute, /router\.post\('\/vip\/claim-all'/);
 assert.match(pointsRoute, /router\.post\('\/vip\/:subscriptionId\/claim'/);
 assert.match(pointsRoute, /scope: 'vip_purchase'/);
+assert.match(pointsRoute, /scope: 'vip_bulk_claim'/);
 assert.match(pointsRoute, /scope: 'vip_partial_claim'/);
 assert.match(pointsRoute, /type: 'vip_daily_reward'/);
 assert.match(pointsRoute, /type: 'vip_purchase'/);
@@ -107,7 +109,8 @@ assert.match(app, /function setVipSubscriptionFilter\(filter\)/);
 assert.match(app, /subscription\.status === "active"/);
 assert.match(app, /subscription\.status !== "active"/);
 assert.match(app, /function claimAllVipRewards\(\)/);
-assert.match(app, /await claimVipReward\(subscriptionId, \{ silent: true, bulk: true \}\)/);
+assert.match(app, /\/api\/points\/vip\/claim-all/);
+assert.doesNotMatch(app, /for \(const subscriptionId of subscriptionIds\)/);
 assert.strictEqual((translations.match(/vip_claim_all:/g) || []).length, 3, 'Claim All label must exist in English, Persian, and Pashto');
 assert.strictEqual((translations.match(/vip_subscription_filter_expired:/g) || []).length, 3, 'expired filter label must exist in all supported locales');
 assert.deepStrictEqual(VIP_PRICE_GRAMS, [1, 3, 5, 10, 20, 35, 50, 70, 85, 100]);

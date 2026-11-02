@@ -3862,33 +3862,33 @@ window.claimVipReward = claimVipReward;
 async function claimAllVipRewards() {
   if (!readModelActionAllowed()) return;
   if (vipClaimAllBusy || vipClaimingIds.size) return;
-  const subscriptionIds = (state.vipSubscriptions || [])
-    .filter(subscription => subscription.status === "active" && vipLiveUnclaimed(subscription) >= 0.01)
-    .map(subscription => subscription.id)
-    .filter(Boolean);
-  if (!subscriptionIds.length) return;
+  const hasClaimableRewards = (state.vipSubscriptions || [])
+    .some(subscription => subscription.status === "active" && vipLiveUnclaimed(subscription) >= 0.01);
+  if (!hasClaimableRewards) return;
 
   vipClaimAllBusy = true;
-  vipClaimAllProgress = { done: 0, total: subscriptionIds.length };
+  vipClaimAllProgress = { done: 0, total: 1 };
   const isVipView = () => (state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip";
   if (isVipView()) {
     const content = $("#content");
     if (content) content.innerHTML = renderProfileVip();
   }
 
-  let succeeded = 0;
+  const scope = "vip_claim_all";
   try {
-    for (const subscriptionId of subscriptionIds) {
-      const claimed = await claimVipReward(subscriptionId, { silent: true, bulk: true });
-      if (claimed) succeeded += 1;
-      vipClaimAllProgress.done += 1;
-      if (isVipView()) {
-        const content = $("#content");
-        if (content) content.innerHTML = renderProfileVip();
-      }
-    }
-    const failed = subscriptionIds.length - succeeded;
-    toast(t("vip_claim_all_result", { success: succeeded, failed, total: subscriptionIds.length }), failed ? "warning" : "success");
+    const result = await api("/api/points/vip/claim-all", {
+      method: "POST",
+      headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) },
+      body: {}
+    });
+    clearPendingIdempotencyKey(scope);
+    vipClaimAllProgress.done = 1;
+    state.points = Number(result.points) || state.points;
+    updateHeader();
+    toast(t("vip_claim_success", { n: formatNumber(result.totalPayoutPoints || 0, 2) }), "success");
+  } catch (error) {
+    clearDefinitiveIdempotencyFailure(scope, error);
+    toast(translateServerMessage(error.code, error.message), "error");
   } finally {
     vipClaimAllBusy = false;
     vipClaimAllProgress = { done: 0, total: 0 };
