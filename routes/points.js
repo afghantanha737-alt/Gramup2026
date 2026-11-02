@@ -148,6 +148,20 @@ function sendVipError(res, error) {
   });
 }
 
+// Serialize all financial VIP claims for one user inside the same Mongo
+// transaction. This prevents a bulk claim and a stale/duplicate claim request
+// from calculating against the same snapshot and then tripping the per-plan
+// compare-and-set guards.
+async function lockVipClaimUser(userId, session) {
+  const user = await User.findOneAndUpdate(
+    { _id: userId },
+    { $inc: { vipClaimLockVersion: 1 } },
+    { new: true, session }
+  );
+  if (!user) throw new Error('VIP subscriber no longer exists.');
+  return user;
+}
+
 /**
  * نکته مهم زمان‌بندی:
  * افغانستان UTC+4:30 است. یعنی ساعت 00:00 UTC دقیقاً برابر است با
@@ -1214,6 +1228,7 @@ router.post('/vip/claim-all', auth, sensitiveRateLimit('claim'), async (req, res
       body: {},
       execute: async session => {
         const now = new Date();
+        await lockVipClaimUser(req.dbUser._id, session);
         const subscriptions = await VipSubscription.find({ user: req.dbUser._id, status: 'active' })
           .sort({ endAt: 1, _id: 1 })
           .session(session);
@@ -1391,6 +1406,7 @@ router.post('/vip/:subscriptionId/claim', auth, sensitiveRateLimit('claim'), asy
       body: { subscriptionId: String(req.params.subscriptionId) },
       execute: async session => {
         const now = new Date();
+        await lockVipClaimUser(req.dbUser._id, session);
         const subscription = await VipSubscription.findOne({ _id: req.params.subscriptionId, user: req.dbUser._id }).session(session);
         if (!subscription) throw vipError('VIP_SUBSCRIPTION_NOT_FOUND', 'اشتراک VIP پیدا نشد.', 404);
         if (subscription.status !== 'active') {

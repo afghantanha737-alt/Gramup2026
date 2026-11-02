@@ -3868,6 +3868,13 @@ async function claimAllVipRewards() {
 
   vipClaimAllBusy = true;
   vipClaimAllProgress = { done: 0, total: 1 };
+  // Disable every rendered copy immediately, before the async request starts.
+  // The backend remains idempotent, while this prevents rapid taps from
+  // creating a second in-flight bulk request in the first place.
+  document.querySelectorAll("[data-vip-claim-all]").forEach(button => {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+  });
   const isVipView = () => (state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip";
   if (isVipView()) {
     const content = $("#content");
