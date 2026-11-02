@@ -32,9 +32,13 @@ assert.doesNotMatch(app, /vipRunningSection|vipActivePlanRow|data-vip-live-sub=/
 assert.match(app, /onclick="claimAllVipRewards\(\)"/);
 assert.match(app, /onclick="purchaseVipPlan\(\$\{planNumber\}\)"/);
 assert.match(app, /setVipPlanCategory\('starter'\)/);
+assert.match(app, /class="vipPlanFact vipPlanFact--cost"/);
+assert.match(app, /class="vipPlanFact vipPlanFact--daily"/);
+assert.match(app, /class="vipPlanButton/);
 assert.match(app, /vipPastPlans/);
 assert.match(app, /vip_plan_daily_label/);
-assert.match(css, /\.vipRedesign \.vipPlanCard \{ display: grid; grid-template-columns: 40px minmax\(0,1fr\) auto/);
+assert.match(css, /\.vipRedesign \.vipPlanCard \{ position: relative; display: grid; grid-template-columns: 1fr/);
+assert.match(css, /\.vipRedesign \.vipPlanTabs \{ display: grid; grid-template-columns: repeat\(3/);
 assert.match(css, /@media \(max-width: 380px\)/);
 assert.match(css, /vipMinerCoin/);
 assert.match(css, /vip-orbit-pulse/);
@@ -45,7 +49,7 @@ assert.match(heroRowStyle, /padding: 0/);
 assert.match(heroRowStyle, /border: 0/);
 assert.match(heroRowStyle, /background: transparent/);
 assert.match(css, /\.vipRedesign \.vipHeroClaimButton \{[^}]*width: 100%/);
-assert.match(html, /style\.css\?v=20261102-cloud-mining-3/);
+assert.match(html, /style\.css\?v=20261102-cloud-mining-4/);
 
 const window = { state: { language: 'fa' } };
 vm.runInNewContext(fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8'), { window });
