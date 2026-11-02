@@ -9,10 +9,7 @@ const idempotencyOperationSchema = new mongoose.Schema({
     'exchange_gram_to_points',
     'withdraw',
     'vip_purchase',
-    'vip_daily_claim',
-    'mining_claim',
-    'mining_upgrade',
-    'onboarding_complete'
+    'vip_daily_claim'
   ] },
   key: { type: String, required: true, minlength: 8, maxlength: 120 },
   requestHash: { type: String, required: true, match: /^[a-f0-9]{64}$/ },

@@ -33,8 +33,9 @@ const DEFAULT_VIP_PLANS = [
 ];
 
 vipPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
-  // Startup is seed-only. Existing catalog economics are administrator-owned
-  // and must never be reconciled or overwritten implicitly on restart.
+  // Seed missing catalog entries first, then reconcile only published catalog
+  // policy fields. Admin-controlled enabled/comingSoon flags are deliberately
+  // preserved, and user subscription snapshots are never rewritten here.
   const { withMongoTransaction } = require('../utils/mongoTransaction');
   await withMongoTransaction(async session => {
     await this.bulkWrite(DEFAULT_VIP_PLANS.map(plan => ({
@@ -44,6 +45,15 @@ vipPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
         upsert: true
       }
     })), { ordered: true, session });
+    await this.bulkWrite(DEFAULT_VIP_PLANS.map(plan => {
+      const { planNumber, pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps } = plan;
+      return {
+        updateOne: {
+          filter: { planNumber },
+          update: { $set: { pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps } }
+        }
+      };
+    }), { ordered: true, session });
   });
 };
 
