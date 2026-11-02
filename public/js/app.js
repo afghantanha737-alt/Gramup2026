@@ -3752,7 +3752,8 @@ function renderProfileVip() {
         <div class="vipMinerVisual" aria-hidden="true"><span class="vipMinerOrbit"></span><span class="vipMinerCoin">◈</span><span class="vipMinerSpark vipMinerSpark--one">✦</span><span class="vipMinerSpark vipMinerSpark--two">·</span></div>
         <div class="vipBalanceValue"><strong data-vip-unclaimed-total>${formatNumber(unclaimedVipPoints, 3)}</strong><span>${t("vip_points_unit")}</span></div>
         <div class="vipHeroPlanList" aria-label="${t("vip_active_plans_heading")}">${activePlanRows || `<div class="vipHeroPlanEmpty">${t("vip_no_active_plans")}</div>`}</div>
-        <button type="button" class="vipHeroButton vipHeroClaimButton" data-vip-claim-all ${!claimableCount || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()">
+        <button type="button" class="vipHeroButton vipHeroClaimButton" data-vip-claim-all ${!claimableCount || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" aria-busy="${vipClaimAllBusy ? "true" : "false"}">
+          <span class="vipClaimSpinner" aria-hidden="true"></span>
           <span data-vip-claim-label>${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_wallet")}</span>
           <b><span data-vip-claim-total>${formatNumber(unclaimedVipPoints, 3)}</span> ${t("vip_points_unit")}</b>
         </button>
@@ -3890,8 +3891,11 @@ async function claimAllVipRewards() {
     });
     clearPendingIdempotencyKey(scope);
     vipClaimAllProgress.done = 1;
-    state.points = Number(result.points) || state.points;
+    if (Array.isArray(result.subscriptions)) state.vipSubscriptions = result.subscriptions;
+    const returnedPoints = Number(result.points);
+    if (Number.isFinite(returnedPoints)) state.points = returnedPoints;
     updateHeader();
+    updateVipLiveDashboard();
     toast(t("vip_claim_success", { n: formatNumber(result.totalPayoutPoints || 0, 2) }), "success");
   } catch (error) {
     clearDefinitiveIdempotencyFailure(scope, error);

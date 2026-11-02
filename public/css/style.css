@@ -1935,6 +1935,10 @@ html[data-theme="light"] .depositMemoCode {
 .vipHeroRows b { color: #fff; font-size: 13px; direction: ltr; white-space: nowrap; }
 .vipHeroButton { width: 100%; min-height: 48px; border-radius: 17px; color: #fff; font-size: 14px; font-weight: 900; background: linear-gradient(100deg, #a78bfa, #7c3aed); box-shadow: 0 12px 28px rgba(124,58,237,.32); }
 .vipHeroButton:active { transform: scale(.98); }
+.vipHeroClaimButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.vipClaimSpinner { display: none; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; }
+.vipHeroClaimButton[aria-busy="true"] .vipClaimSpinner { display: inline-block; animation: vipClaimSpin .75s linear infinite; }
+@keyframes vipClaimSpin { to { transform: rotate(360deg); } }
 .vipPlanCard { min-height: 390px; }
 .vipPlanCard--gold { box-shadow: 0 16px 38px rgba(234,179,8,.12), 0 15px 35px rgba(0,0,0,.22); }
 .vipPlanCard .vipPlanStat { min-height: 94px; display: flex; flex-direction: column; justify-content: center; }
