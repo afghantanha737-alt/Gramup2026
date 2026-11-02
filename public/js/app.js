@@ -3663,7 +3663,7 @@ function renderProfileVip() {
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
-  const iconByPlan = { 1: "◈", 2: "✦", 3: "♛", 4: "✦", 5: "⬡", 6: "✧", 7: "◆", 8: "♦", 9: "⬦", 10: "♛" };
+  const iconByPlan = { 1: "⚡", 2: "⚡", 3: "⚡", 4: "⚡", 5: "⚡", 6: "⚡", 7: "⚡", 8: "⚡", 9: "⚡", 10: "⚡" };
 
   const planCards = visiblePlans.map(plan => {
     const available = plan.enabled === true && plan.comingSoon !== true;
@@ -3694,15 +3694,13 @@ function renderProfileVip() {
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
       <article class="vipPlanCard vipPlanCard--${theme}">
-        <div class="vipPlanTopline">
-          <div class="vipPlanIdentity"><span class="vipPlanMark" aria-hidden="true">${iconByPlan[planNumber] || "✦"}</span><div><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</div><span class="vipPlanDuration">${t("vip_plan_duration_value", { n: formatPoints(plan.durationDays) })}</span></div></div>
-          ${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}
+        <div class="vipPlanAccent" aria-hidden="true"><span class="vipPlanMark">${iconByPlan[planNumber] || "⚡"}</span></div>
+        <div class="vipPlanBody">
+          <div class="vipPlanTopline">
+            <div class="vipPlanTitleLine"><span class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</span><span class="vipPlanDuration">${formatPoints(plan.durationDays)}d</span>${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}</div>
+          </div>
+          <div class="vipPlanInlineMeta"><span>${formatPoints(plan.pricePoints)} ${t("vip_points_unit")}</span><i aria-hidden="true">·</i><span>${formatNumber(planDailyMiningPoints, 2)} ${t("vip_points_per_day")}</span></div>
         </div>
-        <div class="vipPlanFacts">
-          <div class="vipPlanFact vipPlanFact--cost"><span>${t("vip_plan_cost_label")}</span><b>${formatPoints(plan.pricePoints)} <small>${t("vip_points_unit")}</small></b></div>
-          <div class="vipPlanFact vipPlanFact--daily"><span>${t("vip_plan_daily_label")}</span><b>${formatNumber(planDailyMiningPoints, 2)} <small>${t("vip_points_per_day")}</small></b></div>
-        </div>
-        <div class="vipPlanFinancialMeta"><span>${t(isNewVipPolicy ? "vip_daily_total_label" : "vip_total_reward_label")}: <b>${formatPoints(isNewVipPolicy ? dailyTotalPayoutPoints : totalRewardPoints)} ${t("vip_points_unit")}</b></span>${isNewVipPolicy ? `<span>${t("vip_total_received_label")}: <b>${formatPoints(totalReceivedPoints)} ${t("vip_points_unit")}</b></span>` : ""}</div>
         <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})"><span>${isPurchasing ? t("vip_buying") : buttonLabel}</span><i aria-hidden="true">↗</i></button>
       </article>`;
   }).join("");

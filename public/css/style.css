@@ -2552,6 +2552,34 @@ html[data-theme="light"] .vipRedesign .vipPlanCard { color: #f7f7ff; }
   .vipRedesign .vipPlanFact b { font-size: 11px; }
 }
 
+/* Compact horizontal upgrade rows. */
+.vipRedesign .vipPlanList { gap: 7px; }
+.vipRedesign .vipPlanCard { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; align-items: center; gap: 10px; min-height: 64px; padding: 9px 10px; border: 1px solid rgba(103,232,249,.14); border-radius: 16px; background: linear-gradient(105deg, rgba(18,31,42,.97), rgba(10,16,27,.98)); box-shadow: 0 7px 17px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.035); direction: ltr; }
+.vipRedesign .vipPlanCard::before { inset: 0 auto 0 0; width: 2px; }
+.vipRedesign .vipPlanCard:hover { transform: translateY(-1px); border-color: rgba(103,232,249,.30); box-shadow: 0 10px 21px rgba(0,0,0,.22), 0 0 18px rgba(34,211,238,.07); }
+.vipRedesign .vipPlanAccent { display: grid; place-items: center; align-self: stretch; margin: 0; border: 0; }
+.vipRedesign .vipPlanMark { width: 26px; height: 26px; flex-basis: 26px; border: 1px solid rgba(103,232,249,.28); border-radius: 9px; color: #73f2d0; background: rgba(34,211,238,.10); font-size: 14px; box-shadow: 0 0 13px rgba(34,211,238,.12); }
+.vipRedesign .vipPlanBody { min-width: 0; }
+.vipRedesign .vipPlanTopline { margin: 0; }
+.vipRedesign .vipPlanTitleLine { display: flex; align-items: center; flex-wrap: nowrap; gap: 7px; min-width: 0; }
+.vipRedesign .vipPlanTitle { overflow: hidden; color: #effffc; font-size: 11px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+.vipRedesign .vipPlanDuration { flex: 0 0 auto; margin: 0; color: #8fa8ae; font-size: 9px; font-weight: 800; }
+.vipRedesign .vipPlanBadge { flex: 0 0 auto; padding: 3px 5px; border-radius: 999px; font-size: 7px; }
+.vipRedesign .vipPlanInlineMeta { display: flex; align-items: center; gap: 5px; margin-top: 4px; overflow: hidden; color: #9ab1b7; font-size: 9px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.vipRedesign .vipPlanInlineMeta span:first-child { color: #f2d995; }
+.vipRedesign .vipPlanInlineMeta span:last-child { color: #7de8cb; }
+.vipRedesign .vipPlanInlineMeta i { color: #607681; font-style: normal; }
+.vipRedesign .vipPlanButton { width: auto !important; min-width: 56px; min-height: 34px !important; margin: 0 !important; padding: 7px 9px !important; border-radius: 10px !important; font-size: 9px !important; white-space: nowrap; }
+.vipRedesign .vipPlanButton i { display: none; }
+.vipRedesign .vipPlanButton--insufficient, .vipRedesign .vipPlanButton--secondary { max-width: 96px; overflow: hidden; color: #9caab6; background: rgba(148,163,184,.09); box-shadow: none; text-overflow: ellipsis; }
+@media (max-width: 380px) {
+  .vipRedesign .vipPlanCard { grid-template-columns: 27px minmax(0,1fr) auto; gap: 7px; min-height: 60px; padding: 8px; }
+  .vipRedesign .vipPlanMark { width: 23px; height: 23px; flex-basis: 23px; font-size: 12px; }
+  .vipRedesign .vipPlanTitle { font-size: 10px; }
+  .vipRedesign .vipPlanInlineMeta { font-size: 8px; }
+  .vipRedesign .vipPlanButton { min-width: 50px; padding-inline: 7px !important; }
+}
+
 
 /* VIP Cloud Mining dashboard — animated hero, running miners, live accrual. */
 .vipRedesign .vipMiningHero {
