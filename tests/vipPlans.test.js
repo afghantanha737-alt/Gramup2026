@@ -58,6 +58,7 @@ const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 const adminUi = fs.readFileSync(path.join(root, 'public/admin.html'), 'utf8');
 const translations = fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8');
 const vipPlanModel = fs.readFileSync(path.join(root, 'models/VipPlan.js'), 'utf8');
+const idempotencyModel = fs.readFileSync(path.join(root, 'models/IdempotencyOperation.js'), 'utf8');
 const vipPurchaseSection = pointsRoute.slice(
   pointsRoute.indexOf("router.post('/vip/purchase'"),
   pointsRoute.indexOf("router.post('/vip/:subscriptionId/claim'")
@@ -70,6 +71,8 @@ assert.match(pointsRoute, /router\.post\('\/vip\/:subscriptionId\/claim'/);
 assert.match(pointsRoute, /scope: 'vip_purchase'/);
 assert.match(pointsRoute, /scope: 'vip_bulk_claim'/);
 assert.match(pointsRoute, /scope: 'vip_partial_claim'/);
+assert.match(idempotencyModel, /'vip_bulk_claim'/);
+assert.match(idempotencyModel, /'vip_partial_claim'/);
 assert.match(pointsRoute, /type: 'vip_daily_reward'/);
 assert.match(pointsRoute, /type: 'vip_purchase'/);
 assert.match(pointsRoute, /calculateVipAccrual\(subscription, now\)/);
