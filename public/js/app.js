@@ -3582,22 +3582,28 @@ function updateVipLiveDashboard() {
     element.classList.toggle("isActive", liveCount > 0);
     element.classList.toggle("isInactive", liveCount === 0);
   });
-  for (const subscription of activeSubscriptions) {
-    const id = String(subscription.id || "");
-    const ended = Number.isFinite(Date.parse(subscription.endAt || "")) && now >= Date.parse(subscription.endAt);
+    for (const subscription of activeSubscriptions) {
+      const id = String(subscription.id || "");
+      const ended = Number.isFinite(Date.parse(subscription.endAt || "")) && now >= Date.parse(subscription.endAt);
     document.querySelectorAll("[data-vip-live-rate]").forEach(element => {
       if (element.dataset.vipLiveRate === id) {
         const rate = Number(subscription.dailyMiningRatePoints || 0);
         element.textContent = `${formatNumber(ended ? 0 : rate, Number.isInteger(rate) ? 0 : 2)} Pts/d`;
       }
     });
-    document.querySelectorAll("[data-vip-live-days]").forEach(element => {
-      if (element.dataset.vipLiveDays !== id) return;
-      const endAt = Date.parse(subscription.endAt || "");
-      const days = Number.isFinite(endAt) ? Math.max(0, Math.ceil((endAt - now) / 86400000)) : 0;
-      element.textContent = `${formatPoints(days)}d`;
-    });
-  }
+      document.querySelectorAll("[data-vip-live-days]").forEach(element => {
+        if (element.dataset.vipLiveDays !== id) return;
+        const endAt = Date.parse(subscription.endAt || "");
+        const days = Number.isFinite(endAt) ? Math.max(0, Math.ceil((endAt - now) / 86400000)) : 0;
+        element.textContent = `${formatPoints(days)}d`;
+      });
+      document.querySelectorAll("[data-vip-progress]").forEach(element => {
+        if (element.dataset.vipProgress !== id) return;
+        const progress = vipPlanProgressPercent(subscription, now);
+        element.style.width = `${progress}%`;
+        element.setAttribute("aria-valuenow", String(progress));
+      });
+    }
   document.querySelectorAll("[data-vip-claim-all]").forEach(button => {
     const readModelReady = !state.readModelStale && state.financialDataConfirmed && state.membershipDataConfirmed;
     button.disabled = !claimable || vipClaimAllBusy || vipClaimingIds.size > 0 || !readModelReady;
@@ -3635,6 +3641,16 @@ function vipLiveUnclaimed(subscription, now = Date.now() + Number(state.vipServe
   const cap = Number(subscription?.unclaimedEstimateCapPoints);
   if (Number.isFinite(cap) && cap >= 0) estimated = Math.min(estimated, cap);
   return Math.max(0, estimated);
+}
+
+function vipPlanProgressPercent(subscription, now = Date.now() + Number(state.vipServerOffsetMs || 0)) {
+  const endAt = Date.parse(subscription?.endAt || "");
+  if (!Number.isFinite(endAt)) return 0;
+  const durationDays = Math.max(1, Number(subscription?.durationDays) || 0);
+  const explicitStartAt = Date.parse(subscription?.startAt || "");
+  const startAt = Number.isFinite(explicitStartAt) ? explicitStartAt : endAt - (durationDays * 86400000);
+  const totalMs = Math.max(1, endAt - startAt);
+  return Math.min(100, Math.max(0, Number((((now - startAt) / totalMs) * 100).toFixed(2))));
 }
 
 function renderProfileVip() {
@@ -3696,10 +3712,14 @@ function renderProfileVip() {
     const ended = Number.isFinite(Date.parse(subscription.endAt || "")) && now >= Date.parse(subscription.endAt);
     const rate = ended ? 0 : Number(subscription.dailyMiningRatePoints || 0);
     const remainingDays = Math.max(0, Math.ceil((Date.parse(subscription.endAt) - now) / 86400000));
+    const progress = vipPlanProgressPercent(subscription, now);
     return `
-      <div class="vipHeroPlanRow">
-        <span class="vipHeroPlanName">${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</span>
-        <span class="vipHeroPlanMeta"><span data-vip-live-rate="${id}">${formatNumber(rate, Number.isInteger(rate) ? 0 : 2)} Pts/d</span> · <span data-vip-live-days="${id}">${formatPoints(remainingDays)}d</span></span>
+      <div class="vipHeroPlanItem">
+        <div class="vipHeroPlanRow">
+          <span class="vipHeroPlanName">${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</span>
+          <span class="vipHeroPlanMeta"><span data-vip-live-rate="${id}">${formatNumber(rate, Number.isInteger(rate) ? 0 : 2)} Pts/d</span> · <span data-vip-live-days="${id}">${formatPoints(remainingDays)}d</span></span>
+        </div>
+        <div class="vipHeroPlanProgress" role="progressbar" aria-label="${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span data-vip-progress="${id}" style="width:${progress}%"></span></div>
       </div>`;
   }).join("");
 
