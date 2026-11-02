@@ -57,6 +57,7 @@ const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/deposi
 const { buildVipReserveReport, buildVipReserveWorkbook } = require('../utils/vipReserveReport');
 const { pricingForVipPlan, pricePointsForVipPlan } = require('../utils/vipPricing');
 const { newVipPolicyForPlan, dailyPointsCentsFromBps, periodRewardPercentForPlan } = require('../utils/vipPolicy');
+const { dryRun: dryRunVipSettlement, executeAuthorized: executeVipSettlement, CONFIRMATION: VIP_SETTLEMENT_CONFIRMATION, EXECUTION_ENV: VIP_SETTLEMENT_ENV } = require('../utils/vipSettlementReconciliation');
 
 const MAX_REQUIRED_CHANNELS = 5;
 
@@ -2906,6 +2907,34 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
       console.error(`[broadcast:${job._id}] failed:`, error.message || error);
     }
   })();
+});
+
+// Legacy VIP principal settlement is never automatic. This read-only report
+// is available to an authenticated admin, while execution remains disabled
+// unless the operator explicitly enables the separate environment kill-switch.
+router.get('/vip/legacy-settlement/dry-run', async (req, res) => {
+  const report = await dryRunVipSettlement({ asOf: req.query.asOf || new Date(), limit: req.query.limit });
+  res.json({ success: true, report, executionEnabled: process.env[VIP_SETTLEMENT_ENV] === 'true' });
+});
+
+router.post('/vip/legacy-settlement/execute', async (req, res) => {
+  if (req.body?.confirmation !== VIP_SETTLEMENT_CONFIRMATION) {
+    return res.status(400).json({ success: false, code: 'SETTLEMENT_CONFIRMATION_REQUIRED', message: `برای اجرای دستی مقدار confirmation باید ${VIP_SETTLEMENT_CONFIRMATION} باشد.` });
+  }
+  try {
+    const report = await executeVipSettlement({
+      actor: req.adminActor,
+      adminId: req.adminId,
+      idempotencyKey: req.get('Idempotency-Key'),
+      confirmation: req.body.confirmation,
+      asOf: req.body?.asOf ?? null,
+      limit: req.body.limit
+    });
+    return res.json({ success: true, report });
+  } catch (error) {
+    const status = error.statusCode || (error.code === 'TRANSACTIONS_UNAVAILABLE' ? 503 : 500);
+    return res.status(status).json({ success: false, code: error.code || 'SETTLEMENT_FAILED', message: error.message || 'Settlement اجرا نشد.' });
+  }
 });
 
 module.exports = router;

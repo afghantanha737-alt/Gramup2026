@@ -73,19 +73,14 @@
       <span class="tabLabel">تسک‌ها</span>
     </button>
 
-    <button type="button" data-tab="vip" data-i18n-aria="nav_vip" aria-label="VIP">
+    <button type="button" data-tab="mine" data-i18n-aria="nav_mine" aria-label="Mine">
       <span class="tabIcon" aria-hidden="true"><svg class="tabSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.7 5.5L21 9.4l-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9-5.6 2.9 1.1-6.2L3 9.4l6.3-.9L12 3z"/></svg></span>
-      <span class="tabLabel">VIP</span>
+      <span class="tabLabel">Mine</span>
     </button>
 
-    <button type="button" data-tab="wallet" data-i18n-aria="nav_wallet" aria-label="کیف پول">
-      <span class="tabIcon" aria-hidden="true"><svg class="tabSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H19v4"/><path d="M4 7.5V17a2.5 2.5 0 0 0 2.5 2.5H20V9H6.5A2.5 2.5 0 0 1 4 7.5z"/><circle cx="16" cy="14" r="1.2"/></svg></span>
-      <span class="tabLabel">کیف پول</span>
-    </button>
-
-    <button type="button" data-tab="profile" data-i18n-aria="nav_profile" aria-label="پروفایل">
+    <button type="button" data-tab="profile" data-i18n-aria="nav_you" aria-label="You">
       <span class="tabIcon" aria-hidden="true"><svg class="tabSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg></span>
-      <span class="tabLabel">پروفایل</span>
+      <span class="tabLabel">You</span>
     </button>
   </nav>
 </div>
@@ -98,19 +93,20 @@
     <div id="onboardingStep0" class="onboardingStep">
       <div class="onboardingEmoji">👋</div>
       <h3 id="onboardingTitle" class="onboardingHeading" data-i18n="ob_title0">به Gramup خوش اومدی</h3>
-      <p class="onboardingText" data-i18n="ob_text0">یک مینی‌اپ ساده برای جمع‌آوری پوینت با انجام کارهای کوچیک، که قابل تبدیل به کوین واقعیه. تو ۳۰ ثانیه نشونت می‌دیم از کجا شروع کنی.</p>
+      <p class="onboardingText" data-i18n="ob_text0">برای ورود کامل، Security Check، Project Rules و در صورت نیاز اتصال امن TON Wallet را تکمیل کنید.</p>
     </div>
 
     <div id="onboardingStep1" class="onboardingStep" style="display:none">
       <div class="onboardingEmoji">🎯</div>
       <h3 class="onboardingHeading" data-i18n="ob_title1">چطور پوینت جمع کنی؟</h3>
-      <p class="onboardingText" data-i18n="ob_text1">از تب «تسک‌ها» با ورود روزانه و انجام کارهای مشخص‌شده، و از بخش «دعوت دوستان» با معرفی افراد جدید، پوینت به‌دست میاد.</p>
+      <p class="onboardingText" data-i18n="ob_text1">در این مرحله ابتدا Security Check را انجام دهید و سپس Project Rules را بپذیرید. وضعیت همهٔ مراحل در حساب شما ذخیره می‌شود.</p>
     </div>
 
     <div id="onboardingStep2" class="onboardingStep" style="display:none">
       <div class="onboardingEmoji">💱</div>
       <h3 class="onboardingHeading" data-i18n="ob_title2">تبدیل و برداشت</h3>
-      <p class="onboardingText" data-i18n="ob_text2">از تب «کیف‌پول» پوینت‌هاتو به GRAM تبدیل کن و درخواست برداشت بده. هر پرداخت واقعی، با تراکنش روی زنجیره قابل بررسیه — همه‌چیز شفاف.</p>
+      <p class="onboardingText" data-i18n="ob_text2">در صورت استفاده از Wallet، آن را با TON Proof تأیید کنید. بدون تکمیل مراحل الزامی، ورود به بخش‌های مالی امکان‌پذیر نیست.</p>
+      <div id="onboardingWalletConnection" aria-live="polite"></div>
     </div>
 
     <div class="onboardingDots">
@@ -145,6 +141,7 @@
       <p><b>۵. امنیت</b>  
 در صورت شناسایی فعالیت غیرعادی، امکان بررسی یا محدودکردن حساب وجود دارد.</p>
     </div>
+    <button id="acceptTermsBtn" class="primaryBtn" type="button" onclick="acceptTerms()" data-i18n="terms_accept">پذیرش قوانین و ادامه</button>
   </div>
 </div>
 

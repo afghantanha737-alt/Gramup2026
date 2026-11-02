@@ -139,11 +139,13 @@ app.use(express.static(path.join(__dirname, 'public'), {
    API ROUTES
 ========================================================= */
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/onboarding', require('./routes/onboarding'));
 app.use('/api/required-channels', require('./routes/membership'));
 app.use('/api/app-info', require('./routes/appInfo'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/ton-proof', require('./routes/tonProof'));
 app.use('/api/points', require('./routes/points'));
+app.use('/api/mining', require('./routes/mining'));
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/mobile-auth', require('./routes/mobileAuth'));
@@ -242,7 +244,7 @@ async function startServer() {
       './models/IdempotencyOperation', './models/TelegramWebhookUpdate', './models/RateLimitBucket',
       './models/AdminSession', './models/TelegramAdminConversation', './models/AdminLog', './models/DistributedJobLock',
       './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit',
-      './models/VipPlan', './models/VipSubscription', './models/VipReserve', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent'
+      './models/VipPlan', './models/VipSubscription', './models/VipReserve', './models/VipSettlementOperation', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent'
     ]) await require(modelPath).init();
 
     // Route imports register every application model. Await all indexes too;
@@ -324,9 +326,9 @@ async function startServer() {
       void runJob('weekly-campaign-notification', 'Scheduled weekly campaign notification', runWeeklyCampaignNotification);
     }, 60 * 1000);
 
-    const { settleMaturedVipSubscriptions } = require('./utils/vipSettlement');
-    void runJob('vip-principal-settlement', 'Initial VIP principal settlement', () => settleMaturedVipSubscriptions());
-    setInterval(() => { void runJob('vip-principal-settlement', 'Scheduled VIP principal settlement', () => settleMaturedVipSubscriptions()); }, 60 * 1000);
+    // Legacy VIP principal settlement is never a startup or timer job.
+    // It is available only through the explicit, disabled-by-default Admin
+    // reconciliation route with dry-run, idempotency and a Mongo transaction.
 
     const { runVipRewardNotificationSweep } = require('./utils/vipRewardNotification');
     void runJob('vip-reward-notification-sweep', 'Initial VIP reward notification sweep', runVipRewardNotificationSweep);

@@ -13,56 +13,79 @@ function duplicateLedgerError() {
   return error;
 }
 
-async function settleOne(subscriptionId, now) {
-  return withMongoTransaction(async session => {
-    const sourceId = `vip:${subscriptionId}:principal`;
-    const subscription = await VipSubscription.findOne({
-      _id: subscriptionId,
-      status: 'active',
-      policyVersion: { $in: [null, 'legacy_v1'] },
-      principalReturnedAt: null,
-      endAt: { $lte: now }
-    }).session(session);
-    if (!subscription) return { settled: false };
+function legacySettlementFilter({ subscriptionId = null, now = new Date() } = {}) {
+  const filter = {
+    status: 'active',
+    policyVersion: { $in: [null, 'legacy_v1'] },
+    principalReturnedAt: null,
+    reconciliationStatus: { $nin: ['needs_review', 'ineligible', 'settled'] },
+    endAt: { $lte: now }
+  };
+  if (subscriptionId) filter._id = subscriptionId;
+  return filter;
+}
 
-    const previousLedger = await PointsLedger.findOne({ sourceId }).session(session);
-    if (previousLedger) {
-      subscription.status = 'completed';
-      subscription.principalReturnedAt = previousLedger.createdAt || now;
-      await subscription.save({ session });
-      return { settled: false, alreadyRecorded: true };
-    }
+/**
+ * Settle one eligible legacy subscription inside a caller-owned transaction.
+ * This function intentionally does not create a transaction by itself; callers
+ * must use an explicit reconciliation transaction.
+ */
+async function settleLegacyVipSubscriptionInSession(subscriptionId, now, session) {
+  const sourceId = `vip:${subscriptionId}:principal`;
+  const subscription = await VipSubscription.findOne(legacySettlementFilter({ subscriptionId, now })).session(session);
+  if (!subscription) return { settled: false, skipped: true };
 
+  const previousLedger = await PointsLedger.findOne({ sourceId }).session(session);
+  if (previousLedger) {
     subscription.status = 'completed';
-    subscription.principalReturnedAt = now;
+    subscription.reconciliationStatus = 'settled';
+    subscription.principalReturnedAt = previousLedger.createdAt || now;
     await subscription.save({ session });
+    return { settled: false, alreadyRecorded: true, subscriptionId: String(subscription._id) };
+  }
 
-    const user = await User.findOneAndUpdate(
-      { _id: subscription.user },
-      { $inc: { points: subscription.pricePoints } },
-      { new: true, session }
-    );
-    if (!user) throw new Error('VIP subscriber no longer exists; principal return transaction was not committed.');
+  subscription.status = 'completed';
+  subscription.reconciliationStatus = 'settled';
+  subscription.principalReturnedAt = now;
+  await subscription.save({ session });
 
-    const ledger = await recordLedgerRequired({
-      user: user._id,
-      type: 'vip_principal_return',
-      currency: 'points',
-      amount: subscription.pricePoints,
-      description: '',
-      balanceAfter: user.points,
-      sourceId,
-      transactionId: sourceId,
-      session
-    });
-    if (!ledger.created) throw duplicateLedgerError();
+  const user = await User.findOneAndUpdate(
+    { _id: subscription.user },
+    { $inc: { points: subscription.pricePoints } },
+    { new: true, session }
+  );
+  if (!user) throw new Error('VIP subscriber no longer exists; principal return transaction was not committed.');
 
-    return { settled: true, subscriptionId: String(subscription._id), points: user.points };
+  const ledger = await recordLedgerRequired({
+    user: user._id,
+    type: 'vip_principal_return',
+    currency: 'points',
+    amount: subscription.pricePoints,
+    description: 'Authorized legacy VIP reconciliation',
+    balanceAfter: user.points,
+    sourceId,
+    transactionId: sourceId,
+    session
   });
+  if (!ledger.created) throw duplicateLedgerError();
+
+  return {
+    settled: true,
+    subscriptionId: String(subscription._id),
+    userId: String(user._id),
+    points: user.points,
+    amount: subscription.pricePoints
+  };
+}
+
+// Compatibility helper retained for existing explicit callers. It is no longer
+// used by application startup or the normal VIP catalog endpoint.
+async function settleOne(subscriptionId, now) {
+  return withMongoTransaction(session => settleLegacyVipSubscriptionInSession(subscriptionId, now, session));
 }
 
 async function settleMaturedVipSubscriptions({ userId = null, now = new Date(), limit = 100 } = {}) {
-  const filter = { status: 'active', policyVersion: { $in: [null, 'legacy_v1'] }, principalReturnedAt: null, endAt: { $lte: now } };
+  const filter = legacySettlementFilter({ now });
   if (userId) filter.user = userId;
   const rows = await VipSubscription.find(filter).select('_id').sort({ endAt: 1 }).limit(Math.min(500, Math.max(1, limit))).lean();
   const results = [];
@@ -77,4 +100,8 @@ async function settleMaturedVipSubscriptions({ userId = null, now = new Date(), 
   return { scanned: rows.length, settled: results.filter(result => result.settled).length, results };
 }
 
-module.exports = { settleMaturedVipSubscriptions };
+module.exports = {
+  legacySettlementFilter,
+  settleLegacyVipSubscriptionInSession,
+  settleMaturedVipSubscriptions
+};

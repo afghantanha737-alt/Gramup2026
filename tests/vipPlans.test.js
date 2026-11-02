@@ -88,7 +88,10 @@ assert.match(ledgerModel, /'vip_purchase'/);
 assert.match(ledgerModel, /'vip_daily_reward'/);
 assert.match(ledgerModel, /'vip_principal_return'/);
 assert.match(server, /VipPlan\.ensureDefaults\(\)/);
-assert.match(server, /settleMaturedVipSubscriptions\(\)/);
+assert.doesNotMatch(server, /settleMaturedVipSubscriptions\(\)/, 'startup must never settle VIP liabilities automatically');
+assert.match(server, /Legacy VIP principal settlement is never a startup or timer job/);
+assert.match(adminRoute, /legacy-settlement\/dry-run/);
+assert.match(adminRoute, /legacy-settlement\/execute/);
 assert.match(app, /\/api\/points\/vip\/purchase/);
 assert.match(app, /\/api\/points\/vip\/\$\{encodeURIComponent\(subscriptionId\)\}\/claim/);
 assert.match(app, /getPendingIdempotencyKey\(scope\)/);
@@ -114,7 +117,8 @@ assert.match(vipPlanModel, /planNumber: 10, pricePoints: pricePointsForVipPlan\(
 assert.match(vipPlanModel, /planNumber: 1, pricePoints: pricePointsForVipPlan\(1\), monthlyRewardPercent: 10/);
 assert.match(vipPlanModel, /planNumber: 2, pricePoints: pricePointsForVipPlan\(2\), monthlyRewardPercent: 10/);
 assert.match(vipPlanModel, /planNumber: 3, pricePoints: pricePointsForVipPlan\(3\), monthlyRewardPercent: 10/);
-assert.match(vipPlanModel, /pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps/);
+assert.match(vipPlanModel, /\$setOnInsert: plan/);
+assert.doesNotMatch(vipPlanModel, /\$set: \{ pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps \}/, 'startup must not overwrite administrator economics');
 assert.deepStrictEqual([1, 2, 3].map(periodRewardPercentForPlan), [10, 10, 10]);
 assert.deepStrictEqual([4, 5, 6, 7].map(periodRewardPercentForPlan), [15, 15, 15, 15]);
 assert.deepStrictEqual([8, 9, 10].map(periodRewardPercentForPlan), [20, 20, 20]);
@@ -132,10 +136,9 @@ for (const [planNumber, pricePoints] of [[1, 10000], [2, 30000], [3, 50000]]) {
   assert.strictEqual(dailyCents / 100, pricePoints / 100 + pricePoints / 1000, `VIP ${planNumber} daily payout includes principal plus 10% period yield`);
   assert.strictEqual((dailyCents * 100) / 100, pricePoints + pricePoints / 10, `VIP ${planNumber} total 100-day payout`);
 }
-assert.match(indexHtml, /data-tab="vip"/);
-assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|vip|wallet|profile)"/g) || []).length, 5);
-assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'vip', 'wallet', 'profile']);
-assert.match(app, /validTabs = \["home", "tasks", "vip", "wallet", "profile"\]/);
+assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|mine|profile)"/g) || []).length, 4);
+assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'mine', 'profile']);
+assert.match(app, /validTabs = \["home", "tasks", "mine", "wallet", "profile"\]/);
 assert.match(app, /function renderDailyCheckinCard\(\)/);
 assert.match(app, /DAILY_CHECKIN_REWARDS = Object\.freeze\(\[5, 7, 9, 11, 13, 14, 15\]\)/);
 assert.doesNotMatch(app, /function renderDaily\(\)/);

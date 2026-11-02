@@ -80,6 +80,12 @@ const state = {
   vipLoading: false,
   vipError: "",
   vipServerOffsetMs: 0,
+  onboarding: null,
+  onboardingLoading: false,
+  onboardingBlocked: false,
+  mining: null,
+  miningLoading: false,
+  miningHistory: [],
   captchaA: 0,
   captchaB: 0,
   initialized: false,
@@ -240,8 +246,43 @@ applyTheme(getTheme());
 window.toggleTheme = toggleTheme;
 window.selectTheme = selectTheme;
 
+const SOUND_KEY = "gramupSoundEnabled";
+function soundEnabled() {
+  return localStorage.getItem(SOUND_KEY) !== "0";
+}
+function playUiSound(kind = "tap") {
+  if (!soundEnabled() || typeof AudioContext === "undefined") return;
+  try {
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = kind === "success" ? 740 : kind === "error" ? 180 : 420;
+    oscillator.type = "sine";
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.035, context.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.08);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.09);
+    setTimeout(() => context.close().catch(() => {}), 140);
+  } catch { /* audio is optional */ }
+}
+function toggleSound() {
+  localStorage.setItem(SOUND_KEY, soundEnabled() ? "0" : "1");
+  updateSoundUI();
+  playUiSound("tap");
+}
+function updateSoundUI() {
+  const button = $("#soundToggle");
+  if (!button) return;
+  button.textContent = soundEnabled() ? t("sound_on") : t("sound_off");
+  button.setAttribute("aria-pressed", soundEnabled() ? "true" : "false");
+}
+window.toggleSound = toggleSound;
+
 /* ================= HAPTIC ================= */
 function haptic(type = "light") {
+  playUiSound(type === "success" || type === "error" ? type : "tap");
   try {
     if (!tg?.HapticFeedback) return;
     if (type === "success") return tg.HapticFeedback.notificationOccurred("success");
@@ -496,7 +537,8 @@ function setupNavigation() {
 }
 function updateNavigation() {
   $$("#tabbar [data-tab]").forEach(button => {
-    button.classList.toggle("active", button.dataset.tab === state.activeTab);
+    const activeTab = state.activeTab === "wallet" ? "profile" : state.activeTab;
+    button.classList.toggle("active", button.dataset.tab === activeTab);
   });
 }
 let navigationSequence = 0;
@@ -507,7 +549,7 @@ async function navigate(tab) {
   }
   const requestId = ++navigationSequence;
   if (tab !== "profile") profileRenderSequence += 1;
-  const validTabs = ["home", "tasks", "vip", "wallet", "profile"];
+  const validTabs = ["home", "tasks", "mine", "wallet", "profile"];
   if (!validTabs.includes(tab)) tab = "home";
   clearInterval(countdownInterval);
   state.activeTab = tab;
@@ -714,8 +756,19 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ================= TERMS ================= */
-function termsAccepted() {
-  return localStorage.getItem("termsAccepted") === "1";
+let onboardingStatusRequest = null;
+async function loadOnboardingStatus({ force = false } = {}) {
+  if (!force && state.onboarding) return state.onboarding;
+  if (onboardingStatusRequest) return onboardingStatusRequest;
+  state.onboardingLoading = true;
+  onboardingStatusRequest = api("/api/onboarding/status")
+    .then(data => { state.onboarding = data; return data; })
+    .finally(() => { state.onboardingLoading = false; onboardingStatusRequest = null; });
+  return onboardingStatusRequest;
+}
+function onboardingRequirementsComplete() {
+  const status = state.onboarding;
+  return Boolean(status && status.antiBot?.status === "verified" && !status.terms?.required && status.wallet?.state === "verified");
 }
 function showTerms() {
   const overlay = $("#termsOverlay");
@@ -724,11 +777,25 @@ function showTerms() {
 function hideTerms() {
   const overlay = $("#termsOverlay");
   if (overlay) overlay.style.display = "none";
-  localStorage.setItem("termsAccepted", "1");
   maybeShowOnboarding();
 }
 window.hideTerms = hideTerms;
 window.showTerms = showTerms;
+async function acceptTerms() {
+  const button = $("#acceptTermsBtn");
+  if (button) button.disabled = true;
+  try {
+    const result = await api("/api/onboarding/terms/accept", { method: "POST", body: { termsVersion: state.onboarding?.terms?.currentVersion || "gramup-terms-v1" } });
+    state.onboarding = { ...(state.onboarding || {}), terms: result.terms };
+    hideTerms();
+    toast(t("terms_saved"), "success");
+  } catch (error) {
+    toast(error.message || t("error_generic"), "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+window.acceptTerms = acceptTerms;
 
 /* ================= PRIVACY POLICY ================= */
 function showPrivacy() {
@@ -746,14 +813,9 @@ window.hidePrivacy = hidePrivacy;
 const ONBOARDING_STEP_COUNT = 3;
 let onboardingStep = 0;
 
-function onboardingSeen() {
-  const userId = state.user?.telegramId || state.user?.id || getTelegramUser()?.id;
-  const key = userId ? `onboardingSeen:${String(userId)}` : "onboardingSeen";
-  return localStorage.getItem(key) === "1";
-}
-
 function maybeShowOnboarding() {
-  if (onboardingSeen()) return;
+  if (onboardingRequirementsComplete()) { state.onboardingBlocked = false; return; }
+  state.onboardingBlocked = true;
   onboardingStep = 0;
   const overlay = $("#onboardingOverlay");
   if (overlay) overlay.style.display = "flex";
@@ -769,6 +831,7 @@ function renderOnboardingStep() {
   }
   const nextBtn = $("#onboardingNextBtn");
   if (nextBtn) nextBtn.textContent = onboardingStep === ONBOARDING_STEP_COUNT - 1 ? t("ob_start") : t("ob_next");
+  if (onboardingStep === 2) window.gramupWallet?.mount("onboardingWalletConnection");
 }
 
 function onboardingNext() {
@@ -781,16 +844,38 @@ function onboardingNext() {
 }
 window.onboardingNext = onboardingNext;
 
-function finishOnboarding() {
+async function finishOnboarding() {
+  try { await loadOnboardingStatus({ force: true }); } catch { /* the individual action will show its own error */ }
+  if (!onboardingRequirementsComplete()) {
+    if (state.onboarding?.antiBot?.status !== "verified") return showCaptcha();
+    if (state.onboarding?.terms?.required) return showTerms();
+    if (state.onboarding?.wallet?.state !== "verified") {
+      onboardingStep = 2;
+      const onboarding = $("#onboardingOverlay");
+      if (onboarding) onboarding.style.display = "flex";
+      renderOnboardingStep();
+      return toast("ابتدا Wallet را با TON Proof تأیید کنید.", "warning");
+    }
+  }
   const overlay = $("#onboardingOverlay");
-  if (overlay) overlay.style.display = "none";
-  const userId = state.user?.telegramId || state.user?.id || getTelegramUser()?.id;
-  const key = userId ? `onboardingSeen:${String(userId)}` : "onboardingSeen";
-  localStorage.setItem(key, "1");
+  try {
+    await api("/api/onboarding/complete", { method: "POST", body: { onboardingVersion: state.onboarding?.onboardingVersion || "onboarding-v2" } });
+    state.onboardingBlocked = false;
+    state.initialized = true;
+    if (overlay) overlay.style.display = "none";
+    const allowed = await enforceMembership();
+    if (allowed) await navigate("home");
+  } catch (error) {
+    toast(error.message || t("error_generic"), "error");
+  }
 }
 
 function skipOnboarding() {
-  finishOnboarding();
+  if (!onboardingRequirementsComplete()) {
+    toast(t("onboarding_required"), "warning");
+    return;
+  }
+  void finishOnboarding();
 }
 window.skipOnboarding = skipOnboarding;
 window.showOnboarding = () => {
@@ -837,12 +922,33 @@ async function submitCaptcha() {
     return;
   }
 
-  localStorage.setItem("captchaPassed", "1");
-  hideCaptcha();
-  haptic("success");
-  await boot();
+  const button = $("#submitCaptcha");
+  if (button) button.disabled = true;
+  try {
+    const challenge = await api("/api/onboarding/antibot/challenge", { method: "POST" });
+    let counter = 0;
+    const prefix = "0".repeat(Number(challenge.difficulty) || 4);
+    while (!await cryptoDigestStartsWith(`${challenge.nonce}:${counter}`, prefix)) counter += 1;
+    const result = await api("/api/onboarding/antibot/verify", { method: "POST", body: { challengeId: challenge.challengeId, counter: String(counter) } });
+    state.onboarding = { ...(state.onboarding || {}), antiBot: result.antiBot };
+    hideCaptcha();
+    haptic("success");
+    maybeShowOnboarding();
+    renderOnboardingStep();
+  } catch (requestError) {
+    if (error) error.textContent = requestError.message || t("error_generic");
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 window.submitCaptcha = submitCaptcha;
+
+async function cryptoDigestStartsWith(value, prefix) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hex = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+  return hex.startsWith(prefix);
+}
 
 /* ================= LANGUAGE ================= */
 function showLanguageOverlay() {
@@ -2993,6 +3099,11 @@ function renderProfileMenu() {
           <div class="profileText">${t("menu_language")} — ${langNames[state.language]}</div>
           <div class="profileChevron">‹</div>
         </div>
+        <div class="profileItem" onclick="toggleSound()" role="button">
+          <div class="profileIcon">🔊</div>
+          <div class="profileText">${t("sound_title")}</div>
+          <button id="soundToggle" type="button" class="secondaryBtn" aria-pressed="${soundEnabled() ? "true" : "false"}" onclick="event.stopPropagation();toggleSound()">${soundEnabled() ? t("sound_on") : t("sound_off")}</button>
+        </div>
         <div class="profileThemePicker" role="group" aria-label="${escapeHTML(t("theme_title"))}">
           <div class="profileThemeHeading"><span class="profileIcon">🎨</span><strong>${t("theme_title")}</strong></div>
           <div class="profileThemeChoices">
@@ -3551,7 +3662,7 @@ function stopVipCountdown() {
 }
 
 async function tickVipCountdowns() {
-  if ((state.activeTab !== "profile" && state.activeTab !== "vip") || (state.activeTab === "profile" && profileView !== "vip")) return;
+  if (!["profile", "mine", "vip"].includes(state.activeTab) || (state.activeTab === "profile" && profileView !== "vip")) return;
   let shouldRefresh = false;
   document.querySelectorAll("[data-vip-countdown]").forEach(element => {
     const target = Date.parse(element.dataset.vipCountdown || "");
@@ -3577,12 +3688,13 @@ async function tickVipCountdowns() {
 
 function startVipCountdown() {
   stopVipCountdown();
-  if ((state.activeTab !== "profile" && state.activeTab !== "vip") || (state.activeTab === "profile" && profileView !== "vip")) return;
+  if (!["profile", "mine", "vip"].includes(state.activeTab) || (state.activeTab === "profile" && profileView !== "vip")) return;
   void tickVipCountdowns();
   vipCountdownTimer = setInterval(tickVipCountdowns, 1000);
 }
 
 function renderProfileVip() {
+  const { allPlans = false, mineMode = false } = arguments[0] || {};
   const plans = state.vipPlans || [];
   const subscriptions = state.vipSubscriptions || [];
   const activeSubscriptions = subscriptions.filter(subscription => subscription.status === "active");
@@ -3590,7 +3702,7 @@ function renderProfileVip() {
   const filteredSubscriptions = vipSubscriptionFilter === "active" ? activeSubscriptions : expiredSubscriptions;
   const claimableSubscriptions = activeSubscriptions.filter(subscription => subscription.canClaim === true);
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
-  const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
+  const visiblePlans = allPlans ? plans : plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
   const iconByPlan = { 1: "◈", 2: "✦", 3: "♛", 4: "✦", 5: "⬡", 6: "✧", 7: "◆", 8: "♦", 9: "⬦", 10: "♛" };
   const planCards = visiblePlans.map(plan => {
@@ -3695,11 +3807,11 @@ function renderProfileVip() {
     ${subscriptions.length ? `<div class="vipSubscriptionTools" style="display:grid;gap:9px;margin:12px 0"><div class="vipStatusTabs" role="tablist" aria-label="${t("vip_subscription_filters_label")}" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:rgba(4,10,22,.58)"><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "active"}" onclick="setVipSubscriptionFilter('active')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "active" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "active" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "active" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_active")} <b>${formatPoints(activeSubscriptions.length)}</b></button><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "expired"}" onclick="setVipSubscriptionFilter('expired')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "expired" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "expired" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "expired" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_expired")} <b>${formatPoints(expiredSubscriptions.length)}</b></button></div><button type="button" class="vipClaimAll" ${!claimableSubscriptions.length || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" style="width:100%;min-height:43px;padding:10px 14px;border:1px solid rgba(74,222,128,.25);border-radius:13px;background:${claimableSubscriptions.length && !vipClaimAllBusy ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(34,211,238,.12))" : "rgba(71,85,105,.15)"};color:${claimableSubscriptions.length && !vipClaimAllBusy ? "#a7f3d0" : "#8792a5"};font-size:12px;font-weight:900">${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_all", { n: formatPoints(claimableSubscriptions.length) })}</button></div>${filteredSubscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t(vipSubscriptionFilter === "active" ? "vip_active_title" : "vip_expired_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t(vipSubscriptionFilter === "active" ? "vip_active_empty" : "vip_expired_empty")}</div></div>`}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
     <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
       <div class="vipCatalogHeading"><h3>${t("vip_catalog_title")}</h3><p>${t("vip_intro")}</p></div>
-      <div class="vipPlanTabs" role="tablist" aria-label="${t("vip_tier_tabs_label")}">
+      ${allPlans ? "" : `<div class="vipPlanTabs" role="tablist" aria-label="${t("vip_tier_tabs_label")}\">
         <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "starter"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('starter')"><span>${t("vip_tier_starter")}</span><small>1–3</small></button>
         <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "pro"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('pro')"><span>${t("vip_tier_pro")}</span><small>4–7</small></button>
         <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "ultimate"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('ultimate')"><span>${t("vip_tier_ultimate")}</span><small>8–10</small></button>
-      </div>
+      </div>`}
       <div class="vipPlanList" id="vipPlanGrid" role="tabpanel" aria-live="polite">${plans.length ? (planCards || `<div class="vipEmptyTier">${t("vip_category_empty")}</div>`) : `<div class="card"><div class="emptyDesc">${t("vip_empty_plans")}</div></div>`}</div>
     </section>
     </div>
@@ -3712,6 +3824,83 @@ function retryVipPlans() {
   void (state.activeTab === "vip" ? renderVipTab() : renderProfile());
 }
 window.retryVipPlans = retryVipPlans;
+
+async function loadMiningState({ force = false } = {}) {
+  if (!force && state.mining && !state.miningLoading) return state.mining;
+  if (state.miningLoading) return state.mining;
+  state.miningLoading = true;
+  try {
+    const data = await api("/api/mining/status");
+    state.mining = data?.mining || null;
+    state.miningHistory = Array.isArray(data?.history) ? data.history : [];
+    return state.mining;
+  } finally {
+    state.miningLoading = false;
+  }
+}
+
+function formatMiningDuration(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = Math.floor(total % 60);
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function renderMiningSummary() {
+  const mining = state.mining || {};
+  const remaining = Math.max(0, Number(mining.storageFullSeconds || 0) - Number(mining.elapsedSeconds || 0));
+  const canClaim = Number(mining.accumulatedPoints || 0) > 0;
+  const history = Array.isArray(state.miningHistory) ? state.miningHistory : [];
+  return `<style>.miningSummaryCard{margin-bottom:14px;border-color:rgba(103,232,249,.25);background:linear-gradient(145deg,rgba(14,55,73,.72),rgba(10,15,27,.94))}.miningStatsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}.miningStatsGrid>div{padding:11px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(0,0,0,.18)}.miningStatsGrid span{display:block;color:#a8aec2;font-size:10px}.miningStatsGrid b{display:block;margin-top:5px;color:#cffafe;font-size:13px;direction:ltr}.miningActions .primaryBtn{width:100%}.miningHistory{margin-top:16px}.historyRow{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:11px}.historyRow b{color:#86efac;direction:ltr}</style><section class="card miningSummaryCard" aria-label="Mining">
+    <div class="sectionHeader"><div><span class="modalEyebrow">MINE</span><h2 class="sectionTitle">${escapeHTML(mining.rigName || "Basic CPU Miner")}</h2></div><span class="badge success">Lv. ${formatPoints(mining.level || 1)}</span></div>
+    <div class="miningStatsGrid">
+      <div><span>Hourly income</span><b>${formatPoints(mining.effectiveRatePerHour || 0)} ${t("points_unit")}</b></div>
+      <div><span>Daily estimate</span><b>${formatPoints((Number(mining.effectiveRatePerHour) || 0) * 24)} ${t("points_unit")}</b></div>
+      <div><span>Claimable</span><b>${formatPoints(mining.accumulatedPoints || 0)} ${t("points_unit")}</b></div>
+      <div><span>Storage left</span><b data-mining-countdown="${remaining}">${formatMiningDuration(remaining)}</b></div>
+    </div>
+    <div class="miningActions"><button type="button" class="primaryBtn" data-mining-claim ${canClaim ? "" : "disabled"} onclick="claimMining()">${canClaim ? `Claim ${formatPoints(mining.accumulatedPoints)} points` : "Nothing to claim"}</button></div>
+    <div class="miningHistory"><h3 class="sectionTitle">Mining history</h3>${history.length ? history.map(item => `<div class="historyRow"><span>${escapeHTML(item.description || item.type || "Mining")}</span><b>${Number(item.amount) > 0 ? "+" : ""}${formatPoints(item.amount || 0)}</b></div>`).join("") : `<div class="emptyDesc">No mining history yet.</div>`}</div>
+  </section>`;
+}
+
+function renderMine() {
+  return `${renderMiningSummary()}${renderProfileVip({ allPlans: true, mineMode: true })}`;
+}
+
+let miningCountdownTimer = null;
+function startMiningCountdown() {
+  if (miningCountdownTimer) clearInterval(miningCountdownTimer);
+  let remaining = Number(state.mining?.storageFullSeconds || 0) - Number(state.mining?.elapsedSeconds || 0);
+  const tick = () => {
+    document.querySelectorAll("[data-mining-countdown]").forEach(node => { node.textContent = formatMiningDuration(remaining); });
+    if (remaining > 0) remaining -= 1;
+  };
+  tick();
+  miningCountdownTimer = setInterval(tick, 1000);
+}
+
+async function claimMining() {
+  if (!readModelActionAllowed()) return;
+  const button = $("[data-mining-claim]");
+  if (button) button.disabled = true;
+  const scope = "mining_claim";
+  try {
+    const result = await api("/api/mining/claim", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) }, body: {} });
+    clearPendingIdempotencyKey(scope);
+    state.mining = result.mining || state.mining;
+    state.points = Number(result.newBalance) || state.points;
+    await loadUserData({ force: true });
+    renderCurrentTab();
+    toast(result.message || "Mining claimed", "success");
+  } catch (error) {
+    clearDefinitiveIdempotencyFailure(scope, error);
+    toast(error.message || t("error_generic"), "error");
+    if (button) button.disabled = false;
+  }
+}
+window.claimMining = claimMining;
 
 function confirmVipPurchase(message) {
   if (tg && typeof tg.showConfirm === "function") {
@@ -3893,7 +4082,7 @@ async function renderVipTab() {
     $("#content").innerHTML = `<div class="loading" style="height:300px"></div>`;
     await loadVipPlans();
   }
-  if (renderRequestId !== navigationSequence || state.activeTab !== "vip") return;
+  if (renderRequestId !== navigationSequence || !["mine", "vip"].includes(state.activeTab)) return;
   $("#content").innerHTML = state.vipError
     ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondary" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
     : renderProfileVip();
@@ -3931,16 +4120,19 @@ async function renderCurrentTab(requestId = navigationSequence) {
         renderTasks();
       }
       void loadReferralData();
-    } else if (tab === "vip") {
+    } else if (tab === "mine") {
       if (cachedReadModelAvailable) {
         const content = $("#content");
-        if (content) content.innerHTML = renderProfileVip();
+        if (content) content.innerHTML = renderMine();
+        startMiningCountdown();
         startVipCountdown();
         void refreshReadModelInBackground();
       } else {
-        await loadUserData();
+        await Promise.all([loadUserData(), loadVipPlans(), loadMiningState()]);
         if (!isCurrentRender()) return;
-        await renderVipTab();
+        $("#content").innerHTML = renderMine();
+        startMiningCountdown();
+        startVipCountdown();
       }
     } else if (tab === "wallet") {
       if (cachedReadModelAvailable) {
@@ -3993,12 +4185,6 @@ async function boot() {
   const telegramUser = getTelegramUser();
   if (telegramUser) state.user = telegramUser;
 
-  if (!captchaPassed()) {
-    updateHeader();
-    showCaptcha();
-    return;
-  }
-
   await bootstrapAuth();
   applyStaticTranslations();
   if (state.phoneVerificationRequired) {
@@ -4008,11 +4194,9 @@ async function boot() {
   document.body.classList.remove("phone-verification-required");
   if (typeof window.initGramupWalletConnect === "function") await window.initGramupWalletConnect();
 
-  if (!termsAccepted()) {
-    showTerms();
-  } else {
-    maybeShowOnboarding();
-  }
+  await loadOnboardingStatus();
+  maybeShowOnboarding();
+  if (state.onboardingBlocked) return;
 
   state.initialized = true;
 

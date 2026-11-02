@@ -16,6 +16,24 @@ const userSchema = new mongoose.Schema(
     totalCheckins: { type: Number, default: 0, min: 0 },
     lastCheckIn: { type: Date, default: null },
 
+    // Mining state is additive and bounded; missing legacy fields use safe
+    // defaults and are initialized at feature activation, not from createdAt.
+    miningLevel: { type: Number, default: 1, min: 1, max: 10, validate: { validator: Number.isInteger, message: 'Mining level must be an integer.' } },
+    miningStorageLevel: { type: Number, default: 1, min: 1, max: 6, validate: { validator: Number.isInteger, message: 'Mining storage level must be an integer.' } },
+    miningSavedPoints: { type: Number, default: 0, min: 0, validate: { validator: value => Number.isSafeInteger(value), message: 'Saved mining points must be a safe integer.' } },
+    miningLastClaimAt: { type: Date, default: null },
+    miningBoostExpiresAt: { type: Date, default: null },
+    totalMinedPoints: { type: Number, default: 0, min: 0, validate: { validator: value => Number.isSafeInteger(value), message: 'Total mined points must be a safe integer.' } },
+
+    // Account-bound onboarding audit state. Client storage is never an
+    // authorization source for these values.
+    antiBotVerifiedAt: { type: Date, default: null },
+    antiBotVerificationVersion: { type: String, default: '' },
+    termsAcceptedVersion: { type: String, default: '' },
+    termsAcceptedAt: { type: Date, default: null },
+    onboardingVersion: { type: String, default: '' },
+    onboardingCompletedAt: { type: Date, default: null },
+
 
     referralCode: { type: String, required: true, unique: true, index: true },
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

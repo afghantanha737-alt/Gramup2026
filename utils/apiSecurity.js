@@ -7,7 +7,10 @@ const SENSITIVE_RATE_LIMITS = Object.freeze({
   general: Object.freeze({ ipMaxRequests: 60, userMaxRequests: 30 }),
   task: Object.freeze({ ipMaxRequests: 30, userMaxRequests: 20 }),
   claim: Object.freeze({ ipMaxRequests: 15, userMaxRequests: 10 }),
-  withdraw: Object.freeze({ ipMaxRequests: 10, userMaxRequests: 5 })
+  withdraw: Object.freeze({ ipMaxRequests: 10, userMaxRequests: 5 }),
+  mining_claim: Object.freeze({ ipMaxRequests: 12, userMaxRequests: 6 }),
+  mining_upgrade: Object.freeze({ ipMaxRequests: 8, userMaxRequests: 4 }),
+  onboarding: Object.freeze({ ipMaxRequests: 12, userMaxRequests: 6 })
 });
 
 function boundedLimit(value, fallback) {

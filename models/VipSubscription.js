@@ -30,6 +30,11 @@ const vipSubscriptionSchema = new mongoose.Schema({
   claimsCompleted: { type: Number, default: 0, min: 0 },
   claimedRewardPoints: { type: Number, default: 0, min: 0 },
   lastClaimAt: { type: Date, default: null },
+  // Historical records are eligible by default; an operator may explicitly
+  // quarantine a record before reconciliation. Missing legacy values remain
+  // compatible with the $ne: 'needs_review' settlement filter.
+  reconciliationStatus: { type: String, enum: ['eligible', 'needs_review', 'settled', 'ineligible'], default: 'eligible', index: true },
+  reconciliationReason: { type: String, default: '', maxlength: 500 },
   status: { type: String, enum: ['active', 'completed', 'cancelled'], default: 'active', index: true },
   principalReturnedAt: { type: Date, default: null }
 }, { timestamps: true });
