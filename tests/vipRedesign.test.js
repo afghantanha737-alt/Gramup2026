@@ -14,11 +14,20 @@ assert.match(app, /function vipLiveUnclaimed\(subscription, now = Date\.now\(\) 
 assert.match(app, /estimatedUnclaimedPoints/);
 assert.match(app, /dailyMiningRatePoints/);
 assert.match(app, /data-vip-unclaimed-total/);
-assert.match(app, /data-vip-live-sub=/);
+assert.match(app, /data-vip-live-days=/);
 assert.match(app, /vip_cloud_miner/);
 assert.match(app, /vip_claim_wallet/);
 assert.match(app, /vip_settlement_ready/);
 assert.match(app, /plan\.totalReceivedPoints/);
+const heroStart = app.indexOf('<section class="vipHero vipMiningHero"');
+const heroEnd = app.indexOf('</section>', heroStart);
+const heroMarkup = app.slice(heroStart, heroEnd);
+assert.ok(heroMarkup.indexOf('vipBalanceValue') < heroMarkup.indexOf('vipHeroPlanList'), 'plans follow the live unclaimed balance inside the hero');
+assert.ok(heroMarkup.indexOf('vipHeroPlanList') < heroMarkup.indexOf('data-vip-claim-all'), 'Claim immediately follows the compact plan list');
+assert.match(app, /class="vipHeroPlanRow"/);
+assert.match(app, /data-vip-live-rate=/);
+assert.match(app, /data-vip-live-days=/);
+assert.doesNotMatch(app, /vipRunningSection|vipActivePlanRow|data-vip-live-sub=/);
 assert.match(app, /onclick="claimAllVipRewards\(\)"/);
 assert.match(app, /onclick="purchaseVipPlan\(\$\{planNumber\}\)"/);
 assert.match(app, /setVipPlanCategory\('starter'\)/);
@@ -28,7 +37,14 @@ assert.match(css, /\.vipRedesign \.vipPlanCard \{ display: grid; grid-template-c
 assert.match(css, /@media \(max-width: 380px\)/);
 assert.match(css, /vipMinerCoin/);
 assert.match(css, /vip-orbit-pulse/);
-assert.match(html, /style\.css\?v=20261102-cloud-mining-1/);
+assert.match(css, /vipHeroPlanRow/);
+assert.doesNotMatch(css, /vipActivePlanRow/);
+const heroRowStyle = css.match(/\.vipRedesign \.vipHeroPlanRow \{([^}]*)\}/)?.[1] || '';
+assert.match(heroRowStyle, /padding: 0/);
+assert.match(heroRowStyle, /border: 0/);
+assert.match(heroRowStyle, /background: transparent/);
+assert.match(css, /\.vipRedesign \.vipHeroClaimButton \{[^}]*width: 100%/);
+assert.match(html, /style\.css\?v=20261102-cloud-mining-2/);
 
 const window = { state: { language: 'fa' } };
 vm.runInNewContext(fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8'), { window });

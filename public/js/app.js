@@ -3585,16 +3585,17 @@ function updateVipLiveDashboard() {
   for (const subscription of activeSubscriptions) {
     const id = String(subscription.id || "");
     const ended = Number.isFinite(Date.parse(subscription.endAt || "")) && now >= Date.parse(subscription.endAt);
-    document.querySelectorAll("[data-vip-live-sub]").forEach(element => {
-      if (element.dataset.vipLiveSub === id) element.textContent = formatNumber(vipLiveUnclaimed(subscription, now), 3);
-    });
     document.querySelectorAll("[data-vip-live-rate]").forEach(element => {
-      if (element.dataset.vipLiveRate === id) element.textContent = formatNumber(ended ? 0 : Number(subscription.dailyMiningRatePoints || 0), 2);
+      if (element.dataset.vipLiveRate === id) {
+        const rate = Number(subscription.dailyMiningRatePoints || 0);
+        element.textContent = `${formatNumber(ended ? 0 : rate, Number.isInteger(rate) ? 0 : 2)} Pts/d`;
+      }
     });
-    document.querySelectorAll("[data-vip-live-status]").forEach(element => {
-      if (element.dataset.vipLiveStatus !== id) return;
-      element.textContent = t(ended ? "vip_settlement_ready" : "vip_mining_live");
-      element.closest(".vipActivePlanRow")?.classList.toggle("isMatured", ended);
+    document.querySelectorAll("[data-vip-live-days]").forEach(element => {
+      if (element.dataset.vipLiveDays !== id) return;
+      const endAt = Date.parse(subscription.endAt || "");
+      const days = Number.isFinite(endAt) ? Math.max(0, Math.ceil((endAt - now) / 86400000)) : 0;
+      element.textContent = `${formatPoints(days)}d`;
     });
   }
   document.querySelectorAll("[data-vip-claim-all]").forEach(button => {
@@ -3700,12 +3701,10 @@ function renderProfileVip() {
     const rate = ended ? 0 : Number(subscription.dailyMiningRatePoints || 0);
     const remainingDays = Math.max(0, Math.ceil((Date.parse(subscription.endAt) - now) / 86400000));
     return `
-      <article class="vipActivePlanRow ${ended ? "isMatured" : ""}">
-        <span class="vipActivePlanDot" aria-hidden="true"></span>
-        <div class="vipActivePlanName"><b>${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</b><span class="vipMinerStatus" data-vip-live-status="${id}">${t(ended ? "vip_settlement_ready" : "vip_mining_live")}</span><small>${t("vip_days_remaining", { n: formatPoints(remainingDays) })}</small></div>
-        <div class="vipActivePlanReward"><b><span data-vip-live-rate="${id}">${formatNumber(rate, 2)}</span></b><small>${t("vip_points_per_day")}</small></div>
-        <div class="vipActivePlanAccrued"><small>${t("vip_unclaimed_short")}</small><b><span data-vip-live-sub="${id}">${formatNumber(vipLiveUnclaimed(subscription, now), 3)}</span></b></div>
-      </article>`;
+      <div class="vipHeroPlanRow">
+        <span class="vipHeroPlanName">${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</span>
+        <span class="vipHeroPlanMeta"><span data-vip-live-rate="${id}">${formatNumber(rate, Number.isInteger(rate) ? 0 : 2)} Pts/d</span> · <span data-vip-live-days="${id}">${formatPoints(remainingDays)}d</span></span>
+      </div>`;
   }).join("");
 
   const expiredRows = expiredSubscriptions.map(subscription => `
@@ -3738,20 +3737,16 @@ function renderProfileVip() {
         </div>
         <div class="vipMinerVisual" aria-hidden="true"><span class="vipMinerOrbit"></span><span class="vipMinerCoin">◈</span><span class="vipMinerSpark vipMinerSpark--one">✦</span><span class="vipMinerSpark vipMinerSpark--two">·</span></div>
         <div class="vipBalanceValue"><strong data-vip-unclaimed-total>${formatNumber(unclaimedVipPoints, 3)}</strong><span>${t("vip_points_unit")}</span></div>
+        <div class="vipHeroPlanList" aria-label="${t("vip_active_plans_heading")}">${activePlanRows || `<div class="vipHeroPlanEmpty">${t("vip_no_active_plans")}</div>`}</div>
+        <button type="button" class="vipHeroButton vipHeroClaimButton" data-vip-claim-all ${!claimableCount || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()">
+          <span data-vip-claim-label>${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_wallet")}</span>
+          <b><span data-vip-claim-total>${formatNumber(unclaimedVipPoints, 3)}</span> ${t("vip_points_unit")}</b>
+        </button>
         <div class="vipHeroMetrics">
           <div><span>${t("vip_daily_earnings")}</span><b><span data-vip-daily-total>${formatNumber(dailyVipEarnings, 2)}</span> ${t("vip_points_per_day")}</b></div>
           <div><span>${t("vip_current_balance")}</span><b>${formatPoints(state.points)} ${t("vip_points_unit")}</b></div>
         </div>
         <div class="vipAccrualHint">${t("vip_live_estimate_note")}</div>
-        <button type="button" class="vipHeroButton vipHeroClaimButton" data-vip-claim-all ${!claimableCount || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()">
-          <span data-vip-claim-label>${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_wallet")}</span>
-          <b><span data-vip-claim-total>${formatNumber(unclaimedVipPoints, 3)}</span> ${t("vip_points_unit")}</b>
-        </button>
-      </section>
-
-      <section class="vipRunningSection" aria-label="${t("vip_active_plans_heading")}">
-        <div class="vipSectionHeading"><h3>${t("vip_active_plans_heading")}</h3><span>${formatPoints(liveCount)} ${t("vip_running_count")}</span></div>
-        <div class="vipActivePlanList">${activePlanRows || `<div class="vipActivePlanEmpty">${t("vip_no_active_plans")}</div>`}</div>
       </section>
 
       ${expiredRows ? `<details class="vipPastPlans"><summary>${t("vip_expired_title")} <b>${formatPoints(expiredSubscriptions.length)}</b></summary>${expiredRows}</details>` : ""}
