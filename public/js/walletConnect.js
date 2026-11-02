@@ -76,7 +76,6 @@
     window.dispatchEvent(new CustomEvent('gramup:wallet-change', { detail }));
     if (typeof window.onGramupWalletChange === 'function') window.onGramupWalletChange(detail);
     if (document.getElementById('tonWalletConnection')) mount('tonWalletConnection');
-    if (document.getElementById('onboardingWalletConnection')) mount('onboardingWalletConnection');
   }
 
   function apiClient() {
