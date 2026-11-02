@@ -2429,3 +2429,89 @@ body.phone-verification-required #notificationBtn { display: none !important; }
 .referralConsentActions .primaryBtn, .referralConsentActions .secondaryBtn { width: 100%; min-height: 46px; }
 .phoneGateActions .textBtn { min-height: 40px; color: var(--text-soft); font-weight: 700; }
 .consentStatus { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--text-soft); background: var(--surface-3); font-size: 13px; }
+
+
+/* VIP mobile dashboard redesign — scoped visual overrides; accounting and handlers remain unchanged. */
+.vipRedesign .vipHero {
+  padding: 17px;
+  border-color: rgba(91, 221, 220, .24);
+  background: radial-gradient(circle at 94% 4%, rgba(45, 212, 191, .17), transparent 34%), linear-gradient(145deg, #102d32 0%, #141722 58%, #151328 100%);
+}
+.vipRedesign .vipHeroTop { align-items: flex-start; }
+.vipRedesign .vipStatusPill { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 7px 9px; border: 1px solid rgba(74,222,128,.22); border-radius: 999px; color: #a7f3d0; background: rgba(34,197,94,.10); font-size: 9px; font-weight: 850; white-space: nowrap; }
+.vipRedesign .vipStatusPill i { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 10px rgba(74,222,128,.7); }
+.vipRedesign .vipBalanceLabel { color: #c7d4df; font-size: 12px; }
+.vipRedesign .vipBalanceValue { margin: 8px 0 14px; }
+.vipRedesign .vipBalanceValue strong { color: #f3fffd; }
+.vipRedesign .vipBalanceValue span { color: #70e6d0; }
+.vipRedesign .vipHeroMetrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin-bottom: 13px; }
+.vipRedesign .vipHeroMetrics > div { display: grid; gap: 4px; min-width: 0; padding: 10px; border: 1px solid rgba(255,255,255,.075); border-radius: 13px; background: rgba(255,255,255,.045); }
+.vipRedesign .vipHeroMetrics span { color: #9baabd; font-size: 9px; line-height: 1.4; }
+.vipRedesign .vipHeroMetrics b { color: #d6fff5; font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vipRedesign .vipActivePlanHeading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 1px 6px; color: #e7edf6; font-size: 10px; font-weight: 850; }
+.vipRedesign .vipActivePlanHeading b { color: #77e4cd; font-size: 9px; }
+.vipRedesign .vipActivePlanList { display: grid; gap: 1px; }
+.vipRedesign .vipActivePlanRow { display: grid; grid-template-columns: 8px minmax(0,1fr) auto; align-items: center; gap: 9px; min-width: 0; padding: 9px 2px; border-top: 1px solid rgba(255,255,255,.07); }
+.vipRedesign .vipActivePlanDot { width: 6px; height: 6px; border-radius: 50%; background: #5eead4; box-shadow: 0 0 9px rgba(94,234,212,.42); }
+.vipRedesign .vipActivePlanName { min-width: 0; color: #e9eef6; font-size: 10px; font-weight: 800; }
+.vipRedesign .vipActivePlanName small, .vipRedesign .vipActivePlanReward small { display: block; margin-top: 3px; color: #929db0; font-size: 8px; font-weight: 600; }
+.vipRedesign .vipActivePlanReward { color: #8cebd7; font-size: 10px; text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vipRedesign .vipActivePlanEmpty { padding: 10px 2px; border-top: 1px solid rgba(255,255,255,.07); color: #929db0; font-size: 9px; }
+.vipRedesign .vipHeroClaimButton { width: 100%; min-height: 45px; margin-top: 13px; border: 0; border-radius: 14px; color: #06201c; background: linear-gradient(100deg,#79f2d2,#32d3ae); box-shadow: 0 8px 22px rgba(45,212,191,.19); font-size: 12px; font-weight: 950; transition: transform .18s ease, filter .18s ease, box-shadow .18s ease; }
+.vipRedesign .vipHeroClaimButton:not(:disabled):active { transform: translateY(1px) scale(.99); filter: brightness(.96); }
+.vipRedesign .vipHeroClaimButton:disabled { border: 1px solid rgba(255,255,255,.07); color: #8b96a8; background: rgba(255,255,255,.055); box-shadow: none; opacity: 1; }
+.vipRedesign .vipSubscriptionTools { display: grid; gap: 9px; margin: 12px 0; }
+.vipRedesign .vipStatusTabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; padding: 4px; border: 1px solid rgba(255,255,255,.08); border-radius: 15px; background: rgba(4,10,22,.58); }
+.vipRedesign .vipStatusTab { min-height: 38px; padding: 7px; border: 1px solid transparent; border-radius: 11px; color: #a8aec2; background: transparent; font-size: 10px; font-weight: 800; transition: background .18s ease,color .18s ease,border-color .18s ease; }
+.vipRedesign .vipStatusTab[aria-selected="true"] { border-color: rgba(103,232,249,.25); color: #cffafe; background: rgba(34,211,238,.12); }
+.vipRedesign .vipSubscriptionsTitle { margin: 16px 4px 8px !important; color: #dfeaff; font-size: 15px; }
+.vipRedesign .vipPlanList { display: grid; gap: 9px; }
+.vipRedesign .vipPlanCard { display: grid; grid-template-columns: 40px minmax(0,1fr) auto; align-items: center; gap: 10px; min-height: 84px; margin: 0; padding: 12px; border-radius: 19px; transition: transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+.vipRedesign .vipPlanCard:hover { transform: translateY(-1px); }
+.vipRedesign .vipPlanAccent { align-self: stretch; display: grid; place-items: center; margin: -12px 0 -12px -12px; border-inline-end: 1px solid rgba(255,255,255,.07); }
+.vipRedesign .vipPlanBody { min-width: 0; }
+.vipRedesign .vipPlanTopline { min-width: 0; margin: 0 0 7px; }
+.vipRedesign .vipPlanIdentity { min-width: 0; }
+.vipRedesign .vipPlanTitle { font-size: 11px; }
+.vipRedesign .vipPlanDuration { display: block; margin-top: 3px; color: #9aa7ba; font-size: 8px; }
+.vipRedesign .vipPlanBadge { padding: 4px 6px; font-size: 7px; }
+.vipRedesign .vipPlanMark { width: 27px; height: 27px; flex-basis: 27px; border-radius: 9px; font-size: 14px; }
+.vipRedesign .vipPlanFacts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px; }
+.vipRedesign .vipPlanFact { min-width: 0; display: grid; gap: 3px; }
+.vipRedesign .vipPlanFact span { color: #929db0; font-size: 7px; }
+.vipRedesign .vipPlanFact b { overflow: hidden; color: #dbf8f4; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vipRedesign .vipPlanCard .vipPlanButton { width: auto; min-width: 60px; min-height: 38px; margin: 0; padding: 8px 10px; border-radius: 12px; font-size: 9px; white-space: nowrap; }
+.vipRedesign .vipPlanCard--bronze .vipPlanButton--primary { color: #fff7ed; background: linear-gradient(135deg,#9a6333,#d59b61); }
+.vipRedesign .vipPlanCard--silver .vipPlanButton--primary { color: #172033; background: linear-gradient(135deg,#9aa7ba,#e2e8f0); }
+.vipRedesign .vipPlanCard--gold .vipPlanButton--primary { color: #352604; background: linear-gradient(135deg,#eabf50,#fff0a6); }
+.vipRedesign .vipPlanCard--neon .vipPlanButton--primary,.vipRedesign .vipPlanCard--sapphire .vipPlanButton--primary { background: linear-gradient(135deg,#378bf7,#4f46e5); }
+.vipRedesign .vipPlanCard--cyan .vipPlanButton--primary { background: linear-gradient(135deg,#06b6d4,#0e7490); }
+.vipRedesign .vipPlanCard--emerald .vipPlanButton--primary { background: linear-gradient(135deg,#10b981,#047857); }
+.vipRedesign .vipPlanCard--ruby .vipPlanButton--primary { background: linear-gradient(135deg,#fb7185,#be185d); }
+.vipRedesign .vipPlanCard--ultimate .vipPlanButton--primary { background: linear-gradient(135deg,#f5c451,#a855f7); }
+.vipRedesign .vipSubscriptionCard { margin: 9px 0; padding: 14px; border-radius: 18px; }
+.vipRedesign .vipSubscriptionGrid { gap: 6px; }
+.vipRedesign .vipSubscriptionGrid > div { padding: 8px; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; font-size: 9px; }
+.vipRedesign .vipSubscriptionCard button { min-height: 42px; margin-top: 10px; border-radius: 12px; }
+.vipRedesign .vipTierTab:focus-visible,.vipRedesign .vipStatusTab:focus-visible,.vipRedesign .vipHeroClaimButton:focus-visible,.vipRedesign .vipPlanButton:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+@media (max-width: 380px) {
+  .vipRedesign .vipHero { padding: 14px; }
+  .vipRedesign .vipStatusPill { padding: 6px 7px; font-size: 8px; }
+  .vipRedesign .vipPlanCard { grid-template-columns: 31px minmax(0,1fr) auto; gap: 7px; padding: 10px; }
+  .vipRedesign .vipPlanAccent { margin: -10px 0 -10px -10px; }
+  .vipRedesign .vipPlanCard .vipPlanButton { min-width: 54px; padding-inline: 7px; }
+  .vipRedesign .vipPlanFact b { font-size: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vipRedesign .vipPlanCard,.vipRedesign .vipHeroClaimButton,.vipRedesign .vipStatusTab { transition: none; }
+}
+html[data-theme="light"] .vipRedesign .vipHero { color: #f7f7ff; background: radial-gradient(circle at 94% 4%,rgba(45,212,191,.15),transparent 34%),linear-gradient(145deg,#172b34,#1a1b2a 100%); }
+html[data-theme="light"] .vipRedesign .vipActivePlanName,html[data-theme="light"] .vipRedesign .vipSubscriptionsTitle { color: #e8edf5; }
+html[data-theme="light"] .vipRedesign .vipPlanCard { color: #f7f7ff; }
+
+.vipRedesign .vipStatusPill.isInactive { border-color: rgba(148,163,184,.2); color: #b5bdcc; background: rgba(148,163,184,.09); }
+.vipRedesign .vipStatusPill.isInactive i { background: #9aa4b4; box-shadow: 0 0 7px rgba(148,163,184,.35); }
+
+.vipRedesign .vipPlanFinancialMeta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; color: #9baabd; font-size: 7px; line-height: 1.45; }
+.vipRedesign .vipPlanFinancialMeta b { color: #cbd8e7; font-weight: 750; }
+@media (max-width: 380px) { .vipRedesign .vipPlanFinancialMeta { gap: 3px 6px; font-size: 6px; } }
