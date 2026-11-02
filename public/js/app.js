@@ -3644,10 +3644,6 @@ function renderProfileVip() {
   const expiredSubscriptions = subscriptions.filter(subscription => subscription.status !== "active");
   const now = Date.now() + Number(state.vipServerOffsetMs || 0);
   const unclaimedVipPoints = activeSubscriptions.reduce((sum, subscription) => sum + vipLiveUnclaimed(subscription, now), 0);
-  const dailyVipEarnings = activeSubscriptions.reduce((sum, subscription) => {
-    const endAt = Date.parse(subscription.endAt || "");
-    return sum + (Number.isFinite(endAt) && now >= endAt ? 0 : Number(subscription.dailyMiningRatePoints || 0));
-  }, 0);
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
@@ -3732,7 +3728,7 @@ function renderProfileVip() {
       </div>
       <section class="vipHero vipMiningHero" aria-label="${t("vip_unclaimed_earnings")}">
         <div class="vipHeroTop">
-          <div><span class="vipHeroKicker">${t("vip_cloud_miner")}</span><div class="vipBalanceLabel">${t("vip_unclaimed_earnings")}</div></div>
+          <img class="vipHeroLogo" src="/img/gramup-logo-new.png" alt="Gramup" width="42" height="42">
           <span class="vipStatusPill ${hasLiveMining ? "isActive" : "isInactive"}" data-vip-mining-status><i aria-hidden="true"></i><span data-vip-mining-status-label>${t(hasLiveMining ? "vip_mining_live" : activeSubscriptions.length ? "vip_settlement_ready" : "vip_status_inactive")}</span><b data-vip-active-count>${formatPoints(liveCount)}</b></span>
         </div>
         <div class="vipMinerVisual" aria-hidden="true"><span class="vipMinerOrbit"></span><span class="vipMinerCoin">◈</span><span class="vipMinerSpark vipMinerSpark--one">✦</span><span class="vipMinerSpark vipMinerSpark--two">·</span></div>
@@ -3742,10 +3738,6 @@ function renderProfileVip() {
           <span data-vip-claim-label>${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_wallet")}</span>
           <b><span data-vip-claim-total>${formatNumber(unclaimedVipPoints, 3)}</span> ${t("vip_points_unit")}</b>
         </button>
-        <div class="vipHeroMetrics">
-          <div><span>${t("vip_daily_earnings")}</span><b><span data-vip-daily-total>${formatNumber(dailyVipEarnings, 2)}</span> ${t("vip_points_per_day")}</b></div>
-          <div><span>${t("vip_current_balance")}</span><b>${formatPoints(state.points)} ${t("vip_points_unit")}</b></div>
-        </div>
         <div class="vipAccrualHint">${t("vip_live_estimate_note")}</div>
       </section>
 
