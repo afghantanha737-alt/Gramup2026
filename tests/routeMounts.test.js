@@ -7,12 +7,10 @@ const server = fs.readFileSync('server.js', 'utf8');
 
 for (const [name, prefix] of [
   ['auth', '/api/auth'],
-  ['onboarding', '/api/onboarding'],
   ['required channels', '/api/required-channels'],
   ['app info', '/api/app-info'],
   ['tasks', '/api/tasks'],
   ['points', '/api/points'],
-  ['mining', '/api/mining'],
   ['referral', '/api/referral'],
   ['leaderboard', '/api/leaderboard'],
   ['mobile auth', '/api/mobile-auth'],
