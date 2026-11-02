@@ -1,14 +1,13 @@
 'use strict';
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
 const { requireUnifiedAuth } = require('../utils/unifiedAuth');
 const { withMembership } = require('../utils/membership');
+const { withMongoTransaction } = require('../utils/mongoTransaction');
 const { recordLedgerRequired } = require('../utils/ledger');
-const { sensitiveRateLimit } = require('../utils/apiSecurity');
-const { validateIdempotencyKey, idempotencyTransactionId, executeIdempotently } = require('../utils/idempotency');
 const User = require('../models/User');
-const PointsLedger = require('../models/PointsLedger');
 
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
 
@@ -45,9 +44,7 @@ function getMiningState(user, now = new Date()) {
   const boostExpiresAt = user.miningBoostExpiresAt ? new Date(user.miningBoostExpiresAt) : null;
   const isBoosted = Boolean(boostExpiresAt && boostExpiresAt.getTime() > nowMs);
   const effectiveRatePerHour = isBoosted ? rigConfig.ratePerHour * 2 : rigConfig.ratePerHour;
-  // Missing legacy state starts at feature interaction time; never award
-  // unbounded retroactive mining from account creation.
-  const lastClaimAt = user.miningLastClaimAt ? new Date(user.miningLastClaimAt) : now;
+  const lastClaimAt = user.miningLastClaimAt ? new Date(user.miningLastClaimAt) : (user.createdAt ? new Date(user.createdAt) : now);
   const lastClaimMs = lastClaimAt.getTime();
   const totalElapsedMs = Math.max(0, nowMs - lastClaimMs);
   let boostedMs = 0;
@@ -108,23 +105,13 @@ function optimisticUserFilter(user) {
 router.get('/status', auth, async (req, res) => {
   const user = await User.findById(req.dbUser._id);
   if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-  const history = await PointsLedger.find({ user: user._id, type: { $in: ['mining_claim', 'mining_upgrade'] } })
-    .sort({ createdAt: -1 }).limit(20).select('type amount description createdAt balanceAfter').lean();
-  return res.json({ success: true, mining: getMiningState(user, new Date()), history });
+  return res.json({ success: true, mining: getMiningState(user, new Date()) });
 });
 
-router.post('/claim', auth, sensitiveRateLimit('mining_claim'), async (req, res) => {
-  const idempotencyKey = validateIdempotencyKey(req.get('Idempotency-Key'));
-  if (!idempotencyKey) return res.status(400).json({ success: false, code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'برای عملیات مالی کلید تکرارنشدن درخواست لازم است.' });
-  let operation;
+router.post('/claim', auth, async (req, res) => {
+  const now = new Date();
   try {
-    operation = await executeIdempotently({
-      userId: req.dbUser._id,
-      scope: 'mining_claim',
-      key: idempotencyKey,
-      body: {},
-      execute: async session => {
-        const now = new Date();
+    const outcome = await withMongoTransaction(async session => {
       const current = await User.findById(req.dbUser._id).session(session);
       if (!current) throw miningError('USER_NOT_FOUND', 'کاربر پیدا نشد.', 404);
       const state = getMiningState(current, now);
@@ -135,42 +122,31 @@ router.post('/claim', auth, sensitiveRateLimit('mining_claim'), async (req, res)
         $inc: { points: pointsToClaim, totalMinedPoints: pointsToClaim }
       }, { new: true, session });
       if (!updated) throw miningError('MINING_CONFLICT', 'وضعیت استخراج تغییر کرده است؛ دوباره تلاش کنید.', 409);
-      const sourceId = `mining-claim:${updated._id}:${idempotencyKey}`;
+      const sourceId = `mining-claim:${updated._id}:${crypto.randomUUID()}`;
       await recordLedgerRequired({
         user: updated._id, type: 'mining_claim', currency: 'points', amount: pointsToClaim,
         description: `استخراج ${pointsToClaim} پوینت از ماینر`, balanceAfter: updated.points,
-        sourceId,
-        transactionId: idempotencyTransactionId({ userId: updated._id, scope: 'mining_claim', key: idempotencyKey, leg: 'claim' }),
-        session
+        sourceId, session
       });
-        return { body: {
-          success: true, claimedPoints: pointsToClaim, newBalance: updated.points,
-          mining: getMiningState(updated, now),
-          message: `${pointsToClaim} پوینت استخراج‌شده با موفقیت واریز شد!`
-        } };
-      }
+      return { updated, pointsToClaim };
+    });
+    return res.json({
+      success: true, claimedPoints: outcome.pointsToClaim, newBalance: outcome.updated.points,
+      mining: getMiningState(outcome.updated, now),
+      message: `${outcome.pointsToClaim} پوینت استخراج‌شده با موفقیت واریز شد!`
     });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
     throw error;
   }
-  return res.status(operation.status).json(operation.body);
 });
 
-router.post('/upgrade', auth, sensitiveRateLimit('mining_upgrade'), async (req, res) => {
-  const idempotencyKey = validateIdempotencyKey(req.get('Idempotency-Key'));
-  if (!idempotencyKey) return res.status(400).json({ success: false, code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'برای عملیات مالی کلید تکرارنشدن درخواست لازم است.' });
+router.post('/upgrade', auth, async (req, res) => {
   const type = String(req.body?.type || '').trim();
   if (!['rig', 'storage'].includes(type)) return res.status(400).json({ success: false, message: 'نوع ارتقاء نامعتبر است.' });
-  let operation;
+  const now = new Date();
   try {
-    operation = await executeIdempotently({
-      userId: req.dbUser._id,
-      scope: 'mining_upgrade',
-      key: idempotencyKey,
-      body: { type },
-      execute: async session => {
-        const now = new Date();
+    const outcome = await withMongoTransaction(async session => {
       const current = await User.findById(req.dbUser._id).session(session);
       if (!current) throw miningError('USER_NOT_FOUND', 'کاربر پیدا نشد.', 404);
       const state = getMiningState(current, now);
@@ -192,29 +168,26 @@ router.post('/upgrade', auth, sensitiveRateLimit('mining_upgrade'), async (req, 
           user: updated._id, type: 'mining_claim', currency: 'points', amount: pendingPoints,
           description: `تسویه خودکار ${pendingPoints} پوینت هنگام ارتقاء`,
           balanceAfter: (Number(current.points) || 0) + pendingPoints,
-          sourceId: `mining-claim:${updated._id}:${idempotencyKey}:accrual`,
-          transactionId: idempotencyTransactionId({ userId: updated._id, scope: 'mining_upgrade', key: idempotencyKey, leg: 'accrual' }), session
+          sourceId: `mining-claim:${updated._id}:${crypto.randomUUID()}`, session
         });
       }
       await recordLedgerRequired({
         user: updated._id, type: 'mining_upgrade', currency: 'points', amount: -next.cost,
         description: type === 'rig' ? `ارتقاء ماینر به سطح ${next.level} (${next.name})` : `ارتقاء ظرفیت ذخیره به سطح ${next.level} (${next.name})`,
         balanceAfter: updated.points,
-        sourceId: `mining-upgrade:${updated._id}:${idempotencyKey}`,
-        transactionId: idempotencyTransactionId({ userId: updated._id, scope: 'mining_upgrade', key: idempotencyKey, leg: 'upgrade' }), session
+        sourceId: `mining-upgrade:${updated._id}:${crypto.randomUUID()}`, session
       });
-        const label = type === 'rig' ? 'ماینر' : 'ظرفیت باتری';
-        return { body: {
-          success: true, mining: getMiningState(updated, now), newBalance: updated.points,
-          message: `${label} به سطح ${next.level} ارتقاء یافت!`
-        } };
-      }
+      return { updated, next };
+    });
+    const label = type === 'rig' ? 'ماینر' : 'ظرفیت باتری';
+    return res.json({
+      success: true, mining: getMiningState(outcome.updated, now), newBalance: outcome.updated.points,
+      message: `${label} به سطح ${outcome.next.level} ارتقاء یافت!`
     });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
     throw error;
   }
-  return res.status(operation.status).json(operation.body);
 });
 
 module.exports = router;
