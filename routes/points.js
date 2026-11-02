@@ -1292,44 +1292,45 @@ router.post('/vip/claim-all', auth, sensitiveRateLimit('claim'), async (req, res
           if (!reserve) throw vipError('VIP_RESERVE_UNAVAILABLE', 'Reserve قابل پرداخت کافی نیست؛ پرداخت انجام نشد.', 409);
         }
 
-        const updatedSubscriptions = [];
-        for (const item of settlements) {
+        // Bulk claim owns the per-user transaction via lockVipClaimUser above.
+        // Do not use per-subscription compare-and-set updates here: that was
+        // the source of the false concurrency response when several
+        // active plans were claimed together. One bulkWrite updates every
+        // settled plan in this transaction, followed by one balance increment.
+        const subscriptionUpdates = settlements.map(item => {
           const subscription = item.subscription;
-          const updatedSubscription = await VipSubscription.findOneAndUpdate(
-            {
-              _id: subscription._id,
-              user: req.dbUser._id,
-              status: 'active',
-              claimsCompleted: item.claimIndex,
-              claimedRewardPoints: subscription.claimedRewardPoints || 0,
-              principalPaidPoints: subscription.principalPaidPoints || 0,
-              reservePaidCents: subscription.reservePaidCents || 0,
-              lastClaimAt: subscription.lastClaimAt || null
-            },
-            {
-              $set: {
-                claimsCompleted: item.claimIndex + 1,
-                claimedRewardPoints: item.claimedRewardPoints,
-                principalPaidPoints: item.principalPaidPoints,
-                lastClaimAt: now,
-                ...(item.isNewPolicy ? {
-                  principalPaidDays: Math.min(Number(subscription.durationDays) || 0, item.elapsedDays),
-                  reservePaidCents: item.reservePaidCents,
-                  ...(item.principalCents > 0 ? { lastPrincipalPaidAt: now } : {})
-                } : {}),
-                ...(item.isMatured ? {
-                  status: 'completed',
-                  ...(item.isNewPolicy ? { reserveReleasedAt: now } : { principalReturnedAt: now })
-                } : {})
+          return {
+            updateOne: {
+              filter: { _id: subscription._id, user: req.dbUser._id, status: 'active' },
+              update: {
+                $set: {
+                  claimsCompleted: item.claimIndex + 1,
+                  claimedRewardPoints: item.claimedRewardPoints,
+                  principalPaidPoints: item.principalPaidPoints,
+                  lastClaimAt: now,
+                  ...(item.isNewPolicy ? {
+                    principalPaidDays: Math.min(Number(subscription.durationDays) || 0, item.elapsedDays),
+                    reservePaidCents: item.reservePaidCents,
+                    ...(item.principalCents > 0 ? { lastPrincipalPaidAt: now } : {})
+                  } : {}),
+                  ...(item.isMatured ? {
+                    status: 'completed',
+                    ...(item.isNewPolicy ? { reserveReleasedAt: now } : { principalReturnedAt: now })
+                  } : {})
+                }
               }
-            },
-            { new: true, session }
-          );
-          if (!updatedSubscription) {
-            throw vipError('VIP_CLAIM_CONFLICT', 'پوینت‌ها هم‌زمان از درخواست دیگری دریافت شدند؛ وضعیت را تازه‌سازی کنید.', 409);
-          }
-          updatedSubscriptions.push(updatedSubscription);
+            }
+          };
+        });
+        const bulkResult = await VipSubscription.bulkWrite(subscriptionUpdates, { session, ordered: true });
+        if (Number(bulkResult.matchedCount) !== settlements.length) {
+          throw vipError('VIP_BULK_CLAIM_RETRY', 'وضعیت یکی از پلن‌ها تغییر کرده است؛ درخواست را دوباره ارسال کنید.', 409);
         }
+        const updatedById = new Map(
+          (await VipSubscription.find({ _id: { $in: settlements.map(item => item.subscription._id) } }).session(session))
+            .map(subscription => [String(subscription._id), subscription])
+        );
+        const updatedSubscriptions = settlements.map(item => updatedById.get(String(item.subscription._id))).filter(Boolean);
 
         const totalPayoutPoints = pointsFromCents(totalPayoutCents);
         const user = await User.findOneAndUpdate(
