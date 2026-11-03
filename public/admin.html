@@ -281,6 +281,14 @@
             <option value="all">همه</option>
           </select>
         </div>
+        <div id="screenshotBulkActions" class="row" style="margin-top:10px;align-items:center">
+          <label class="small" style="display:flex;align-items:center;gap:6px;margin:0">
+            <input id="selectAllScreenshotSubmissions" type="checkbox" style="width:auto;margin:0" onchange="toggleAllScreenshotSubmissions(this.checked)">
+            انتخاب همه
+          </label>
+          <button type="button" class="success" onclick="approveSelectedScreenshotSubmissions()">تأیید موارد انتخاب‌شده</button>
+          <button type="button" class="danger" onclick="rejectSelectedScreenshotSubmissions()">رد موارد انتخاب‌شده</button>
+        </div>
         <div id="screenshotSubmissions" style="margin-top:10px"></div>
       </div>
     </div>
@@ -1039,6 +1047,9 @@ async function loadTasks() {
 async function loadScreenshotSubmissions() {
   const container = document.getElementById("screenshotSubmissions");
   if (!container) return;
+  releaseScreenshotImageUrls();
+  const selectAll = document.getElementById("selectAllScreenshotSubmissions");
+  if (selectAll) selectAll.checked = false;
   container.innerHTML = '<div class="empty">در حال بارگذاری...</div>';
   const status = document.getElementById("screenshotSubmissionFilter")?.value || "pending";
   try {
@@ -1056,7 +1067,7 @@ async function loadScreenshotSubmissions() {
     }
     const labels = { pending: "در انتظار بررسی", approved: "تأیید شد", rejected: "رد شد" };
     container.innerHTML = `<div style="overflow:auto"><table>
-      <thead><tr><th>کاربر</th><th>Task</th><th>Screenshot</th><th>Reward</th><th>تاریخ ارسال</th><th>وضعیت/عملیات</th></tr></thead>
+      <thead><tr><th><input id="selectAllScreenshotRows" type="checkbox" aria-label="انتخاب همه ارسال‌ها" style="width:auto;margin:0" onchange="toggleAllScreenshotSubmissions(this.checked)"></th><th>کاربر</th><th>Task</th><th>Screenshot</th><th>Reward</th><th>تاریخ ارسال</th><th>وضعیت/عملیات</th></tr></thead>
       <tbody>${submissions.map(item => {
         const userName = item.user
           ? [item.user.firstName, item.user.lastName].filter(Boolean).join(" ") || item.user.username || item.user.telegramId
@@ -1064,9 +1075,10 @@ async function loadScreenshotSubmissions() {
         const submitted = item.submittedAt || item.createdAt;
         const statusLabel = labels[item.status] || item.status;
         return `<tr>
+          <td><input class="screenshot-submission-select" type="checkbox" value="${escapeHtml(item._id)}" aria-label="انتخاب ارسال ${escapeHtml(userName)}" ${item.status !== "pending" ? "disabled" : ""} style="width:auto;margin:0" onchange="syncScreenshotSelectAllState()"></td>
           <td>${escapeHtml(userName)}<br><span class="small">${escapeHtml(item.user?.telegramId || "—")}</span></td>
           <td>${escapeHtml(item.task?.title || "Task حذف‌شده")}</td>
-          <td><button class="secondary" type="button" onclick="viewScreenshotSubmission('${item._id}')">مشاهده تصویر</button></td>
+          <td><div class="screenshot-inline-preview"><span class="small">در حال بارگذاری تصویر…</span><img data-screenshot-id="${escapeHtml(item._id)}" alt="Screenshot submission" loading="lazy" style="display:none;max-width:180px;max-height:120px;border-radius:8px;object-fit:contain;background:rgba(0,0,0,.08)"></div></td>
           <td>+${escapeHtml(item.reward)} UP</td>
           <td>${submitted ? new Date(submitted).toLocaleString("fa-IR") : "—"}</td>
           <td><span class="badge ${item.status === "approved" ? "approved" : item.status === "rejected" ? "rejected" : "pending"}">${escapeHtml(statusLabel)}</span>
@@ -1076,11 +1088,86 @@ async function loadScreenshotSubmissions() {
         </tr>`;
       }).join("")}</tbody>
     </table></div>`;
+    await hydrateScreenshotImages(submissions);
+    syncScreenshotSelectAllState();
   } catch (error) {
     const pendingCountElement = document.getElementById("pendingScreenshotCount");
     if (pendingCountElement) pendingCountElement.textContent = "(—)";
     container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
+}
+
+let screenshotImageObjectUrls = [];
+
+function releaseScreenshotImageUrls() {
+  screenshotImageObjectUrls.forEach(url => URL.revokeObjectURL(url));
+  screenshotImageObjectUrls = [];
+}
+
+async function hydrateScreenshotImages(submissions) {
+  await Promise.all(submissions.map(async item => {
+    const image = document.querySelector(`img[data-screenshot-id="${CSS.escape(item._id)}"]`);
+    if (!image) return;
+    const wrapper = image.parentElement;
+    try {
+      const response = await fetch(`/api/admin/task-submissions/${encodeURIComponent(item._id)}/image`, {
+        headers: { "x-admin-session": ADMIN_SESSION }
+      });
+      if (!response.ok) throw new Error("تصویر در دسترس نیست.");
+      const url = URL.createObjectURL(await response.blob());
+      screenshotImageObjectUrls.push(url);
+      image.src = url;
+      image.style.display = "block";
+      const loadingText = wrapper.querySelector(".small");
+      if (loadingText) loadingText.remove();
+    } catch {
+      wrapper.innerHTML = '<span class="small">تصویر در دسترس نیست.</span>';
+    }
+  }));
+}
+
+function getSelectedScreenshotSubmissionIds() {
+  return Array.from(document.querySelectorAll(".screenshot-submission-select:checked:not(:disabled)"), checkbox => checkbox.value);
+}
+
+function syncScreenshotSelectAllState() {
+  const checkboxes = Array.from(document.querySelectorAll(".screenshot-submission-select:not(:disabled)"));
+  const selected = checkboxes.filter(checkbox => checkbox.checked).length;
+  [document.getElementById("selectAllScreenshotSubmissions"), document.getElementById("selectAllScreenshotRows")].forEach(selectAll => {
+    if (!selectAll) return;
+    selectAll.checked = checkboxes.length > 0 && selected === checkboxes.length;
+    selectAll.indeterminate = selected > 0 && selected < checkboxes.length;
+  });
+}
+
+function toggleAllScreenshotSubmissions(checked) {
+  document.querySelectorAll(".screenshot-submission-select:not(:disabled)").forEach(checkbox => { checkbox.checked = checked; });
+  [document.getElementById("selectAllScreenshotSubmissions"), document.getElementById("selectAllScreenshotRows")].forEach(selectAll => {
+    if (selectAll) { selectAll.checked = checked; selectAll.indeterminate = false; }
+  });
+}
+
+async function approveSelectedScreenshotSubmissions() {
+  const ids = getSelectedScreenshotSubmissionIds();
+  if (!ids.length) return showMsg("حداقل یک submission در انتظار بررسی را انتخاب کنید.", "error");
+  if (!confirm(`آیا ${ids.length} submission انتخاب‌شده تأیید و پاداش آن‌ها پرداخت شود؟`)) return;
+  const results = await Promise.allSettled(ids.map(id => api(`/api/admin/task-submissions/${encodeURIComponent(id)}/approve`, { method: "POST", body: JSON.stringify({}) })));
+  const succeeded = results.filter(result => result.status === "fulfilled").length;
+  const failed = results.length - succeeded;
+  showMsg(`${succeeded} submission تأیید شد${failed ? `؛ ${failed} مورد ناموفق بود` : ""}.`, failed ? "error" : "success");
+  await Promise.all([loadScreenshotSubmissions(), loadTasks()]);
+}
+
+async function rejectSelectedScreenshotSubmissions() {
+  const ids = getSelectedScreenshotSubmissionIds();
+  if (!ids.length) return showMsg("حداقل یک submission در انتظار بررسی را انتخاب کنید.", "error");
+  const note = prompt("دلیل رد موارد انتخاب‌شده را وارد کنید (اختیاری):", "");
+  if (note === null) return;
+  const results = await Promise.allSettled(ids.map(id => api(`/api/admin/task-submissions/${encodeURIComponent(id)}/reject`, { method: "POST", body: JSON.stringify({ note }) })));
+  const succeeded = results.filter(result => result.status === "fulfilled").length;
+  const failed = results.length - succeeded;
+  showMsg(`${succeeded} submission رد شد${failed ? `؛ ${failed} مورد ناموفق بود` : ""}.`, failed ? "error" : "success");
+  await loadScreenshotSubmissions();
 }
 
 let screenshotImageObjectUrl = "";
