@@ -274,7 +274,7 @@
       <div class="card">
         <div class="flexBetween"><b>📸 Screenshot Submissions <span id="pendingScreenshotCount" class="badge pending" aria-live="polite">(…)</span></b><button type="button" class="secondary" onclick="loadScreenshotSubmissions()">تازه‌سازی</button></div>
         <div class="row" style="margin-top:10px">
-          <select id="screenshotSubmissionFilter" onchange="loadScreenshotSubmissions()" style="max-width:220px">
+          <select id="screenshotSubmissionFilter" onchange="screenshotSubmissionPage = 1; loadScreenshotSubmissions(1)" style="max-width:220px">
             <option value="pending">در انتظار بررسی</option>
             <option value="rejected">ردشده‌ها</option>
             <option value="approved">تأییدشده‌ها</option>
@@ -1044,16 +1044,21 @@ async function loadTasks() {
   }
 }
 
-async function loadScreenshotSubmissions() {
+let screenshotSubmissionPage = 1;
+const SCREENSHOT_PAGE_SIZE = 20;
+const SCREENSHOT_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70' viewBox='0 0 70 70'%3E%3Crect width='70' height='70' rx='6' fill='%23eef2f7'/%3E%3Cpath d='M23 45l8-9 6 6 5-6 9 9H23z' fill='%2394a3b8'/%3E%3Ccircle cx='32' cy='28' r='4' fill='%2394a3b8'/%3E%3C/svg%3E";
+
+async function loadScreenshotSubmissions(page = screenshotSubmissionPage) {
   const container = document.getElementById("screenshotSubmissions");
   if (!container) return;
   releaseScreenshotImageUrls();
+  screenshotSubmissionPage = Math.max(1, Number(page) || 1);
   const selectAll = document.getElementById("selectAllScreenshotSubmissions");
   if (selectAll) selectAll.checked = false;
   container.innerHTML = '<div class="empty">در حال بارگذاری...</div>';
   const status = document.getElementById("screenshotSubmissionFilter")?.value || "pending";
   try {
-    const data = await api(`/api/admin/task-submissions?status=${encodeURIComponent(status)}`);
+    const data = await api(`/api/admin/task-submissions?status=${encodeURIComponent(status)}&page=${screenshotSubmissionPage}&limit=${SCREENSHOT_PAGE_SIZE}`);
     const pendingCountElement = document.getElementById("pendingScreenshotCount");
     if (pendingCountElement) {
       const pendingCount = Math.max(0, Number(data.pendingCount) || 0);
@@ -1066,7 +1071,8 @@ async function loadScreenshotSubmissions() {
       return;
     }
     const labels = { pending: "در انتظار بررسی", approved: "تأیید شد", rejected: "رد شد" };
-    container.innerHTML = `<div style="overflow:auto"><table>
+    const pagination = data.pagination || {};
+    container.innerHTML = `<div><div style="overflow:auto"><table>
       <thead><tr><th><input id="selectAllScreenshotRows" type="checkbox" aria-label="انتخاب همه ارسال‌ها" style="width:auto;margin:0" onchange="toggleAllScreenshotSubmissions(this.checked)"></th><th>کاربر</th><th>Task</th><th>Screenshot</th><th>Reward</th><th>تاریخ ارسال</th><th>وضعیت/عملیات</th></tr></thead>
       <tbody>${submissions.map(item => {
         const userName = item.user
@@ -1078,7 +1084,7 @@ async function loadScreenshotSubmissions() {
           <td><input class="screenshot-submission-select" type="checkbox" value="${escapeHtml(item._id)}" aria-label="انتخاب ارسال ${escapeHtml(userName)}" ${item.status !== "pending" ? "disabled" : ""} style="width:auto;margin:0" onchange="syncScreenshotSelectAllState()"></td>
           <td>${escapeHtml(userName)}<br><span class="small">${escapeHtml(item.user?.telegramId || "—")}</span></td>
           <td>${escapeHtml(item.task?.title || "Task حذف‌شده")}</td>
-          <td><div class="screenshot-inline-preview"><span class="small">در حال بارگذاری تصویر…</span><img data-screenshot-id="${escapeHtml(item._id)}" alt="Screenshot submission" loading="lazy" style="display:none;max-width:180px;max-height:120px;border-radius:8px;object-fit:contain;background:rgba(0,0,0,.08)"></div></td>
+          <td><div class="screenshot-inline-preview"><img data-screenshot-id="${escapeHtml(item._id)}" src="${SCREENSHOT_PLACEHOLDER}" alt="Screenshot thumbnail" loading="lazy" title="برای مشاهده اندازه کامل کلیک کنید" onclick="viewScreenshotSubmission('${item._id}')" style="display:block;width:70px;height:70px;max-width:70px;max-height:70px;border-radius:6px;object-fit:cover;background:rgba(0,0,0,.08);cursor:zoom-in"></div></td>
           <td>+${escapeHtml(item.reward)} UP</td>
           <td>${submitted ? new Date(submitted).toLocaleString("fa-IR") : "—"}</td>
           <td><span class="badge ${item.status === "approved" ? "approved" : item.status === "rejected" ? "rejected" : "pending"}">${escapeHtml(statusLabel)}</span>
@@ -1087,8 +1093,15 @@ async function loadScreenshotSubmissions() {
           </td>
         </tr>`;
       }).join("")}</tbody>
-    </table></div>`;
-    await hydrateScreenshotImages(submissions);
+    </table></div>
+    <div class="row" style="margin-top:10px;align-items:center;justify-content:space-between">
+      <span class="small">صفحه ${Number(pagination.page) || screenshotSubmissionPage} از ${Number(pagination.totalPages) || 1} · ${Number(pagination.total) || submissions.length} مورد</span>
+      <div class="row" style="margin:0">
+        <button type="button" class="secondary" onclick="loadScreenshotSubmissions(${Math.max(1, (Number(pagination.page) || screenshotSubmissionPage) - 1)})" ${pagination.hasPrevious ? "" : "disabled"}>قبلی</button>
+        <button type="button" class="secondary" onclick="loadScreenshotSubmissions(${(Number(pagination.page) || screenshotSubmissionPage) + 1})" ${pagination.hasNext ? "" : "disabled"}>بعدی</button>
+      </div>
+    </div></div>`;
+    observeScreenshotImages();
     syncScreenshotSelectAllState();
   } catch (error) {
     const pendingCountElement = document.getElementById("pendingScreenshotCount");
@@ -1098,32 +1111,45 @@ async function loadScreenshotSubmissions() {
 }
 
 let screenshotImageObjectUrls = [];
+let screenshotImageObserver = null;
 
 function releaseScreenshotImageUrls() {
+  if (screenshotImageObserver) screenshotImageObserver.disconnect();
+  screenshotImageObserver = null;
   screenshotImageObjectUrls.forEach(url => URL.revokeObjectURL(url));
   screenshotImageObjectUrls = [];
 }
 
-async function hydrateScreenshotImages(submissions) {
-  await Promise.all(submissions.map(async item => {
-    const image = document.querySelector(`img[data-screenshot-id="${CSS.escape(item._id)}"]`);
-    if (!image) return;
-    const wrapper = image.parentElement;
-    try {
-      const response = await fetch(`/api/admin/task-submissions/${encodeURIComponent(item._id)}/image`, {
-        headers: { "x-admin-session": ADMIN_SESSION }
-      });
+function observeScreenshotImages() {
+  const images = document.querySelectorAll("img[data-screenshot-id]");
+  const loadImage = image => {
+    if (image.dataset.loading === "true" || image.dataset.loaded === "true") return;
+    image.dataset.loading = "true";
+    fetch(`/api/admin/task-submissions/${encodeURIComponent(image.dataset.screenshotId)}/image`, {
+      headers: { "x-admin-session": ADMIN_SESSION }
+    }).then(async response => {
       if (!response.ok) throw new Error("تصویر در دسترس نیست.");
       const url = URL.createObjectURL(await response.blob());
       screenshotImageObjectUrls.push(url);
       image.src = url;
-      image.style.display = "block";
-      const loadingText = wrapper.querySelector(".small");
-      if (loadingText) loadingText.remove();
-    } catch {
-      wrapper.innerHTML = '<span class="small">تصویر در دسترس نیست.</span>';
-    }
-  }));
+      image.dataset.loaded = "true";
+    }).catch(() => {
+      image.src = SCREENSHOT_PLACEHOLDER;
+      image.title = "تصویر در دسترس نیست";
+    }).finally(() => { image.dataset.loading = "false"; });
+  };
+  if (!("IntersectionObserver" in window)) {
+    images.forEach(loadImage);
+    return;
+  }
+  screenshotImageObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      loadImage(entry.target);
+      screenshotImageObserver.unobserve(entry.target);
+    });
+  }, { rootMargin: "120px" });
+  images.forEach(image => screenshotImageObserver.observe(image));
 }
 
 function getSelectedScreenshotSubmissionIds() {

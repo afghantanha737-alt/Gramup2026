@@ -691,21 +691,35 @@ router.get('/task-submissions', async (req, res) => {
   if (requestedStatus !== 'all' && !allowedStatuses.includes(requestedStatus)) {
     return res.status(400).json({ success: false, message: 'وضعیت submission نامعتبر است.' });
   }
+  const requestedPage = Number.parseInt(req.query.page, 10);
+  const requestedLimit = Number.parseInt(req.query.limit, 10);
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 20) : 20;
+  const skip = (page - 1) * limit;
   const filter = { proofMimeType: { $in: ['image/jpeg', 'image/png', 'image/webp'] } };
   if (requestedStatus !== 'all') filter.status = requestedStatus;
-  const [submissions, pendingCount] = await Promise.all([
+  const [submissions, total, pendingCount] = await Promise.all([
     TaskCompletion.find(filter)
       .select('user task reward status proofMimeType submittedAt reviewedAt reviewedBy adminNote createdAt')
       .populate('user', 'telegramId firstName lastName username')
       .populate('task', 'title reward verifyType')
       .sort({ submittedAt: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .lean(),
+    TaskCompletion.countDocuments(filter),
     TaskCompletion.countDocuments({
       proofMimeType: { $in: ['image/jpeg', 'image/png', 'image/webp'] },
       status: 'pending'
     })
   ]);
-  res.json({ success: true, submissions, pendingCount });
+  const totalPages = Math.ceil(total / limit);
+  res.json({
+    success: true,
+    submissions,
+    pendingCount,
+    pagination: { page, limit, total, totalPages, hasPrevious: page > 1, hasNext: page < totalPages }
+  });
 });
 
 router.get('/task-submissions/:id/image', async (req, res) => {
