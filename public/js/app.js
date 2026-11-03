@@ -2600,9 +2600,9 @@ function renderWallet() {
 
     <div class="tbWalletGrid">
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconOrange">${TB_ICONS.coin}</div>
-        <div class="tbStatLabel tbColOrange">${t("wallet_points_card_title")}</div>
-        <div class="tbWalletValue">${tokenAmount(state.points)}</div>
+        <div class="tbWalletIcon tbWalletLogoWrap"><img class="tbWalletLogo" src="img/gramup-logo-new.png" alt="Gramup" /></div>
+        <div class="tbStatLabel tbColBlue">${t("wallet_UP_card_title")}</div>
+        <div class="tbWalletValue">${formatPoints(state.points)}</div>
       </div>
       <div class="tbWalletCard">
         <div class="tbWalletIcon tbIconBlue">${TB_ICONS.gem}</div>
