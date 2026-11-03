@@ -328,9 +328,9 @@ async function startServer() {
     // Matured VIP balances settle only through the user's explicit claim action.
 
     const { runVipRewardNotificationSweep } = require('./utils/vipRewardNotification');
-    void runJob('vip-reward-notification-sweep', 'Initial VIP reward notification sweep', runVipRewardNotificationSweep);
+    void runJob('vip-storage-full-notification-sweep', 'Initial VIP storage-full notification sweep', runVipRewardNotificationSweep);
     setInterval(() => {
-      void runJob('vip-reward-notification-sweep', 'Scheduled VIP reward notification sweep', runVipRewardNotificationSweep);
+      void runJob('vip-storage-full-notification-sweep', 'Scheduled VIP storage-full notification sweep', runVipRewardNotificationSweep);
     }, 5 * 60 * 1000);
 
     server = app.listen(PORT, () => {

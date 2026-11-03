@@ -1,37 +1,58 @@
 'use strict';
 
-const { calculateVipAccrual } = require('./vipAccrual');
+const { calculateVipAccrual, MINING_STORAGE_CAP_MS } = require('./vipAccrual');
 const { safelySendTelegram } = require('./telegramNotification');
 const DAY_MS = 24 * 60 * 60 * 1000;
-const BATCH_SIZE = 20;
-const BATCH_DELAY_MS = 1100;
-
-function claimReadiness(subscription, now = new Date()) {
-  if (subscription.status !== 'active') return null;
-  const accrual = calculateVipAccrual(subscription, now);
-  if (!accrual?.canClaim) return null;
-  const claimNumber = Math.max(0, Math.floor(Number(subscription.claimsCompleted) || 0)) + 1;
-  return {
-    claimNumber,
-    rewardPoints: accrual.rewardPoints,
-    principalPoints: accrual.principalPoints,
-    totalPayoutPoints: accrual.unclaimedPoints,
-    nextClaimAt: null
-  };
-}
+const STORAGE_FULL_ALERT = '⚠️ Your Gramup Cloud Miner is full! Claim your accrued points now to resume mining.';
 
 function utcDayKey(date = new Date()) {
   return Math.floor(date.getTime() / DAY_MS);
 }
 
-function vipRewardNotificationText(subscription, rewardPoints) {
-  const planName = `VIP Plan ${Math.max(1, Number(subscription.planNumber) || 1)}`;
-  return `Your unclaimed mining balance for ${planName} is ${rewardPoints} Points. Claim it to your wallet any time from the VIP dashboard.`;
+function normalizeWebAppUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    return ['https:', 'http:'].includes(url.protocol) ? url.toString() : '';
+  } catch {
+    return '';
+  }
 }
 
-async function reserveDailyNotification(eventKey, leaseUntil, DistributedJobLock) {
+function vipRewardNotificationText() {
+  return STORAGE_FULL_ALERT;
+}
+
+function storageFullState(subscription, now = new Date()) {
+  if (subscription?.status !== 'active') return null;
+  const accrual = calculateVipAccrual(subscription, now);
+  if (!accrual?.storageFull) return null;
+  return {
+    subscription,
+    accrual,
+    storageCapAt: accrual.storageCapAt
+  };
+}
+
+// Kept as a compatibility helper for admin/tests; the scheduled sweep now
+// alerts only when the 24-hour storage cap is reached, never per plan.
+function claimReadiness(subscription, now = new Date()) {
+  const full = storageFullState(subscription, now);
+  if (!full) return null;
+  const claimNumber = Math.max(0, Math.floor(Number(subscription.claimsCompleted) || 0)) + 1;
+  return {
+    claimNumber,
+    rewardPoints: full.accrual.rewardPoints,
+    principalPoints: full.accrual.principalPoints,
+    totalPayoutPoints: full.accrual.unclaimedPoints,
+    nextClaimAt: null
+  };
+}
+
+async function reserveStorageFullNotification(eventKey, leaseUntil, DistributedJobLock) {
   try {
-    await DistributedJobLock.create({ _id: eventKey, owner: 'vip-reward-notification', leaseUntil });
+    await DistributedJobLock.create({ _id: eventKey, owner: 'vip-storage-full-notification', leaseUntil });
     return true;
   } catch (error) {
     if (error?.code === 11000) return false;
@@ -44,49 +65,63 @@ async function runVipRewardNotificationSweep(now = new Date(), dependencies = {}
   const User = dependencies.User || require('../models/User');
   const DistributedJobLock = dependencies.DistributedJobLock || require('../models/DistributedJobLock');
   const notifyUser = dependencies.notifyUser || require('./bot').notifyUser;
-
   const subscriptions = await VipSubscription.find({ status: 'active', startAt: { $lte: now } }).lean();
-  const ready = subscriptions
-    .map(subscription => ({ subscription, claim: claimReadiness(subscription, now) }))
-    .filter(item => item.claim);
+  const fullByUser = new Map();
 
-  if (!ready.length) return { sent: 0, failed: 0, duplicate: 0, notReady: subscriptions.length };
+  for (const subscription of subscriptions) {
+    const full = storageFullState(subscription, now);
+    if (!full) continue;
+    const userId = String(subscription.user);
+    const current = fullByUser.get(userId);
+    // One user-level alert is enough even if all eight plans are full.
+    if (!current || full.storageCapAt < current.storageCapAt) fullByUser.set(userId, full);
+  }
 
-  const userIds = [...new Set(ready.map(item => String(item.subscription.user)))];
+  if (!fullByUser.size) return { sent: 0, failed: 0, duplicate: 0, notReady: subscriptions.length, usersFull: 0 };
+  const userIds = [...fullByUser.keys()];
   const users = await User.find({ _id: { $in: userIds } }, '_id telegramId').lean();
   const userById = new Map(users.map(user => [String(user._id), user]));
-  const nextUtcDay = new Date((utcDayKey(now) + 1) * DAY_MS);
+  const leaseUntil = new Date(now.getTime() + MINING_STORAGE_CAP_MS);
+  const webAppUrl = normalizeWebAppUrl(
+    process.env.MINI_APP_PUBLIC_URL || process.env.GRAM_APP_PUBLIC_URL || process.env.PUBLIC_APP_URL
+  );
   let sent = 0;
   let failed = 0;
   let duplicate = 0;
   let missingUser = 0;
 
-  for (let offset = 0; offset < ready.length; offset += BATCH_SIZE) {
-    const batch = ready.slice(offset, offset + BATCH_SIZE);
-    await Promise.all(batch.map(async ({ subscription, claim }) => {
-      const user = userById.get(String(subscription.user));
-      if (!user?.telegramId) {
-        missingUser += 1;
-        return;
-      }
-
-      // At most one reminder is sent per subscription per UTC day.
-      const eventKey = `vip-ready:${subscription._id}:${utcDayKey(now)}`;
-      const reserved = await reserveDailyNotification(eventKey, nextUtcDay, DistributedJobLock);
-      if (!reserved) {
-        duplicate += 1;
-        return;
-      }
-
-      const delivered = await safelySendTelegram(() => notifyUser(user.telegramId, vipRewardNotificationText(subscription, claim.totalPayoutPoints)),
-        { context: 'vip_reward_reminder' });
-      if (delivered) sent += 1;
-      else failed += 1;
-    }));
-    if (offset + BATCH_SIZE < ready.length) await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+  for (const [userId, full] of fullByUser.entries()) {
+    const user = userById.get(userId);
+    if (!user?.telegramId) {
+      missingUser += 1;
+      continue;
+    }
+    const cycle = full.storageCapAt instanceof Date ? full.storageCapAt.getTime() : utcDayKey(now);
+    const eventKey = `vip-storage-full:${userId}:${cycle}`;
+    const reserved = await reserveStorageFullNotification(eventKey, leaseUntil, DistributedJobLock);
+    if (!reserved) {
+      duplicate += 1;
+      continue;
+    }
+    const options = webAppUrl
+      ? { reply_markup: { inline_keyboard: [[{ text: 'Open GramUp', web_app: { url: webAppUrl } }]] } }
+      : {};
+    const delivered = await safelySendTelegram(
+      () => notifyUser(user.telegramId, STORAGE_FULL_ALERT, options),
+      { context: 'vip_storage_full_notification' }
+    );
+    if (delivered) sent += 1;
+    else failed += 1;
   }
 
-  return { sent, failed, duplicate, missingUser, totalReady: ready.length };
+  return { sent, failed, duplicate, missingUser, totalReady: fullByUser.size, usersFull: fullByUser.size };
 }
 
-module.exports = { claimReadiness, utcDayKey, vipRewardNotificationText, runVipRewardNotificationSweep };
+module.exports = {
+  STORAGE_FULL_ALERT,
+  claimReadiness,
+  storageFullState,
+  utcDayKey,
+  vipRewardNotificationText,
+  runVipRewardNotificationSweep
+};

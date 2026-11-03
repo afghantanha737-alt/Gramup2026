@@ -3555,6 +3555,11 @@ function stopVipCountdown() {
 function updateVipLiveDashboard() {
   const now = Date.now() + Number(state.vipServerOffsetMs || 0);
   const activeSubscriptions = (state.vipSubscriptions || []).filter(subscription => subscription.status === "active");
+  const storageFull = activeSubscriptions.some(subscription => vipStorageFull(subscription, now));
+  const storageCapAt = activeSubscriptions
+    .map(subscription => vipStorageCapAt(subscription))
+    .filter(Number.isFinite)
+    .reduce((soonest, value) => Math.min(soonest, value), Infinity);
   const total = activeSubscriptions.reduce((sum, subscription) => sum + vipLiveUnclaimed(subscription, now), 0);
   const dailyTotal = activeSubscriptions.reduce((sum, subscription) => {
     const endAt = Date.parse(subscription.endAt || "");
@@ -3576,11 +3581,18 @@ function updateVipLiveDashboard() {
     element.textContent = formatPoints(liveCount);
   });
   document.querySelectorAll("[data-vip-mining-status-label]").forEach(element => {
-    element.textContent = t(liveCount ? "vip_mining_live" : activeSubscriptions.length ? "vip_settlement_ready" : "vip_status_inactive");
+    element.textContent = t(storageFull ? "vip_storage_full" : liveCount ? "vip_mining_live" : activeSubscriptions.length ? "vip_settlement_ready" : "vip_status_inactive");
+  });
+  document.querySelectorAll("[data-vip-storage-countdown]").forEach(element => {
+    element.textContent = storageFull
+      ? t("vip_storage_full")
+      : Number.isFinite(storageCapAt)
+        ? t("vip_storage_full_in", { time: formatVipStorageTime(Math.max(0, storageCapAt - now)) })
+        : "";
   });
   document.querySelectorAll("[data-vip-mining-status]").forEach(element => {
-    element.classList.toggle("isActive", liveCount > 0);
-    element.classList.toggle("isInactive", liveCount === 0);
+    element.classList.toggle("isActive", liveCount > 0 && !storageFull);
+    element.classList.toggle("isInactive", liveCount === 0 || storageFull);
   });
     for (const subscription of activeSubscriptions) {
       const id = String(subscription.id || "");
@@ -3630,7 +3642,10 @@ function vipLiveUnclaimed(subscription, now = Date.now() + Number(state.vipServe
   const sampleAt = Date.parse(subscription?.accrualAsOf || "") || Number(state.vipServerNowMs) || now;
   const endAt = Date.parse(subscription?.endAt || "");
   const rate = Math.max(0, Number(subscription?.dailyMiningRatePoints) || 0);
-  const accrualUntil = Number.isFinite(endAt) ? Math.min(now, endAt) : now;
+  const storageCapAt = vipStorageCapAt(subscription);
+  const accrualUntil = Number.isFinite(endAt)
+    ? Math.min(now, endAt, Number.isFinite(storageCapAt) ? storageCapAt : now)
+    : Number.isFinite(storageCapAt) ? Math.min(now, storageCapAt) : now;
   const elapsedMs = Math.max(0, accrualUntil - sampleAt);
   let estimated = base + (rate * elapsedMs / 86400000);
   const isNewPolicy = subscription?.policyVersion === "v2_100d";
@@ -3641,6 +3656,26 @@ function vipLiveUnclaimed(subscription, now = Date.now() + Number(state.vipServe
   const cap = Number(subscription?.unclaimedEstimateCapPoints);
   if (Number.isFinite(cap) && cap >= 0) estimated = Math.min(estimated, cap);
   return Math.max(0, estimated);
+}
+
+function vipStorageCapAt(subscription) {
+  const explicitCap = Date.parse(subscription?.storageCapAt || "");
+  if (Number.isFinite(explicitCap)) return explicitCap;
+  const anchor = Date.parse(subscription?.lastClaimAt || subscription?.startAt || "");
+  return Number.isFinite(anchor) ? anchor + 86400000 : NaN;
+}
+
+function vipStorageFull(subscription, now = Date.now() + Number(state.vipServerOffsetMs || 0)) {
+  const endAt = Date.parse(subscription?.endAt || "");
+  const capAt = vipStorageCapAt(subscription);
+  return Boolean(subscription?.storageFull || Number.isFinite(capAt) && now >= capAt && (!Number.isFinite(endAt) || now < endAt));
+}
+
+function formatVipStorageTime(milliseconds) {
+  const minutes = Math.max(0, Math.floor(Number(milliseconds || 0) / 60000));
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${String(remainingMinutes).padStart(2, "0")}m`;
 }
 
 function vipPlanProgressPercent(subscription, now = Date.now() + Number(state.vipServerOffsetMs || 0)) {
@@ -3659,6 +3694,11 @@ function renderProfileVip() {
   const activeSubscriptions = subscriptions.filter(subscription => subscription.status === "active");
   const expiredSubscriptions = subscriptions.filter(subscription => subscription.status !== "active");
   const now = Date.now() + Number(state.vipServerOffsetMs || 0);
+  const storageFull = activeSubscriptions.some(subscription => vipStorageFull(subscription, now));
+  const storageCapAt = activeSubscriptions
+    .map(subscription => vipStorageCapAt(subscription))
+    .filter(Number.isFinite)
+    .reduce((soonest, value) => Math.min(soonest, value), Infinity);
   const unclaimedVipPoints = activeSubscriptions.reduce((sum, subscription) => sum + vipLiveUnclaimed(subscription, now), 0);
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
@@ -3747,10 +3787,11 @@ function renderProfileVip() {
       <section class="vipHero vipMiningHero" aria-label="${t("vip_unclaimed_earnings")}">
         <div class="vipHeroTop">
           <img class="vipHeroLogo" src="/img/gramup-logo-new.png" alt="Gramup" width="42" height="42">
-          <span class="vipStatusPill ${hasLiveMining ? "isActive" : "isInactive"}" data-vip-mining-status><i aria-hidden="true"></i><span data-vip-mining-status-label>${t(hasLiveMining ? "vip_mining_live" : activeSubscriptions.length ? "vip_settlement_ready" : "vip_status_inactive")}</span><b data-vip-active-count>${formatPoints(liveCount)}</b></span>
+          <span class="vipStatusPill ${hasLiveMining && !storageFull ? "isActive" : "isInactive"}" data-vip-mining-status><i aria-hidden="true"></i><span data-vip-mining-status-label>${t(storageFull ? "vip_storage_full" : hasLiveMining ? "vip_mining_live" : activeSubscriptions.length ? "vip_settlement_ready" : "vip_status_inactive")}</span><b data-vip-active-count>${formatPoints(liveCount)}</b></span>
         </div>
         <div class="vipMinerVisual" aria-hidden="true"><span class="vipMinerOrbit"></span><span class="vipMinerCoin">◈</span><span class="vipMinerSpark vipMinerSpark--one">✦</span><span class="vipMinerSpark vipMinerSpark--two">·</span></div>
         <div class="vipBalanceValue"><strong data-vip-unclaimed-total>${formatNumber(unclaimedVipPoints, 3)}</strong><span>${t("vip_points_unit")}</span></div>
+        <div class="vipStorageCountdown" data-vip-storage-countdown>${storageFull ? t("vip_storage_full") : Number.isFinite(storageCapAt) ? t("vip_storage_full_in", { time: formatVipStorageTime(Math.max(0, storageCapAt - now)) }) : ""}</div>
         <div class="vipHeroPlanList" aria-label="${t("vip_active_plans_heading")}">${activePlanRows || `<div class="vipHeroPlanEmpty">${t("vip_no_active_plans")}</div>`}</div>
         <button type="button" class="vipHeroButton vipHeroClaimButton" data-vip-claim-all ${!claimableCount || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" aria-busy="${vipClaimAllBusy ? "true" : "false"}">
           <span class="vipClaimSpinner" aria-hidden="true"></span>

@@ -2,6 +2,7 @@
 
 const { NEW_VIP_POLICY_VERSION, dailyPointsCentsFromBps } = require('./vipPolicy');
 const { DAY_MS } = require('./vipRewards');
+const MINING_STORAGE_CAP_MS = DAY_MS;
 
 function centsFromPoints(points) {
   const value = Number(points);
@@ -61,8 +62,15 @@ function calculateVipAccrual(subscription, now = new Date()) {
   const rewardPaidCents = centsFromPoints(subscription?.claimedRewardPoints || 0);
   if (!timing || !Number.isSafeInteger(totalRewardCents) || totalRewardCents < 0 || rewardPaidCents == null) return null;
 
-  const matured = new Date(now).getTime() >= timing.end;
-  const rewardAccruedCents = cumulativeAccruedCents(totalRewardCents, startAt, endAt, now);
+  const nowMs = new Date(now).getTime();
+  const lastClaimMs = dateMs(subscription?.lastClaimAt);
+  const storageAnchorMs = Math.max(timing.start, lastClaimMs == null ? timing.start : lastClaimMs);
+  const storageCapAtMs = Math.min(timing.end, storageAnchorMs + MINING_STORAGE_CAP_MS);
+  const accrualNow = new Date(Math.min(nowMs, storageCapAtMs));
+  const storageFull = nowMs >= storageCapAtMs && nowMs < timing.end;
+  const storageRemainingMs = storageFull ? 0 : Math.max(0, storageCapAtMs - nowMs);
+  const matured = nowMs >= timing.end;
+  const rewardAccruedCents = cumulativeAccruedCents(totalRewardCents, startAt, endAt, accrualNow);
   const isNewPolicy = String(subscription?.policyVersion || '') === NEW_VIP_POLICY_VERSION;
 
   let totalPrincipalCents = 0;
@@ -80,11 +88,11 @@ function calculateVipAccrual(subscription, now = new Date()) {
   }
 
   const principalAccruedCents = isNewPolicy
-    ? cumulativeAccruedCents(totalPrincipalCents, startAt, endAt, now)
+    ? cumulativeAccruedCents(totalPrincipalCents, startAt, endAt, accrualNow)
     : (matured ? totalPrincipalCents : 0);
   const totalMiningCents = totalRewardCents + (isNewPolicy ? totalPrincipalCents : 0);
   const totalAccruedCents = isNewPolicy
-    ? cumulativeAccruedCents(totalMiningCents, startAt, endAt, now)
+    ? cumulativeAccruedCents(totalMiningCents, startAt, endAt, accrualNow)
     : rewardAccruedCents + (matured ? totalPrincipalCents : 0);
   const rewardPaidAndPrincipalCents = rewardPaidCents + principalPaidCents;
   const totalPendingCents = Math.max(0, totalAccruedCents - rewardPaidAndPrincipalCents);
@@ -100,8 +108,8 @@ function calculateVipAccrual(subscription, now = new Date()) {
   residualCents -= residualRewardCents;
   principalPendingCents += residualCents;
   const estimatedUnclaimedPoints = isNewPolicy
-    ? estimatedAccruedPoints(totalMiningCents, rewardPaidAndPrincipalCents, startAt, endAt, now)
-    : Number((Math.max(0, estimatedAccruedPoints(totalRewardCents, rewardPaidCents, startAt, endAt, now) || 0)
+    ? estimatedAccruedPoints(totalMiningCents, rewardPaidAndPrincipalCents, startAt, endAt, accrualNow)
+    : Number((Math.max(0, estimatedAccruedPoints(totalRewardCents, rewardPaidCents, startAt, endAt, accrualNow) || 0)
       + (matured ? Math.max(0, totalPrincipalCents - principalPaidCents) / 100 : 0)).toFixed(3));
 
   const durationDays = Number(subscription?.durationDays);
@@ -128,6 +136,9 @@ function calculateVipAccrual(subscription, now = new Date()) {
     unclaimedEstimateCapPoints: Math.max(estimateCapPoints, estimatedUnclaimedPoints),
     dailyMiningRatePoints,
     totalMiningCents,
+    storageCapAt: new Date(storageCapAtMs),
+    storageFull,
+    storageRemainingMs,
     rewardRemainingCents,
     principalRemainingCents,
     canClaim: subscription?.status === 'active' && unclaimedPoints >= 0.01
@@ -145,6 +156,7 @@ function accruedByElapsed(totalCentsPerDay, elapsedMs) {
 
 module.exports = {
   DAY_MS,
+  MINING_STORAGE_CAP_MS,
   centsFromPoints,
   pointsFromCents,
   cumulativeAccruedCents,

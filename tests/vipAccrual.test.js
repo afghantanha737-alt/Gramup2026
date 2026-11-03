@@ -59,14 +59,15 @@ assert.strictEqual(afterFirstClaim.unclaimedPoints, 0.08,
 
 const final = calculateVipAccrual({
   ...plan1,
-  claimedRewardPoints: 10,
-  principalPaidPoints: 100
+  claimedRewardPoints: 0,
+  principalPaidPoints: 0
 }, endAt);
-assert.strictEqual(final.rewardPendingCents, 99000);
-assert.strictEqual(final.principalPendingCents, 990000);
-assert.strictEqual(final.unclaimedPoints, 10890);
+assert.strictEqual(final.rewardPendingCents, 1000, 'unclaimed reward is capped at one storage day');
+assert.strictEqual(final.principalPendingCents, 10000, 'unclaimed principal accrual is capped at one storage day');
+assert.strictEqual(final.unclaimedPoints, 110);
 assert.strictEqual(final.dailyMiningRatePoints, 0);
 assert.strictEqual(final.canClaim, true);
+assert.strictEqual(final.storageFull, false, 'matured plans are settlement-ready rather than storage-full');
 
 const legacy = {
   status: 'active',
@@ -85,10 +86,10 @@ assert.strictEqual(legacyDay.unclaimedPoints, 33.33);
 assert.strictEqual(legacyDay.dailyMiningRatePoints, 33.3333);
 assert.strictEqual(legacyDay.principalPoints, 0, 'legacy principal is not paid early');
 const legacyMatured = calculateVipAccrual(legacy, legacy.endAt);
-assert.strictEqual(legacyMatured.rewardPendingCents, 100000);
+assert.strictEqual(legacyMatured.rewardPendingCents, 3333, 'legacy mining reward is capped at one storage day');
 assert.strictEqual(legacyMatured.principalPendingCents, 1000000,
   'legacy principal becomes claimable only at maturity');
-assert.strictEqual(legacyMatured.unclaimedPoints, 11000);
+assert.strictEqual(legacyMatured.unclaimedPoints, 10033.33);
 
 assert.strictEqual(estimatedAccruedPoints(1100000, 0, startAt, endAt, oneMinute), 0.076);
 assert.strictEqual(calculateVipAccrual({ ...plan1, startAt: 'invalid' }, oneMinute), null);

@@ -128,6 +128,9 @@ function publicVipSubscription(subscription, now = new Date()) {
     principalAtMaturityPoints: !isNewPolicy && !subscription.principalReturnedAt ? Number(subscription.pricePoints) || 0 : 0,
     dailyMiningRatePoints: accrual?.dailyMiningRatePoints || 0,
     accrualAsOf: now.toISOString(),
+    storageCapAt: accrual?.storageCapAt ? new Date(accrual.storageCapAt).toISOString() : null,
+    storageFull: Boolean(accrual?.storageFull),
+    storageRemainingMs: Number(accrual?.storageRemainingMs) || 0,
     accrualEnded: now >= endAt,
     reserveLiabilityPoints: reservePointsFromCents(Number(subscription.reserveLiabilityCents || 0)),
     reservePaidPoints: reservePointsFromCents(Number(subscription.reservePaidCents || 0)),
@@ -1297,40 +1300,40 @@ router.post('/vip/claim-all', auth, sensitiveRateLimit('claim'), async (req, res
         // the source of the false concurrency response when several
         // active plans were claimed together. One bulkWrite updates every
         // settled plan in this transaction, followed by one balance increment.
-        const subscriptionUpdates = settlements.map(item => {
-          const subscription = item.subscription;
+        const settlementById = new Map(settlements.map(item => [String(item.subscription._id), item]));
+        const subscriptionUpdates = subscriptions.map(subscription => {
+          const item = settlementById.get(String(subscription._id));
+          const update = item ? {
+            claimsCompleted: item.claimIndex + 1,
+            claimedRewardPoints: item.claimedRewardPoints,
+            principalPaidPoints: item.principalPaidPoints,
+            lastClaimAt: now,
+            ...(item.isNewPolicy ? {
+              principalPaidDays: Math.min(Number(subscription.durationDays) || 0, item.elapsedDays),
+              reservePaidCents: item.reservePaidCents,
+              ...(item.principalCents > 0 ? { lastPrincipalPaidAt: now } : {})
+            } : {}),
+            ...(item.isMatured ? {
+              status: 'completed',
+              ...(item.isNewPolicy ? { reserveReleasedAt: now } : { principalReturnedAt: now })
+            } : {})
+          } : { lastClaimAt: now };
           return {
             updateOne: {
               filter: { _id: subscription._id, user: req.dbUser._id, status: 'active' },
-              update: {
-                $set: {
-                  claimsCompleted: item.claimIndex + 1,
-                  claimedRewardPoints: item.claimedRewardPoints,
-                  principalPaidPoints: item.principalPaidPoints,
-                  lastClaimAt: now,
-                  ...(item.isNewPolicy ? {
-                    principalPaidDays: Math.min(Number(subscription.durationDays) || 0, item.elapsedDays),
-                    reservePaidCents: item.reservePaidCents,
-                    ...(item.principalCents > 0 ? { lastPrincipalPaidAt: now } : {})
-                  } : {}),
-                  ...(item.isMatured ? {
-                    status: 'completed',
-                    ...(item.isNewPolicy ? { reserveReleasedAt: now } : { principalReturnedAt: now })
-                  } : {})
-                }
-              }
+              update: { $set: update }
             }
           };
         });
         const bulkResult = await VipSubscription.bulkWrite(subscriptionUpdates, { session, ordered: true });
-        if (Number(bulkResult.matchedCount) !== settlements.length) {
+        if (Number(bulkResult.matchedCount) !== subscriptions.length) {
           throw vipError('VIP_BULK_CLAIM_RETRY', 'وضعیت یکی از پلن‌ها تغییر کرده است؛ درخواست را دوباره ارسال کنید.', 409);
         }
         const updatedById = new Map(
-          (await VipSubscription.find({ _id: { $in: settlements.map(item => item.subscription._id) } }).session(session))
+          (await VipSubscription.find({ _id: { $in: subscriptions.map(subscription => subscription._id) } }).session(session))
             .map(subscription => [String(subscription._id), subscription])
         );
-        const updatedSubscriptions = settlements.map(item => updatedById.get(String(item.subscription._id))).filter(Boolean);
+        const updatedSubscriptions = subscriptions.map(subscription => updatedById.get(String(subscription._id))).filter(Boolean);
 
         const totalPayoutPoints = pointsFromCents(totalPayoutCents);
         const user = await User.findOneAndUpdate(

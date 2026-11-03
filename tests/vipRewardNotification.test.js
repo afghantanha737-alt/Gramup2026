@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+process.env.MINI_APP_PUBLIC_URL = 'https://gramup.example/app';
 const {
   claimReadiness,
   vipRewardNotificationText,
@@ -24,12 +25,12 @@ assert.deepStrictEqual(claimReadiness(readySub, now), {
   totalPayoutPoints: 7,
   nextClaimAt: null
 });
-assert.ok(claimReadiness({ ...readySub, lastClaimAt: new Date(now.getTime() - 12 * 60 * 60 * 1000) }, now),
-  'partial mining claims are ready before a full day has elapsed');
+assert.strictEqual(claimReadiness({ ...readySub, lastClaimAt: new Date(now.getTime() - 12 * 60 * 60 * 1000) }, now), null,
+  'storage-full notifications are suppressed before a full day has elapsed');
 assert.strictEqual(claimReadiness({ ...readySub, status: 'completed' }, now), null);
 assert.ok(claimReadiness({ ...readySub, claimsCompleted: 30 }, now), 'claim operations no longer stop at the number of contract days');
 assert.strictEqual(vipRewardNotificationText(readySub, 7),
-  'Your unclaimed mining balance for VIP Plan 3 is 7 Points. Claim it to your wallet any time from the VIP dashboard.');
+  '⚠️ Your Gramup Cloud Miner is full! Claim your accrued points now to resume mining.');
 
 async function testSweep() {
   const subscriptions = [
@@ -56,8 +57,8 @@ async function testSweep() {
       deliveryKeys.add(record._id);
     }
   };
-  const notifyUser = async (telegramId, text) => {
-    sent.push({ telegramId, text });
+  const notifyUser = async (telegramId, text, options) => {
+    sent.push({ telegramId, text, options });
     return true;
   };
   const deps = { VipSubscription, User, DistributedJobLock, notifyUser };
@@ -67,7 +68,8 @@ async function testSweep() {
   assert.strictEqual(first.totalReady, 1, 'only subscriptions with at least 0.01 unclaimed Points are notified');
   assert.strictEqual(sent.length, 1);
   assert.strictEqual(sent[0].telegramId, user.telegramId);
-  assert.match(sent[0].text, /VIP Plan 3 is 7 Points/);
+  assert.strictEqual(sent[0].text, '⚠️ Your Gramup Cloud Miner is full! Claim your accrued points now to resume mining.');
+  assert.strictEqual(sent[0].options.reply_markup.inline_keyboard.length, 1);
 
   const repeated = await runVipRewardNotificationSweep(now, deps);
   assert.strictEqual(repeated.duplicate, 1);
@@ -75,8 +77,8 @@ async function testSweep() {
 
   const nextDay = new Date(now.getTime() + day);
   const nextDayResult = await runVipRewardNotificationSweep(nextDay, deps);
-  assert.strictEqual(nextDayResult.sent, 2, 'unclaimed balances may be reminded again on a later day');
-  assert.strictEqual(sent.length, 3);
+  assert.strictEqual(nextDayResult.duplicate, 1, 'a full storage cycle only sends one consolidated alert');
+  assert.strictEqual(sent.length, 1);
 }
 
 testSweep().then(() => {
