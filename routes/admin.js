@@ -67,6 +67,15 @@ function pageParams(query, defaultLimit = 100, maxLimit = 300) {
   return { page, limit, skip: (page - 1) * limit };
 }
 
+async function sendTaskSubmissionTelegramNotifications(notifications) {
+  const deliverable = notifications.filter(item => item?.telegramId && item?.text);
+  const results = await Promise.allSettled(deliverable.map(item => notifyUser(item.telegramId, item.text)));
+  const sent = results.filter(result => result.status === 'fulfilled' && result.value === true).length;
+  const failed = results.length - sent;
+  if (failed) console.warn(`Task submission Telegram notifications incomplete: sent=${sent}, failed=${failed}`);
+  return { attempted: deliverable.length, sent, failed };
+}
+
 function safeAdminReferralRates(settings) {
   try { return normalizeReferralRates(settings?.referralLevelRates); }
   catch { return [...DEFAULT_REFERRAL_LEVEL_RATES]; }
@@ -739,11 +748,20 @@ router.post('/task-submissions/bulk-action', async (req, res) => {
   const reviewedAt = new Date();
 
   if (action === 'reject') {
+    const submissions = await TaskCompletion.find(pendingFilter)
+      .select('user task')
+      .populate('user', 'telegramId')
+      .populate('task', 'title')
+      .lean();
     const result = await TaskCompletion.updateMany(
       pendingFilter,
       { $set: { status: 'rejected', adminNote: note, reviewedAt, reviewedBy: req.adminActor } }
     );
     const processed = result.modifiedCount ?? result.nModified ?? 0;
+    const notifications = await sendTaskSubmissionTelegramNotifications(submissions.slice(0, processed).map(submission => ({
+      telegramId: submission.user?.telegramId,
+      text: `Your task ${submission.task?.title || 'Unknown task'} was rejected.${note ? ` ${note}` : ''}`
+    })));
     recordAdminLog({
       actor: req.adminActor,
       action: 'task_submission_bulk_reject',
@@ -751,7 +769,7 @@ router.post('/task-submissions/bulk-action', async (req, res) => {
       targetId: ids.join(','),
       details: `${processed} screenshot submission رد شد${note ? ` — ${note}` : ''}`
     });
-    return res.json({ success: true, action, processed, requested: ids.length });
+    return res.json({ success: true, action, processed, requested: ids.length, notifications });
   }
 
   try {
@@ -771,7 +789,7 @@ router.post('/task-submissions/bulk-action', async (req, res) => {
       const userIds = [...new Set(submissions.map(submission => String(submission.user)))];
       const [tasks, users] = await Promise.all([
         Task.find({ _id: { $in: taskIds } }).select('title maxCompletions completedCount isSponsored sponsorPriceUsd').session(session).lean(),
-        User.find({ _id: { $in: userIds } }).select('_id points').session(session).lean()
+        User.find({ _id: { $in: userIds } }).select('_id points telegramId').session(session).lean()
       ]);
       const taskById = new Map(tasks.map(task => [String(task._id), task]));
       const userById = new Map(users.map(user => [String(user._id), user]));
@@ -878,7 +896,14 @@ router.post('/task-submissions/bulk-action', async (req, res) => {
           }
         }
       })), { session, ordered: true });
-      return { processed: submissions.length, totalReward: submissions.reduce((sum, submission) => sum + Number(submission.reward), 0) };
+      return {
+        processed: submissions.length,
+        totalReward: submissions.reduce((sum, submission) => sum + Number(submission.reward), 0),
+        notifications: submissions.map(submission => ({
+          telegramId: userById.get(String(submission.user)).telegramId,
+          text: `Your task ${taskById.get(String(submission.task)).title || 'Unknown task'} has been approved! You received ${Number(submission.reward)} UP.`
+        }))
+      };
     });
 
     recordAdminLog({
@@ -888,7 +913,8 @@ router.post('/task-submissions/bulk-action', async (req, res) => {
       targetId: ids.join(','),
       details: `${payment.processed} screenshot submission تأیید شد — مجموع پاداش ${payment.totalReward} UP`
     });
-    return res.json({ success: true, action, processed: payment.processed, requested: ids.length, totalReward: payment.totalReward });
+    const notifications = await sendTaskSubmissionTelegramNotifications(payment.notifications);
+    return res.json({ success: true, action, processed: payment.processed, requested: ids.length, totalReward: payment.totalReward, notifications });
   } catch (error) {
     const status = ['NO_PENDING_SUBMISSIONS', 'INVALID_SUBMISSION_DATA', 'TASK_FULL', 'TASK_CAPACITY_CHANGED', 'SUBMISSION_USER_NOT_FOUND', 'SUBMISSION_NOT_PENDING', 'TASK_REWARD_ALREADY_PAID'].includes(error.code) ? 409 : 500;
     if (status === 500) console.error('Bulk screenshot task approval failed:', error);
