@@ -2641,6 +2641,14 @@ html[data-theme="light"] .vipRedesign .vipPlanCard { color: #f7f7ff; }
 .vipRedesign .vipBalanceValue { position: relative; z-index: 1; display: flex; align-items: baseline; justify-content: center; gap: 7px; margin: 17px 0 15px; text-align: center; }
 .vipRedesign .vipBalanceValue strong { color: #edfff7; font-size: clamp(30px, 9vw, 42px); line-height: 1; letter-spacing: -.045em; text-shadow: 0 0 21px rgba(52,211,153,.18); }
 .vipRedesign .vipBalanceValue span { color: #6ee7b7; }
+.vipRedesign .vipStorageCountdown { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 9px; width: fit-content; max-width: 100%; min-height: 48px; margin: 0 auto 12px; padding: 4px 12px 4px 5px; border: 1px solid rgba(103,232,249,.18); border-radius: 999px; color: #bdeee5; background: rgba(2,10,19,.32); font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.vipRedesign .vipStorageCountdown[hidden] { display: none; }
+.vipRedesign .vipStorageCountdownSvg { width: 38px; height: 38px; flex: 0 0 38px; overflow: visible; transform: rotate(-90deg); }
+.vipRedesign .vipStorageCountdownTrack,.vipRedesign .vipStorageCountdownProgress { fill: none; stroke-width: 5; }
+.vipRedesign .vipStorageCountdownTrack { stroke: rgba(255,255,255,.13); }
+.vipRedesign .vipStorageCountdownProgress { stroke: #5eead4; stroke-linecap: round; transition: stroke-dashoffset .8s linear,stroke .2s ease; }
+.vipRedesign .vipStorageCountdown.isFull { color: #fecaca; border-color: rgba(248,113,113,.32); background: rgba(127,29,29,.12); }
+.vipRedesign .vipStorageCountdown.isFull .vipStorageCountdownProgress { stroke: #fb7185; }
 .vipRedesign .vipAccrualHint { margin-top: 9px; color: #93a7aa; font-size: 9px; line-height: 1.45; text-align: center; }
 .vipRedesign .vipHeroClaimButton { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 50px; padding: 11px 15px; }
 .vipRedesign .vipHeroClaimButton > span { font-size: 12px; }

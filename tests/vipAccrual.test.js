@@ -46,6 +46,18 @@ const oneHour = calculateVipAccrual(plan1, new Date(startAt.getTime() + 60 * 60 
 assert.strictEqual(oneHour.unclaimedPoints, 4.58);
 assert.strictEqual(oneHour.estimatedUnclaimedPoints, 4.583);
 
+const beforeStorageCap = calculateVipAccrual({ ...plan1, lastClaimAt: startAt },
+  new Date(startAt.getTime() + 23 * 60 * 60 * 1000));
+assert.strictEqual(beforeStorageCap.storageFull, false);
+assert.strictEqual(beforeStorageCap.elapsedSeconds, 23 * 60 * 60);
+const afterStorageCap = calculateVipAccrual({ ...plan1, lastClaimAt: startAt },
+  new Date(startAt.getTime() + 48 * 60 * 60 * 1000));
+assert.strictEqual(afterStorageCap.elapsedSeconds, 86400);
+assert.strictEqual(afterStorageCap.storageFull, true);
+assert.strictEqual(afterStorageCap.storageCapAt.getTime(), startAt.getTime() + DAY_MS);
+assert.strictEqual(afterStorageCap.unclaimedPoints, 110,
+  'active miner accrual stays frozen at exactly one day, even when queried two days later');
+
 const afterFirstClaim = calculateVipAccrual({
   ...plan1,
   claimedRewardPoints: minuteAccrual.rewardPoints,

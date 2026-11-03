@@ -1,9 +1,9 @@
 'use strict';
 
-const { calculateVipAccrual, MINING_STORAGE_CAP_MS } = require('./vipAccrual');
+const { calculateVipAccrual } = require('./vipAccrual');
 const { safelySendTelegram } = require('./telegramNotification');
 const DAY_MS = 24 * 60 * 60 * 1000;
-const STORAGE_FULL_ALERT = '⚠️ Your Gramup Cloud Miner is full! Claim your accrued points now to resume mining.';
+const STORAGE_FULL_ALERT = '⚠️ Your Gramup Cloud Miner storage is full (24h limit)! Claim your accrued UP now to resume mining.';
 
 function utcDayKey(date = new Date()) {
   return Math.floor(date.getTime() / DAY_MS);
@@ -81,7 +81,9 @@ async function runVipRewardNotificationSweep(now = new Date(), dependencies = {}
   const userIds = [...fullByUser.keys()];
   const users = await User.find({ _id: { $in: userIds } }, '_id telegramId').lean();
   const userById = new Map(users.map(user => [String(user._id), user]));
-  const leaseUntil = new Date(now.getTime() + MINING_STORAGE_CAP_MS);
+  // Keep the deduplication record for the contract lifetime so a user who
+  // remains full is not reminded again until a claim starts a new cap cycle.
+  const leaseUntil = new Date(now.getTime() + 100 * DAY_MS);
   const webAppUrl = normalizeWebAppUrl(
     process.env.MINI_APP_PUBLIC_URL || process.env.GRAM_APP_PUBLIC_URL || process.env.PUBLIC_APP_URL
   );

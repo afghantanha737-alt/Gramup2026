@@ -3562,8 +3562,12 @@ function stopVipCountdown() {
 function updateVipLiveDashboard() {
   const now = Date.now() + Number(state.vipServerOffsetMs || 0);
   const activeSubscriptions = (state.vipSubscriptions || []).filter(subscription => subscription.status === "active");
-  const storageFull = activeSubscriptions.some(subscription => vipStorageFull(subscription, now));
-  const storageCapAt = activeSubscriptions
+  const liveSubscriptions = activeSubscriptions.filter(subscription => {
+    const endAt = Date.parse(subscription.endAt || "");
+    return Number.isFinite(endAt) && now < endAt;
+  });
+  const storageFull = liveSubscriptions.some(subscription => vipStorageFull(subscription, now));
+  const storageCapAt = liveSubscriptions
     .map(subscription => vipStorageCapAt(subscription))
     .filter(Number.isFinite)
     .reduce((soonest, value) => Math.min(soonest, value), Infinity);
@@ -3590,12 +3594,18 @@ function updateVipLiveDashboard() {
   document.querySelectorAll("[data-vip-mining-status-label]").forEach(element => {
     element.textContent = t(storageFull ? "vip_storage_full" : liveCount ? "vip_mining_live" : activeSubscriptions.length ? "vip_settlement_ready" : "vip_status_inactive");
   });
+  const storageRemainingMs = Number.isFinite(storageCapAt) ? Math.max(0, storageCapAt - now) : null;
   document.querySelectorAll("[data-vip-storage-countdown]").forEach(element => {
-    element.textContent = storageFull
-      ? t("vip_storage_full")
-      : Number.isFinite(storageCapAt)
-        ? t("vip_storage_full_in", { time: formatVipStorageTime(Math.max(0, storageCapAt - now)) })
-        : "";
+    element.hidden = storageRemainingMs === null;
+    element.classList.toggle("isFull", storageFull);
+    if (storageRemainingMs === null) return;
+    const text = element.querySelector("[data-vip-storage-countdown-text]");
+    if (text) text.textContent = t("vip_storage_full_in", { time: formatVipStorageTime(storageRemainingMs) });
+    const ring = element.querySelector("[data-vip-storage-ring]");
+    if (ring) {
+      const remainingRatio = Math.max(0, Math.min(1, storageRemainingMs / 86400000));
+      ring.style.strokeDashoffset = String(226.1946710584651 * (1 - remainingRatio));
+    }
   });
   document.querySelectorAll("[data-vip-mining-status]").forEach(element => {
     element.classList.toggle("isActive", liveCount > 0 && !storageFull);
@@ -3679,10 +3689,11 @@ function vipStorageFull(subscription, now = Date.now() + Number(state.vipServerO
 }
 
 function formatVipStorageTime(milliseconds) {
-  const minutes = Math.max(0, Math.floor(Number(milliseconds || 0) / 60000));
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return `${hours}h ${String(remainingMinutes).padStart(2, "0")}m`;
+  const totalSeconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function vipPlanProgressPercent(subscription, now = Date.now() + Number(state.vipServerOffsetMs || 0)) {
@@ -3701,8 +3712,12 @@ function renderProfileVip() {
   const activeSubscriptions = subscriptions.filter(subscription => subscription.status === "active");
   const expiredSubscriptions = subscriptions.filter(subscription => subscription.status !== "active");
   const now = Date.now() + Number(state.vipServerOffsetMs || 0);
-  const storageFull = activeSubscriptions.some(subscription => vipStorageFull(subscription, now));
-  const storageCapAt = activeSubscriptions
+  const liveSubscriptions = activeSubscriptions.filter(subscription => {
+    const endAt = Date.parse(subscription.endAt || "");
+    return Number.isFinite(endAt) && now < endAt;
+  });
+  const storageFull = liveSubscriptions.some(subscription => vipStorageFull(subscription, now));
+  const storageCapAt = liveSubscriptions
     .map(subscription => vipStorageCapAt(subscription))
     .filter(Number.isFinite)
     .reduce((soonest, value) => Math.min(soonest, value), Infinity);
@@ -3798,7 +3813,10 @@ function renderProfileVip() {
         </div>
         <div class="vipMinerVisual" aria-hidden="true"><span class="vipMinerOrbit"></span><span class="vipMinerCoin">◈</span><span class="vipMinerSpark vipMinerSpark--one">✦</span><span class="vipMinerSpark vipMinerSpark--two">·</span></div>
         <div class="vipBalanceValue"><strong data-vip-unclaimed-total>${formatNumber(unclaimedVipPoints, 3)}</strong><span>${t("vip_UP_unit")}</span></div>
-        <div class="vipStorageCountdown" data-vip-storage-countdown>${storageFull ? t("vip_storage_full") : Number.isFinite(storageCapAt) ? t("vip_storage_full_in", { time: formatVipStorageTime(Math.max(0, storageCapAt - now)) }) : ""}</div>
+        ${Number.isFinite(storageCapAt) ? `<div class="vipStorageCountdown${storageFull ? " isFull" : ""}" data-vip-storage-countdown role="timer" aria-live="off">
+          <svg class="vipStorageCountdownSvg" viewBox="0 0 84 84" aria-hidden="true"><circle class="vipStorageCountdownTrack" cx="42" cy="42" r="36"></circle><circle class="vipStorageCountdownProgress" data-vip-storage-ring cx="42" cy="42" r="36" style="stroke-dasharray:226.1946710584651;stroke-dashoffset:${226.1946710584651 * (1 - Math.max(0, Math.min(1, Math.max(0, storageCapAt - now) / 86400000)))}"></circle></svg>
+          <span data-vip-storage-countdown-text>${t("vip_storage_full_in", { time: formatVipStorageTime(Math.max(0, storageCapAt - now)) })}</span>
+        </div>` : ""}
         <div class="vipHeroPlanList" aria-label="${t("vip_active_plans_heading")}">${activePlanRows || `<div class="vipHeroPlanEmpty">${t("vip_no_active_plans")}</div>`}</div>
         <button type="button" class="vipHeroButton vipHeroClaimButton" data-vip-claim-all ${!claimableCount || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" aria-busy="${vipClaimAllBusy ? "true" : "false"}">
           <span class="vipClaimSpinner" aria-hidden="true"></span>

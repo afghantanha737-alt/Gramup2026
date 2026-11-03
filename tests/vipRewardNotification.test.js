@@ -30,11 +30,12 @@ assert.strictEqual(claimReadiness({ ...readySub, lastClaimAt: new Date(now.getTi
 assert.strictEqual(claimReadiness({ ...readySub, status: 'completed' }, now), null);
 assert.ok(claimReadiness({ ...readySub, claimsCompleted: 30 }, now), 'claim operations no longer stop at the number of contract days');
 assert.strictEqual(vipRewardNotificationText(readySub, 7),
-  '⚠️ Your Gramup Cloud Miner is full! Claim your accrued points now to resume mining.');
+  '⚠️ Your Gramup Cloud Miner storage is full (24h limit)! Claim your accrued UP now to resume mining.');
 
 async function testSweep() {
   const subscriptions = [
     readySub,
+    { ...readySub, _id: 'sub-1b', planNumber: 4 },
     { ...readySub, _id: 'sub-not-ready', startAt: new Date(now.getTime() - 1000), endAt: new Date(now.getTime() + day * 30) },
     { ...readySub, _id: 'sub-complete', status: 'completed', claimsCompleted: 30 }
   ];
@@ -65,11 +66,12 @@ async function testSweep() {
 
   const first = await runVipRewardNotificationSweep(now, deps);
   assert.strictEqual(first.sent, 1);
-  assert.strictEqual(first.totalReady, 1, 'only subscriptions with at least 0.01 unclaimed Points are notified');
+  assert.strictEqual(first.totalReady, 1, 'multiple full subscriptions for one user are consolidated into one alert');
   assert.strictEqual(sent.length, 1);
   assert.strictEqual(sent[0].telegramId, user.telegramId);
-  assert.strictEqual(sent[0].text, '⚠️ Your Gramup Cloud Miner is full! Claim your accrued points now to resume mining.');
+  assert.strictEqual(sent[0].text, '⚠️ Your Gramup Cloud Miner storage is full (24h limit)! Claim your accrued UP now to resume mining.');
   assert.strictEqual(sent[0].options.reply_markup.inline_keyboard.length, 1);
+  assert.strictEqual(sent[0].options.reply_markup.inline_keyboard[0][0].web_app.url, 'https://gramup.example/app');
 
   const repeated = await runVipRewardNotificationSweep(now, deps);
   assert.strictEqual(repeated.duplicate, 1);
@@ -79,10 +81,21 @@ async function testSweep() {
   const nextDayResult = await runVipRewardNotificationSweep(nextDay, deps);
   assert.strictEqual(nextDayResult.duplicate, 1, 'a full storage cycle only sends one consolidated alert');
   assert.strictEqual(sent.length, 1);
+
+  subscriptions.forEach(subscription => {
+    subscription.lastClaimAt = now;
+    subscription.claimedRewardPoints = 7;
+  });
+  const nextCycle = await runVipRewardNotificationSweep(nextDay, deps);
+  assert.strictEqual(nextCycle.sent, 1, 'a successful claim resets the full-cycle notification eligibility');
+  assert.strictEqual(sent.length, 2, 'the next full cycle sends one alert, not one alert per plan');
+  const repeatedNextCycle = await runVipRewardNotificationSweep(nextDay, deps);
+  assert.strictEqual(repeatedNextCycle.duplicate, 1);
+  assert.strictEqual(sent.length, 2);
 }
 
 testSweep().then(() => {
-  console.log('PASS — VIP reminders target continuously accrued balances and deduplicate per subscription/day');
+  console.log('PASS — VIP cap alerts consolidate plans per user and deduplicate once per full cycle');
 }).catch(error => {
   console.error(error);
   process.exitCode = 1;

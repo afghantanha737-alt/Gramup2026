@@ -327,11 +327,12 @@ async function startServer() {
     // Legacy VIP principal settlement is never a startup or timer job.
     // Matured VIP balances settle only through the user's explicit claim action.
 
+    // A single consolidated user-level sweep replaces any legacy per-plan alerts.
     const { runVipRewardNotificationSweep } = require('./utils/vipRewardNotification');
     void runJob('vip-storage-full-notification-sweep', 'Initial VIP storage-full notification sweep', runVipRewardNotificationSweep);
     setInterval(() => {
       void runJob('vip-storage-full-notification-sweep', 'Scheduled VIP storage-full notification sweep', runVipRewardNotificationSweep);
-    }, 5 * 60 * 1000);
+    }, 60 * 1000);
 
     server = app.listen(PORT, () => {
       server.requestTimeout = 120000;

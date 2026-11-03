@@ -2,7 +2,8 @@
 
 const { NEW_VIP_POLICY_VERSION, dailyPointsCentsFromBps } = require('./vipPolicy');
 const { DAY_MS } = require('./vipRewards');
-const MINING_STORAGE_CAP_MS = DAY_MS;
+const MINING_STORAGE_CAP_SECONDS = 24 * 60 * 60;
+const MINING_STORAGE_CAP_MS = MINING_STORAGE_CAP_SECONDS * 1000;
 
 function centsFromPoints(points) {
   const value = Number(points);
@@ -65,8 +66,13 @@ function calculateVipAccrual(subscription, now = new Date()) {
   const nowMs = new Date(now).getTime();
   const lastClaimMs = dateMs(subscription?.lastClaimAt);
   const storageAnchorMs = Math.max(timing.start, lastClaimMs == null ? timing.start : lastClaimMs);
+  const elapsedSeconds = Math.min(
+    Math.max(0, (nowMs - storageAnchorMs) / 1000),
+    MINING_STORAGE_CAP_SECONDS
+  );
   const storageCapAtMs = Math.min(timing.end, storageAnchorMs + MINING_STORAGE_CAP_MS);
-  const accrualNow = new Date(Math.min(nowMs, storageCapAtMs));
+  const accrualNowMs = Math.min(nowMs, timing.end, storageAnchorMs + elapsedSeconds * 1000);
+  const accrualNow = new Date(Math.max(timing.start, accrualNowMs));
   const storageFull = nowMs >= storageCapAtMs && nowMs < timing.end;
   const storageRemainingMs = storageFull ? 0 : Math.max(0, storageCapAtMs - nowMs);
   const matured = nowMs >= timing.end;
@@ -137,6 +143,7 @@ function calculateVipAccrual(subscription, now = new Date()) {
     dailyMiningRatePoints,
     totalMiningCents,
     storageCapAt: new Date(storageCapAtMs),
+    elapsedSeconds,
     storageFull,
     storageRemainingMs,
     rewardRemainingCents,
@@ -157,6 +164,7 @@ function accruedByElapsed(totalCentsPerDay, elapsedMs) {
 module.exports = {
   DAY_MS,
   MINING_STORAGE_CAP_MS,
+  MINING_STORAGE_CAP_SECONDS,
   centsFromPoints,
   pointsFromCents,
   cumulativeAccruedCents,
