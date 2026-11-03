@@ -24,8 +24,8 @@
 
 <!-- App CSS -->
 <link rel="icon" type="image/jpeg" href="img/gramup-logo-new.jpg">
-<link rel="stylesheet" href="/css/style.css?v=up_final_v3">
-<link rel="stylesheet" href="/css/theme-selector.css?v=up_final_v3">
+<link rel="stylesheet" href="/css/style.css?v=up_final_v4">
+<link rel="stylesheet" href="/css/theme-selector.css?v=up_final_v4">
 
 </head>
 <body>
@@ -264,11 +264,11 @@ UP از طریق تسک‌ها، دعوت دوستان و پاداش روزان�
     </div>
     <div class="withdrawBody">
       <div class="exchangeDirectionToggle">
-        <button type="button" class="exchangeDirectionBtn active" id="exchangeDirPTG" onclick="setExchangeDirection('points_to_gram')" data-i18n="exchange_direction_points_to_gram">UP → Gram</button>
-        <button type="button" class="exchangeDirectionBtn" id="exchangeDirGTP" onclick="setExchangeDirection('gram_to_points')" data-i18n="exchange_direction_gram_to_points">Gram → UP</button>
+        <button type="button" class="exchangeDirectionBtn active" id="exchangeDirPTG" onclick="setExchangeDirection('points_to_gram')" data-i18n="exchange_direction_UP_to_gram">UP → GRAM</button>
+        <button type="button" class="exchangeDirectionBtn" id="exchangeDirGTP" onclick="setExchangeDirection('gram_to_points')" data-i18n="exchange_direction_gram_to_UP">GRAM → UP</button>
       </div>
-      <label class="fieldLabel" id="exchangeAmountLabel" data-i18n="exchange_points_label">مقدار UP</label>
-      <input id="exchangePoints" type="number" inputmode="numeric" placeholder="مثلاً 1000" data-i18n-ph="exchange_points_ph" oninput="updateExchangePreview()">
+      <label class="fieldLabel" id="exchangeAmountLabel" data-i18n="exchange_UP_label">مقدار تبدیل</label>
+      <input id="exchangePoints" type="number" inputmode="numeric" placeholder="مقدار UP را وارد کنید (مثلاً 0.00)" data-i18n-ph="exchange_UP_ph" oninput="updateExchangePreview()">
       <p id="exchangePreview" style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">معادل GRAM دریافتی: 0</p>
       <p id="exchangeError" class="captchaErr" role="alert"></p>
       <button type="button" class="primaryBtn" id="submitExchange" onclick="submitExchange()" data-i18n="exchange_submit">تبدیل کن</button>
@@ -328,11 +328,11 @@ UP از طریق تسک‌ها، دعوت دوستان و پاداش روزان�
 <!-- TOAST -->
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script src="/js/maintenanceGate.js?v=up_final_v3"></script>
-<script src="/js/i18n.js?v=up_final_v3"></script>
-<script src="/js/readModelCache.js?v=up_final_v3"></script>
-<script src="/js/app.js?v=up_final_v3"></script>
+<script src="/js/maintenanceGate.js?v=up_final_v4"></script>
+<script src="/js/i18n.js?v=up_final_v4"></script>
+<script src="/js/readModelCache.js?v=up_final_v4"></script>
+<script src="/js/app.js?v=up_final_v4"></script>
 <script src="https://unpkg.com/@tonconnect/ui@5.0.1/dist/tonconnect-ui.min.js"></script>
-<script src="/js/walletConnect.js?v=up_final_v3"></script>
+<script src="/js/walletConnect.js?v=up_final_v4"></script>
 </body>
 </html>

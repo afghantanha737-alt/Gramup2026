@@ -1411,7 +1411,7 @@ function renderHome() {
           <div class="tbLabel">${t("tb_total_balance")}</div>
           <div class="tbAmount"><span class="tbAmountNum">${formatFixed(state.gramBalance, 3)}</span><span class="tbAmountUnit">GRAM</span></div>
           <div class="tbPills">
-            <span class="tbPill tbPillPurple">${t("tb_points_chip", { n: formatPoints(state.points) })}</span>
+            <span class="tbPill tbPillPurple">${t("tb_UP_chip", { n: formatPoints(state.points) })}</span>
             <span class="tbPill tbPillOrange">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
           </div>
         </div>
@@ -1464,7 +1464,7 @@ function renderHome() {
 
     <div class="tbStats">
       <div class="tbStat">
-        <div class="tbStatIcon tbIconMint"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#2f9bf0"/><path d="M20 24h24l6 8-18 20L14 32z" fill="#fff"/><path d="M32 30v10M27 35h10" stroke="#2f9bf0" stroke-width="3" stroke-linecap="round"/></svg></div>
+        <div class="tbStatIcon tbIconMint">${tokenIconMarkup()}</div>
         <div class="tbStatLabel tbColGreen">${t("tb_earned")}</div>
         <div class="tbStatValue">${tokenAmount(state.totalEarnedPoints)}</div>
       </div>
@@ -1975,7 +1975,7 @@ function renderTasks() {
     <section class="tasksOverview">
       <div class="tasksOverviewTop"><div><h1>${t("tasks_title")}</h1></div><strong>${taskProgress}%</strong></div>
       <div class="tasksProgressTrack"><i style="width:${taskProgress}%"></i></div>
-      <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(visibleTasks.length)} ${t("task_btn_done")}</span><span>${t("tb_points_chip", { n: formatPoints(state.points) })}</span></div>
+      <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(visibleTasks.length)} ${t("task_btn_done")}</span><span>${t("tb_UP_chip", { n: formatPoints(state.points) })}</span></div>
     </section>
     ${sectionTabs}
     ${dailyCheckinHtml}
@@ -2181,8 +2181,8 @@ function setExchangeDirection(direction) {
   const input = $("#exchangePoints");
   const title = $("#exchangeTitle");
   if (exchangeDirection === "points_to_gram") {
-    if (label) { label.dataset.i18n = "exchange_points_label"; label.textContent = t("exchange_points_label"); }
-    if (input) { input.dataset.i18nPh = "exchange_points_ph"; input.setAttribute("placeholder", t("exchange_points_ph")); }
+    if (label) { label.dataset.i18n = "exchange_UP_label"; label.textContent = t("exchange_UP_label"); }
+    if (input) { input.dataset.i18nPh = "exchange_UP_ph"; input.setAttribute("placeholder", t("exchange_UP_ph")); }
     if (title) { title.dataset.i18n = "exchange_modal_title"; title.textContent = t("exchange_modal_title"); }
   } else {
     if (label) { label.dataset.i18n = "exchange_gram_label"; label.textContent = t("exchange_gram_label"); }
@@ -2929,7 +2929,7 @@ function renderProfileMenu() {
       <div class="profileHeadInfo">
         <div class="profileNameLg">${escapeHTML(firstName)}</div>
         <div class="tbPills">
-          <span class="tbPill tbPillPurple tbPillSm">${t("tb_points_chip", { n: formatPoints(state.points) })}</span>
+          <span class="tbPill tbPillPurple tbPillSm">${t("tb_UP_chip", { n: formatPoints(state.points) })}</span>
           <span class="tbPill tbPillOrange tbPillSm">${formatPoints(state.invitedCount)} ${t("tb_referrals")}</span>
           <span class="tbPill tbPillGreen tbPillSm">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
         </div>

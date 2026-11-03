@@ -813,6 +813,7 @@ html[dir="rtl"] .tbLinkArrow { display: inline-block; transform: scaleX(-1); }
 .tbStat { background: var(--tb-card); border-radius: 20px; padding: 14px 6px 12px; text-align: center; box-shadow: var(--tb-card-shadow); }
 .tbStatIcon { width: 40px; height: 40px; margin: 0 auto 8px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
 .tbStatIcon svg { width: 20px; height: 20px; }
+.tbStatIcon .upTokenIcon { width: 22px; height: 22px; flex-basis: 22px; border-radius: 7px; }
 .tbIconMint { background: #d1fae5; border: 1.5px solid #a7f3d0; }
 .tbIconMint svg { width: 18px; height: 18px; }
 .tbIconOrange { background: #f59e0b; box-shadow: 0 5px 12px rgba(245, 158, 11, .32); }
