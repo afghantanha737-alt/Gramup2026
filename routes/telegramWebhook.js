@@ -134,12 +134,12 @@ async function broadcastBotMessageToActiveUsers(fromChatId, messageId) {
   if (!bot) return { sent: 0, total: 0 };
   const users = await User.find({
     telegramId: { $exists: true, $nin: [null, ''] },
-    isBanned: { $ne: true },
-    $or: [{ telegramBlockedAt: null }, { telegramBlockedAt: { $exists: false } }]
+    isBanned: { $ne: true }
   }).select('telegramId').lean();
   const batchSize = 20;
   const delayMs = 1100;
   let sent = 0;
+  let firstError = '';
   console.log(`📣 Bot broadcast started: recipients=${users.length}, source=${fromChatId}/${messageId}`);
   for (let index = 0; index < users.length; index += batchSize) {
     const batch = users.slice(index, index + batchSize);
@@ -148,23 +148,31 @@ async function broadcastBotMessageToActiveUsers(fromChatId, messageId) {
         await bot.copyMessage(String(user.telegramId), String(fromChatId), Number(messageId));
         return true;
       } catch (error) {
-        if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
+        if (!firstError) firstError = String(error?.message || error).slice(0, 240);
+        // copyMessage may fail because of source-message permissions; do not mark
+        // the recipient as blocked based on this ambiguous operation.
         return false;
       }
     }));
     sent += results.filter(Boolean).length;
     if (index + batchSize < users.length) await new Promise(resolve => setTimeout(resolve, delayMs));
   }
-  console.log(`📣 Bot broadcast finished: sent=${sent} failed=${users.length - sent} total=${users.length}`);
-  return { sent, total: users.length };
+  console.log(`📣 Bot broadcast finished: sent=${sent} failed=${users.length - sent} total=${users.length}${firstError ? ` firstError=${firstError}` : ''}`);
+  return { sent, total: users.length, firstError };
 }
 
 function broadcastContentFromMessage(message) {
   const text = String(message?.text || '');
   if (text) return { contentType: 'text', contentText: text };
-  const photo = Array.isArray(message?.photo) && message.photo.length ? message.photo[message.photo.length - 1] : null;
-  if (photo?.file_id) {
-    return { contentType: 'photo', contentCaption: String(message.caption || ''), contentFileId: photo.file_id };
+  const media = [
+    ['photo', Array.isArray(message?.photo) && message.photo.length ? message.photo[message.photo.length - 1] : null],
+    ['video', message?.video],
+    ['document', message?.document],
+    ['audio', message?.audio],
+    ['animation', message?.animation]
+  ].find(([, value]) => value?.file_id);
+  if (media) {
+    return { contentType: media[0], contentCaption: String(message.caption || ''), contentFileId: media[1].file_id };
   }
   return { contentType: 'copy' };
 }
@@ -174,10 +182,18 @@ async function sendBotBroadcastToUser(user, pending) {
     await bot.sendMessage(String(user.telegramId), pending.contentText);
     return;
   }
-  if (pending.contentType === 'photo' && pending.contentFileId) {
-    await bot.call('sendPhoto', {
+  const mediaMethods = {
+    photo: ['sendPhoto', 'photo'],
+    video: ['sendVideo', 'video'],
+    document: ['sendDocument', 'document'],
+    audio: ['sendAudio', 'audio'],
+    animation: ['sendAnimation', 'animation']
+  };
+  const media = mediaMethods[pending.contentType];
+  if (media && pending.contentFileId) {
+    await bot.call(media[0], {
       chat_id: String(user.telegramId),
-      photo: pending.contentFileId,
+      [media[1]]: pending.contentFileId,
       ...(pending.contentCaption ? { caption: pending.contentCaption } : {})
     });
     return;
@@ -188,8 +204,7 @@ async function sendBotBroadcastToUser(user, pending) {
 async function broadcastPendingTelegramMessage(pending) {
   const users = await User.find({
     telegramId: { $exists: true, $nin: [null, ''] },
-    isBanned: { $ne: true },
-    $or: [{ telegramBlockedAt: null }, { telegramBlockedAt: { $exists: false } }]
+    isBanned: { $ne: true }
   }).select('telegramId').lean();
   const batchSize = 20;
   const delayMs = 1100;
