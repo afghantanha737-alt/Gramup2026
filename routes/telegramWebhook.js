@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
-const { bot, broadcastCopyToActiveUsers, isTelegramDeliveryBlocked } = require('../utils/bot');
+const { bot, markTelegramBlocked, isTelegramDeliveryBlocked } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { safelySendTelegram } = require('../utils/telegramNotification');
 const sendMessage = (...args) => safelySendTelegram(() => bot.sendMessage(...args), { context: 'webhook_reply' });
@@ -130,6 +130,35 @@ async function handleAdminPending(chatId) {
   await sendMessage(chatId, body);
 }
 
+async function broadcastBotMessageToActiveUsers(fromChatId, messageId) {
+  if (!bot) return { sent: 0, total: 0 };
+  const users = await User.find({
+    telegramId: { $exists: true, $nin: [null, ''] },
+    isBanned: { $ne: true },
+    $or: [{ telegramBlockedAt: null }, { telegramBlockedAt: { $exists: false } }]
+  }).select('telegramId').lean();
+  const batchSize = 20;
+  const delayMs = 1100;
+  let sent = 0;
+  console.log(`📣 Bot broadcast started: recipients=${users.length}, source=${fromChatId}/${messageId}`);
+  for (let index = 0; index < users.length; index += batchSize) {
+    const batch = users.slice(index, index + batchSize);
+    const results = await Promise.all(batch.map(async user => {
+      try {
+        await bot.copyMessage(String(user.telegramId), String(fromChatId), Number(messageId));
+        return true;
+      } catch (error) {
+        if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
+        return false;
+      }
+    }));
+    sent += results.filter(Boolean).length;
+    if (index + batchSize < users.length) await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  console.log(`📣 Bot broadcast finished: sent=${sent} failed=${users.length - sent} total=${users.length}`);
+  return { sent, total: users.length };
+}
+
 async function handleAdminBroadcastPrompt(telegramId, chatId) {
   adminSessions.setAwaitingContent(telegramId);
   await sendMessage(
@@ -159,8 +188,8 @@ async function handleBroadcastConfirm(telegramId, chatId) {
     return;
   }
   await sendMessage(chatId, '⏳ در حال ارسال...');
-  const sent = await broadcastCopyToActiveUsers(User, pending.fromChatId, pending.messageId);
-  await sendMessage(chatId, `✅ پیام برای ${sent} کاربر ارسال شد.`);
+  const result = await broadcastBotMessageToActiveUsers(pending.fromChatId, pending.messageId);
+  await sendMessage(chatId, `✅ پیام برای ${result.sent} کاربر ارسال شد (از ${result.total} کاربر فعال).`);
 }
 
 async function handleCallbackQuery(callbackQuery) {
