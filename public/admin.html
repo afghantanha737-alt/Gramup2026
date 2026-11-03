@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>پنل ادمین | Points Rewards</title>
+<title>پنل ادمین | UP Rewards</title>
 <style>
   :root{
     --bg:#0b0c11; --surface:#12141c; --surface2:#171a22; --line:rgba(255,255,255,.09);
@@ -208,7 +208,7 @@
         </div>
         <label id="taskUrlLabel">لینک انجام Task (اختیاری؛ برای دکمه‌ی «باز کردن لینک»)</label>
         <input id="taskUrl" placeholder="https://...">
-        <label>مقدار پاداش (پوینت)</label>
+        <label>مقدار پاداش (UP)</label>
         <input id="taskReward" type="number" placeholder="مثلاً 100">
         <div id="taskCapacityFields">
           <label>حداکثر تعداد تکمیل (اختیاری — برای تسک اسپانسری نادیده گرفته می‌شود)</label>
@@ -370,7 +370,7 @@
           <select id="userSortFilter" onchange="loadUsers()" style="flex:1;min-width:110px;margin:0">
             <option value="newest">جدیدترین</option>
             <option value="oldest">قدیمی‌ترین</option>
-            <option value="points">بیشترین پوینت</option>
+            <option value="points">بیشترین UP</option>
             <option value="invited">بیشترین دعوت</option>
           </select>
         </div>
@@ -378,7 +378,7 @@
           <b>عملیات گروهی موجودی</b>
           <p class="small">فقط کاربران انتخاب‌شده در صفحهٔ فعلی اعمال می‌شوند؛ برای کاربران دیگر از صفحه‌بندی یا جستجو استفاده کنید. هر کاربر جداگانه در Audit و Ledger ثبت خواهد شد. حداکثر ۱۰۰ کاربر.</p>
           <div class="row">
-            <select id="bulkCurrency" style="flex:1;margin:0"><option value="points">Points</option><option value="gram">GRAM</option></select>
+            <select id="bulkCurrency" style="flex:1;margin:0"><option value="points">UP</option><option value="gram">GRAM</option></select>
             <select id="bulkAction" style="flex:1;margin:0" onchange="toggleBulkAmount()"><option value="add">افزودن</option><option value="zero">صفرکردن</option></select>
             <input id="bulkAmount" type="number" min="0" step="1" placeholder="مقدار" style="flex:1;margin:0">
             <input id="bulkReason" placeholder="دلیل اجباری" style="flex:2;margin:0">
@@ -472,7 +472,7 @@
     <div id="tab-vip" class="tabContent hidden">
       <div class="card">
         <div class="flexBetween"><b>VIP Management</b><button type="button" class="secondary" onclick="loadVipManagement()">Refresh</button></div>
-        <p class="small">Read-only subscription reporting. Revenue and rewards are shown in Points using recorded purchase snapshots.</p>
+        <p class="small">Read-only subscription reporting. Revenue and rewards are shown in UP using recorded purchase snapshots.</p>
         <div id="vipSummaryGrid" class="statsGrid" style="margin-top:12px"><div class="empty">Loading VIP summary…</div></div>
       </div>
 
@@ -484,7 +484,7 @@
           <b>ثبت تأمین حسابداری Reserve</b>
           <p class="small">این عملیات فقط مبلغ اعلام‌شده را در Reserve داخلی ثبت می‌کند و هیچ انتقال خارجی وجه انجام نمی‌دهد.</p>
           <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px;align-items:end">
-            <label>مقدار Points<input id="vipReserveFundAmount" type="number" min="0.01" step="0.01" placeholder="مثلاً 10000"></label>
+            <label>مقدار UP<input id="vipReserveFundAmount" type="number" min="0.01" step="0.01" placeholder="مثلاً 10000"></label>
             <label>دلیل ثبت<input id="vipReserveFundReason" type="text" maxlength="500" placeholder="مثلاً تأمین سرمایه دوره جدید"></label>
             <button type="button" onclick="fundVipReserveAdmin()">ثبت تأمین</button>
           </div>
@@ -525,7 +525,7 @@
 
       <div class="card">
         <div class="flexBetween"><b>VIP Plan Settings</b><span class="small">قیمت‌ها و سیاست پاداش کاتالوگ در راه‌اندازی سرور همگام می‌شوند.</span></div>
-        <p class="small">قیمت خرید از پوینت کسر می‌شود. تغییر کاتالوگ روی خریدهای جدید اثر دارد؛ اشتراک‌های قبلی کاربران تغییر نمی‌کنند.</p>
+        <p class="small">قیمت خرید از UP کسر می‌شود. تغییر کاتالوگ روی خریدهای جدید اثر دارد؛ اشتراک‌های قبلی کاربران تغییر نمی‌کنند.</p>
         <div role="tablist" aria-label="VIP plan categories" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
           <button type="button" class="secondary" data-vip-admin-tab="starter" aria-selected="true" onclick="setVipAdminCategory('starter')">Starter · VIP 1–3</button>
           <button type="button" class="secondary" data-vip-admin-tab="pro" aria-selected="false" onclick="setVipAdminCategory('pro')">Pro · VIP 4–7</button>
@@ -563,7 +563,7 @@
           <div id="maintenanceAllowedList" class="small" style="margin-top:10px"></div>
           <div id="maintenanceMessage" class="small" style="margin-top:8px"></div>
         </div>
-        <label>نرخ تبدیل (هر پوینت به GRAM)</label>
+        <label>نرخ تبدیل (هر UP به GRAM)</label>
         <input id="setRate" type="number" step="0.000001">
         <label>قیمت هر ۱ GRAM به دلار (برای نمایش ≈ USD؛ صفر = مخفی)</label>
         <input id="setGramUsd" type="number" step="0.0001" min="0">
@@ -614,7 +614,7 @@
             <span id="reminderStatusBox">هنوز اجرا نشده.</span>
           </div>
         </div>
-        <label>حداقل پوینت برای برداشت</label>
+        <label>حداقل UP برای برداشت</label>
         <input id="setMinWithdraw" type="number">
         <label>پاداش ورود روزانه (پایه)</label>
         <input id="setDaily" type="number">
@@ -622,12 +622,12 @@
         <input id="setStreakBonus" type="number">
         <div style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:14px 0;background:var(--surface2)">
           <b>Referral — پاداش و کمیسیون</b>
-          <p class="small">پاداش مستقیم برای هر دعوت معتبر دقیقاً ۱۰ Points است. کمیسیون فقط از Points واقعاً کسب‌شده در task، check-in و leaderboard محاسبه می‌شود؛ تبدیل موجودی و پاداش‌های Referral کمیسیون ایجاد نمی‌کنند.</p>
-          <label>پاداش ثابت دعوت مستقیم (Points)</label>
+          <p class="small">پاداش مستقیم برای هر دعوت معتبر دقیقاً ۱۰ UP است. کمیسیون فقط از UP واقعاً کسب‌شده در task، check-in و leaderboard محاسبه می‌شود؛ تبدیل موجودی و پاداش‌های Referral کمیسیون ایجاد نمی‌کنند.</p>
+          <label>پاداش ثابت دعوت مستقیم (UP)</label>
           <input id="setReferralInitialReward" type="number" value="10" disabled>
-          <label>پاداش یک‌بارۀ خوش‌آمدگویی دعوت‌شده (Points)</label>
+          <label>پاداش یک‌بارۀ خوش‌آمدگویی دعوت‌شده (UP)</label>
           <input id="setReferralWelcomeReward" type="number" value="5" min="0" max="1000000" step="1">
-          <p class="small">پیش‌فرض ۵ پوینت است؛ مقدار صفر این پاداش را برای دعوت‌های جدید غیرفعال می‌کند. موجودی قبلی کاربران تغییر نمی‌کند.</p>
+          <p class="small">پیش‌فرض ۵ UP است؛ مقدار صفر این پاداش را برای دعوت‌های جدید غیرفعال می‌کند. موجودی قبلی کاربران تغییر نمی‌کند.</p>
           <label>نرخ ثابت کمیسیون Referral (قابل‌گسترش تا ۱۰ Level)</label>
           <div id="referralLevelRates"></div>
         </div>
@@ -637,8 +637,8 @@
             <input type="checkbox" id="setWeeklyLeaderboardEnabled" style="width:auto">
             <span>فعال باشد</span>
           </label>
-          <p class="small">امتیازها هر دوشنبه بر اساس UTC از صفر محاسبه می‌شوند. جوایز زیر برای رتبه‌های اول تا سوم است و می‌تواند از بودجه‌ی تبلیغ‌دهنده تأمین شود.</p>
-          <label>جوایز رتبه‌های ۱، ۲ و ۳ (پوینت)</label>
+          <p class="small">UPها هر دوشنبه بر اساس UTC از صفر محاسبه می‌شوند. جوایز زیر برای رتبه‌های اول تا سوم است و می‌تواند از بودجه‌ی تبلیغ‌دهنده تأمین شود.</p>
+          <label>جوایز رتبه‌های ۱، ۲ و ۳ (UP)</label>
           <div class="row">
             <input id="setWeeklyPrize1" type="number" min="0" step="1" placeholder="رتبه ۱">
             <input id="setWeeklyPrize2" type="number" min="0" step="1" placeholder="رتبه ۲">
@@ -867,7 +867,7 @@ async function loadStats() {
     referralGrid.innerHTML = `
       <div class="card" style="margin-bottom:0"><div class="small">کل Referralهای ثبت‌شده</div><div style="font-size:20px;font-weight:850">${formatFaNumber(s.totalReferred || 0)}</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">Referral فعال</div><div style="font-size:20px;font-weight:850">${formatFaNumber(s.activeReferred || 0)}</div></div>
-      <div class="card" style="margin-bottom:0"><div class="small">Points توزیع‌شده به‌صورت کمیسیون</div><div style="font-size:20px;font-weight:850">${formatFaNumber(s.referralCommissionTotalPoints || 0)}</div><div class="small">${formatFaNumber(s.referralCommissionTransactions || 0)} رویداد Ledger</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">UP توزیع‌شده به‌صورت کمیسیون</div><div style="font-size:20px;font-weight:850">${formatFaNumber(s.referralCommissionTotalPoints || 0)}</div><div class="small">${formatFaNumber(s.referralCommissionTransactions || 0)} رویداد Ledger</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">تبدیل دعوت‌ها</div><div style="font-size:20px;font-weight:850">٪${s.referralConversionRate || 0}</div><div class="small">${formatFaNumber(s.convertedReferred || 0)} از ${formatFaNumber(s.totalReferred || 0)}</div></div>`;
     const levelRows = Array.isArray(s.referralLevelStats) ? s.referralLevelStats : [];
     document.getElementById("referralLevelStats").innerHTML = `
@@ -905,7 +905,7 @@ async function loadLiabilitySummary() {
     const paid = Number(data.withdrawals?.paid?.amount || 0);
     const confirmedDeposits = Number(data.deposits?.confirmed?.amount || 0);
     container.innerHTML = `<div class="statsGrid" style="margin-top:12px">
-      <div class="card" style="margin-bottom:0"><div class="small">تعهد Points فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.points?.currentUserLiability)}</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">تعهد UP فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.points?.currentUserLiability)}</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">تعهد GRAM فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.gram?.currentUserLiability)} GRAM</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">برداشت در انتظار/پردازش</div><div style="font-size:20px;font-weight:800">${n(pending + processing)} GRAM</div></div>
       <div class="card" style="margin-bottom:0"><div class="small">برداشت پرداخت‌شده</div><div style="font-size:20px;font-weight:800">${n(paid)} GRAM</div></div>
@@ -1067,7 +1067,7 @@ async function loadScreenshotSubmissions() {
           <td>${escapeHtml(userName)}<br><span class="small">${escapeHtml(item.user?.telegramId || "—")}</span></td>
           <td>${escapeHtml(item.task?.title || "Task حذف‌شده")}</td>
           <td><button class="secondary" type="button" onclick="viewScreenshotSubmission('${item._id}')">مشاهده تصویر</button></td>
-          <td>+${escapeHtml(item.reward)} Points</td>
+          <td>+${escapeHtml(item.reward)} UP</td>
           <td>${submitted ? new Date(submitted).toLocaleString("fa-IR") : "—"}</td>
           <td><span class="badge ${item.status === "approved" ? "approved" : item.status === "rejected" ? "rejected" : "pending"}">${escapeHtml(statusLabel)}</span>
             ${item.status === "pending" ? `<div class="row" style="margin-top:6px"><button type="button" onclick="approveScreenshotSubmission('${item._id}')">تأیید و پرداخت</button><button type="button" class="danger" onclick="rejectScreenshotSubmission('${item._id}')">رد</button></div>` : ""}
@@ -1115,7 +1115,7 @@ async function approveScreenshotSubmission(id) {
   if (!confirm("این Screenshot را تأیید و پاداش ثبت‌شده در سرور را پرداخت می‌کنید؟")) return;
   try {
     const result = await api(`/api/admin/task-submissions/${id}/approve`, { method: "POST", body: JSON.stringify({}) });
-    showMsg(`تأیید شد؛ ${result.reward} پوینت پرداخت شد.`, "success");
+    showMsg(`تأیید شد؛ ${result.reward} UP پرداخت شد.`, "success");
     await Promise.all([loadScreenshotSubmissions(), loadTasks()]);
   } catch (error) { showMsg(error.message, "error"); }
 }
@@ -1581,7 +1581,7 @@ async function loadWeeklyAwards() {
       return `<tr><td>${row.rank}</td><td>${escapeHtml(row.user?.firstName || row.user?.username || "—")}</td><td>${row.points}</td><td>${data.prizes?.[row.rank - 1] || 0}</td><td><span class="badge ${status === "paid" ? "paid" : status === "failed" ? "rejected" : "pending"}">${status === "paid" ? "پرداخت‌شده" : status === "failed" ? "ناموفق" : "در انتظار پرداخت"}</span></td></tr>`;
     }).join("");
     container.innerHTML = `<div class="small">بازه: ${new Date(data.weekStart).toLocaleDateString("fa-IR")} تا ${new Date(data.weekEnd).toLocaleDateString("fa-IR")}</div>` +
-      (rows ? `<table style="margin-top:8px"><thead><tr><th>رتبه</th><th>کاربر</th><th>امتیاز هفته</th><th>جایزه</th><th>وضعیت</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">برای این هفته رتبه‌ای ثبت نشده است.</div>');
+      (rows ? `<table style="margin-top:8px"><thead><tr><th>رتبه</th><th>کاربر</th><th>UP هفته</th><th>جایزه</th><th>وضعیت</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">برای این هفته رتبه‌ای ثبت نشده است.</div>');
   } catch (error) {
     container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
@@ -1590,7 +1590,7 @@ async function loadWeeklyAwards() {
 async function payWeeklyAwards() {
   const key = document.getElementById("weeklyAwardKey").value.trim();
   if (!key) return showMsg("ابتدا هفته را مشخص کنید.", "error");
-  if (!confirm("جوایز این هفته به موجودی پوینت برندگان اضافه می‌شود و هر رتبه فقط یک‌بار پرداخت خواهد شد. ادامه می‌دهید؟")) return;
+  if (!confirm("جوایز این هفته به موجودی UP برندگان اضافه می‌شود و هر رتبه فقط یک‌بار پرداخت خواهد شد. ادامه می‌دهید؟")) return;
   try {
     const data = await api(`/api/admin/weekly-leaderboard/${encodeURIComponent(key)}/pay`, { method: "POST", body: JSON.stringify({}) });
     showMsg(`پرداخت انجام شد: ${(data.results || []).filter(item => item.status === "paid").length} رتبه.`, "success");
@@ -1610,7 +1610,7 @@ async function loadFinancialAudit() {
       container.innerHTML = `<div class="empty">اختلافی پیدا نشد. ${data.checkedUsers} کاربر بررسی شد.</div>`;
       return;
     }
-    container.innerHTML = `<div class="small" style="margin-bottom:8px">${data.checkedUsers} کاربر بررسی شد؛ ${data.discrepancyCount} اختلاف نمایش داده می‌شود.</div><table><thead><tr><th>کاربر</th><th>موجودی پوینت</th><th>Ledger پوینت</th><th>اختلاف پوینت</th><th>موجودی GRAM</th><th>Ledger GRAM</th><th>اختلاف GRAM</th></tr></thead><tbody>${data.discrepancies.map(row => `<tr><td>${escapeHtml(row.name || row.telegramId || "—")}</td><td>${row.pointsBalance}</td><td>${row.pointsLedger}</td><td style="color:var(--danger)">${row.pointsDifference}</td><td>${row.gramBalance}</td><td>${row.gramLedger}</td><td style="color:var(--danger)">${row.gramDifference}</td></tr>`).join("")}</tbody></table>`;
+    container.innerHTML = `<div class="small" style="margin-bottom:8px">${data.checkedUsers} کاربر بررسی شد؛ ${data.discrepancyCount} اختلاف نمایش داده می‌شود.</div><table><thead><tr><th>کاربر</th><th>موجودی UP</th><th>Ledger UP</th><th>اختلاف UP</th><th>موجودی GRAM</th><th>Ledger GRAM</th><th>اختلاف GRAM</th></tr></thead><tbody>${data.discrepancies.map(row => `<tr><td>${escapeHtml(row.name || row.telegramId || "—")}</td><td>${row.pointsBalance}</td><td>${row.pointsLedger}</td><td style="color:var(--danger)">${row.pointsDifference}</td><td>${row.gramBalance}</td><td>${row.gramLedger}</td><td style="color:var(--danger)">${row.gramDifference}</td></tr>`).join("")}</tbody></table>`;
   } catch (error) {
     container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
@@ -1675,13 +1675,13 @@ async function loadUsers() {
     }
     container.innerHTML = `
       <table class="adminUsersTable">
-        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه کاربران این صفحه" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>Points</th><th>GRAM</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه کاربران این صفحه" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>UP</th><th>GRAM</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
         <tbody>
           ${users.map(u => `
             <tr>
               <td class="usersSelectCell"><input class="user-select" type="checkbox" value="${u._id}" aria-label="انتخاب کاربر" style="width:auto;margin:0"></td>
               <td class="usersNameCell" data-label="نام / یوزرنیم · Telegram ID">${escapeHtml(u.firstName || u.username || "—")}<div class="small">Telegram ID: ${escapeHtml(u.telegramId || "—")}</div></td>
-              <td data-label="Points">${Number(u.points || 0)}</td>
+              <td data-label="UP">${Number(u.points || 0)}</td>
               <td data-label="GRAM">${Number(u.gramBalance || 0)}</td>
               <td data-label="دعوت‌شده">${u.invitedCount || 0}</td>
               <td data-label="وضعیت">${u.isBanned ? '<span class="badge rejected">مسدود</span>' : '<span class="badge approved">فعال</span>'}</td>
@@ -1745,9 +1745,9 @@ function renderUserAccount(data) {
   document.getElementById("accountModalTitle").textContent = `${u.firstName || u.username || u.telegramId || "کاربر"} · ${u.telegramId || u._id}`;
   document.getElementById("accountModalBody").innerHTML = `
     <div class="statsGrid" style="margin-top:12px">
-      <div class="card"><div class="small">Points موجود</div><b>${Number(b.currentPoints || 0)}</b></div>
+      <div class="card"><div class="small">UP موجود</div><b>${Number(b.currentPoints || 0)}</b></div>
       <div class="card"><div class="small">GRAM موجود</div><b>${Number(b.currentGram || 0)}</b></div>
-      <div class="card"><div class="small">کل Points کسب‌شده</div><b>${Number(b.totalEarnedPoints || 0)}</b></div>
+      <div class="card"><div class="small">کل UP کسب‌شده</div><b>${Number(b.totalEarnedPoints || 0)}</b></div>
       <div class="card"><div class="small">GRAM واریزشده</div><b>${Number(b.totalGramCredited || 0)}</b></div>
       <div class="card"><div class="small">GRAM برداشت‌شده</div><b>${Number(b.totalWithdrawnGram || 0)}</b></div>
       <div class="card"><div class="small">دعوت / فعال</div><b>${Number(b.referralCount || 0)} / ${Number(b.activeReferralCount || 0)}</b></div>
@@ -1755,7 +1755,7 @@ function renderUserAccount(data) {
     <div class="card">
       <b>تغییر دستی موجودی</b>
       <div class="row" style="margin-top:10px">
-        <select id="accountBalanceCurrency" style="flex:1;margin:0"><option value="points">Points</option><option value="gram">GRAM</option></select>
+        <select id="accountBalanceCurrency" style="flex:1;margin:0"><option value="points">UP</option><option value="gram">GRAM</option></select>
         <select id="accountBalanceAction" style="flex:1;margin:0"><option value="add">افزودن</option><option value="subtract">کسر</option><option value="set">تنظیم مقدار دقیق</option><option value="zero">صفرکردن</option></select>
         <input id="accountBalanceAmount" type="number" min="0" step="1" placeholder="مقدار" style="flex:1;margin:0">
       </div>
@@ -1774,10 +1774,10 @@ function renderUserAccount(data) {
       </div>
     </div>
     <div class="card"><b>تاریخچه‌ی تراکنش‌ها (تا ۱۰۰ مورد)</b>
-      ${tx.length ? `<div style="overflow:auto;margin-top:8px"><table><thead><tr><th>زمان</th><th>نوع</th><th>مقدار</th><th>Level / نرخ</th><th>Source User → Recipient</th><th>Transaction ID</th><th>منبع درآمد</th></tr></thead><tbody>${tx.map(x => `<tr><td>${new Date(x.createdAt).toLocaleString("fa-IR")}</td><td>${escapeHtml(x.type || "—")}<div class="small">${escapeHtml(x.description || "")}</div></td><td>${Number(x.amount || 0)} ${escapeHtml(x.currency || "points")}</td><td>${x.referralLevel ? `L${x.referralLevel} · ${x.commissionRatePercent ?? 0}%` : "—"}</td><td>${escapeHtml(x.sourceUserId || "—")} → ${escapeHtml(x.recipientUserId || "—")}</td><td>${escapeHtml(x.transactionId || x.sourceId || "—")}</td><td>${escapeHtml(x.earningTransactionId || "—")}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">تراکنشی ثبت نشده است.</div>'}
+      ${tx.length ? `<div style="overflow:auto;margin-top:8px"><table><thead><tr><th>زمان</th><th>نوع</th><th>مقدار</th><th>Level / نرخ</th><th>Source User → Recipient</th><th>Transaction ID</th><th>منبع درآمد</th></tr></thead><tbody>${tx.map(x => `<tr><td>${new Date(x.createdAt).toLocaleString("fa-IR")}</td><td>${escapeHtml(x.type || "—")}<div class="small">${escapeHtml(x.description || "")}</div></td><td>${Number(x.amount || 0)} ${escapeHtml(x.currency === "points" ? "UP" : (x.currency || "—"))}</td><td>${x.referralLevel ? `L${x.referralLevel} · ${x.commissionRatePercent ?? 0}%` : "—"}</td><td>${escapeHtml(x.sourceUserId || "—")} → ${escapeHtml(x.recipientUserId || "—")}</td><td>${escapeHtml(x.transactionId || x.sourceId || "—")}</td><td>${escapeHtml(x.earningTransactionId || "—")}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">تراکنشی ثبت نشده است.</div>'}
     </div>
     <div class="card"><b>تاریخچه‌ی تغییرات مدیریتی</b>
-      ${audits.length ? `<div style="overflow:auto;margin-top:8px"><table><thead><tr><th>زمان</th><th>ادمین / Session ID</th><th>عملیات</th><th>قبل</th><th>تغییر</th><th>بعد</th><th>دلیل / Action ID</th></tr></thead><tbody>${audits.map(a => `<tr><td>${new Date(a.createdAt).toLocaleString("fa-IR")}</td><td>${escapeHtml(a.actor || "ادمین")}<div class="small">${escapeHtml(a.adminId || "—")}</div></td><td>${escapeHtml(a.action)} · ${escapeHtml(a.currency)}</td><td>${a.before ?? a.statusBefore ?? "—"}</td><td>${a.change ?? "—"}</td><td>${a.after ?? a.statusAfter ?? "—"}</td><td>${escapeHtml(a.reason || "")}<div class="small">${escapeHtml(a.actionId || "")}</div></td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">Audit ثبت نشده است.</div>'}
+      ${audits.length ? `<div style="overflow:auto;margin-top:8px"><table><thead><tr><th>زمان</th><th>ادمین / Session ID</th><th>عملیات</th><th>قبل</th><th>تغییر</th><th>بعد</th><th>دلیل / Action ID</th></tr></thead><tbody>${audits.map(a => `<tr><td>${new Date(a.createdAt).toLocaleString("fa-IR")}</td><td>${escapeHtml(a.actor || "ادمین")}<div class="small">${escapeHtml(a.adminId || "—")}</div></td><td>${escapeHtml(a.action)} · ${escapeHtml(a.currency === "points" ? "UP" : (a.currency || "—"))}</td><td>${a.before ?? a.statusBefore ?? "—"}</td><td>${a.change ?? "—"}</td><td>${a.after ?? a.statusAfter ?? "—"}</td><td>${escapeHtml(a.reason || "")}<div class="small">${escapeHtml(a.actionId || "")}</div></td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">Audit ثبت نشده است.</div>'}
     </div>`;
   document.getElementById("accountReviewStatus").value = u.accountReviewStatus || "normal";
 }
@@ -1875,7 +1875,7 @@ async function deleteUser(id) {
 async function testWeeklyRewardNotification(id) {
   if (!confirm("این فقط یک پیام آزمایشی Telegram است و هیچ Reward واقعی پرداخت نمی‌شود. ادامه می‌دهید؟")) return;
   const rank = Number(prompt("مقام آزمایشی را وارد کنید (۱ تا ۳):"));
-  const reward = Number(prompt("مقدار Reward آزمایشی را به Points وارد کنید:"));
+  const reward = Number(prompt("مقدار Reward آزمایشی را به UP وارد کنید:"));
   if (!Number.isInteger(rank) || rank < 1 || rank > 3 || !Number.isSafeInteger(reward) || reward <= 0) {
     showMsg("مقام و مقدار Reward باید عدد صحیح معتبر باشند.", "error");
     return;
@@ -2103,18 +2103,18 @@ async function loadVipReserveDashboard() {
     const tone = Number(l.reconciliationDifferencePoints || 0) < 0 ? "var(--danger)" : "var(--success)";
     container.innerHTML = `
       <div class="statsGrid" style="margin-top:12px">
-        <div class="card" style="margin:0"><div class="small">Reserve قابل استفاده</div><strong style="font-size:20px">${reserveNumber(r.availablePoints)} Points</strong></div>
-        <div class="card" style="margin:0"><div class="small">Reserve رزروشده</div><strong style="font-size:20px">${reserveNumber(r.reservedPoints)} Points</strong></div>
-        <div class="card" style="margin:0"><div class="small">Reserve تأمین‌شده</div><strong style="font-size:20px">${reserveNumber(r.fundedPoints)} Points</strong></div>
-        <div class="card" style="margin:0"><div class="small">تعهد باقی‌مانده فعال</div><strong style="font-size:20px">${reserveNumber(l.activeRemainingPoints)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">Reserve قابل استفاده</div><strong style="font-size:20px">${reserveNumber(r.availablePoints)} UP</strong></div>
+        <div class="card" style="margin:0"><div class="small">Reserve رزروشده</div><strong style="font-size:20px">${reserveNumber(r.reservedPoints)} UP</strong></div>
+        <div class="card" style="margin:0"><div class="small">Reserve تأمین‌شده</div><strong style="font-size:20px">${reserveNumber(r.fundedPoints)} UP</strong></div>
+        <div class="card" style="margin:0"><div class="small">تعهد باقی‌مانده فعال</div><strong style="font-size:20px">${reserveNumber(l.activeRemainingPoints)} UP</strong></div>
         <div class="card" style="margin:0"><div class="small">پوشش Reserve</div><strong style="font-size:20px;color:${l.coveragePercent == null || Number(l.coveragePercent) >= 100 ? "var(--success)" : "var(--danger)"}">${reserveCoverageLabel(l.coveragePercent)}</strong></div>
-        <div class="card" style="margin:0"><div class="small">اختلاف تطبیق</div><strong style="font-size:20px;color:${tone}">${reserveNumber(l.reconciliationDifferencePoints)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">اختلاف تطبیق</div><strong style="font-size:20px;color:${tone}">${reserveNumber(l.reconciliationDifferencePoints)} UP</strong></div>
       </div>
       <div class="statsGrid" style="margin-top:12px">
         <div class="card" style="margin:0"><div class="small">اشتراک‌های v2 فعال / کل</div><strong style="font-size:18px">${reserveNumber(s.active)} / ${reserveNumber(s.total)}</strong></div>
-        <div class="card" style="margin:0"><div class="small">پرداخت روزانه مورد انتظار</div><strong style="font-size:18px">${reserveNumber(daily.totalPointsAverage)} Points</strong><div class="small">برآورد میانگین روزانه</div></div>
-        <div class="card" style="margin:0"><div class="small">پرداخت اصل ثبت‌شده</div><strong style="font-size:18px">${reserveNumber(ledger.vip_daily_principal?.points)} Points</strong><div class="small">${reserveNumber(ledger.vip_daily_principal?.events)} رویداد</div></div>
-        <div class="card" style="margin:0"><div class="small">پرداخت سود ثبت‌شده</div><strong style="font-size:18px">${reserveNumber(ledger.vip_daily_reward?.points)} Points</strong><div class="small">${reserveNumber(ledger.vip_daily_reward?.events)} رویداد</div></div>
+        <div class="card" style="margin:0"><div class="small">پرداخت روزانه مورد انتظار</div><strong style="font-size:18px">${reserveNumber(daily.totalPointsAverage)} UP</strong><div class="small">برآورد میانگین روزانه</div></div>
+        <div class="card" style="margin:0"><div class="small">پرداخت اصل ثبت‌شده</div><strong style="font-size:18px">${reserveNumber(ledger.vip_daily_principal?.points)} UP</strong><div class="small">${reserveNumber(ledger.vip_daily_principal?.events)} رویداد</div></div>
+        <div class="card" style="margin:0"><div class="small">پرداخت سود ثبت‌شده</div><strong style="font-size:18px">${reserveNumber(ledger.vip_daily_reward?.points)} UP</strong><div class="small">${reserveNumber(ledger.vip_daily_reward?.events)} رویداد</div></div>
       </div>
       <div class="small" style="margin-top:12px">سیاست: ${escapeHtml(p.version || "—")} · خرید جدید: ${p.newPurchasesEnabled ? "فعال" : "خاموش"} · پرداخت: ${p.payoutsEnabled ? "فعال" : "خاموش"} · آخرین بروزرسانی: ${escapeHtml(formatVipAdminDate(data.asOf))}</div>`;
   } catch (error) {
@@ -2168,9 +2168,9 @@ async function loadVipReserveReport() {
     const fmt = value => reserveNumber(value);
     container.innerHTML = `
       <div class="statsGrid" style="margin-top:12px">
-        <div class="card" style="margin:0"><div class="small">Ledger اصل</div><strong>${fmt(totals.vip_daily_principal?.points)} Points</strong></div>
-        <div class="card" style="margin:0"><div class="small">Ledger سود</div><strong>${fmt(totals.vip_daily_reward?.points)} Points</strong></div>
-        <div class="card" style="margin:0"><div class="small">بازگشت اصل نهایی</div><strong>${fmt(totals.vip_principal_return?.points)} Points</strong></div>
+        <div class="card" style="margin:0"><div class="small">Ledger اصل</div><strong>${fmt(totals.vip_daily_principal?.points)} UP</strong></div>
+        <div class="card" style="margin:0"><div class="small">Ledger سود</div><strong>${fmt(totals.vip_daily_reward?.points)} UP</strong></div>
+        <div class="card" style="margin:0"><div class="small">بازگشت اصل نهایی</div><strong>${fmt(totals.vip_principal_return?.points)} UP</strong></div>
         <div class="card" style="margin:0"><div class="small">اشتراک‌های ایجادشده</div><strong>${fmt(report.period?.subscriptions)} مورد</strong></div>
       </div>
       <h4 style="margin:18px 0 8px">روند روزانه Ledger</h4>
@@ -2215,8 +2215,8 @@ async function loadVipSummaryAdmin() {
       ["Total VIP Purchases", data.totalVipPurchases, ""],
       ["Active VIPs", data.activeVips, ""],
       ["Expired VIPs", data.expiredVips, ""],
-      ["Total VIP Revenue", data.totalVipRevenuePoints, "Points"],
-      ["Total Daily VIP Earnings", data.totalDailyVipEarningsPoints, "Points / day (average)"],
+      ["Total VIP Revenue", data.totalVipRevenuePoints, "UP"],
+      ["Total Daily VIP Earnings", data.totalDailyVipEarningsPoints, "UP / day (average)"],
       ["Total VIP Users", data.totalVipUsers, ""]
     ];
     grid.innerHTML = cards.map(([label, value, unit]) => `<div class="card" style="margin:0"><div class="small">${escapeHtml(label)}</div><strong style="display:block;font-size:20px;margin-top:8px">${formatVipAdminNumber(value)}${unit ? ` <small>${escapeHtml(unit)}</small>` : ""}</strong></div>`).join("");
@@ -2261,9 +2261,9 @@ async function loadVipSubscriptionsAdmin(page = 1) {
           <td>${escapeHtml(formatVipAdminDate(item.startDate))}</td>
           <td>${escapeHtml(formatVipAdminDate(item.expiryDate))}</td>
           <td>${formatVipAdminNumber(item.durationDays)} days</td>
-          <td>${formatVipAdminNumber(item.purchaseAmountPoints)} Points</td>
-          <td>${formatVipAdminNumber(item.dailyEarningPoints)} Points</td>
-          <td>${formatVipAdminNumber(item.totalExpectedEarningPoints)} Points</td>
+          <td>${formatVipAdminNumber(item.purchaseAmountPoints)} UP</td>
+          <td>${formatVipAdminNumber(item.dailyEarningPoints)} UP</td>
+          <td>${formatVipAdminNumber(item.totalExpectedEarningPoints)} UP</td>
           <td><span class="badge ${escapeHtml(item.status)}">${vipAdminStatusLabel(item.status)}</span></td>
           <td>${formatVipAdminNumber(item.remainingDays)}</td>
           <td><button type="button" class="secondary" onclick="openVipDetails('${escapeHtml(item.id)}')">Details</button></td>
@@ -2297,13 +2297,13 @@ async function openVipDetails(id) {
     const item = data.subscription;
     const fields = [
       ["User ID", item.userId], ["Username", item.username ? `@${item.username}` : "—"], ["Name", item.name || "—"],
-      ["VIP Plan", item.planNumber], ["Purchase Amount", `${formatVipAdminNumber(item.purchaseAmountPoints)} Points`],
+      ["VIP Plan", item.planNumber], ["Purchase Amount", `${formatVipAdminNumber(item.purchaseAmountPoints)} UP`],
       ["Purchase Date", formatVipAdminDate(item.purchaseDate)], ["Start Date", formatVipAdminDate(item.startDate)],
       ["Expiry Date", formatVipAdminDate(item.expiryDate)], ["Duration", `${formatVipAdminNumber(item.durationDays)} days`],
-      ["Daily Earning", `${formatVipAdminNumber(item.dailyEarningPoints)} Points`],
-      ["Total Expected Earning", `${formatVipAdminNumber(item.totalExpectedEarningPoints)} Points`],
-      ["Earned to Date", `${formatVipAdminNumber(item.earnedToDatePoints)} Points`],
-      ["Remaining Earning", `${formatVipAdminNumber(item.remainingEarningPoints)} Points`],
+      ["Daily Earning", `${formatVipAdminNumber(item.dailyEarningPoints)} UP`],
+      ["Total Expected Earning", `${formatVipAdminNumber(item.totalExpectedEarningPoints)} UP`],
+      ["Earned to Date", `${formatVipAdminNumber(item.earnedToDatePoints)} UP`],
+      ["Remaining Earning", `${formatVipAdminNumber(item.remainingEarningPoints)} UP`],
       ["Partial Claims", formatVipAdminNumber(item.claimsCompleted)],
       ["Remaining Days", formatVipAdminNumber(item.remainingDays)], ["Current Status", vipAdminStatusLabel(item.status)]
     ];
@@ -2344,7 +2344,7 @@ async function loadVipPlansAdmin() {
           <div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:var(--surface)">
             <b>پلن ${Number(plan.planNumber)}</b>
             <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px">
-              <div><label>هزینه (${Number(plan.pricing?.grams) || 0} GRAM، پوینت ثابت)</label><input id="vipPlanPrice${Number(plan.planNumber)}" type="number" min="0" step="1" value="${Number(plan.pricing?.pricePoints ?? plan.pricePoints) || 0}" readonly></div>
+              <div><label>هزینه (${Number(plan.pricing?.grams) || 0} GRAM، UP ثابت)</label><input id="vipPlanPrice${Number(plan.planNumber)}" type="number" min="0" step="1" value="${Number(plan.pricing?.pricePoints ?? plan.pricePoints) || 0}" readonly></div>
               <div><label>بازدهی دوره (۱۰۰ روزه، %)</label><input id="vipPlanRate${Number(plan.planNumber)}" type="number" min="0" max="100" step="0.01" value="${Number(plan.monthlyRewardPercent) || 0}" readonly></div>
               <div><label>مدت (روز)</label><input id="vipPlanDays${Number(plan.planNumber)}" type="number" min="1" max="3650" step="1" value="${Number(plan.durationDays) || 100}" readonly></div>
               <label style="display:flex;align-items:center;gap:8px;margin-top:28px"><input id="vipPlanEnabled${Number(plan.planNumber)}" type="checkbox" style="width:auto" ${plan.enabled ? "checked" : ""}> فعال برای خرید</label>
