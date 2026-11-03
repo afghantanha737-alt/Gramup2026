@@ -2601,7 +2601,7 @@ function renderWallet() {
     <div class="tbWalletGrid">
       <div class="tbWalletCard">
         <div class="tbWalletIcon tbWalletLogoWrap"><img class="tbWalletLogo" src="img/gramup-logo-new.png" alt="Gramup" /></div>
-        <div class="tbStatLabel tbColBlue">${t("wallet_UP_card_title")}</div>
+        <div class="tbStatLabel tbColBlue">UP</div>
         <div class="tbWalletValue">${formatPoints(state.points)}</div>
       </div>
       <div class="tbWalletCard">
@@ -2627,7 +2627,7 @@ function renderWallet() {
     </div>
 
     <div class="card">
-      <p style="font-size:11px;margin-bottom:0">${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })} • ${t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawGram, 6) })}</p>
+      <p style="font-size:11px;margin-bottom:0">${t("wallet_exchange_rate_note", { rate: formatNumber(state.rate, 6) })} • ${t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawGram, 6) })}</p>
     </div>
 
     <div class="card" id="withdrawHistoryCard">
