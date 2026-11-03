@@ -1858,9 +1858,11 @@ function renderDailyCheckinCard() {
     const completed = day <= completedDays;
     const current = state.canCheckIn && day === nextDay;
     return `<div class="dailyCheckDay ${completed ? "is-complete" : ""} ${current ? "is-current" : ""}">
-      <span class="dailyCheckDayNumber">${completed ? "✓" : day}</span>
+      ${completed
+        ? `<span class="dailyCheckDayNumber isClaimed" aria-label="${t("checkin_done_button")}">✓</span>`
+        : `<span class="dailyCheckDayNumber dailyCheckToken"><img src="/img/gramup-logo-new.png" alt="UP" width="25" height="25"></span>`}
       <strong>${t("day_label", { n: day })}</strong>
-      <small>+${tokenAmount(reward)}</small>
+      <small class="dailyCheckReward" aria-label="+${tokenAmount(reward)} UP">+${tokenAmount(reward)} <img src="/img/gramup-logo-new.png" alt="UP" width="10" height="10"></small>
     </div>`;
   }).join("");
   return `<section class="card dailyCheckCard" aria-labelledby="dailyCheckTitle">
@@ -1884,7 +1886,7 @@ async function doCheckIn() {
     state.nextResetAt = Number(result.nextResetAt) || state.nextResetAt;
     updateHeader();
     haptic("success");
-    toast(`+${tokenAmount(result.earned)} 🎉`, "success");
+    toast(t("checkin_claim_success", { n: tokenAmount(result.earned) }), "success");
     rerenderActiveUserDataView();
     try {
       await loadUserData({ force: true });

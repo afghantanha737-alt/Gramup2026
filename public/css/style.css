@@ -2351,9 +2351,14 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .dailyCheckGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}
 .dailyCheckDay{min-width:0;padding:9px 3px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(0,0,0,.14);text-align:center;}
 .dailyCheckDayNumber{display:grid;place-items:center;width:25px;height:25px;margin:0 auto 6px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-muted);font-size:11px;font-weight:900;}
+.dailyCheckToken{width:30px;height:30px;padding:2px;border:1px solid rgba(103,232,249,.5);background:rgba(5,15,24,.8);box-shadow:0 0 9px rgba(34,211,238,.14);}
+.dailyCheckToken img{display:block;width:100%;height:100%;border-radius:50%;object-fit:cover;}
+.dailyCheckDayNumber.isClaimed{background:#10b981;color:#06140f;}
 .dailyCheckDay strong,.dailyCheckDay small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dailyCheckDay strong{font-size:9px;color:var(--text-muted);}.dailyCheckDay small{margin-top:5px;color:var(--text);font-size:9px;font-weight:800;}
-.dailyCheckDay.is-complete{border-color:rgba(52,211,153,.35);background:rgba(16,185,129,.12);}.dailyCheckDay.is-complete .dailyCheckDayNumber{background:#10b981;color:#06140f;}
+.dailyCheckReward{display:flex!important;align-items:center;justify-content:center;gap:2px;font-variant-numeric:tabular-nums;}
+.dailyCheckReward img{width:9px;height:9px;flex:0 0 9px;border-radius:50%;object-fit:cover;}
+.dailyCheckDay.is-complete{border-color:rgba(52,211,153,.35);background:rgba(16,185,129,.12);}
 .dailyCheckDay.is-current{border-color:rgba(167,139,250,.8);box-shadow:0 0 0 1px rgba(167,139,250,.2);}.dailyCheckDay.is-current .dailyCheckDayNumber{background:#8b5cf6;color:#fff;}
 .dailyCheckFooter{margin-top:15px;color:var(--text-muted);font-size:11px;}.dailyCheckFooter .primaryBtn{margin:0;padding:10px 14px;}
 .dailyCheckCountdown{margin-top:10px;padding:9px 12px;border:1px solid rgba(103,232,249,.18);border-radius:12px;background:rgba(6,21,27,.42);color:#67e8f9;font-size:11px;font-weight:800;text-align:center;letter-spacing:.15px;}
