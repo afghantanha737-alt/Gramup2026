@@ -1986,7 +1986,7 @@ function renderTasks() {
         if (task.taskKind === "vip_activation") {
           actionHtml = status === "approved"
             ? `<button class="taskAction done" disabled>${t("task_btn_done")}</button>`
-            : `<button class="taskAction pending" disabled>🔒 VIP ${formatPoints(task.vipPlanNumber)}</button>`;
+            : `<button class="taskAction pending" disabled>🔒 Miner ${formatPoints(task.vipPlanNumber)}</button>`;
         } else if (task.taskKind === "bio_link") {
           const completion = completionRecord(task._id);
           const nextAvailableAt = completion?.nextAvailableAt ? new Date(completion.nextAvailableAt) : null;
@@ -3495,7 +3495,7 @@ async function loadVipPlans() {
     state.vipDataLoaded = true;
     return true;
   } catch (error) {
-    console.warn("VIP plans failed:", error);
+    console.warn("Mining plans failed:", error);
     state.vipError = translateServerMessage(error.code, error.message) || t("vip_error");
     state.vipDataLoaded = false;
     return false;
