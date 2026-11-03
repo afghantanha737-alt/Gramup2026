@@ -1177,11 +1177,11 @@ async function approveSelectedScreenshotSubmissions() {
   const ids = getSelectedScreenshotSubmissionIds();
   if (!ids.length) return showMsg("حداقل یک submission در انتظار بررسی را انتخاب کنید.", "error");
   if (!confirm(`آیا ${ids.length} submission انتخاب‌شده تأیید و پاداش آن‌ها پرداخت شود؟`)) return;
-  const results = await Promise.allSettled(ids.map(id => api(`/api/admin/task-submissions/${encodeURIComponent(id)}/approve`, { method: "POST", body: JSON.stringify({}) })));
-  const succeeded = results.filter(result => result.status === "fulfilled").length;
-  const failed = results.length - succeeded;
-  showMsg(`${succeeded} submission تأیید شد${failed ? `؛ ${failed} مورد ناموفق بود` : ""}.`, failed ? "error" : "success");
-  await Promise.all([loadScreenshotSubmissions(), loadTasks()]);
+  try {
+    const result = await api("/api/admin/task-submissions/bulk-action", { method: "POST", body: JSON.stringify({ ids, action: "approve" }) });
+    showMsg(`${result.processed} submission تأیید شد؛ مجموع پاداش ${result.totalReward || 0} UP پرداخت شد.`, "success");
+    await Promise.all([loadScreenshotSubmissions(), loadTasks()]);
+  } catch (error) { showMsg(error.message, "error"); }
 }
 
 async function rejectSelectedScreenshotSubmissions() {
@@ -1189,11 +1189,11 @@ async function rejectSelectedScreenshotSubmissions() {
   if (!ids.length) return showMsg("حداقل یک submission در انتظار بررسی را انتخاب کنید.", "error");
   const note = prompt("دلیل رد موارد انتخاب‌شده را وارد کنید (اختیاری):", "");
   if (note === null) return;
-  const results = await Promise.allSettled(ids.map(id => api(`/api/admin/task-submissions/${encodeURIComponent(id)}/reject`, { method: "POST", body: JSON.stringify({ note }) })));
-  const succeeded = results.filter(result => result.status === "fulfilled").length;
-  const failed = results.length - succeeded;
-  showMsg(`${succeeded} submission رد شد${failed ? `؛ ${failed} مورد ناموفق بود` : ""}.`, failed ? "error" : "success");
-  await loadScreenshotSubmissions();
+  try {
+    const result = await api("/api/admin/task-submissions/bulk-action", { method: "POST", body: JSON.stringify({ ids, action: "reject", note }) });
+    showMsg(`${result.processed} submission رد شد.`, "success");
+    await loadScreenshotSubmissions();
+  } catch (error) { showMsg(error.message, "error"); }
 }
 
 let screenshotImageObjectUrl = "";

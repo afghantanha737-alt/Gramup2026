@@ -722,6 +722,180 @@ router.get('/task-submissions', async (req, res) => {
   });
 });
 
+router.post('/task-submissions/bulk-action', async (req, res) => {
+  const requestedIds = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  const ids = [...new Set(requestedIds.map(String))];
+  const action = String(req.body?.action || '').trim().toLowerCase();
+  const note = String(req.body?.note || '').trim().slice(0, 500);
+  if (!ids.length || ids.length > 100 || ids.some(id => !mongoose.isValidObjectId(id))) {
+    return res.status(400).json({ success: false, message: 'فهرست submissionها نامعتبر است.' });
+  }
+  if (!['approve', 'reject'].includes(action)) {
+    return res.status(400).json({ success: false, message: 'عملیات bulk نامعتبر است.' });
+  }
+
+  const imageFilter = { proofMimeType: { $in: ['image/jpeg', 'image/png', 'image/webp'] } };
+  const pendingFilter = { _id: { $in: ids }, status: 'pending', ...imageFilter };
+  const reviewedAt = new Date();
+
+  if (action === 'reject') {
+    const result = await TaskCompletion.updateMany(
+      pendingFilter,
+      { $set: { status: 'rejected', adminNote: note, reviewedAt, reviewedBy: req.adminActor } }
+    );
+    const processed = result.modifiedCount ?? result.nModified ?? 0;
+    recordAdminLog({
+      actor: req.adminActor,
+      action: 'task_submission_bulk_reject',
+      targetType: 'task_completion',
+      targetId: ids.join(','),
+      details: `${processed} screenshot submission رد شد${note ? ` — ${note}` : ''}`
+    });
+    return res.json({ success: true, action, processed, requested: ids.length });
+  }
+
+  try {
+    const settings = await Settings.getGlobal();
+    const payment = await withMongoTransaction(async session => {
+      const submissions = await TaskCompletion.find(pendingFilter)
+        .select('user task reward status proofMimeType')
+        .session(session)
+        .lean();
+      if (!submissions.length) {
+        const error = new Error('هیچ submission در انتظار بررسی در فهرست انتخاب‌شده وجود ندارد.');
+        error.code = 'NO_PENDING_SUBMISSIONS';
+        throw error;
+      }
+
+      const taskIds = [...new Set(submissions.map(submission => String(submission.task)))];
+      const userIds = [...new Set(submissions.map(submission => String(submission.user)))];
+      const [tasks, users] = await Promise.all([
+        Task.find({ _id: { $in: taskIds } }).select('title maxCompletions completedCount isSponsored sponsorPriceUsd').session(session).lean(),
+        User.find({ _id: { $in: userIds } }).select('_id points').session(session).lean()
+      ]);
+      const taskById = new Map(tasks.map(task => [String(task._id), task]));
+      const userById = new Map(users.map(user => [String(user._id), user]));
+      const taskCounts = new Map();
+      const userRewards = new Map();
+      const sourceIds = [];
+      for (const submission of submissions) {
+        const taskId = String(submission.task);
+        const userId = String(submission.user);
+        const task = taskById.get(taskId);
+        const user = userById.get(userId);
+        const reward = Number(submission.reward);
+        if (!task || !user || !Number.isFinite(reward) || reward <= 0) {
+          const error = new Error('یکی از submissionهای انتخاب‌شده داده‌ی معتبر ندارد.');
+          error.code = 'INVALID_SUBMISSION_DATA';
+          throw error;
+        }
+        taskCounts.set(taskId, (taskCounts.get(taskId) || 0) + 1);
+        userRewards.set(userId, (userRewards.get(userId) || 0) + reward);
+        sourceIds.push(`task:${taskId}:user:${userId}`);
+      }
+
+      const existingLedger = await PointsLedger.find({ sourceId: { $in: sourceIds } }).select('sourceId').session(session).lean();
+      if (existingLedger.length) {
+        const error = new Error('حداقل یکی از پاداش‌های انتخاب‌شده قبلاً پرداخت شده است.');
+        error.code = 'TASK_REWARD_ALREADY_PAID';
+        throw error;
+      }
+
+      const taskOperations = [];
+      for (const [taskId, count] of taskCounts) {
+        const task = taskById.get(taskId);
+        if (task.maxCompletions != null && Number(task.completedCount || 0) + count > Number(task.maxCompletions)) {
+          const error = new Error(`ظرفیت task «${task.title || taskId}» برای تأیید گروهی کافی نیست.`);
+          error.code = 'TASK_FULL';
+          throw error;
+        }
+        taskOperations.push({ updateOne: { filter: { _id: task._id }, update: { $inc: { completedCount: count } } } });
+      }
+      const taskResult = await Task.bulkWrite(taskOperations, { session, ordered: true });
+      const updatedTasks = taskResult.modifiedCount ?? taskResult.nModified ?? 0;
+      if (updatedTasks !== taskOperations.length) {
+        const error = new Error('وضعیت ظرفیت یکی از taskها هم‌زمان تغییر کرده است.');
+        error.code = 'TASK_CAPACITY_CHANGED';
+        throw error;
+      }
+
+      const userOperations = [];
+      for (const [userId, reward] of userRewards) {
+        const user = userById.get(userId);
+        userOperations.push({ updateOne: { filter: { _id: user._id }, update: { $inc: { points: reward } } } });
+      }
+      const userResult = await User.bulkWrite(userOperations, { session, ordered: true });
+      const updatedUsers = userResult.modifiedCount ?? userResult.nModified ?? 0;
+      if (updatedUsers !== userOperations.length) {
+        const error = new Error('یکی از کاربران submission پیدا نشد یا هم‌زمان تغییر کرد.');
+        error.code = 'SUBMISSION_USER_NOT_FOUND';
+        throw error;
+      }
+
+      const submissionResult = await TaskCompletion.updateMany(
+        pendingFilter,
+        { $set: { status: 'approved', reviewedAt, reviewedBy: req.adminActor } },
+        { session }
+      );
+      const updatedSubmissions = submissionResult.modifiedCount ?? submissionResult.nModified ?? 0;
+      if (updatedSubmissions !== submissions.length) {
+        const error = new Error('برخی submissionها هم‌زمان توسط ادمین دیگری بررسی شدند.');
+        error.code = 'SUBMISSION_NOT_PENDING';
+        throw error;
+      }
+
+      const ledgerBalances = new Map(userIds.map(userId => [userId, Number(userById.get(userId).points || 0)]));
+      for (const submission of submissions) {
+        const task = taskById.get(String(submission.task));
+        const reward = Number(submission.reward);
+        const sourceId = `task:${submission.task}:user:${submission.user}`;
+        const userId = String(submission.user);
+        ledgerBalances.set(userId, ledgerBalances.get(userId) + reward);
+        const ledger = await recordLedgerRequired({
+          user: submission.user,
+          type: 'task',
+          amount: reward,
+          description: `Task Reward — ${task.title}`,
+          balanceAfter: ledgerBalances.get(userId),
+          sourceId,
+          session
+        });
+        if (!ledger.created) {
+          const error = new Error('ثبت یکی از پاداش‌ها تکراری بود؛ عملیات لغو شد.');
+          error.code = 'TASK_REWARD_ALREADY_PAID';
+          throw error;
+        }
+      }
+
+      await TaskCompletion.bulkWrite(submissions.map(submission => ({
+        updateOne: {
+          filter: { _id: submission._id, status: 'approved' },
+          update: {
+            $set: {
+              revenueUsd: taskById.get(String(submission.task)).isSponsored ? Number(taskById.get(String(submission.task)).sponsorPriceUsd) || 0 : 0,
+              costUsd: rewardCostUsd(Number(submission.reward), settings.rate, settings.gramUsdPrice)
+            }
+          }
+        }
+      })), { session, ordered: true });
+      return { processed: submissions.length, totalReward: submissions.reduce((sum, submission) => sum + Number(submission.reward), 0) };
+    });
+
+    recordAdminLog({
+      actor: req.adminActor,
+      action: 'task_submission_bulk_approve',
+      targetType: 'task_completion',
+      targetId: ids.join(','),
+      details: `${payment.processed} screenshot submission تأیید شد — مجموع پاداش ${payment.totalReward} UP`
+    });
+    return res.json({ success: true, action, processed: payment.processed, requested: ids.length, totalReward: payment.totalReward });
+  } catch (error) {
+    const status = ['NO_PENDING_SUBMISSIONS', 'INVALID_SUBMISSION_DATA', 'TASK_FULL', 'TASK_CAPACITY_CHANGED', 'SUBMISSION_USER_NOT_FOUND', 'SUBMISSION_NOT_PENDING', 'TASK_REWARD_ALREADY_PAID'].includes(error.code) ? 409 : 500;
+    if (status === 500) console.error('Bulk screenshot task approval failed:', error);
+    return res.status(status).json({ success: false, message: error.message || 'تأیید گروهی submissionها انجام نشد.', code: error.code || 'SERVER_ERROR' });
+  }
+});
+
 router.get('/task-submissions/:id/image', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(404).json({ success: false, message: 'Submission پیدا نشد.' });
