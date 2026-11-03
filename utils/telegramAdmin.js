@@ -49,14 +49,23 @@ function createAdminSessionStore(now = () => Date.now(), Model = require('../mod
     async clearAwaitingContent(telegramId) {
       await Model.deleteOne({ telegramId: String(telegramId), state: 'awaiting_content' });
     },
-    async setPendingConfirm(telegramId, fromChatId, messageId) {
+    async setPendingConfirm(telegramId, fromChatId, messageId, content = {}) {
       await upsertConversation(telegramId, {
-        $set: { state: 'pending_confirm', fromChatId, messageId: Number(messageId), expiresAt: expiry() }
+        $set: {
+          state: 'pending_confirm',
+          fromChatId,
+          messageId: Number(messageId),
+          contentType: content.contentType || 'copy',
+          contentText: String(content.contentText || ''),
+          contentCaption: String(content.contentCaption || ''),
+          contentFileId: String(content.contentFileId || ''),
+          expiresAt: expiry()
+        }
       }, { upsert: true, new: true, setDefaultsOnInsert: true });
     },
     async takePendingConfirm(telegramId) {
       return Model.findOneAndDelete({ telegramId: String(telegramId), state: 'pending_confirm', expiresAt: { $gt: new Date(now()) } })
-        .select('fromChatId messageId expiresAt').lean();
+        .select('fromChatId messageId contentType contentText contentCaption contentFileId expiresAt').lean();
     },
     async hasPendingConfirm(telegramId) {
       return Boolean(await Model.exists({ telegramId: String(telegramId), state: 'pending_confirm', expiresAt: { $gt: new Date(now()) } }));

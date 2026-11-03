@@ -159,6 +159,62 @@ async function broadcastBotMessageToActiveUsers(fromChatId, messageId) {
   return { sent, total: users.length };
 }
 
+function broadcastContentFromMessage(message) {
+  const text = String(message?.text || '');
+  if (text) return { contentType: 'text', contentText: text };
+  const photo = Array.isArray(message?.photo) && message.photo.length ? message.photo[message.photo.length - 1] : null;
+  if (photo?.file_id) {
+    return { contentType: 'photo', contentCaption: String(message.caption || ''), contentFileId: photo.file_id };
+  }
+  return { contentType: 'copy' };
+}
+
+async function sendBotBroadcastToUser(user, pending) {
+  if (pending.contentType === 'text' && pending.contentText) {
+    await bot.sendMessage(String(user.telegramId), pending.contentText);
+    return;
+  }
+  if (pending.contentType === 'photo' && pending.contentFileId) {
+    await bot.call('sendPhoto', {
+      chat_id: String(user.telegramId),
+      photo: pending.contentFileId,
+      ...(pending.contentCaption ? { caption: pending.contentCaption } : {})
+    });
+    return;
+  }
+  await bot.copyMessage(String(user.telegramId), String(pending.fromChatId), Number(pending.messageId));
+}
+
+async function broadcastPendingTelegramMessage(pending) {
+  const users = await User.find({
+    telegramId: { $exists: true, $nin: [null, ''] },
+    isBanned: { $ne: true },
+    $or: [{ telegramBlockedAt: null }, { telegramBlockedAt: { $exists: false } }]
+  }).select('telegramId').lean();
+  const batchSize = 20;
+  const delayMs = 1100;
+  let sent = 0;
+  let firstError = '';
+  console.log(`📣 Bot broadcast started: recipients=${users.length}, type=${pending.contentType || 'copy'}`);
+  for (let index = 0; index < users.length; index += batchSize) {
+    const batch = users.slice(index, index + batchSize);
+    const results = await Promise.all(batch.map(async user => {
+      try {
+        await sendBotBroadcastToUser(user, pending);
+        return true;
+      } catch (error) {
+        if (!firstError) firstError = String(error?.message || error).slice(0, 240);
+        if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
+        return false;
+      }
+    }));
+    sent += results.filter(Boolean).length;
+    if (index + batchSize < users.length) await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  console.log(`📣 Bot broadcast finished: sent=${sent} failed=${users.length - sent} total=${users.length}${firstError ? ` firstError=${firstError}` : ''}`);
+  return { sent, total: users.length, firstError };
+}
+
 async function handleAdminBroadcastPrompt(telegramId, chatId) {
   adminSessions.setAwaitingContent(telegramId);
   await sendMessage(
@@ -168,8 +224,8 @@ async function handleAdminBroadcastPrompt(telegramId, chatId) {
 }
 
 async function handleBroadcastContent(telegramId, chatId, message) {
-  adminSessions.clearAwaitingContent(telegramId);
-  adminSessions.setPendingConfirm(telegramId, chatId, message.message_id);
+  await adminSessions.clearAwaitingContent(telegramId);
+  await adminSessions.setPendingConfirm(telegramId, chatId, message.message_id, broadcastContentFromMessage(message));
   await safelySendTelegram(() => bot.copyMessage(chatId, chatId, message.message_id), { context: 'broadcast_preview' }); // پیش‌نمایش دقیقاً همان چیزی که کاربران می‌بینند
   await sendMessage(chatId, '⬆️ این پیام برای همه‌ی کاربران فعال ارسال شود؟', {
     reply_markup: {
@@ -188,8 +244,10 @@ async function handleBroadcastConfirm(telegramId, chatId) {
     return;
   }
   await sendMessage(chatId, '⏳ در حال ارسال...');
-  const result = await broadcastBotMessageToActiveUsers(pending.fromChatId, pending.messageId);
-  await sendMessage(chatId, `✅ پیام برای ${result.sent} کاربر ارسال شد (از ${result.total} کاربر فعال).`);
+  const result = pending.contentType === 'copy'
+    ? await broadcastBotMessageToActiveUsers(pending.fromChatId, pending.messageId)
+    : await broadcastPendingTelegramMessage(pending);
+  await sendMessage(chatId, `✅ پیام برای ${result.sent} کاربر ارسال شد (از ${result.total} کاربر فعال).${result.firstError ? ` خطای نمونه: ${result.firstError}` : ''}`);
 }
 
 async function handleCallbackQuery(callbackQuery) {
