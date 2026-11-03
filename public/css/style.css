@@ -2667,3 +2667,9 @@ html[data-theme="light"] .vipRedesign .vipPlanCard { color: #f7f7ff; }
 @media (prefers-reduced-motion: reduce) {
   .vipRedesign .vipMinerOrbit,.vipRedesign .vipMinerCoin,.vipRedesign .vipMinerSpark { animation: none !important; }
 }
+
+/* Gramup native token branding */
+.upTokenAmount { display:inline-flex; align-items:center; justify-content:center; gap:5px; white-space:nowrap; vertical-align:middle; }
+.upTokenIcon { width:16px; height:16px; flex:0 0 16px; border-radius:5px; object-fit:cover; box-shadow:0 2px 8px rgba(250,204,21,.24); }
+.tbWalletValue .upTokenIcon, .vipBalanceValue .upTokenIcon { width:20px; height:20px; flex-basis:20px; border-radius:6px; }
+.vipPlanStat .upTokenAmount, .vipPlanReward .upTokenAmount, .vipPlanDaily .upTokenAmount { color:inherit; font-weight:inherit; }

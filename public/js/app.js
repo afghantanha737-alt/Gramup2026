@@ -281,6 +281,13 @@ function formatPoints(value) {
   const amount = Number(value) || 0;
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Number(amount.toFixed(2)));
 }
+function tokenIconMarkup() {
+  return '<img class="upTokenIcon" src="img/gramup-logo-new.png" alt="" aria-hidden="true">';
+}
+function tokenAmount(value, decimals = 2) {
+  const amount = Number(value) || 0;
+  return `<span class="upTokenAmount"><span>${new Intl.NumberFormat("en-US", { maximumFractionDigits: decimals }).format(Number(amount.toFixed(decimals)))}</span>${tokenIconMarkup()}<span>UP</span></span>`;
+}
 function formatNumber(value, decimals = 4) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: decimals }).format(Number(value) || 0);
 }
@@ -1459,7 +1466,7 @@ function renderHome() {
       <div class="tbStat">
         <div class="tbStatIcon tbIconMint"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#2f9bf0"/><path d="M20 24h24l6 8-18 20L14 32z" fill="#fff"/><path d="M32 30v10M27 35h10" stroke="#2f9bf0" stroke-width="3" stroke-linecap="round"/></svg></div>
         <div class="tbStatLabel tbColGreen">${t("tb_earned")}</div>
-        <div class="tbStatValue">${formatPoints(state.totalEarnedPoints)}</div>
+        <div class="tbStatValue">${tokenAmount(state.totalEarnedPoints)}</div>
       </div>
       <div class="tbStat">
         <div class="tbStatIcon tbIconOrange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2A6.5 6.5 0 0 1 21.5 20"/></svg></div>
@@ -1487,7 +1494,7 @@ function renderHome() {
           const icon = taskIconMarkup(task);
           return `<button type="button" class="auroraPreviewTask" onclick="navigate('tasks')">
             <span class="auroraPreviewTaskIcon">${icon}</span>
-            <span class="auroraPreviewTaskCopy"><strong>${escapeHTML(task.title)}</strong><small>+${formatPoints(task.reward)} ${t("points_unit")}</small></span>
+            <span class="auroraPreviewTaskCopy"><strong>${escapeHTML(task.title)}</strong><small>+${tokenAmount(task.reward)}</small></span>
             <span class="auroraPreviewStatus ${status === "approved" ? "done" : ""}">${status === "approved" ? "✓" : "→"}</span>
           </button>`;
         }).join("") || `<div class="auroraPreviewEmpty">${t("tasks_empty_desc")}</div>`}
@@ -1853,7 +1860,7 @@ function renderDailyCheckinCard() {
     return `<div class="dailyCheckDay ${completed ? "is-complete" : ""} ${current ? "is-current" : ""}">
       <span class="dailyCheckDayNumber">${completed ? "✓" : day}</span>
       <strong>${t("day_label", { n: day })}</strong>
-      <small>+${formatPoints(reward)} ${t("points_unit")}</small>
+      <small>+${tokenAmount(reward)}</small>
     </div>`;
   }).join("");
   return `<section class="card dailyCheckCard" aria-labelledby="dailyCheckTitle">
@@ -1877,7 +1884,7 @@ async function doCheckIn() {
     state.nextResetAt = Number(result.nextResetAt) || state.nextResetAt;
     updateHeader();
     haptic("success");
-    toast(`+${formatPoints(result.earned)} ${t("points_unit")} 🎉`, "success");
+    toast(`+${tokenAmount(result.earned)} 🎉`, "success");
     rerenderActiveUserDataView();
     try {
       await loadUserData({ force: true });
@@ -2054,7 +2061,7 @@ function renderTasks() {
             ${taskDescription ? `<div class="taskDesc">${escapeHTML(taskDescription)}</div>` : ""}
             ${task.verifyType === "latest_post" ? `<div class="taskDesc">${t("task_latest_post_open_hint")}</div>` : ""}
             ${task.isSpecialOfDay && task.expiresAt ? `<div class="taskDesc" style="color:var(--warning)">⏳ ${t("special_task_deadline", { date: new Date(task.expiresAt).toLocaleString(state.language === "en" ? "en-US" : "fa-IR") })}</div>` : ""}
-            <div class="taskReward">+${formatPoints(task.reward)} ${t("points_unit")}</div>
+            <div class="taskReward">+${tokenAmount(task.reward)}</div>
           </div>
           ${actionHtml}
           ${hint ? `<div class="taskHint ${hint.type}" style="flex-basis:100%">${escapeHTML(hint.message)}</div>` : ""}
@@ -2595,7 +2602,7 @@ function renderWallet() {
       <div class="tbWalletCard">
         <div class="tbWalletIcon tbIconOrange">${TB_ICONS.coin}</div>
         <div class="tbStatLabel tbColOrange">${t("wallet_points_card_title")}</div>
-        <div class="tbWalletValue">${formatPoints(state.points)}</div>
+        <div class="tbWalletValue">${tokenAmount(state.points)}</div>
       </div>
       <div class="tbWalletCard">
         <div class="tbWalletIcon tbIconBlue">${TB_ICONS.gem}</div>
@@ -2931,9 +2938,9 @@ function renderProfileMenu() {
     </section>
 
     <section class="profilePulseGrid" aria-label="${escapeHTML(t("tb_your_progress"))}">
-      <div><strong>${formatPoints(state.points)}</strong><span>${t("wallet_points_card_title")}</span></div>
+      <div><strong>${tokenAmount(state.points)}</strong><span>${t("wallet_points_card_title")}</span></div>
       <div><strong>${formatNumber(state.invitedCount)}</strong><span>${t("referral_kpi_direct")}</span></div>
-      <div><strong>${formatPoints(state.totalEarnedPoints)}</strong><span>${t("tb_earned")}</span></div>
+      <div><strong>${tokenAmount(state.totalEarnedPoints)}</strong><span>${t("tb_earned")}</span></div>
     </section>
     <div class="card profileMenuPanel">
       <div class="profileMenuLabel">${t("menu_referral")}</div>
@@ -3063,7 +3070,7 @@ function renderReferralRewardTasks() {
             <span style="display:inline-block;width:18px;height:1px;background:var(--text-muted);opacity:.7"></span>
             <span>${formatPoints(task.invitedCount)} ${t("referral_active_label")}</span>
           </div>
-          <div class="taskReward">+${formatPoints(task.rewardPoints)} ${t("points_unit")}</div>
+          <div class="taskReward">+${tokenAmount(task.rewardPoints)}</div>
           <div style="height:6px;background:var(--surface-3);border-radius:999px;overflow:hidden;margin-top:8px">
             <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,var(--primary),var(--primary-2));border-radius:999px;transition:width .3s ease"></div>
           </div>
@@ -3113,8 +3120,8 @@ function renderReferralStatsCard() {
         <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_count")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.totalReferrals) || 0)}</div></div>
         <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_active_count")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.activeReferrals) || 0)}</div></div>
         ${levelRows}
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_invite_rewards")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${formatPoints(Number(stats.totalInviteRewardsPoints) || 0)} ${t("points_unit")}</div></div>
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_team_commission")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${formatPoints(Number(stats.totalTeamCommissionPoints) || 0)} ${t("points_unit")}</div></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_invite_rewards")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.totalInviteRewardsPoints) || 0)}</div></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_team_commission")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.totalTeamCommissionPoints) || 0)}</div></div>
       </div>
     </div>`;
 }
@@ -3223,7 +3230,7 @@ function renderProfileReferral() {
       <li class="rf-history-row" key="${escapeHTML(item.id || "")}">
         <span class="rf-history-icon" aria-hidden="true">${item.kind === "commission" ? "↗" : item.kind === "milestone" ? "✦" : "＋"}</span>
         <span class="rf-history-main"><strong>${escapeHTML(title)}</strong><small>${escapeHTML(meta.join(" · "))}</small></span>
-        <b class="rf-history-points">+${formatPoints(Number(item.points) || 0)}<small>${t("points_unit")}</small></b>
+        <b class="rf-history-points">+${tokenAmount(Number(item.points) || 0)}</b>
       </li>`;
   }).join("");
   const currentLevelLabel = currentLevel > 0 ? t("referral_level_label", { n: formatPoints(currentLevel) }) : "—";
@@ -3240,8 +3247,8 @@ function renderProfileReferral() {
         <div class="rf-hero-orbit" aria-hidden="true"></div>
         <div class="rf-hero-top"><span class="rf-overline">${t("referral_hero_eyebrow")}</span><span class="rf-hero-badge">${t("referral_reward_direct_badge", { n: rewardDisplay })}</span></div>
         <h2 class="rf-hero-title" id="rfHeroTitle">${t("referral_total_earnings_title")}</h2>
-        <div class="rf-hero-total"><span class="rf-hero-coin" aria-hidden="true">◇</span><strong>${formatPoints(totalEarnings)}</strong><span>${t("points_unit")}</span></div>
-        <div class="rf-hero-bottom"><span>${t("referral_this_month")}</span><strong>+${formatPoints(monthlyEarnings)} ${t("points_unit")}</strong></div>
+        <div class="rf-hero-total"><span class="rf-hero-coin" aria-hidden="true">◇</span><strong>${tokenAmount(totalEarnings)}</div>
+        <div class="rf-hero-bottom"><span>${t("referral_this_month")}</span><strong>+${tokenAmount(monthlyEarnings)}</strong></div>
       </section>
 
       <section class="rf-kpi-grid" aria-label="${escapeHTML(t("referral_stats_title"))}">
@@ -3416,7 +3423,7 @@ function renderProfileLeaderboard() {
       <div class="card" style="text-align:center">
         <div class="cardSubtitle">${t("leaderboard_rank_label")}</div>
         <div style="font-size:24px;font-weight:900;margin-top:4px">#${formatPoints(myRank)}</div>
-        ${weekly ? `<div class="cardSubtitle">${formatPoints(state.weeklyMyPoints)} ${t("points_unit")}</div>` : ""}
+        ${weekly ? `<div class="cardSubtitle">${tokenAmount(state.weeklyMyPoints)}</div>` : ""}
       </div>` : ""
     }
 
