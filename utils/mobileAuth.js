@@ -87,7 +87,7 @@ function requireMobileAuth() {
       req.mobileSession = session;
       req.dbUser = session.user;
       if (!isVerifiedAllowedPhone(session.user)) {
-        return res.status(403).json({ success: false, code: 'PHONE_VERIFICATION_REQUIRED', message: 'برای ادامه، Contact تلگرام خود را با شمارهٔ +93 یا +98 تأیید کنید.' });
+        return res.status(403).json({ success: false, code: 'PHONE_VERIFICATION_REQUIRED', message: 'برای ادامه، Contact تلگرام خود را با یک شمارهٔ بین‌المللی معتبر تأیید کنید.' });
       }
       next();
     } catch (error) { next(error); }

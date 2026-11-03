@@ -57,7 +57,7 @@ const userSchema = new mongoose.Schema(
       proofVerifiedAt: { type: Date, default: null },
       proofPublicKey: { type: String, default: '' }
     },
-    phoneCountryCode: { type: String, enum: ['', '+93', '+98'], default: '' },
+    phoneCountryCode: { type: String, match: /^(?:|\+|\+[1-9]\d{0,2})$/, default: '' },
     phoneVerifiedAt: { type: Date, default: null },
     phoneContactRequestedAt: { type: Date, default: null },
     pendingReferralIdentifier: { type: String, default: '' },

@@ -86,7 +86,11 @@ function signedInitData() {
     user.phoneCountryCode = '+1';
     user.phoneVerifiedAt = new Date();
     response = await send('/api/secure');
-    assert.strictEqual(response.status, 403, 'a verification timestamp with an unsupported code is not enough');
+    assert.strictEqual(response.status, 200, 'a valid international +1 contact unlocks protected APIs');
+
+    user.phoneCountryCode = '+44';
+    response = await send('/api/secure');
+    assert.strictEqual(response.status, 200, 'other international calling codes also unlock protected APIs');
 
     user.phoneCountryCode = '+98';
     response = await send('/api/secure');
@@ -98,7 +102,7 @@ function signedInitData() {
     await new Promise(resolve => server.close(resolve));
   }
 
-  console.log('ALL PASS — central Telegram auth gate restricts protected APIs to verified +93/+98 contacts');
+  console.log('ALL PASS — central Telegram auth gate accepts verified international contacts, including +93 and +98');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

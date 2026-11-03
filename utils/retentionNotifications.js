@@ -161,7 +161,7 @@ async function enqueueDailyStreakExpiryWarnings(now = new Date(), options = {}) 
     referralMessageConsent: 'granted',
     telegramId: { $exists: true, $nin: ['', null] },
     phoneVerifiedAt: { $ne: null },
-    phoneCountryCode: { $in: ['+93', '+98'] },
+    phoneCountryCode: /^\+(?:[1-9]\d{0,2})?$/,
     streak: { $gt: 0 },
     lastCheckIn: { $gte: startOfYesterday, $lt: startOfToday }
   };

@@ -232,7 +232,7 @@ function requireTelegramAuth(botToken) {
         return res.status(403).json({
           success: false,
           code: 'PHONE_VERIFICATION_REQUIRED',
-          message: 'برای ادامه، Contact تلگرام خود را با شمارهٔ +93 یا +98 تأیید کنید.'
+          message: 'برای ادامه، Contact تلگرام خود را با یک شمارهٔ بین‌المللی معتبر تأیید کنید.'
         });
       }
       next();

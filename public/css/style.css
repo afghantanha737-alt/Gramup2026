@@ -2425,7 +2425,7 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .taskAction.pending[data-latest-post-cooldown] { min-width: 104px; color: #aeb8c9; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.16); box-shadow: none; font-variant-numeric: tabular-nums; }
 .taskAction[data-latest-post-check] { background: linear-gradient(135deg,#22c879,#0ca66d); color: #fff; box-shadow: 0 7px 15px rgba(16,185,129,.25); }
 
-/* Telegram Contact verification gate (+93/+98 only) */
+/* Telegram Contact verification gate (international E.164 numbers) */
 body.phone-verification-required #tabbar,
 body.phone-verification-required #notificationBtn { display: none !important; }
 .phoneGate { width: min(100%, 520px); margin: 24px auto; padding: 28px 22px; text-align: center; }

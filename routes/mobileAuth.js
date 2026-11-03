@@ -30,7 +30,7 @@ router.post('/consume', mobileBootstrapRateLimit('consume'), async (req, res) =>
   if (challenge?.status === 'verified' && challenge.telegramId) {
     const user = await User.findOne({ telegramId: String(challenge.telegramId) }).select('phoneVerifiedAt phoneCountryCode');
     if (user && !isVerifiedAllowedPhone(user)) {
-      return res.status(403).json({ success: false, code: 'PHONE_VERIFICATION_REQUIRED', message: 'برای ادامه، Contact تلگرام خود را با شمارهٔ +93 یا +98 تأیید کنید.' });
+      return res.status(403).json({ success: false, code: 'PHONE_VERIFICATION_REQUIRED', message: 'برای ادامه، Contact تلگرام خود را با یک شمارهٔ بین‌المللی معتبر تأیید کنید.' });
     }
   }
   const result = await consumeMobileChallenge(String(challengeId || ''), String(token || ''), req.get('user-agent'));

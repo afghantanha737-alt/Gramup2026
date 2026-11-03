@@ -11,9 +11,9 @@ const MESSAGES = {
     en: name => `Hi ${name} 👋\nWelcome to Gramup!\nComplete tasks, invite friends and check in daily to earn points and convert them to GRAM.`
   },
   phoneContactRequest: {
-    fa: () => 'برای ادامهٔ ورود، شمارهٔ خودتان را با دکمهٔ زیر از طریق Telegram به اشتراک بگذارید. فقط شماره‌های +93 و +98 پذیرفته می‌شوند. شمارهٔ کامل ذخیره نمی‌شود؛ فقط کد کشور و زمان تأیید ثبت می‌شود.',
-    ps: () => 'د ننوتلو د دوام لپاره، د لاندې تڼۍ له لارې خپل د Telegram Contact شریک کړئ. یوازې د +93 او +98 شمېرې منل کېږي. بشپړه شمېره نه ساتل کېږي؛ یوازې د هېواد کوډ او د تایید وخت ثبتېږي.',
-    en: () => 'To continue signing in, share your own Telegram contact with the button below. Only +93 and +98 numbers are accepted. Your full number is not stored; only the country code and verification time are recorded.'
+    fa: () => 'برای ادامهٔ ورود، شمارهٔ خودتان را با دکمهٔ زیر از طریق Telegram به اشتراک بگذارید. شمارهٔ بین‌المللی معتبر با قالب E.164 پذیرفته می‌شود. شمارهٔ کامل ذخیره نمی‌شود؛ فقط کد کشور و زمان تأیید ثبت می‌شود.',
+    ps: () => 'د ننوتلو د دوام لپاره، د لاندې تڼۍ له لارې خپل د Telegram Contact شریک کړئ. د E.164 بڼې هره نړیواله معتبره شمېره منل کېږي. بشپړه شمېره نه ساتل کېږي؛ یوازې د هېواد کوډ او د تایید وخت ثبتېږي.',
+    en: () => 'To continue signing in, share your own Telegram contact with the button below. Any valid E.164 international number is accepted. Your full number is not stored; only the country code and verification time are recorded.'
   },
   phoneShareButton: {
     fa: () => 'اشتراک شمارهٔ خودم',
@@ -26,9 +26,9 @@ const MESSAGES = {
     en: () => 'Please share your own contact using Telegram’s share button. Someone else’s number cannot be used.'
   },
   phoneContactUnsupported: {
-    fa: () => 'استفاده از Gramup فقط برای شماره‌های +93 و +98 امکان‌پذیر است. این شماره تأیید نمی‌شود و حساب شما مسدود نشده است؛ اگر شمارهٔ مجاز دیگری دارید، Contact خودتان را دوباره با دکمهٔ زیر بفرستید.',
-    ps: () => 'Gramup یوازې د +93 او +98 شمېرو لپاره کار کوي. دا شمېره نه تاییدېږي او ستاسو حساب نه دی بند شوی؛ که بله منل شوې شمېره لرئ، خپل Contact د لاندې تڼۍ له لارې بیا واستوئ.',
-    en: () => 'Gramup is available only for +93 and +98 numbers. This number cannot be verified, but your account has not been blocked; if you have another eligible number, share your own contact again with the button below.'
+    fa: () => 'لطفاً یک شمارهٔ بین‌المللی معتبر وارد کنید؛ نمونه: +1234567890. این شماره تأیید نشد و حساب شما مسدود نشده است؛ Contact خودتان را دوباره با دکمهٔ زیر بفرستید.',
+    ps: () => 'مهرباني وکړئ نړیواله معتبره شمېره دننه کړئ؛ بېلګه: +1234567890. دا شمېره تایید نه شوه، خو حساب مو نه دی بند شوی؛ خپل Contact د لاندې تڼۍ له لارې بیا واستوئ.',
+    en: () => 'Please enter a valid international phone number (e.g. +1234567890). This number was not verified, but your account has not been blocked; share your own contact again using the button below.'
   },
   phoneContactVerified: {
     fa: () => '✅ شمارهٔ شما با موفقیت تأیید شد. حالا می‌توانید به Gramup برگردید.',

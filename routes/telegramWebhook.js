@@ -57,7 +57,7 @@ async function handlePhoneContactMessage(message) {
 
   const verification = normalizeTelegramContact(message.contact, senderId);
   if (!verification.ok) {
-    const key = verification.reason === 'unsupported_country' ? 'phoneContactUnsupported' : 'phoneContactNotSelf';
+    const key = verification.reason === 'not_self_contact' ? 'phoneContactNotSelf' : 'phoneContactUnsupported';
     const language = user.language || 'fa';
     await sendMessage(chatId, botText(key, language), {
       reply_markup: contactRequestKeyboard(botText('phoneShareButton', language))

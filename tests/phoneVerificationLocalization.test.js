@@ -10,7 +10,7 @@ const window = { state: { language: 'fa' } };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/js/i18n.js'), 'utf8'), { window });
 
 const keys = [
-  'phone_gate_eyebrow', 'phone_gate_title', 'phone_gate_desc', 'phone_gate_privacy',
+  'phone_gate_eyebrow', 'phone_gate_title', 'phone_gate_desc', 'phone_gate_example', 'phone_gate_privacy',
   'phone_gate_share', 'phone_gate_check', 'phone_gate_sent', 'phone_gate_pending', 'phone_gate_error',
   'referral_message_consent_eyebrow', 'referral_message_consent_title', 'referral_message_consent_desc',
   'referral_message_consent_status', 'referral_message_consent_unset', 'referral_message_consent_granted',
@@ -24,6 +24,9 @@ for (const language of ['fa', 'ps', 'en']) {
     const value = window.t(key, { status: 'test' });
     assert.ok(value && value !== 'Translation unavailable.', `${key} must resolve in ${language}`);
   }
+  assert.ok(!window.t('phone_gate_desc').includes('+93') && !window.t('phone_gate_desc').includes('+98'),
+    `phone gate must not restrict country codes in ${language}`);
+  assert.ok(window.t('phone_gate_example').includes('+1234567890'), `phone example/${language}`);
   assert.ok(botText('phoneContactRequest', language).length > 20, `phone contact text/${language}`);
   assert.ok(botText('phoneShareButton', language).length > 4, `phone share button/${language}`);
   assert.ok(botText('phoneContactVerified', language).length > 10, `phone verified/${language}`);

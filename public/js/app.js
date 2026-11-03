@@ -1057,7 +1057,7 @@ function renderPhoneVerificationGate(messageKey = "") {
       <span class="modalEyebrow">${t("phone_gate_eyebrow")}</span>
       <h1 id="phoneGateTitle" class="phoneGateTitle">${t("phone_gate_title")}</h1>
       <p class="phoneGateText">${t("phone_gate_desc")}</p>
-      <div class="phoneGateCodes" dir="ltr">+93 <span>·</span> +98</div>
+      <div class="phoneGateCodes" dir="ltr">${t("phone_gate_example")}</div>
       <p class="phoneGatePrivacy">${t("phone_gate_privacy")}</p>
       <div id="phoneGateMessage" class="phoneGateMessage" role="status" aria-live="polite">${messageKey ? t(messageKey) : (state.phoneContactRequestSent ? t("phone_gate_sent") : "")}</div>
       <div class="phoneGateActions">
