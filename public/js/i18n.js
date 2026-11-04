@@ -1389,10 +1389,16 @@ const ERROR_CODE_MAP = {
   VIP_CLAIM_NO_ACCRUAL: { fa: "هنوز ۰٫۰۱ UP قابل دریافت جمع نشده است.", ps: "تر اوسه د ترلاسه کولو لپاره ۰٫۰۱ UP نه دی جمع شوی.", en: "At least 0.01 UP must accrue before you can claim." }
 };
 
-function t(key, vars) {
+function t(key, vars, fallback) {
   const lang = (window.state && window.state.language) || "fa";
   const dictionary = TRANSLATIONS[lang] || TRANSLATIONS.fa;
-  let text = dictionary[key] ?? dictionary.translation_unavailable;
+  const unavailable = dictionary.translation_unavailable || "Translation unavailable.";
+  const translated = dictionary[key];
+  const hasTranslation = typeof translated === "string"
+    && translated.trim().length > 0
+    && translated !== unavailable
+    && translated !== "Translation unavailable.";
+  let text = hasTranslation ? translated : (typeof fallback === "string" && fallback.trim() ? fallback : unavailable);
   if (vars) {
     Object.keys(vars).forEach(k => {
       text = text.replaceAll(`{${k}}`, vars[k]);
