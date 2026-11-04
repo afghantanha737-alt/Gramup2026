@@ -4,6 +4,8 @@ const { NEW_VIP_POLICY_VERSION, dailyPointsCentsFromBps } = require('./vipPolicy
 const { DAY_MS } = require('./vipRewards');
 const MINING_STORAGE_CAP_SECONDS = 24 * 60 * 60;
 const MINING_STORAGE_CAP_MS = MINING_STORAGE_CAP_SECONDS * 1000;
+const MINING_BOOST_MS = 60 * 60 * 1000;
+const MINING_BOOST_RATE = 1.05;
 
 function centsFromPoints(points) {
   const value = Number(points);
@@ -55,7 +57,7 @@ function estimatedAccruedPoints(totalCents, paidCents, startAt, endAt, now) {
   return Number(pending) / 1000;
 }
 
-function calculateVipAccrual(subscription, now = new Date()) {
+function calculateVipAccrual(subscription, now = new Date(), options = {}) {
   const startAt = subscription?.startAt;
   const endAt = subscription?.endAt;
   const timing = elapsedWithinContract(startAt, endAt, now);
@@ -71,7 +73,16 @@ function calculateVipAccrual(subscription, now = new Date()) {
     MINING_STORAGE_CAP_SECONDS
   );
   const storageCapAtMs = Math.min(timing.end, storageAnchorMs + MINING_STORAGE_CAP_MS);
-  const accrualNowMs = Math.min(nowMs, timing.end, storageAnchorMs + elapsedSeconds * 1000);
+  const baseAccrualNowMs = Math.min(nowMs, timing.end, storageAnchorMs + elapsedSeconds * 1000);
+  const boostExpiresMs = dateMs(options.miningBoostExpiresAt);
+  const boostStartMs = boostExpiresMs == null ? null : boostExpiresMs - MINING_BOOST_MS;
+  const boostWindowStartMs = boostStartMs == null ? null : Math.max(storageAnchorMs, boostStartMs);
+  const boostWindowEndMs = boostExpiresMs == null ? null : Math.min(baseAccrualNowMs, boostExpiresMs);
+  const boostedElapsedMs = boostWindowStartMs == null || boostWindowEndMs == null
+    ? 0
+    : Math.max(0, boostWindowEndMs - boostWindowStartMs);
+  const boostExtraMs = Math.floor(boostedElapsedMs * (MINING_BOOST_RATE - 1));
+  const accrualNowMs = Math.min(timing.end, baseAccrualNowMs + boostExtraMs);
   const accrualNow = new Date(Math.max(timing.start, accrualNowMs));
   const storageFull = nowMs >= storageCapAtMs && nowMs < timing.end;
   const storageRemainingMs = storageFull ? 0 : Math.max(0, storageCapAtMs - nowMs);
@@ -122,6 +133,8 @@ function calculateVipAccrual(subscription, now = new Date()) {
   const dailyMiningRatePoints = !matured && Number.isFinite(durationDays) && durationDays > 0
     ? Number((totalMiningCents / 100 / durationDays).toFixed(4))
     : 0;
+  const miningBoostActive = boostExpiresMs != null && nowMs >= boostExpiresMs - MINING_BOOST_MS && nowMs < boostExpiresMs;
+  const activeDailyMiningRatePoints = Number((dailyMiningRatePoints * (miningBoostActive ? MINING_BOOST_RATE : 1)).toFixed(4));
   const rewardRemainingCents = Math.max(0, totalRewardCents - rewardPaidCents);
   const principalRemainingCents = Math.max(0, totalPrincipalCents - principalPaidCents);
   const unclaimedPoints = Number((totalPendingCents / 100).toFixed(2));
@@ -141,9 +154,12 @@ function calculateVipAccrual(subscription, now = new Date()) {
     estimatedUnclaimedPoints,
     unclaimedEstimateCapPoints: Math.max(estimateCapPoints, estimatedUnclaimedPoints),
     dailyMiningRatePoints,
+    activeDailyMiningRatePoints,
+    miningBoostActive,
     totalMiningCents,
     storageCapAt: new Date(storageCapAtMs),
     elapsedSeconds,
+    miningBoostAppliedSeconds: Math.floor(boostedElapsedMs / 1000),
     storageFull,
     storageRemainingMs,
     rewardRemainingCents,

@@ -20,6 +20,7 @@ const { vipActivationTaskDefinition } = require('../utils/vipActivationTasks');
 const { idempotencyTransactionId, executeIdempotently } = require('../utils/idempotency');
 const { utcDayKey, wasUtcYesterday } = require('../utils/utcDay');
 const { claimDailyCheckin } = require('../utils/dailyAutoCheckin');
+const { MINING_BOOST_MS, AD_COOLDOWN_MS, adCooldownRemainingMs, dailyAdsWatchedToday } = require('../utils/adRewardPolicy');
 const {
   DAY_MS,
   calculateTotalRewardCents,
@@ -89,13 +90,13 @@ function publicVipPlan(plan) {
   };
 }
 
-function publicVipSubscription(subscription, now = new Date()) {
+function publicVipSubscription(subscription, now = new Date(), miningBoostExpiresAt = null) {
   const startAt = new Date(subscription.startAt);
   const endAt = new Date(subscription.endAt);
   const active = subscription.status === 'active';
   const claimIndex = Number(subscription.claimsCompleted || 0);
   const isNewPolicy = String(subscription.policyVersion || LEGACY_VIP_POLICY_VERSION) === NEW_VIP_POLICY_VERSION;
-  const accrual = calculateVipAccrual(subscription, now);
+  const accrual = calculateVipAccrual(subscription, now, { miningBoostExpiresAt });
   const rewardPoints = accrual?.rewardPoints || 0;
   const principalPoints = accrual?.principalPoints || 0;
   const unclaimedPoints = accrual?.unclaimedPoints || 0;
@@ -127,6 +128,8 @@ function publicVipSubscription(subscription, now = new Date()) {
     unclaimedEstimateCapPoints: accrual?.unclaimedEstimateCapPoints || 0,
     principalAtMaturityPoints: !isNewPolicy && !subscription.principalReturnedAt ? Number(subscription.pricePoints) || 0 : 0,
     dailyMiningRatePoints: accrual?.dailyMiningRatePoints || 0,
+    activeDailyMiningRatePoints: accrual?.activeDailyMiningRatePoints || accrual?.dailyMiningRatePoints || 0,
+    miningBoostActive: Boolean(accrual?.miningBoostActive),
     accrualAsOf: now.toISOString(),
     storageCapAt: accrual?.storageCapAt ? new Date(accrual.storageCapAt).toISOString() : null,
     storageFull: Boolean(accrual?.storageFull),
@@ -1044,15 +1047,72 @@ router.get('/vip/plans', auth, async (req, res) => {
   const [plans, subscriptions, user] = await Promise.all([
     VipPlan.find({}).sort({ planNumber: 1 }).lean(),
     VipSubscription.find({ user: req.dbUser._id }).sort({ createdAt: -1 }).limit(30).lean(),
-    User.findById(req.dbUser._id).select('points').lean()
+    User.findById(req.dbUser._id).select('points miningBoostExpiresAt dailyAdsWatched lastAdWatchDate').lean()
   ]);
   res.json({
     success: true,
     serverNow: now.toISOString(),
     points: user?.points ?? req.dbUser.points,
+    miningBoostExpiresAt: user?.miningBoostExpiresAt || null,
+    lastAdWatchDate: user?.lastAdWatchDate || null,
+    miningBoostRemainingSeconds: user?.miningBoostExpiresAt && new Date(user.miningBoostExpiresAt) > now
+      ? Math.ceil((new Date(user.miningBoostExpiresAt).getTime() - now.getTime()) / 1000) : 0,
     plans: plans.map(publicVipPlan),
-    subscriptions: subscriptions.map(subscription => publicVipSubscription(subscription, now))
+    subscriptions: subscriptions.map(subscription => publicVipSubscription(subscription, now, user?.miningBoostExpiresAt))
   });
+});
+
+router.post('/vip/mining-boost', auth, sensitiveRateLimit('claim'), async (req, res) => {
+  const now = new Date();
+  try {
+    const result = await withMongoTransaction(async session => {
+      const current = await User.findById(req.dbUser._id)
+        .select('dailyAdsWatched lastAdWatchDate miningBoostExpiresAt')
+        .session(session);
+      if (!current) throw vipError('USER_NOT_FOUND', 'کاربر پیدا نشد.', 404);
+      const currentExpiry = current.miningBoostExpiresAt ? new Date(current.miningBoostExpiresAt) : null;
+      if (currentExpiry && currentExpiry.getTime() > now.getTime()) {
+        throw vipError('MINING_BOOST_ACTIVE', 'Mining boost هم‌اکنون فعال است.', 409, { expiresAt: currentExpiry });
+      }
+      const cooldownRemainingMs = adCooldownRemainingMs(current, now);
+      if (cooldownRemainingMs > 0) {
+        throw vipError('AD_COOLDOWN', 'برای تماشای تبلیغ بعدی کمی صبر کنید.', 429, {
+          retryAfterSeconds: Math.ceil(cooldownRemainingMs / 1000)
+        });
+      }
+      const watchedToday = dailyAdsWatchedToday(current, now);
+      const previousWatchDate = current.lastAdWatchDate || null;
+      const updated = await User.findOneAndUpdate({
+        _id: current._id,
+        lastAdWatchDate: previousWatchDate,
+        miningBoostExpiresAt: current.miningBoostExpiresAt || null
+      }, {
+        $set: {
+          dailyAdsWatched: watchedToday,
+          lastAdWatchDate: now,
+          miningBoostExpiresAt: new Date(now.getTime() + MINING_BOOST_MS)
+        }
+      }, { new: true, session });
+      if (!updated) throw vipError('AD_REWARD_CONFLICT', 'وضعیت تبلیغ تغییر کرده است؛ صفحه را تازه‌سازی کنید.', 409);
+      return updated;
+    });
+    return res.json({
+      success: true,
+      miningBoostExpiresAt: result.miningBoostExpiresAt,
+      miningBoostRemainingSeconds: Math.ceil((new Date(result.miningBoostExpiresAt).getTime() - now.getTime()) / 1000),
+      lastAdWatchDate: result.lastAdWatchDate,
+      serverNow: now.toISOString()
+    });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+      ...(error.retryAfterSeconds ? { retryAfterSeconds: error.retryAfterSeconds } : {}),
+      ...(error.expiresAt ? { expiresAt: error.expiresAt } : {})
+    });
+    throw error;
+  }
 });
 
 router.post('/vip/purchase', auth, sensitiveRateLimit('claim'), async (req, res) => {
@@ -1211,7 +1271,7 @@ router.post('/vip/purchase', auth, sensitiveRateLimit('claim'), async (req, res)
         return { body: {
           success: true,
           points: finalPoints,
-          subscription: publicVipSubscription(subscription, startAt)
+          subscription: publicVipSubscription(subscription, startAt, user?.miningBoostExpiresAt)
         } };
       }
     });
@@ -1232,6 +1292,7 @@ router.post('/vip/claim-all', auth, sensitiveRateLimit('claim'), async (req, res
       execute: async session => {
         const now = new Date();
         await lockVipClaimUser(req.dbUser._id, session);
+        const boostUser = await User.findById(req.dbUser._id).select('miningBoostExpiresAt').session(session);
         const subscriptions = await VipSubscription.find({ user: req.dbUser._id, status: 'active' })
           .sort({ endAt: 1, _id: 1 })
           .session(session);
@@ -1240,7 +1301,7 @@ router.post('/vip/claim-all', auth, sensitiveRateLimit('claim'), async (req, res
         let reservePayoutCents = 0;
 
         for (const subscription of subscriptions) {
-          const accrual = calculateVipAccrual(subscription, now);
+          const accrual = calculateVipAccrual(subscription, now, { miningBoostExpiresAt: boostUser?.miningBoostExpiresAt });
           if (!accrual) throw vipError('VIP_PAYOUT_INVALID', 'مقدار پرداخت VIP معتبر نیست؛ با مدیریت تماس بگیرید.', 409);
           const rewardCents = Number(accrual.rewardPendingCents) || 0;
           const principalCents = Number(accrual.principalPendingCents) || 0;
@@ -1386,7 +1447,7 @@ router.post('/vip/claim-all', auth, sensitiveRateLimit('claim'), async (req, res
           totalPayoutPoints,
           claimedSubscriptions: settlements.length,
           points: user.points,
-          subscriptions: updatedSubscriptions.map(subscription => publicVipSubscription(subscription, now))
+          subscriptions: updatedSubscriptions.map(subscription => publicVipSubscription(subscription, now, boostUser?.miningBoostExpiresAt))
         } };
       }
     });
@@ -1411,13 +1472,14 @@ router.post('/vip/:subscriptionId/claim', auth, sensitiveRateLimit('claim'), asy
       execute: async session => {
         const now = new Date();
         await lockVipClaimUser(req.dbUser._id, session);
+        const boostUser = await User.findById(req.dbUser._id).select('miningBoostExpiresAt').session(session);
         const subscription = await VipSubscription.findOne({ _id: req.params.subscriptionId, user: req.dbUser._id }).session(session);
         if (!subscription) throw vipError('VIP_SUBSCRIPTION_NOT_FOUND', 'اشتراک VIP پیدا نشد.', 404);
         if (subscription.status !== 'active') {
           throw vipError('VIP_PLAN_COMPLETED', 'دوره این پلن به پایان رسیده است.', 409);
         }
 
-        const accrual = calculateVipAccrual(subscription, now);
+        const accrual = calculateVipAccrual(subscription, now, { miningBoostExpiresAt: boostUser?.miningBoostExpiresAt });
         if (!accrual) throw vipError('VIP_PAYOUT_INVALID', 'مقدار پرداخت VIP معتبر نیست؛ با مدیریت تماس بگیرید.', 409);
         const rewardCents = accrual.rewardPendingCents;
         const principalCents = accrual.principalPendingCents;
@@ -1540,7 +1602,7 @@ router.post('/vip/:subscriptionId/claim', auth, sensitiveRateLimit('claim'), asy
           principalPoints,
           totalPayoutPoints,
           points: user.points,
-          subscription: publicVipSubscription(updatedSubscription, now)
+          subscription: publicVipSubscription(updatedSubscription, now, boostUser?.miningBoostExpiresAt)
         } };
       }
     });

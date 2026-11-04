@@ -2689,3 +2689,21 @@ html[data-theme="light"] .vipRedesign .vipPlanCard { color: #f7f7ff; }
 .upTokenIcon { width:16px; height:16px; flex:0 0 16px; border-radius:5px; object-fit:cover; box-shadow:0 2px 8px rgba(250,204,21,.24); }
 .tbWalletValue .upTokenIcon, .vipBalanceValue .upTokenIcon { width:20px; height:20px; flex-basis:20px; border-radius:6px; }
 .vipPlanStat .upTokenAmount, .vipPlanReward .upTokenAmount, .vipPlanDaily .upTokenAmount { color:inherit; font-weight:inherit; }
+
+/* Rewarded video task and one-hour Mine boost */
+.dailyAdRewardCard{margin:10px 0;padding:13px;border:1px solid rgba(103,232,249,.18);border-radius:17px;background:radial-gradient(circle at 100% 0%,rgba(34,211,238,.10),transparent 45%),linear-gradient(145deg,rgba(19,30,43,.96),rgba(12,15,25,.96));box-shadow:0 10px 25px rgba(0,0,0,.16)}
+.dailyAdRewardTop{display:flex;align-items:center;gap:10px;min-width:0}
+.dailyAdRewardIcon{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border:1px solid rgba(103,232,249,.24);border-radius:12px;color:#67e8f9;background:rgba(34,211,238,.10);font-size:14px}
+.dailyAdRewardCopy{display:grid;gap:3px;min-width:0;flex:1}
+.dailyAdRewardCopy strong{color:var(--text);font-size:13px;font-weight:900}
+.dailyAdRewardCopy small{color:var(--text-muted);font-size:10px;line-height:1.5}
+.dailyAdRewardProgress{padding:5px 7px;border:1px solid rgba(167,139,250,.24);border-radius:999px;color:#c4b5fd;background:rgba(124,58,237,.10);font-size:9px;font-weight:850;white-space:nowrap}
+.dailyAdRewardButton{width:100%;margin-top:11px}
+.dailyAdRewardButton:disabled{opacity:.72;cursor:not-allowed}
+.vipMiningBoost{display:grid;gap:6px;margin-top:9px;padding:10px;border:1px solid rgba(250,204,21,.2);border-radius:14px;background:rgba(250,204,21,.055)}
+.vipMiningBoost button{width:100%;min-height:42px;border:1px solid rgba(250,204,21,.25);border-radius:12px;color:#fff2b2;background:linear-gradient(100deg,rgba(245,158,11,.24),rgba(234,179,8,.12));font-size:12px;font-weight:900}
+.vipMiningBoost button:disabled{opacity:.75;cursor:not-allowed}
+.vipMiningBoost small{color:var(--text-muted);font-size:10px;line-height:1.5;text-align:center}
+html[data-theme="light"] .dailyAdRewardCard{background:linear-gradient(145deg,#fff,#f4f8fb);border-color:rgba(90,75,221,.18)}
+html[data-theme="light"] .dailyAdRewardCopy strong{color:var(--text)}
+@media(max-width:380px){.dailyAdRewardCard{padding:11px}.dailyAdRewardTop{gap:7px}.dailyAdRewardIcon{width:31px;height:31px;flex-basis:31px}.dailyAdRewardCopy strong{font-size:11px}.dailyAdRewardProgress{font-size:8px;padding:4px 6px}}

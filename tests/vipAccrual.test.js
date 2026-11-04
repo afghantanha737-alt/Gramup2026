@@ -45,6 +45,22 @@ assert.strictEqual(minuteAccrual.canClaim, true);
 const oneHour = calculateVipAccrual(plan1, new Date(startAt.getTime() + 60 * 60 * 1000));
 assert.strictEqual(oneHour.unclaimedPoints, 4.58);
 assert.strictEqual(oneHour.estimatedUnclaimedPoints, 4.583);
+const oneHourBoosted = calculateVipAccrual(
+  { ...plan1, lastClaimAt: startAt },
+  new Date(startAt.getTime() + 60 * 60 * 1000),
+  { miningBoostExpiresAt: new Date(startAt.getTime() + 60 * 60 * 1000) }
+);
+assert.ok(oneHourBoosted.unclaimedPoints > oneHour.unclaimedPoints, 'a completed boosted hour accrues faster than the base rate');
+assert.strictEqual(oneHourBoosted.miningBoostAppliedSeconds, 3600);
+assert.ok(oneHourBoosted.unclaimedPoints <= 110, 'the boost accelerates accrual without exceeding the contract payout cap');
+const activeBoost = calculateVipAccrual(
+  { ...plan1, lastClaimAt: startAt },
+  new Date(startAt.getTime() + 30 * 60 * 1000),
+  { miningBoostExpiresAt: new Date(startAt.getTime() + 60 * 60 * 1000) }
+);
+assert.strictEqual(activeBoost.miningBoostActive, true);
+assert.strictEqual(activeBoost.dailyMiningRatePoints, 110, "the plan's underlying contract rate remains available");
+assert.strictEqual(activeBoost.activeDailyMiningRatePoints, 115.5, 'the current effective rate is exactly 5% higher while active');
 
 const beforeStorageCap = calculateVipAccrual({ ...plan1, lastClaimAt: startAt },
   new Date(startAt.getTime() + 23 * 60 * 60 * 1000));

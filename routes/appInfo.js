@@ -27,6 +27,7 @@ router.get('/', (req, res) => {
     appName: 'Gramup',
     botLink,
     botConfigured: Boolean(botLink),
+    adsgramRewardedBlockId: String(process.env.ADSGRAM_REWARDED_BLOCK_ID || '').trim(),
     payoutChannelUrl,
     payoutChannelUsername: '@' + cleanUsername
   });

@@ -27,6 +27,8 @@ const {
   isLatestPostOpenValid,
   nextLatestPostAvailableAt
 } = require('../utils/latestPostEngagement');
+const { utcDayKey } = require('../utils/utcDay');
+const { DAILY_AD_CAP, AD_REWARD_POINTS, AD_COOLDOWN_MS, adCooldownRemainingMs, dailyAdsWatchedToday } = require('../utils/adRewardPolicy');
 
 // احراز هویت تلگرام + بررسی عضویت فعلی در کانال‌های اجباری (روی هر درخواست محافظت‌شده)
 const { withMembership } = require('../utils/membership');
@@ -131,6 +133,86 @@ router.get('/', auth, async (req, res) => {
   } catch (error) {
     console.error('GET /api/tasks failed:', error);
     res.status(500).json({ success: false, message: 'خطایی در بارگذاری تسک‌ها رخ داد.', code: 'SERVER_ERROR' });
+  }
+});
+
+router.get('/ad-reward/status', auth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const now = new Date();
+  const user = await User.findById(req.dbUser._id).select('dailyAdsWatched lastAdWatchDate').lean();
+  if (!user) return res.status(404).json({ success: false, code: 'USER_NOT_FOUND' });
+  return res.json({
+    success: true,
+    watchedToday: dailyAdsWatchedToday(user, now),
+    dailyLimit: DAILY_AD_CAP,
+    cooldownRemainingSeconds: Math.ceil(adCooldownRemainingMs(user, now) / 1000),
+    lastAdWatchDate: user.lastAdWatchDate || null,
+    dayKey: utcDayKey(now),
+    serverNow: now.toISOString()
+  });
+});
+
+router.post('/ad-reward/claim', auth, sensitiveRateLimit('claim'), async (req, res) => {
+  const now = new Date();
+  try {
+    const payment = await withMongoTransaction(async session => {
+      const current = await User.findById(req.dbUser._id).session(session);
+      if (!current) throw Object.assign(new Error('User not found.'), { code: 'USER_NOT_FOUND', statusCode: 404 });
+      const watchedToday = dailyAdsWatchedToday(current, now);
+      if (watchedToday >= DAILY_AD_CAP) {
+        throw Object.assign(new Error('Daily rewarded-ad limit reached.'), { code: 'AD_DAILY_LIMIT', statusCode: 409 });
+      }
+      const cooldownRemainingMs = adCooldownRemainingMs(current, now);
+      if (cooldownRemainingMs > 0) {
+        throw Object.assign(new Error('Please wait before watching another rewarded ad.'), {
+          code: 'AD_COOLDOWN', statusCode: 429, retryAfterSeconds: Math.ceil(cooldownRemainingMs / 1000)
+        });
+      }
+
+      const previousCount = Math.max(0, Math.floor(Number(current.dailyAdsWatched) || 0));
+      const previousWatchDate = current.lastAdWatchDate || null;
+      const updated = await User.findOneAndUpdate({
+        _id: current._id,
+        dailyAdsWatched: { $in: [previousCount, null] },
+        lastAdWatchDate: previousWatchDate
+      }, {
+        $set: { dailyAdsWatched: watchedToday + 1, lastAdWatchDate: now },
+        $inc: { points: AD_REWARD_POINTS }
+      }, { new: true, session });
+      if (!updated) throw Object.assign(new Error('Ad reward state changed; refresh and try again.'), { code: 'AD_REWARD_CONFLICT', statusCode: 409 });
+
+      const sourceId = `ad-reward:${updated._id}:${utcDayKey(now)}:${watchedToday + 1}`;
+      const ledger = await recordLedgerRequired({
+        user: updated._id,
+        type: 'ad_reward',
+        amount: AD_REWARD_POINTS,
+        description: 'Rewarded video ad task',
+        balanceAfter: updated.points,
+        sourceId,
+        session
+      });
+      if (!ledger.created) throw Object.assign(new Error('This ad reward has already been credited.'), { code: 'AD_REWARD_DUPLICATE', statusCode: 409 });
+      return { user: updated, watchedToday: watchedToday + 1 };
+    });
+    return res.json({
+      success: true,
+      reward: AD_REWARD_POINTS,
+      points: payment.user.points,
+      watchedToday: payment.watchedToday,
+      dailyLimit: DAILY_AD_CAP,
+      lastAdWatchDate: payment.user.lastAdWatchDate,
+      cooldownRemainingSeconds: Math.ceil(AD_COOLDOWN_MS / 1000),
+      dayKey: utcDayKey(now),
+      serverNow: now.toISOString()
+    });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+      ...(error.retryAfterSeconds ? { retryAfterSeconds: error.retryAfterSeconds } : {})
+    });
+    throw error;
   }
 });
 

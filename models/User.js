@@ -11,6 +11,9 @@ const userSchema = new mongoose.Schema(
     photoUrl: { type: String, default: '' },
 
     points: { type: Number, default: 0, min: 0 },
+    dailyAdsWatched: { type: Number, default: 0, min: 0, max: 5 },
+    lastAdWatchDate: { type: Date, default: null },
+    miningBoostExpiresAt: { type: Date, default: null },
     // Monotonic transaction lock marker used to serialize VIP financial claims.
     vipClaimLockVersion: { type: Number, default: 0, min: 0 },
     gramBalance: { type: Number, default: 0, min: 0 },
