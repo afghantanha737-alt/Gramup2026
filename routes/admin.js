@@ -28,6 +28,7 @@ const WeeklyLeaderboardAward = require('../models/WeeklyLeaderboardAward');
 const LatestPostEngagementState = require('../models/LatestPostEngagementState');
 const Deposit = require('../models/Deposit');
 const GramSwapIntent = require('../models/GramSwapIntent');
+const MobileAuthChallenge = require('../models/MobileAuthChallenge');
 const MobileSession = require('../models/MobileSession');
 const OnboardingChallenge = require('../models/OnboardingChallenge');
 const NotificationDelivery = require('../models/NotificationDelivery');
@@ -36,6 +37,8 @@ const IdempotencyOperation = require('../models/IdempotencyOperation');
 const VipPlan = require('../models/VipPlan');
 const VipSubscription = require('../models/VipSubscription');
 const VipReserve = require('../models/VipReserve');
+const TaskReactionState = require('../models/TaskReactionState');
+const TelegramAdminConversation = require('../models/TelegramAdminConversation');
 const { isValidAdminKey } = require('../utils/adminKey');
 const RequiredChannel = require('../models/RequiredChannel');
 const { membership, validateChannelRef, normalizeChannelInput } = require('../utils/membership');
@@ -1908,71 +1911,79 @@ router.delete('/users/:id', async (req, res) => {
       const user = await User.findById(req.params.id).session(session);
       if (!user) return { missing: true };
 
-      const dependentCount = await User.countDocuments({ referredBy: user._id }).session(session);
-      if (dependentCount > 0) return { hasDependents: true, dependentCount };
-
-      const financialLinks = { $or: [
-        { user: user._id }, { sourceUserId: user._id }, { recipientUserId: user._id }
-      ] };
-      const [ledgerHistory, transactionHistory, pendingDeposit, openWithdrawal, pendingSwap,
-        confirmedDeposit, paidWithdrawal, confirmedSwap, openAward, paidAward,
-        vipFinancialHistory, balanceFinancialAudit] = await Promise.all([
-        PointsLedger.exists(financialLinks).session(session),
-        Transaction.exists(financialLinks).session(session),
+      // Keep unsettled operations connected to a live account until they can be
+      // resolved safely; completed financial history never blocks profile deletion.
+      const [pendingDeposit, openWithdrawal, pendingSwap, openAward, activeVipPlan] = await Promise.all([
         Deposit.exists({ user: user._id, status: 'pending' }).session(session),
         Withdrawal.exists({ user: user._id, status: { $in: ['pending', 'approved', 'processing'] } }).session(session),
         GramSwapIntent.exists({ user: user._id, status: 'pending' }).session(session),
-        Deposit.exists({ user: user._id, status: 'confirmed' }).session(session),
-        Withdrawal.exists({ user: user._id, status: 'paid' }).session(session),
-        GramSwapIntent.exists({ user: user._id, status: 'confirmed' }).session(session),
         WeeklyLeaderboardAward.exists({ user: user._id, status: { $in: ['pending', 'processing', 'failed'] } }).session(session),
-        WeeklyLeaderboardAward.exists({ user: user._id, status: 'paid' }).session(session),
-        VipSubscription.exists({ user: user._id }).session(session),
-        BalanceAudit.exists({ userId: user._id, currency: { $in: ['points', 'gram'] } }).session(session)
+        VipSubscription.exists({ user: user._id, status: 'active' }).session(session)
       ]);
-      if (ledgerHistory || transactionHistory || confirmedDeposit || paidWithdrawal || confirmedSwap || paidAward
-        || vipFinancialHistory || balanceFinancialAudit) {
-        return { hasFinancialHistory: true };
+      if (pendingDeposit || openWithdrawal || pendingSwap || openAward || activeVipPlan) {
+        return { hasOpenFinancialOperations: true };
       }
-      if (pendingDeposit || openWithdrawal || pendingSwap || openAward) return { hasOpenFinancialOperations: true };
 
-      const referrer = user.referredBy
-        ? await User.findById(user.referredBy).session(session)
-        : null;
+      const referrerIds = new Set();
+      if (user.referredBy) referrerIds.add(String(user.referredBy));
+      const linkedReferrers = await User.find({ activeReferralIds: user._id })
+        .select('_id activeReferralIds').session(session);
+      for (const referrer of linkedReferrers) referrerIds.add(String(referrer._id));
+      const referrersToUpdate = referrerIds.size
+        ? await User.find({ _id: { $in: [...referrerIds] } }).select('_id activeReferralIds').session(session)
+        : [];
+
+      // Detach direct invitees and remove the deleted ID from every cached
+      // referral list before deleting the profile; financial reward journals
+      // remain unchanged and continue to reconcile by their internal IDs.
+      await User.updateMany({ referredBy: user._id }, { $set: { referredBy: null } }, { session });
+      await User.updateMany({ activeReferralIds: user._id }, { $pull: { activeReferralIds: user._id } }, { session });
+      if (user.telegramId) {
+        await Settings.updateOne(
+          { key: 'global' },
+          { $pull: { maintenanceAllowedTelegramIds: String(user.telegramId) } },
+          { session }
+        );
+      }
 
       await ReferralRelationship.deleteMany({
         $or: [{ referrerId: user._id }, { referredUserId: user._id }]
       }).session(session);
       await TaskCompletion.deleteMany({ user: user._id }).session(session);
       await LatestPostEngagementState.deleteMany({ user: user._id }).session(session);
-      await Withdrawal.deleteMany({ user: user._id }).session(session);
-      await Deposit.deleteMany({ user: user._id }).session(session);
       await NotificationDelivery.deleteMany({
         $or: [
           { user: user._id },
+          { telegramId: String(user.telegramId) },
           { eventKey: `referral-initial:${user._id}` }
         ]
       }).session(session);
       await IdempotencyOperation.deleteMany({ userId: user._id }).session(session);
-      await BalanceAudit.deleteMany({ userId: user._id }).session(session);
-      await GramSwapIntent.deleteMany({ user: user._id }).session(session);
       await MobileSession.deleteMany({ user: user._id }).session(session);
+      await MobileAuthChallenge.deleteMany({ telegramId: String(user.telegramId) }).session(session);
       await OnboardingChallenge.deleteMany({ user: user._id }).session(session);
       await TonProofChallenge.deleteMany({ user: user._id }).session(session);
+      await TaskReactionState.deleteMany({ telegramUserId: String(user.telegramId) }).session(session);
+      await TelegramAdminConversation.deleteMany({ telegramId: String(user.telegramId) }).session(session);
+      await AdminLog.updateMany({
+        targetType: 'user',
+        targetId: { $in: [String(user._id), String(user.telegramId)] }
+      }, {
+        $set: { targetId: '', details: '[target account details redacted after account deletion]' }
+      }, { session });
       await recordAdminLogRequired({
         actor: req.adminActor,
-        action: 'user_delete',
+        action: 'user_delete_anonymized',
         targetType: 'user',
-        targetId: user._id,
-        details: 'Admin-confirmed permanent user deletion; eligible linked records removed after financial and referral safeguards.'
+        targetId: '',
+        details: 'Admin-confirmed profile and access deletion; personal operational data removed. Immutable financial and audit history retained without a profile.'
       }, session);
       await User.deleteOne({ _id: user._id }).session(session);
 
-      if (referrer) {
+      for (const referrer of referrersToUpdate) {
         const remainingInvitedCount = await User.countDocuments({ referredBy: referrer._id }).session(session);
-        const activeReferralIds = Array.isArray(referrer.activeReferralIds)
-          ? referrer.activeReferralIds.filter(id => String(id) !== String(user._id))
-          : [];
+        const activeReferralIds = (Array.isArray(referrer.activeReferralIds) ? referrer.activeReferralIds : [])
+          .filter(id => String(id) !== String(user._id));
         await User.updateOne(
           { _id: referrer._id },
           {
@@ -1990,22 +2001,11 @@ router.delete('/users/:id', async (req, res) => {
     });
 
     if (outcome.missing) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
-    if (outcome.hasFinancialHistory) {
-      return res.status(409).json({ success: false, code: 'FINANCIAL_HISTORY_IMMUTABLE',
-        message: 'این حساب سابقه مالی دارد؛ برای حفظ دفتر کل حذف نمی‌شود. حساب را مسدود کنید.' });
-    }
     if (outcome.hasOpenFinancialOperations) {
       return res.status(409).json({ success: false, code: 'OPEN_FINANCIAL_OPERATIONS',
-        message: 'حذف انجام نشد؛ ابتدا واریز، برداشت، تبدیل یا جایزهٔ هفتگی باز این حساب را تعیین‌تکلیف کنید.' });
+        message: 'حذف انجام نشد؛ ابتدا واریز، برداشت، تبدیل، جایزهٔ هفتگی یا طرح Mining فعال این حساب را تعیین‌تکلیف کنید.' });
     }
-    if (outcome.hasDependents) {
-      return res.status(409).json({
-        success: false,
-        code: 'REFERRAL_DEPENDENCIES_EXIST',
-        message: `حذف انجام نشد؛ این User هنوز Referrer ${outcome.dependentCount} کاربر دیگر است.`
-      });
-    }
-    return res.json({ success: true, message: 'کاربر و داده‌های وابستهٔ مجاز با موفقیت حذف شدند.' });
+    return res.json({ success: true, message: 'پروفایل و دسترسی کاربر حذف و داده‌های شخصی غیرمالی پاک شدند؛ سوابق مالی و ممیزی immutable حفظ شده‌اند.' });
   } catch (error) {
     if (error?.code === 'TRANSACTIONS_UNAVAILABLE') {
       return res.status(503).json({ success: false, code: error.code, message: 'حذف انجام نشد؛ MongoDB Transaction در دسترس نیست.' });

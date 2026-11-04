@@ -25,21 +25,32 @@ const route = source.slice(start, end);
 assert.doesNotMatch(route, /isTestDeleteEnvironment|TEST_ONLY|TEST environment/);
 assert.match(route, /hasUserDeletionConfirmation\(req\.body\?\.confirmation, req\.params\.id\)/);
 assert.match(route, /getMongoTransactionStatus\(\)/);
-assert.match(route, /PointsLedger\.exists\(financialLinks\)/);
-assert.match(route, /Transaction\.exists\(financialLinks\)/);
-assert.match(route, /VipSubscription\.exists\(\{ user: user\._id \}\)/);
-assert.match(route, /BalanceAudit\.exists\(\{ userId: user\._id, currency: \{ \$in: \['points', 'gram'\] \} \}\)/);
-assert.match(route, /WeeklyLeaderboardAward\.exists/);
+assert.doesNotMatch(route, /hasFinancialHistory|FINANCIAL_HISTORY_IMMUTABLE|PointsLedger\.exists|Transaction\.exists|BalanceAudit\.exists/,
+  'completed immutable financial history must not block profile deletion');
 assert.match(route, /hasOpenFinancialOperations/);
-assert.match(route, /hasDependents/);
-for (const model of ['ReferralRelationship', 'TaskCompletion', 'LatestPostEngagementState', 'Withdrawal', 'Deposit',
-  'NotificationDelivery', 'IdempotencyOperation', 'BalanceAudit', 'GramSwapIntent', 'MobileSession',
-  'OnboardingChallenge', 'TonProofChallenge']) {
+assert.doesNotMatch(route, /REFERRAL_DEPENDENCIES_EXIST|hasDependents/,
+  'referral connections must be detached instead of blocking profile deletion');
+assert.match(route, /VipSubscription\.exists\(\{ user: user\._id, status: 'active' \}\)/,
+  'an active VIP contract remains protected as an unresolved liability');
+assert.match(route, /User\.updateMany\(\{ referredBy: user\._id \}, \{ \$set: \{ referredBy: null \} \}/,
+  'direct invitees must be detached from the deleted profile');
+assert.match(route, /User\.updateMany\(\{ activeReferralIds: user\._id \}/,
+  'cached referral identifiers must be removed from other profiles');
+assert.match(route, /Settings\.updateOne\([\s\S]*maintenanceAllowedTelegramIds/,
+  'the deleted Telegram ID must be removed from the maintenance allowlist');
+for (const model of ['ReferralRelationship', 'TaskCompletion', 'LatestPostEngagementState',
+  'NotificationDelivery', 'IdempotencyOperation', 'MobileSession', 'MobileAuthChallenge',
+  'OnboardingChallenge', 'TonProofChallenge', 'TaskReactionState', 'TelegramAdminConversation']) {
   assert.match(route, new RegExp(`${model}\\.deleteMany`));
 }
-assert.doesNotMatch(route, /VipSubscription\.deleteMany|WeeklyLeaderboardAward\.deleteMany/);
+assert.doesNotMatch(route, /(?:PointsLedger|Transaction|BalanceAudit|Deposit|Withdrawal|GramSwapIntent|VipSubscription|WeeklyLeaderboardAward)\.deleteMany/,
+  'financial ledgers, audits, payment records, awards and VIP history must be preserved');
+assert.match(route, /AdminLog\.updateMany\([\s\S]*targetId: \{ \$in: \[String\(user\._id\), String\(user\.telegramId\)\] \}/,
+  'old admin logs linked to the account must be redacted');
 assert.match(route, /recordAdminLogRequired\(/);
-assert.doesNotMatch(route, /AdminLog\.deleteMany/);
+assert.match(route, /action: 'user_delete_anonymized'/);
+assert.match(route, /targetId: ''/,
+  'the deletion audit event must not retain a link to the deleted profile');
 assert.match(route, /User\.deleteOne\(/);
 
-console.log('PASS — production deletion confirmation, financial/referral guards, atomic audit and linked-record cleanup');
+console.log('PASS — profile deletion is not blocked by completed financial history; access/personal data is purged, unresolved liabilities are guarded, and accounting records are preserved');

@@ -1804,7 +1804,7 @@ async function loadUsers() {
                   : `<button class="danger" onclick="userAction('${u._id}','ban')">مسدود کردن</button>`
                 }
                 <button class="secondary" onclick="openUserAccount('${u._id}')">موجودی و جزئیات</button>
-                <button class="danger" title="Permanently deletes the account and eligible related data; open financial operations, financial history, or referral dependents block deletion" onclick="deleteUser('${u._id}')">Delete User</button>
+                <button class="danger" title="Permanently removes profile, access and non-financial personal data. Immutable financial history is retained without a profile link; open operations or active Mining plans must be resolved first." onclick="deleteUser('${u._id}')">Delete User</button>
                 <button class="secondary" onclick="testWeeklyRewardNotification('${u._id}')">Test Weekly Reward Notification</button>
               </td>
             </tr>
@@ -1969,7 +1969,7 @@ async function userAction(id, action) {
 }
 
 async function deleteUser(id) {
-  const warning = "این عملیات حذف دائمی است و قابل بازگشت نیست. حساب و داده‌های وابستهٔ مجاز حذف می‌شوند. سابقهٔ مالی، تراکنش یا جایزهٔ هفتگی باز، یا کاربران دعوت‌شده باعث لغو حذف می‌شود.";
+  const warning = "این عملیات پروفایل، اطلاعات دسترسی، نشست‌ها و داده‌های شخصی غیرمالی کاربر را به‌طور دائمی حذف می‌کند و قابل بازگشت نیست. سوابق دفترکل، تراکنش‌ها و ممیزی مالی برای تطبیق موجودی حفظ می‌شوند اما پس از حذف پروفایل، به کاربر قابل پیوند نخواهند بود. واریز، برداشت، تبدیل، جایزهٔ هفتگیِ باز یا طرح Mining فعال باید ابتدا تعیین‌تکلیف شود. پیوندهای ارجاعی قطع می‌شوند.";
   if (!confirm(warning)) return;
   const confirmationText = `DELETE USER ${id}`;
   const confirmation = prompt(`برای تأیید نهایی، دقیقاً این عبارت را وارد کنید:\n${confirmationText}`);
@@ -1982,7 +1982,7 @@ async function deleteUser(id) {
       method: "DELETE",
       body: JSON.stringify({ confirmation })
     });
-    showMsg(result.message || "User با موفقیت حذف شد.", "success");
+    showMsg(result.message || "پروفایل و داده‌های شخصی غیرمالی حذف شد؛ سوابق مالی برای تطبیق حفظ شدند.", "success");
     loadUsers();
   } catch (error) {
     showMsg(error.message, "error");
