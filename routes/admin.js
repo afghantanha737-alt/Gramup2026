@@ -21,11 +21,15 @@ const { normalizeTaskUrl } = require('../utils/taskUrl');
 const AdminLog = require('../models/AdminLog');
 const TaskCompletion = require('../models/TaskCompletion');
 const PointsLedger = require('../models/PointsLedger');
+const Transaction = require('../models/Transaction');
 const BalanceAudit = require('../models/BalanceAudit');
 const ReferralRelationship = require('../models/ReferralRelationship');
 const WeeklyLeaderboardAward = require('../models/WeeklyLeaderboardAward');
 const LatestPostEngagementState = require('../models/LatestPostEngagementState');
 const Deposit = require('../models/Deposit');
+const GramSwapIntent = require('../models/GramSwapIntent');
+const MobileSession = require('../models/MobileSession');
+const OnboardingChallenge = require('../models/OnboardingChallenge');
 const NotificationDelivery = require('../models/NotificationDelivery');
 const BroadcastJob = require('../models/BroadcastJob');
 const IdempotencyOperation = require('../models/IdempotencyOperation');
@@ -52,8 +56,9 @@ const { calculateTotalRewardCents } = require('../utils/vipRewards');
 const { toVipAdminRecord } = require('../utils/vipAdminReadModel');
 const { toCents: vipReserveToCents, fundReserve: fundVipReserve, reserveSnapshot: vipReserveSnapshot } = require('../utils/vipReserve');
 const { isTestEnvironment, normalizeAllowedTelegramIds } = require('../utils/maintenance');
-const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
+const { hasUserDeletionConfirmation } = require('../utils/adminUserDeletion');
 const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/depositFinance');
+const TonProofChallenge = require('../models/TonProofChallenge');
 const { buildVipReserveReport, buildVipReserveWorkbook } = require('../utils/vipReserveReport');
 const { pricingForVipPlan, pricePointsForVipPlan } = require('../utils/vipPricing');
 const { newVipPolicyForPlan, dailyPointsCentsFromBps, periodRewardPercentForPlan } = require('../utils/vipPolicy');
@@ -1877,11 +1882,15 @@ router.post('/users/:id/unban', async (req, res) => {
 });
 
 router.delete('/users/:id', async (req, res) => {
-  if (!isTestDeleteEnvironment()) {
-    return res.status(403).json({ success: false, code: 'TEST_ONLY', message: 'حذف User فقط در محیط TEST مجاز است.' });
-  }
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
     return res.status(400).json({ success: false, message: 'شناسه کاربر نامعتبر است.' });
+  }
+  if (!hasUserDeletionConfirmation(req.body?.confirmation, req.params.id)) {
+    return res.status(400).json({
+      success: false,
+      code: 'USER_DELETION_CONFIRMATION_REQUIRED',
+      message: `برای حذف دائمی، تأیید دقیق «DELETE USER ${req.params.id}» الزامی است.`
+    });
   }
 
   const transactionStatus = getMongoTransactionStatus();
@@ -1889,7 +1898,7 @@ router.delete('/users/:id', async (req, res) => {
     return res.status(503).json({
       success: false,
       code: 'TRANSACTIONS_UNAVAILABLE',
-      message: 'حذف انجام نشد؛ MongoDB Transaction در محیط TEST در دسترس نیست.',
+      message: 'حذف انجام نشد؛ قابلیت امن MongoDB Transaction در دسترس نیست.',
       reason: transactionStatus.reason || 'Transaction capability was not confirmed.'
     });
   }
@@ -1905,11 +1914,27 @@ router.delete('/users/:id', async (req, res) => {
       const financialLinks = { $or: [
         { user: user._id }, { sourceUserId: user._id }, { recipientUserId: user._id }
       ] };
-      const [ledgerHistory, transactionHistory] = await Promise.all([
+      const [ledgerHistory, transactionHistory, pendingDeposit, openWithdrawal, pendingSwap,
+        confirmedDeposit, paidWithdrawal, confirmedSwap, openAward, paidAward,
+        vipFinancialHistory, balanceFinancialAudit] = await Promise.all([
         PointsLedger.exists(financialLinks).session(session),
-        require('../models/Transaction').exists(financialLinks).session(session)
+        Transaction.exists(financialLinks).session(session),
+        Deposit.exists({ user: user._id, status: 'pending' }).session(session),
+        Withdrawal.exists({ user: user._id, status: { $in: ['pending', 'approved', 'processing'] } }).session(session),
+        GramSwapIntent.exists({ user: user._id, status: 'pending' }).session(session),
+        Deposit.exists({ user: user._id, status: 'confirmed' }).session(session),
+        Withdrawal.exists({ user: user._id, status: 'paid' }).session(session),
+        GramSwapIntent.exists({ user: user._id, status: 'confirmed' }).session(session),
+        WeeklyLeaderboardAward.exists({ user: user._id, status: { $in: ['pending', 'processing', 'failed'] } }).session(session),
+        WeeklyLeaderboardAward.exists({ user: user._id, status: 'paid' }).session(session),
+        VipSubscription.exists({ user: user._id }).session(session),
+        BalanceAudit.exists({ userId: user._id, currency: { $in: ['points', 'gram'] } }).session(session)
       ]);
-      if (ledgerHistory || transactionHistory) return { hasFinancialHistory: true };
+      if (ledgerHistory || transactionHistory || confirmedDeposit || paidWithdrawal || confirmedSwap || paidAward
+        || vipFinancialHistory || balanceFinancialAudit) {
+        return { hasFinancialHistory: true };
+      }
+      if (pendingDeposit || openWithdrawal || pendingSwap || openAward) return { hasOpenFinancialOperations: true };
 
       const referrer = user.referredBy
         ? await User.findById(user.referredBy).session(session)
@@ -1922,8 +1947,6 @@ router.delete('/users/:id', async (req, res) => {
       await LatestPostEngagementState.deleteMany({ user: user._id }).session(session);
       await Withdrawal.deleteMany({ user: user._id }).session(session);
       await Deposit.deleteMany({ user: user._id }).session(session);
-      await VipSubscription.deleteMany({ user: user._id }).session(session);
-      await WeeklyLeaderboardAward.deleteMany({ user: user._id }).session(session);
       await NotificationDelivery.deleteMany({
         $or: [
           { user: user._id },
@@ -1932,6 +1955,17 @@ router.delete('/users/:id', async (req, res) => {
       }).session(session);
       await IdempotencyOperation.deleteMany({ userId: user._id }).session(session);
       await BalanceAudit.deleteMany({ userId: user._id }).session(session);
+      await GramSwapIntent.deleteMany({ user: user._id }).session(session);
+      await MobileSession.deleteMany({ user: user._id }).session(session);
+      await OnboardingChallenge.deleteMany({ user: user._id }).session(session);
+      await TonProofChallenge.deleteMany({ user: user._id }).session(session);
+      await recordAdminLogRequired({
+        actor: req.adminActor,
+        action: 'user_delete',
+        targetType: 'user',
+        targetId: user._id,
+        details: 'Admin-confirmed permanent user deletion; eligible linked records removed after financial and referral safeguards.'
+      }, session);
       await User.deleteOne({ _id: user._id }).session(session);
 
       if (referrer) {
@@ -1960,6 +1994,10 @@ router.delete('/users/:id', async (req, res) => {
       return res.status(409).json({ success: false, code: 'FINANCIAL_HISTORY_IMMUTABLE',
         message: 'این حساب سابقه مالی دارد؛ برای حفظ دفتر کل حذف نمی‌شود. حساب را مسدود کنید.' });
     }
+    if (outcome.hasOpenFinancialOperations) {
+      return res.status(409).json({ success: false, code: 'OPEN_FINANCIAL_OPERATIONS',
+        message: 'حذف انجام نشد؛ ابتدا واریز، برداشت، تبدیل یا جایزهٔ هفتگی باز این حساب را تعیین‌تکلیف کنید.' });
+    }
     if (outcome.hasDependents) {
       return res.status(409).json({
         success: false,
@@ -1967,7 +2005,7 @@ router.delete('/users/:id', async (req, res) => {
         message: `حذف انجام نشد؛ این User هنوز Referrer ${outcome.dependentCount} کاربر دیگر است.`
       });
     }
-    return res.json({ success: true, message: 'User و داده‌های وابسته‌ی او از محیط TEST حذف شدند.' });
+    return res.json({ success: true, message: 'کاربر و داده‌های وابستهٔ مجاز با موفقیت حذف شدند.' });
   } catch (error) {
     if (error?.code === 'TRANSACTIONS_UNAVAILABLE') {
       return res.status(503).json({ success: false, code: error.code, message: 'حذف انجام نشد؛ MongoDB Transaction در دسترس نیست.' });

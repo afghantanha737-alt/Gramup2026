@@ -1,23 +1,20 @@
 'use strict';
 
-function isTestDeleteEnvironment(env = process.env) {
-  const nodeEnv = String(env.NODE_ENV || '').trim().toLowerCase();
-  const appEnv = String(env.APP_ENV || '').trim().toLowerCase();
+const USER_DELETION_CONFIRMATION_PREFIX = 'DELETE USER';
+const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
 
-  // An explicit application production marker always wins. The project's test
-  // deployment uses its dedicated hostname even when Render sets NODE_ENV to
-  // production, so that hostname remains a valid TEST signal when APP_ENV is not.
-  if (appEnv === 'production') return false;
-  if (nodeEnv === 'test' || appEnv === 'test') return true;
-
-  try {
-    const hostname = new URL(String(env.APP_URL || '')).hostname.toLowerCase();
-    if (hostname === 'gramup-test.onrender.com' || hostname.endsWith('.gramup-test.onrender.com')) return true;
-  } catch {
-    // Missing or invalid APP_URL is not evidence of a test environment.
-  }
-
-  return false;
+function userDeletionConfirmation(userId) {
+  const id = String(userId || '').trim();
+  return OBJECT_ID_PATTERN.test(id) ? `${USER_DELETION_CONFIRMATION_PREFIX} ${id}` : '';
 }
 
-module.exports = { isTestDeleteEnvironment };
+function hasUserDeletionConfirmation(value, userId) {
+  const expected = userDeletionConfirmation(userId);
+  return Boolean(expected) && typeof value === 'string' && value === expected;
+}
+
+module.exports = {
+  USER_DELETION_CONFIRMATION_PREFIX,
+  userDeletionConfirmation,
+  hasUserDeletionConfirmation
+};

@@ -1804,7 +1804,7 @@ async function loadUsers() {
                   : `<button class="danger" onclick="userAction('${u._id}','ban')">مسدود کردن</button>`
                 }
                 <button class="secondary" onclick="openUserAccount('${u._id}')">موجودی و جزئیات</button>
-                <button class="danger" title="TEST environment only; deletes the account and its related records" onclick="deleteUser('${u._id}')">Delete User (TEST only)</button>
+                <button class="danger" title="Permanently deletes the account and eligible related data; open financial operations, financial history, or referral dependents block deletion" onclick="deleteUser('${u._id}')">Delete User</button>
                 <button class="secondary" onclick="testWeeklyRewardNotification('${u._id}')">Test Weekly Reward Notification</button>
               </td>
             </tr>
@@ -1969,15 +1969,19 @@ async function userAction(id, action) {
 }
 
 async function deleteUser(id) {
-  const warning = "این عملیات فقط در محیط TEST مجاز است. User و داده‌های وابسته او به‌صورت کامل حذف می‌شوند و قابل بازگشت نیستند. کاربری که کاربران دیگری را دعوت کرده باشد تا زمان رفع وابستگی حذف نمی‌شود.";
+  const warning = "این عملیات حذف دائمی است و قابل بازگشت نیست. حساب و داده‌های وابستهٔ مجاز حذف می‌شوند. سابقهٔ مالی، تراکنش یا جایزهٔ هفتگی باز، یا کاربران دعوت‌شده باعث لغو حذف می‌شود.";
   if (!confirm(warning)) return;
-  const confirmation = prompt("برای تأیید نهایی حذف، عبارت DELETE USER را دقیقاً وارد کنید:");
-  if (confirmation !== "DELETE USER") {
+  const confirmationText = `DELETE USER ${id}`;
+  const confirmation = prompt(`برای تأیید نهایی، دقیقاً این عبارت را وارد کنید:\n${confirmationText}`);
+  if (confirmation !== confirmationText) {
     showMsg("حذف لغو شد؛ عبارت تأیید صحیح وارد نشد.", "error");
     return;
   }
   try {
-    const result = await api(`/api/admin/users/${id}`, { method: "DELETE" });
+    const result = await api(`/api/admin/users/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirmation })
+    });
     showMsg(result.message || "User با موفقیت حذف شد.", "success");
     loadUsers();
   } catch (error) {
