@@ -3719,7 +3719,7 @@ function updateVipLiveDashboard() {
       if (element.dataset.vipLiveRate === id) {
         const baseRate = Number(subscription.dailyMiningRatePoints || 0);
         const rate = now < Date.parse(state.miningBoostExpiresAt || "") ? baseRate * 1.05 : baseRate;
-        element.textContent = `${formatNumber(ended ? 0 : rate, Number.isInteger(rate) ? 0 : 2)} UP/day`;
+        element.textContent = `${formatNumber(ended ? 0 : rate, Number.isInteger(rate) ? 0 : 2)} ${t("vip_points_per_day")}`;
       }
     });
       document.querySelectorAll("[data-vip-live-days]").forEach(element => {
@@ -3882,7 +3882,7 @@ function renderProfileVip() {
           <div class="vipPlanTopline">
             <div class="vipPlanTitleLine"><span class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</span><span class="vipPlanDuration">${formatPoints(plan.durationDays)}d</span>${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}</div>
           </div>
-          <div class="vipPlanInlineMeta"><span>${formatPoints(plan.pricePoints)} ${t("vip_UP_unit")}</span><i aria-hidden="true">·</i><span>${formatNumber(planDailyMiningPoints, 2)} ${t("vip_UP_per_day")}</span></div>
+          <div class="vipPlanInlineMeta"><span>${formatPoints(plan.pricePoints)} ${t("vip_UP_unit")}</span><i aria-hidden="true">·</i><span>${t("vip_daily_total_label")}: ${formatNumber(planDailyMiningPoints, 2)} ${t("vip_UP_per_day")}</span><i aria-hidden="true">·</i><span>${t("vip_total_received_label")}: ${formatNumber(isNewVipPolicy ? totalReceivedPoints : totalRewardPoints, 2)} ${t("vip_UP_unit")}</span></div>
         </div>
         <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})"><span>${isPurchasing ? t("vip_buying") : buttonLabel}</span><i aria-hidden="true">↗</i></button>
       </article>`;
@@ -3899,7 +3899,7 @@ function renderProfileVip() {
       <div class="vipHeroPlanItem">
         <div class="vipHeroPlanRow">
           <span class="vipHeroPlanName">${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</span>
-          <span class="vipHeroPlanMeta"><span data-vip-live-rate="${id}">${formatNumber(rate, Number.isInteger(rate) ? 0 : 2)} UP/day</span> · <span data-vip-live-days="${id}">${formatPoints(remainingDays)}d</span></span>
+          <span class="vipHeroPlanMeta"><span data-vip-live-rate="${id}">${formatNumber(rate, Number.isInteger(rate) ? 0 : 2)} ${t("vip_points_per_day")}</span> · <span data-vip-live-days="${id}">${formatPoints(remainingDays)}d</span></span>
         </div>
         <div class="vipHeroPlanProgress" role="progressbar" aria-label="${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span data-vip-progress="${id}" style="width:${progress}%"></span></div>
       </div>`;
