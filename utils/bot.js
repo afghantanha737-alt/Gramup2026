@@ -3,6 +3,8 @@
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_DELIVERY_TIMEOUT_MS = 8000;
 const DELIVERY_METHODS = new Set(['sendMessage', 'sendPhoto', 'copyMessage', 'answerCallbackQuery']);
+const TELEGRAM_USER_ID_PATTERN = /^[1-9]\d{0,15}$/;
+const TELEGRAM_MAX_USER_ID = (1n << 52n) - 1n;
 
 class TelegramApiError extends Error {
   constructor(message, statusCode, body) {
@@ -183,12 +185,27 @@ async function markTelegramBlocked(telegramId) {
 // از پیام‌های همگانی حذف کند.
 function activeTelegramUserFilter() {
   return {
+    // Keep this broad enough to retrieve legacy rows whose BSON ID was stored
+    // as a number; filterActiveTelegramRecipients validates the final chat ID.
     telegramId: { $exists: true, $nin: [null, ''] },
     $and: [
       { $or: [{ isBanned: false }, { isBanned: { $exists: false } }] },
       { $or: [{ telegramBlockedAt: null }, { telegramBlockedAt: { $exists: false } }] }
     ]
   };
+}
+
+function isValidTelegramUserId(value) {
+  const id = String(value == null ? '' : value);
+  if (!TELEGRAM_USER_ID_PATTERN.test(id)) return false;
+  try { return BigInt(id) <= TELEGRAM_MAX_USER_ID; }
+  catch { return false; }
+}
+
+function filterActiveTelegramRecipients(users) {
+  return (Array.isArray(users) ? users : []).filter(user =>
+    isValidTelegramUserId(user?.telegramId) && user?.isBanned !== true && !user?.telegramBlockedAt
+  );
 }
 
 async function copyMessageSafe(User, telegramId, fromChatId, messageId) {
@@ -203,7 +220,8 @@ async function copyMessageSafe(User, telegramId, fromChatId, messageId) {
 
 async function broadcastToActiveUsers(User, textOrFn) {
   if (!bot) return;
-  const users = await User.find(activeTelegramUserFilter(), 'telegramId language');
+  const candidates = await User.find(activeTelegramUserFilter(), 'telegramId language');
+  const users = filterActiveTelegramRecipients(candidates);
   console.log(`📣 Text broadcast started: recipients=${users.length}`);
   const BATCH_SIZE = 20;
   const DELAY_MS = 1100;
@@ -217,7 +235,8 @@ async function broadcastToActiveUsers(User, textOrFn) {
 
 async function broadcastCopyToActiveUsers(User, fromChatId, messageId) {
   if (!bot) return 0;
-  const users = await User.find(activeTelegramUserFilter(), 'telegramId');
+  const candidates = await User.find(activeTelegramUserFilter(), 'telegramId isBanned telegramBlockedAt');
+  const users = filterActiveTelegramRecipients(candidates);
   console.log(`📣 Copy broadcast started: recipients=${users.length}, source=${fromChatId}/${messageId}`);
   const BATCH_SIZE = 20;
   const DELAY_MS = 1100;
@@ -232,4 +251,4 @@ async function broadcastCopyToActiveUsers(User, fromChatId, messageId) {
   return sent;
 }
 
-module.exports = { bot, buildTelegramWebhookPayload, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, broadcastToActiveUsers, broadcastCopyToActiveUsers, withTelegramDeliveryDeadline };
+module.exports = { bot, buildTelegramWebhookPayload, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, isValidTelegramUserId, filterActiveTelegramRecipients, broadcastToActiveUsers, broadcastCopyToActiveUsers, withTelegramDeliveryDeadline };

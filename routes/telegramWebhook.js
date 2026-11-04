@@ -2,7 +2,13 @@
 const express = require('express');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
-const { bot, markTelegramBlocked, isTelegramDeliveryBlocked } = require('../utils/bot');
+const {
+  bot,
+  markTelegramBlocked,
+  isTelegramDeliveryBlocked,
+  activeTelegramUserFilter,
+  filterActiveTelegramRecipients
+} = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { safelySendTelegram } = require('../utils/telegramNotification');
 const sendMessage = (...args) => safelySendTelegram(() => bot.sendMessage(...args), { context: 'webhook_reply' });
@@ -132,10 +138,8 @@ async function handleAdminPending(chatId) {
 
 async function broadcastBotMessageToActiveUsers(fromChatId, messageId) {
   if (!bot) return { sent: 0, total: 0 };
-  const users = await User.find({
-    telegramId: { $exists: true, $nin: [null, ''] },
-    isBanned: { $ne: true }
-  }).select('telegramId').lean();
+  const candidates = await User.find(activeTelegramUserFilter()).select('telegramId isBanned telegramBlockedAt').lean();
+  const users = filterActiveTelegramRecipients(candidates);
   const batchSize = 20;
   const delayMs = 1100;
   let sent = 0;
@@ -149,8 +153,7 @@ async function broadcastBotMessageToActiveUsers(fromChatId, messageId) {
         return true;
       } catch (error) {
         if (!firstError) firstError = String(error?.message || error).slice(0, 240);
-        // copyMessage may fail because of source-message permissions; do not mark
-        // the recipient as blocked based on this ambiguous operation.
+        if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
         return false;
       }
     }));
@@ -202,10 +205,8 @@ async function sendBotBroadcastToUser(user, pending) {
 }
 
 async function broadcastPendingTelegramMessage(pending) {
-  const users = await User.find({
-    telegramId: { $exists: true, $nin: [null, ''] },
-    isBanned: { $ne: true }
-  }).select('telegramId').lean();
+  const candidates = await User.find(activeTelegramUserFilter()).select('telegramId isBanned telegramBlockedAt').lean();
+  const users = filterActiveTelegramRecipients(candidates);
   const batchSize = 20;
   const delayMs = 1100;
   let sent = 0;
