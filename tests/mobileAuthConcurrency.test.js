@@ -31,7 +31,7 @@ const MobileAuthChallenge = {
     if (challenge?._id === filter._id && challenge.status === filter.status) Object.assign(challenge, update.$set || {});
   }
 };
-const userDoc = { _id: 'user-1', telegramId: '42', isBanned: false, phoneCountryCode: '', phoneVerifiedAt: null };
+const userDoc = { _id: 'user-1', telegramId: '42', isBanned: false };
 const User = { findOne: async () => userDoc };
 const mobileSession = { user: userDoc, save: async () => {} };
 const MobileSession = {
@@ -65,7 +65,7 @@ const { createMobileChallenge, verifyMobileChallenge, consumeMobileChallenge, re
     { status(code) { authError = code; return this; }, json(payload) { authError = payload; } },
     () => { authorized = true; }
   );
-  assert.strictEqual(authorized, true, 'a valid session remains authorized without any verified phone number');
+  assert.strictEqual(authorized, true, 'a valid session remains authorized using only the Telegram identity');
   assert.strictEqual(authError, null);
   console.log('PASS — mobile auth challenge verification and session consumption are atomic under concurrency');
 })().catch(error => { console.error(error); process.exitCode = 1; });

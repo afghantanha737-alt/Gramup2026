@@ -26,7 +26,7 @@ async function testWelcomeRace() {
   const referrer = {
     _id: 'referrer-welcome', telegramId: '200', referredBy: null, isBanned: false,
     accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0,
-    language: 'en', phoneCountryCode: '', phoneVerifiedAt: null, referralMessageConsent: 'unset'
+    language: 'en', referralMessageConsent: 'unset'
   };
   const invitee = {
     _id: 'invitee-welcome', telegramId: '201', referredBy: null, referralInitialRewardEligible: false,
@@ -130,7 +130,7 @@ async function testWarningTiming() {
   const user = {
     _id: 'warning-user', telegramId: '300', language: 'en', streak: 6,
     lastCheckIn: new Date('2026-10-29T23:00:00.000Z'), isBanned: false,
-    telegramBlockedAt: null, phoneCountryCode: '+93', phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'),
+    telegramBlockedAt: null,
     referralMessageConsent: 'granted'
   };
   let warningFilter;
@@ -181,7 +181,7 @@ async function testCommissionDedupAndFailure() {
   } = require('../utils/retentionNotifications');
   const recipient = {
     _id: 'commission-user', telegramId: '400', language: 'en', isBanned: false,
-    telegramBlockedAt: null, phoneCountryCode: '+98', phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'),
+    telegramBlockedAt: null,
     referralMessageConsent: 'granted'
   };
   const rows = new Map();
@@ -272,8 +272,8 @@ async function testWarningDeliveryClearsStaleAndClaimed() {
     }
   };
   const users = new Map([
-    ['stale-user', { _id: 'stale-user', telegramId: '500', isBanned: false, telegramBlockedAt: null, phoneCountryCode: '+93', phoneVerifiedAt: now, referralMessageConsent: 'granted', lastCheckIn: new Date('2026-10-29T12:00:00Z'), streak: 2 }],
-    ['claimed-user', { _id: 'claimed-user', telegramId: '501', isBanned: false, telegramBlockedAt: null, phoneCountryCode: '+93', phoneVerifiedAt: now, referralMessageConsent: 'granted', lastCheckIn: new Date('2026-10-30T12:00:00Z'), streak: 3 }]
+    ['stale-user', { _id: 'stale-user', telegramId: '500', isBanned: false, telegramBlockedAt: null, referralMessageConsent: 'granted', lastCheckIn: new Date('2026-10-29T12:00:00Z'), streak: 2 }],
+    ['claimed-user', { _id: 'claimed-user', telegramId: '501', isBanned: false, telegramBlockedAt: null, referralMessageConsent: 'granted', lastCheckIn: new Date('2026-10-30T12:00:00Z'), streak: 3 }]
   ]);
   let sends = 0;
   const result = await sweepNotificationType(DAILY_STREAK_WARNING_NOTIFICATION_TYPE, {

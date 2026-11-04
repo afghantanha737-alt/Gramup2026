@@ -711,7 +711,7 @@ html[data-theme="light"] .progressTrack { background: rgba(20,22,28,.08); }
 
 /* =========================================================
    GRAMUP HOME — Turbo-style redesign (header, home, bottom nav)
-   Sizes are measured from the reference screenshot (411px wide phone).
+   Sizes are measured from the reference screenshot (411px wide mobile viewport).
    Light = lavender look; dark keeps the same layout with dark tokens.
 ========================================================= */
 :root {

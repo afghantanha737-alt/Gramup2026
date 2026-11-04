@@ -2,8 +2,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const { contactRequestKeyboard } = require('./telegramPhoneContact');
-const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 const { safelySendTelegram, logTelegramNotificationFailure } = require('./telegramNotification');
 const START_COMMAND = /^\/start(?:@[A-Za-z0-9_]+)?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/;
 const DEFAULT_WELCOME_IMAGE_PATH = path.join(__dirname, '..', 'public', 'img', 'welcome-bot.jpg');
@@ -166,20 +164,22 @@ async function handleTelegramStart({
   }
 
   const language = user.language || 'fa';
-  if (command.payload === 'phone_contact') {
-    const delivered = await safelySendTelegram(() => {
-      if (isVerifiedAllowedPhone(user)) {
-        return bot.sendMessage(message.chat.id, botText('phoneContactVerified', language), { reply_markup: { remove_keyboard: true } });
-      }
-      return bot.sendMessage(message.chat.id, botText('phoneContactRequest', language),
-        { reply_markup: contactRequestKeyboard(botText('phoneShareButton', language)) });
-    }, { context: 'start_phone_contact', logger });
-    return { isNewUser, hadReferralPayload: false, welcomeSent: delivered, hasMiniAppButton: false, phoneContactRequested: true };
-  }
-
   if (isNewUser && command.payload) {
     user.pendingReferralIdentifier = String(command.payload).slice(0, 64);
     if (typeof user.save === 'function') await user.save();
+    try {
+      const referralResult = await linkReferralByCode({
+        referredUserId: user._id,
+        identifier: user.pendingReferralIdentifier,
+        source: 'signup'
+      });
+      if (referralResult?.linked || referralResult?.reason === 'invalid_referral_identifier' || referralResult?.reason === 'invalid_referrer') {
+        user.pendingReferralIdentifier = '';
+        if (typeof user.save === 'function') await user.save();
+      }
+    } catch (error) {
+      logger.error?.('Pending referral completion failed:', error.message || error);
+    }
   }
 
   const sentWelcome = await sendWelcomeMessage({

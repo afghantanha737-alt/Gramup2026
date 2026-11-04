@@ -2,7 +2,6 @@
 
 const { cycleDayForStreak, dailyCheckinReward } = require('./dailyCheckin');
 const { utcDayKey } = require('./utcDay');
-const { isVerifiedAllowedPhone: defaultIsVerifiedAllowedPhone } = require('./telegramPhoneContact');
 const {
   SENDING_LEASE_MS,
   retryDelayMs,
@@ -42,13 +41,12 @@ function safeLanguage(user) {
   return ['fa', 'ps', 'en'].includes(language) ? language : 'en';
 }
 
-function notificationGate(user, isVerifiedAllowedPhone = defaultIsVerifiedAllowedPhone) {
+function notificationGate(user) {
   return Boolean(
     user
       && !user.isBanned
       && !user.telegramBlockedAt
       && /^\d+$/.test(String(user.telegramId || ''))
-      && isVerifiedAllowedPhone(user)
       && user.referralMessageConsent === 'granted'
   );
 }
@@ -65,7 +63,7 @@ function referralCommissionText(user, amount, level, rate) {
 /**
  * Queue exactly one immutable notification for one positive commission ledger row.
  * The caller supplies the same Mongo session used for the balance and ledger write.
- * Consent, verified phone, ban, Telegram-block and numeric chat-id gates are checked
+ * Consent, ban, Telegram-block and numeric chat-id gates are checked
  * before the outbox write; a gate failure never changes balances or consumes retries.
  */
 async function enqueueReferralCommissionNotification(payload = {}, dependencies = {}) {
@@ -78,7 +76,7 @@ async function enqueueReferralCommissionNotification(payload = {}, dependencies 
     return { status: 'skipped', reason: 'non_positive_or_non_points' };
   }
   const eventKey = commissionEventKey(sourceId, entry.transactionId || payload.transactionId);
-  if (!eventKey || !notificationGate(recipient, dependencies.isVerifiedAllowedPhone || defaultIsVerifiedAllowedPhone)) {
+  if (!eventKey || !notificationGate(recipient)) {
     return { status: 'skipped', reason: eventKey ? 'notification_gate' : 'missing_source_id' };
   }
 
@@ -151,7 +149,6 @@ async function enqueueDailyStreakExpiryWarnings(now = new Date(), options = {}) 
   const User = options.User || require('../models/User');
   const NotificationDelivery = options.NotificationDelivery || require('../models/NotificationDelivery');
   const enqueue = options.enqueuePendingNotification || defaultEnqueuePendingNotification;
-  const isVerifiedAllowedPhone = options.isVerifiedAllowedPhone || defaultIsVerifiedAllowedPhone;
   const todayKey = utcDayKey(date);
   const startOfToday = new Date(todayKey * DAY_MS);
   const startOfYesterday = new Date(startOfToday.getTime() - DAY_MS);
@@ -160,12 +157,10 @@ async function enqueueDailyStreakExpiryWarnings(now = new Date(), options = {}) 
     telegramBlockedAt: null,
     referralMessageConsent: 'granted',
     telegramId: { $exists: true, $nin: ['', null] },
-    phoneVerifiedAt: { $ne: null },
-    phoneCountryCode: /^\+(?:[1-9]\d{0,2})?$/,
     streak: { $gt: 0 },
     lastCheckIn: { $gte: startOfYesterday, $lt: startOfToday }
   };
-  const projection = '_id telegramId language streak lastCheckIn isBanned telegramBlockedAt phoneCountryCode phoneVerifiedAt referralMessageConsent';
+  const projection = '_id telegramId language streak lastCheckIn isBanned telegramBlockedAt referralMessageConsent';
 
   let queued = 0;
   let skipped = 0;
@@ -178,7 +173,7 @@ async function enqueueDailyStreakExpiryWarnings(now = new Date(), options = {}) 
   const enqueueForUser = async user => {
     candidates += 1;
     const details = nextCheckinDetails(user, date);
-    if (!details || !notificationGate(user, isVerifiedAllowedPhone)) {
+    if (!details || !notificationGate(user)) {
       skipped += 1;
       return;
     }
@@ -237,7 +232,7 @@ async function resolveRows(Model, query, limit) {
 async function resolveUser(User, id) {
   if (!User || typeof User.findById !== 'function') return null;
   let query = User.findById(id);
-  if (query && typeof query.select === 'function') query = query.select('_id telegramId isBanned telegramBlockedAt phoneCountryCode phoneVerifiedAt referralMessageConsent lastCheckIn streak');
+  if (query && typeof query.select === 'function') query = query.select('_id telegramId isBanned telegramBlockedAt referralMessageConsent lastCheckIn streak');
   return query;
 }
 
@@ -275,7 +270,6 @@ async function sweepNotificationType(type, options = {}) {
   const Model = options.NotificationDelivery || options.notificationDeliveryModel || require('../models/NotificationDelivery');
   const User = options.User || require('../models/User');
   const sendNotificationOnce = options.sendNotificationOnce || defaultSendNotificationOnce;
-  const isVerifiedAllowedPhone = options.isVerifiedAllowedPhone || defaultIsVerifiedAllowedPhone;
   const now = asDate(options.now || new Date());
   const maxAttempts = Math.max(1, Number(options.maxAttempts || RETENTION_NOTIFICATION_MAX_ATTEMPTS));
   const limit = Math.max(1, Math.min(1000, Number(options.limit || RETENTION_NOTIFICATION_LIMIT)));
@@ -304,9 +298,9 @@ async function sweepNotificationType(type, options = {}) {
         continue;
       }
     }
-    if (!notificationGate(user, isVerifiedAllowedPhone)) {
+    if (!notificationGate(user)) {
       summary.skipped += 1;
-      const reason = !user ? 'user_missing' : user.isBanned ? 'banned' : user.telegramBlockedAt ? 'telegram_blocked' : user.referralMessageConsent !== 'granted' ? 'consent' : 'phone';
+      const reason = !user ? 'user_missing' : user.isBanned ? 'banned' : user.telegramBlockedAt ? 'telegram_blocked' : 'consent';
       await deferGateBlocked(Model, row, now, reason);
       continue;
     }
