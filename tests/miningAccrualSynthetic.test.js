@@ -18,15 +18,14 @@ assert.equal(oneHour.baseRatePerHour, 20);
 assert.equal(oneHour.accumulatedPoints, 20);
 assert.equal(oneHour.maxStoragePoints, 60);
 
-const boostedThenNormal = getMiningState({
+const twoHoursAtBaseRate = getMiningState({
   miningLevel: 1,
   miningStorageLevel: 1,
   miningSavedPoints: 0,
   miningLastClaimAt: at('2026-10-31T22:00:00.000Z'),
-  miningBoostExpiresAt: at('2026-10-31T23:00:00.000Z')
 }, now);
-assert.equal(boostedThenNormal.accumulatedPoints, 60, 'one boosted hour plus one normal hour is capped at 3h storage');
-assert.equal(boostedThenNormal.isStorageFull, true);
+assert.equal(twoHoursAtBaseRate.accumulatedPoints, 40, 'mining accrues at the configured base rate');
+assert.equal(twoHoursAtBaseRate.isStorageFull, false);
 
 const legacyNoStart = getMiningState({
   miningLevel: 1,
@@ -46,4 +45,4 @@ const savedAndCapacity = getMiningState({
 assert.equal(savedAndCapacity.accumulatedPoints, 55);
 assert.equal(savedAndCapacity.maxStoragePoints, 270);
 
-console.log('PASS — synthetic Mining accrual, boost, storage cap and legacy no-retroactive contract');
+console.log('PASS — synthetic Mining accrual, base rate, storage cap and legacy no-retroactive contract');

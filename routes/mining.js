@@ -44,42 +44,26 @@ function getMiningState(user, now = new Date()) {
   const rigConfig = RIG_LEVELS.find(r => r.level === level) || RIG_LEVELS[0];
   const storageConfig = STORAGE_LEVELS.find(s => s.level === storageLevel) || STORAGE_LEVELS[0];
   const nowMs = now.getTime();
-  const boostExpiresAt = user.miningBoostExpiresAt ? new Date(user.miningBoostExpiresAt) : null;
-  const isBoosted = Boolean(boostExpiresAt && boostExpiresAt.getTime() > nowMs);
-  const effectiveRatePerHour = isBoosted ? rigConfig.ratePerHour * 2 : rigConfig.ratePerHour;
   // A missing miningLastClaimAt means mining has not started. Anchor at the
   // current server time so legacy users never receive retroactive accrual.
   const lastClaimAt = user.miningLastClaimAt ? new Date(user.miningLastClaimAt) : now;
   const lastClaimMs = lastClaimAt.getTime();
   const totalElapsedMs = Math.max(0, nowMs - lastClaimMs);
-  let boostedMs = 0;
-  let normalMs = 0;
-  if (boostExpiresAt && boostExpiresAt.getTime() > lastClaimMs) {
-    const boostEndMs = Math.min(nowMs, boostExpiresAt.getTime());
-    boostedMs = Math.max(0, boostEndMs - lastClaimMs);
-    normalMs = Math.max(0, nowMs - boostEndMs);
-  } else {
-    normalMs = totalElapsedMs;
-  }
   const baseRatePerMs = rigConfig.ratePerHour / (3600 * 1000);
-  const newlyAccumulatedPoints = (boostedMs * baseRatePerMs * 2) + (normalMs * baseRatePerMs);
+  const newlyAccumulatedPoints = totalElapsedMs * baseRatePerMs;
   const savedPoints = Number(user.miningSavedPoints) || 0;
   const totalRawPoints = savedPoints + newlyAccumulatedPoints;
-  // Capacity is tied to storage hardware, not the temporary boost; it cannot shrink when boost expires.
   const maxStoragePoints = Math.max(1, Math.floor(storageConfig.maxHours * rigConfig.ratePerHour));
   const accumulatedPoints = Math.max(0, Math.min(maxStoragePoints, Math.floor(totalRawPoints)));
   const nextRig = RIG_LEVELS.find(r => r.level === level + 1) || null;
   const nextStorage = STORAGE_LEVELS.find(s => s.level === storageLevel + 1) || null;
   return {
     level, storageLevel, rigName: rigConfig.name, storageName: storageConfig.name,
-    baseRatePerHour: rigConfig.ratePerHour, effectiveRatePerHour,
+    baseRatePerHour: rigConfig.ratePerHour, effectiveRatePerHour: rigConfig.ratePerHour,
     maxStorageHours: storageConfig.maxHours, maxStoragePoints, accumulatedPoints,
     isStorageFull: accumulatedPoints >= maxStoragePoints,
     elapsedSeconds: Math.floor(totalElapsedMs / 1000),
     storageFullSeconds: Math.floor(storageConfig.maxHours * 3600),
-    isBoosted,
-    boostExpiresAt: isBoosted ? boostExpiresAt.toISOString() : null,
-    boostRemainingSeconds: isBoosted ? Math.max(0, Math.floor((boostExpiresAt.getTime() - nowMs) / 1000)) : 0,
     nextRigUpgrade: nextRig ? { level: nextRig.level, name: nextRig.name, ratePerHour: nextRig.ratePerHour, cost: nextRig.upgradeCost } : null,
     nextStorageUpgrade: nextStorage ? { level: nextStorage.level, name: nextStorage.name, maxHours: nextStorage.maxHours, cost: nextStorage.upgradeCost } : null,
     totalMinedPoints: Number(user.totalMinedPoints) || 0,
@@ -102,8 +86,7 @@ function optimisticUserFilter(user) {
     miningLevel: Number(user.miningLevel) || 1,
     miningStorageLevel: Number(user.miningStorageLevel) || 1,
     miningSavedPoints: Number(user.miningSavedPoints) || 0,
-    miningLastClaimAt: user.miningLastClaimAt || null,
-    miningBoostExpiresAt: user.miningBoostExpiresAt || null
+    miningLastClaimAt: user.miningLastClaimAt || null
   };
 }
 

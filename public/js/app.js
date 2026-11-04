@@ -59,13 +59,6 @@ const state = {
   referralMinTasks: 2,
   referralTasks: [],
   taskSection: "daily",
-  dailyAdRewardLoaded: false,
-  dailyAdRewardLoading: false,
-  dailyAdRewardError: false,
-  dailyAdsWatched: 0,
-  dailyAdLastWatchDate: null,
-  dailyAdDayKey: null,
-  dailyAdBusy: false,
   tasks: [],
   completions: [],
   tasksServerOffsetMs: 0,
@@ -85,8 +78,6 @@ const state = {
   vipError: "",
   vipServerOffsetMs: 0,
   vipServerNowMs: 0,
-  miningBoostExpiresAt: null,
-  miningBoostBusy: false,
   captchaA: 0,
   captchaB: 0,
   initialized: false,
@@ -406,61 +397,12 @@ async function api(url, options = {}) {
     const err = new Error(response.status === 401 ? t('auth_error') : response.status === 403 ? t('auth_forbidden') : (data?.message || t("error_generic")));
     err.code = data?.code || (response.status === 401 ? 'AUTH_REQUIRED' : response.status === 403 ? 'AUTH_FORBIDDEN' : null);
     err.status = response.status;
-    err.retryAfterSeconds = Number(data?.retryAfterSeconds) || 0;
-    err.expiresAt = data?.expiresAt || null;
     err.authFailure = authFailure;
     throw err;
   }
   return data;
 }
 window.gramupApi = api;
-
-let adsgramBlockIdPromise = null;
-let adsgramController = null;
-let adsgramControllerBlockId = "";
-async function getAdsgramBlockId() {
-  if (!adsgramBlockIdPromise) {
-    adsgramBlockIdPromise = fetch("/api/app-info", { cache: "no-store" })
-      .then(response => {
-        if (!response.ok) throw new Error("Ads configuration could not be loaded.");
-        return response.json();
-      })
-      .then(data => String(data?.adsgramRewardedBlockId || "").trim());
-  }
-  return adsgramBlockIdPromise;
-}
-function confirmAdSimulator() {
-  return new Promise(resolve => {
-    if (tg && typeof tg.showConfirm === "function") tg.showConfirm(t("ad_simulator_prompt"), resolve);
-    else resolve(window.confirm(t("ad_simulator_prompt")));
-  });
-}
-async function showAd() {
-  try {
-    const blockId = await getAdsgramBlockId();
-    if (!blockId) return { done: await confirmAdSimulator(), simulated: true };
-    const sdkDeadline = Date.now() + 8000;
-    while ((!window.Adsgram || typeof window.Adsgram.init !== "function") && Date.now() < sdkDeadline) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    if (!window.Adsgram || typeof window.Adsgram.init !== "function") {
-      return { done: false, error: true, reason: "sdk_unavailable" };
-    }
-    if (!adsgramController || adsgramControllerBlockId !== blockId) {
-      adsgramController = window.Adsgram.init({ blockId });
-      adsgramControllerBlockId = blockId;
-    }
-    if (!adsgramController || typeof adsgramController.show !== "function") {
-      return { done: false, error: true, reason: "sdk_unavailable" };
-    }
-    const result = await adsgramController.show();
-    return { done: result?.done === true && result?.error !== true, result };
-  } catch (error) {
-    console.warn("Rewarded ad did not complete:", error);
-    return { done: false, error: true, reason: "playback_failed" };
-  }
-}
-window.showAd = showAd;
 
 /** Multipart upload helper with header-based Telegram authentication and cancellation timeout. */
 async function apiUpload(url, formData) {
@@ -1285,7 +1227,6 @@ let historyRequestSequence = 0;
 const LEDGER_TYPE_UI = {
   task: { icon: "✅" },
   checkin: { icon: "📅" },
-  ad_reward: { icon: "🎥" },
   spin: { icon: "🎡" },
   referral_bonus: { icon: "👥" },
   referral_initial: { icon: "🎁" },
@@ -1904,124 +1845,16 @@ async function doCheckIn() {
   }
 }
 window.doCheckIn = doCheckIn;
-let dailyAdCountdownTimer = null;
-function formatAdCooldown(seconds) {
-  const total = Math.max(0, Math.ceil(Number(seconds) || 0));
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-function dailyAdCooldownRemaining() {
-  const last = Date.parse(state.dailyAdLastWatchDate || "");
-  if (!Number.isFinite(last)) return 0;
-  return Math.max(0, Math.ceil((last + 60000 - (Date.now() + Number(state.tasksServerOffsetMs || 0))) / 1000));
-}
-async function loadDailyAdRewardStatus() {
-  if (state.dailyAdRewardLoading) return false;
-  state.dailyAdRewardLoading = true;
-  try {
-    const data = await api("/api/tasks/ad-reward/status");
-    state.dailyAdsWatched = Math.max(0, Number(data.watchedToday) || 0);
-    state.dailyAdLastWatchDate = data.lastAdWatchDate || null;
-    state.dailyAdDayKey = Number(data.dayKey);
-    const serverNow = Date.parse(data.serverNow || "");
-    if (Number.isFinite(serverNow)) state.tasksServerOffsetMs = serverNow - Date.now();
-    state.dailyAdRewardLoaded = true;
-    state.dailyAdRewardError = false;
-    return true;
-  } catch (error) {
-    console.warn("Daily ad reward status failed:", error);
-    state.dailyAdRewardError = true;
-    return false;
-  } finally {
-    state.dailyAdRewardLoading = false;
-    if (state.activeTab === "tasks" && state.taskSection === "daily") renderTasks();
-  }
-}
-function renderDailyAdRewardCard() {
-  const watched = Math.min(5, Math.max(0, Number(state.dailyAdsWatched) || 0));
-  const cooldown = dailyAdCooldownRemaining();
-  const limitReached = watched >= 5;
-  const disabled = state.dailyAdBusy || state.dailyAdRewardLoading || (!state.dailyAdRewardError && (!state.dailyAdRewardLoaded || limitReached || cooldown > 0));
-  const label = state.dailyAdBusy || state.dailyAdRewardLoading ? t("ad_reward_busy")
-    : state.dailyAdRewardError ? t("retry_button")
-      : limitReached ? t("ad_limit_reached")
-        : cooldown > 0 ? t("ad_cooldown", { time: formatAdCooldown(cooldown) })
-          : t("ad_watch_button");
-  return `<section class="dailyAdRewardCard" aria-label="${escapeHTML(t("ad_task_title"))}">
-    <div class="dailyAdRewardTop"><span class="dailyAdRewardIcon" aria-hidden="true">▶</span><div class="dailyAdRewardCopy"><strong>${t("ad_task_title")}</strong><small>${t("ad_task_description")}</small></div><span class="dailyAdRewardProgress" data-daily-ad-progress>${t("ad_daily_limit", { n: `${watched}/5` })}</span></div>
-    <button type="button" class="taskAction dailyAdRewardButton ${limitReached ? "done" : ""}" data-daily-ad-button ${disabled ? "disabled" : ""} onclick="${state.dailyAdRewardError ? "loadDailyAdRewardStatus()" : "claimDailyAdReward()"}">${label}</button>
-  </section>`;
-}
-function stopDailyAdCountdown() {
-  if (dailyAdCountdownTimer) clearInterval(dailyAdCountdownTimer);
-  dailyAdCountdownTimer = null;
-}
-function startDailyAdCountdown() {
-  stopDailyAdCountdown();
-  if (state.activeTab !== "tasks" || state.taskSection !== "daily") return;
-  dailyAdCountdownTimer = setInterval(() => {
-    if (state.activeTab !== "tasks" || state.taskSection !== "daily") return stopDailyAdCountdown();
-    const nowDayKey = Math.floor((Date.now() + Number(state.tasksServerOffsetMs || 0)) / 86400000);
-    if (state.dailyAdRewardLoaded && Number.isFinite(state.dailyAdDayKey) && nowDayKey !== state.dailyAdDayKey) {
-      void loadDailyAdRewardStatus();
-      return;
-    }
-    const button = document.querySelector("[data-daily-ad-button]");
-    const progress = document.querySelector("[data-daily-ad-progress]");
-    if (!button || !progress) return;
-    const cooldown = dailyAdCooldownRemaining();
-    const watched = Math.min(5, Math.max(0, Number(state.dailyAdsWatched) || 0));
-    progress.textContent = t("ad_daily_limit", { n: `${watched}/5` });
-    if (!state.dailyAdBusy && !state.dailyAdRewardError) {
-      button.disabled = !state.dailyAdRewardLoaded || watched >= 5 || cooldown > 0;
-      button.textContent = watched >= 5 ? t("ad_limit_reached") : cooldown > 0
-        ? t("ad_cooldown", { time: formatAdCooldown(cooldown) }) : t("ad_watch_button");
-    }
-  }, 1000);
-}
-async function claimDailyAdReward() {
-  if (state.dailyAdBusy || state.dailyAdRewardError || !state.dailyAdRewardLoaded) return;
-  if (Number(state.dailyAdsWatched) >= 5 || dailyAdCooldownRemaining() > 0) return;
-  state.dailyAdBusy = true;
-  renderTasks();
-  try {
-    const ad = await showAd();
-    if (!ad.done) {
-      toast(t("ad_reward_failed"), "warning");
-      return;
-    }
-    const result = await api("/api/tasks/ad-reward/claim", { method: "POST", body: {} });
-    state.points = Number(result.points) || state.points;
-    state.dailyAdsWatched = Number(result.watchedToday) || 0;
-    state.dailyAdLastWatchDate = result.lastAdWatchDate || new Date().toISOString();
-    state.dailyAdDayKey = Number(result.dayKey);
-    updateHeader();
-    toast(t("ad_reward_success"), "success");
-    haptic("success");
-    void loadUserData({ force: true });
-  } catch (error) {
-    if (error.code === "AD_DAILY_LIMIT") state.dailyAdsWatched = 5;
-    if (error.code === "AD_COOLDOWN") void loadDailyAdRewardStatus();
-    toast(error.code === "AD_COOLDOWN" ? t("ad_cooldown", { time: formatAdCooldown(error.retryAfterSeconds || 60) }) : translateServerMessage(error.code, error.message), "error");
-  } finally {
-    state.dailyAdBusy = false;
-    if (state.activeTab === "tasks" && state.taskSection === "daily") renderTasks();
-  }
-}
-window.claimDailyAdReward = claimDailyAdReward;
 function renderTasks() {
   stopDailyCheckinCountdown();
-  stopDailyAdCountdown();
   const content = $("#content");
   const taskSection = ["daily", "vip", "invite"].includes(state.taskSection) ? state.taskSection : "daily";
-  if (taskSection === "daily" && !state.dailyAdRewardLoaded && !state.dailyAdRewardLoading && !state.dailyAdRewardError) void loadDailyAdRewardStatus();
-  if (taskSection === "daily") setTimeout(startDailyAdCountdown, 0);
   const isInviteSection = taskSection === "invite";
   const visibleTasks = isInviteSection
     ? []
     : state.tasks.filter(task => taskSection === "vip" ? task.taskKind === "vip_activation" : task.taskKind !== "vip_activation");
   const referralHtml = isInviteSection ? renderReferralRewardTasks() : "";
   const dailyCheckinHtml = taskSection === "daily" ? renderDailyCheckinCard() : "";
-  const dailyAdRewardHtml = taskSection === "daily" ? renderDailyAdRewardCard() : "";
   const taskErrorHtml = tasksLoadError ? `<div class="card" role="status"><div class="emptyDesc">${t("tasks_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryTasks()">${t("retry_button")}</button></div>` : "";
   const sectionTabs = `
     <div class="taskCategoryTabs taskSectionTabs" role="tablist" aria-label="${escapeHTML(t("tasks_title"))}">
@@ -2031,7 +1864,7 @@ function renderTasks() {
     </div>`;
 
   if (!state.tasks.length && tasksLoadError && !isInviteSection) {
-    content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}${dailyAdRewardHtml}${dailyCheckinHtml}${taskErrorHtml}`;
+    content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}${taskErrorHtml}`;
     return;
   }
   const inviteHasContent = isInviteSection && state.referralTasks.length > 0;
@@ -2041,7 +1874,6 @@ function renderTasks() {
     content.innerHTML = `
       <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
       ${sectionTabs}
-      ${dailyAdRewardHtml}
       ${dailyCheckinHtml}
       ${taskErrorHtml}
       ${referralHtml}
@@ -2075,7 +1907,6 @@ function renderTasks() {
       <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(visibleTasks.length)} ${t("task_btn_done")}</span><span>${t("tb_UP_chip", { n: formatPoints(state.points) })}</span></div>
     </section>
     ${sectionTabs}
-    ${dailyAdRewardHtml}
     ${dailyCheckinHtml}
     ${taskErrorHtml}
     ${referralHtml}
@@ -3594,8 +3425,6 @@ async function loadVipPlans() {
     state.vipPlans = Array.isArray(data?.plans) ? data.plans : [];
     state.vipSubscriptions = Array.isArray(data?.subscriptions) ? data.subscriptions : [];
     if (data?.points != null) state.points = Number(data.points) || 0;
-    state.miningBoostExpiresAt = data?.miningBoostExpiresAt || null;
-    state.dailyAdLastWatchDate = data?.lastAdWatchDate || null;
     const serverNow = Date.parse(data?.serverNow || "");
     state.vipServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
     state.vipServerNowMs = Number.isFinite(serverNow) ? serverNow : Date.now();
@@ -3674,8 +3503,7 @@ function updateVipLiveDashboard() {
   const total = activeSubscriptions.reduce((sum, subscription) => sum + vipLiveUnclaimed(subscription, now), 0);
   const dailyTotal = activeSubscriptions.reduce((sum, subscription) => {
     const endAt = Date.parse(subscription.endAt || "");
-    const rate = Number(subscription.dailyMiningRatePoints || 0);
-    return sum + (Number.isFinite(endAt) && now >= endAt ? 0 : rate * (now < Date.parse(state.miningBoostExpiresAt || "") ? 1.05 : 1));
+    return sum + (Number.isFinite(endAt) && now >= endAt ? 0 : Number(subscription.dailyMiningRatePoints || 0));
   }, 0);
   const liveCount = activeSubscriptions.filter(subscription => {
     const endAt = Date.parse(subscription.endAt || "");
@@ -3717,9 +3545,8 @@ function updateVipLiveDashboard() {
       const ended = Number.isFinite(Date.parse(subscription.endAt || "")) && now >= Date.parse(subscription.endAt);
     document.querySelectorAll("[data-vip-live-rate]").forEach(element => {
       if (element.dataset.vipLiveRate === id) {
-        const baseRate = Number(subscription.dailyMiningRatePoints || 0);
-        const rate = now < Date.parse(state.miningBoostExpiresAt || "") ? baseRate * 1.05 : baseRate;
-        element.textContent = `${formatNumber(ended ? 0 : rate, Number.isInteger(rate) ? 0 : 2)} ${t("vip_points_per_day")}`;
+        const rate = Number(subscription.dailyMiningRatePoints || 0);
+        element.textContent = `${formatNumber(ended ? 0 : rate, Number.isInteger(rate) ? 0 : 2)} UP/day`;
       }
     });
       document.querySelectorAll("[data-vip-live-days]").forEach(element => {
@@ -3741,17 +3568,6 @@ function updateVipLiveDashboard() {
   });
   document.querySelectorAll("[data-vip-claim-label]").forEach(element => {
     element.textContent = vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_wallet");
-  });
-  const boostExpiresAt = Date.parse(state.miningBoostExpiresAt || "");
-  const boostRemainingMs = Number.isFinite(boostExpiresAt) ? Math.max(0, boostExpiresAt - now) : 0;
-  const boostCooldownSeconds = Math.max(0, Math.ceil((Date.parse(state.dailyAdLastWatchDate || "") + 60000 - now) / 1000));
-  document.querySelectorAll("[data-mining-boost-button]").forEach(button => {
-    const boostActive = boostRemainingMs > 0;
-    button.disabled = state.miningBoostBusy || boostActive || boostCooldownSeconds > 0;
-    button.textContent = state.miningBoostBusy ? t("ad_reward_busy")
-      : boostActive ? t("mining_boost_active", { time: formatVipCountdown(boostRemainingMs) })
-        : boostCooldownSeconds > 0 ? t("ad_cooldown", { time: formatAdCooldown(boostCooldownSeconds) })
-          : t("mining_boost_button");
   });
 }
 
@@ -3777,11 +3593,7 @@ function vipLiveUnclaimed(subscription, now = Date.now() + Number(state.vipServe
     ? Math.min(now, endAt, Number.isFinite(storageCapAt) ? storageCapAt : now)
     : Number.isFinite(storageCapAt) ? Math.min(now, storageCapAt) : now;
   const elapsedMs = Math.max(0, accrualUntil - sampleAt);
-  const boostExpiresAt = Date.parse(state.miningBoostExpiresAt || "");
-  const boostStartsAt = boostExpiresAt - 3600000;
-  const boostedElapsedMs = Number.isFinite(boostExpiresAt)
-    ? Math.max(0, Math.min(accrualUntil, boostExpiresAt) - Math.max(sampleAt, boostStartsAt)) : 0;
-  let estimated = base + (rate * (elapsedMs + boostedElapsedMs * 0.05) / 86400000);
+  let estimated = base + (rate * elapsedMs / 86400000);
   const isNewPolicy = subscription?.policyVersion === "v2_100d";
   if (!isNewPolicy && Number(subscription?.principalAtMaturityPoints) > 0
     && Number.isFinite(endAt) && now >= endAt && sampleAt < endAt) {
@@ -3839,10 +3651,6 @@ function renderProfileVip() {
     .filter(Number.isFinite)
     .reduce((soonest, value) => Math.min(soonest, value), Infinity);
   const unclaimedVipPoints = activeSubscriptions.reduce((sum, subscription) => sum + vipLiveUnclaimed(subscription, now), 0);
-  const boostExpiresMs = Date.parse(state.miningBoostExpiresAt || "");
-  const boostRemainingMs = Number.isFinite(boostExpiresMs) ? Math.max(0, boostExpiresMs - now) : 0;
-  const boostCooldownSeconds = Math.max(0, Math.ceil((Date.parse(state.dailyAdLastWatchDate || "") + 60000 - now) / 1000));
-  const miningBoostActive = boostRemainingMs > 0;
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
@@ -3891,8 +3699,7 @@ function renderProfileVip() {
   const activePlanRows = activeSubscriptions.map(subscription => {
     const id = escapeHTML(subscription.id);
     const ended = Number.isFinite(Date.parse(subscription.endAt || "")) && now >= Date.parse(subscription.endAt);
-    const baseRate = ended ? 0 : Number(subscription.dailyMiningRatePoints || 0);
-    const rate = miningBoostActive ? baseRate * 1.05 : baseRate;
+    const rate = ended ? 0 : Number(subscription.dailyMiningRatePoints || 0);
     const remainingDays = Math.max(0, Math.ceil((Date.parse(subscription.endAt) - now) / 86400000));
     const progress = vipPlanProgressPercent(subscription, now);
     return `
@@ -3945,10 +3752,6 @@ function renderProfileVip() {
           <span data-vip-claim-label>${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_wallet")}</span>
           <b><span data-vip-claim-total>${formatNumber(unclaimedVipPoints, 3)}</span> ${t("vip_UP_unit")}</b>
         </button>
-        <div class="vipMiningBoost">
-          <button type="button" data-mining-boost-button ${state.miningBoostBusy || miningBoostActive || boostCooldownSeconds > 0 ? "disabled" : ""} onclick="activateMiningBoost()">${state.miningBoostBusy ? t("ad_reward_busy") : miningBoostActive ? t("mining_boost_active", { time: formatVipCountdown(boostRemainingMs) }) : boostCooldownSeconds > 0 ? t("ad_cooldown", { time: formatAdCooldown(boostCooldownSeconds) }) : t("mining_boost_button")}</button>
-          <small>${t("mining_boost_hint")}</small>
-        </div>
         <div class="vipAccrualHint">${t("vip_live_estimate_note")}</div>
       </section>
 
@@ -3971,42 +3774,6 @@ function retryVipPlans() {
   void (state.activeTab === "vip" ? renderVipTab() : renderProfile());
 }
 window.retryVipPlans = retryVipPlans;
-
-async function activateMiningBoost() {
-  const expiry = Date.parse(state.miningBoostExpiresAt || "");
-  if (state.miningBoostBusy || Number.isFinite(expiry) && expiry > Date.now() + Number(state.vipServerOffsetMs || 0)) return;
-  if (dailyAdCooldownRemaining() > 0) return;
-  state.miningBoostBusy = true;
-  updateVipLiveDashboard();
-  try {
-    const ad = await showAd();
-    if (!ad.done) {
-      toast(t("ad_reward_failed"), "warning");
-      return;
-    }
-    const result = await api("/api/points/vip/mining-boost", { method: "POST", body: {} });
-    state.miningBoostExpiresAt = result.miningBoostExpiresAt || null;
-    state.dailyAdLastWatchDate = result.lastAdWatchDate || new Date().toISOString();
-    const serverNow = Date.parse(result.serverNow || "");
-    if (Number.isFinite(serverNow)) state.vipServerOffsetMs = serverNow - Date.now();
-    state.vipDataLoaded = false;
-    await loadVipPlans();
-    if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") {
-      const content = $("#content");
-      if (content) content.innerHTML = renderProfileVip();
-      startVipCountdown();
-    }
-    toast(t("mining_boost_active", { time: formatVipCountdown(3600000) }), "success");
-    haptic("success");
-  } catch (error) {
-    if (error.code === "AD_COOLDOWN") void loadDailyAdRewardStatus();
-    toast(error.code === "AD_COOLDOWN" ? t("ad_cooldown", { time: formatAdCooldown(error.retryAfterSeconds || 60) }) : translateServerMessage(error.code, error.message), "error");
-  } finally {
-    state.miningBoostBusy = false;
-    updateVipLiveDashboard();
-  }
-}
-window.activateMiningBoost = activateMiningBoost;
 
 function confirmVipPurchase(message) {
   if (tg && typeof tg.showConfirm === "function") {

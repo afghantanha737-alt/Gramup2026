@@ -16,7 +16,7 @@ const pointsLedgerSchema = new mongoose.Schema(
         'task',            // پاداش تکمیل تسک
         'checkin',         // پاداش ورود روزانه
         'daily_chest',     // صندوق پاداش روزانه
-        'ad_reward',       // rewarded video ad task credit
+        'ad_reward',       // legacy historical records; new ad rewards are disabled
         'spin',            // برد پوینت از گردونه شانس
         'mining_claim',    // تسویه‌ی پوینت استخراج‌شده
         'mining_upgrade',  // هزینه‌ی ارتقای ماینر

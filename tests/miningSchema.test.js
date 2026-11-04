@@ -7,7 +7,7 @@ const user = fs.readFileSync('models/User.js', 'utf8');
 const route = fs.readFileSync('routes/mining.js', 'utf8');
 const server = fs.readFileSync('server.js', 'utf8');
 
-for (const field of ['miningLevel', 'miningStorageLevel', 'miningSavedPoints', 'miningLastClaimAt', 'miningBoostExpiresAt', 'totalMinedPoints']) {
+for (const field of ['miningLevel', 'miningStorageLevel', 'miningSavedPoints', 'miningLastClaimAt', 'totalMinedPoints']) {
   assert.match(user, new RegExp(`${field}:`), `missing ${field}`);
 }
 for (const field of ['antiBotVerifiedAt', 'termsAcceptedVersion', 'onboardingVersion']) {

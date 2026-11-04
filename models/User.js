@@ -11,14 +11,11 @@ const userSchema = new mongoose.Schema(
     photoUrl: { type: String, default: '' },
 
     points: { type: Number, default: 0, min: 0 },
-    dailyAdsWatched: { type: Number, default: 0, min: 0, max: 5 },
-    lastAdWatchDate: { type: Date, default: null },
     // Mining state is server-authoritative; a missing claim anchor means mining has not started.
     miningLevel: { type: Number, default: 1, min: 1, max: 10 },
     miningStorageLevel: { type: Number, default: 1, min: 1, max: 6 },
     miningSavedPoints: { type: Number, default: 0, min: 0 },
     miningLastClaimAt: { type: Date, default: null },
-    miningBoostExpiresAt: { type: Date, default: null },
     totalMinedPoints: { type: Number, default: 0, min: 0 },
     antiBotVerifiedAt: { type: Date, default: null },
     antiBotVerificationVersion: { type: String, default: '' },
