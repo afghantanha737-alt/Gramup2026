@@ -6,9 +6,14 @@ const vm = require('vm');
 
 const root = path.join(__dirname, '..');
 const expectedLabels = {
-  fa: 'موجودی UP',
-  ps: 'د UP موجودي',
-  en: 'Available UP'
+  fa: 'موجودی قابل استفاده',
+  ps: 'د کارولو وړ بیلانس',
+  en: 'Available Balance'
+};
+const expectedEarnedLabels = {
+  fa: 'کسب‌شده',
+  ps: 'ترلاسه شوي',
+  en: 'EARNED'
 };
 
 const context = {
@@ -41,10 +46,15 @@ for (const [language, expectedLabel] of Object.entries(expectedLabels)) {
   context.window.state.language = language;
   const html = vm.runInContext('renderProfileMenu()', context);
   const stats = html.match(/<section class="profilePulseGrid"[\s\S]*?<\/section>/)?.[0] || '';
-  assert.ok(stats.includes(`<strong>123.45</strong><span>${expectedLabel}</span>`),
-    `rendered Profile stats must contain ${expectedLabel} directly below the UP figure in ${language}`);
+  const leftCard = stats.match(/<div><strong>123\.45[\s\S]*?<\/div>/)?.[0] || '';
+  assert.ok(leftCard.includes(`<strong>123.45</strong><small class="profilePulseUnit">UP</small><span>${expectedLabel}</span>`),
+    `rendered balance card must show its amount, one UP unit, then ${expectedLabel} in ${language}`);
+  assert.strictEqual((leftCard.match(/>UP</g) || []).length, 1,
+    `balance label must not repeat UP in ${language}`);
+  assert.ok(stats.includes(`<strong>456.78</strong><small class="profilePulseUnit">UP</small><span>${expectedEarnedLabels[language]}</span>`),
+    `earned card must follow the same amount / UP / label order in ${language}`);
   assert.ok(!stats.includes('Translation unavailable.'),
-    `rendered Profile stats must not show the generic missing-translation text in ${language}`);
+    `rendered Profile stats must not show generic missing-translation text in ${language}`);
 }
 
 context.state.language = 'en';
@@ -52,20 +62,30 @@ context.window.state.language = 'en';
 context.__translations.en.wallet_points_card_title = '';
 let html = vm.runInContext('renderProfileMenu()', context);
 let stats = html.match(/<section class="profilePulseGrid"[\s\S]*?<\/section>/)?.[0] || '';
-assert.ok(stats.includes('<strong>123.45</strong><span>Available UP</span>'),
-  'blank locale values must use the Profile label fallback');
+assert.ok(stats.includes('<strong>123.45</strong><small class="profilePulseUnit">UP</small><span>Available Balance</span>'),
+  'blank locale values must use the clean balance-label fallback');
 
 delete context.__translations.en.wallet_points_card_title;
 html = vm.runInContext('renderProfileMenu()', context);
 stats = html.match(/<section class="profilePulseGrid"[\s\S]*?<\/section>/)?.[0] || '';
-assert.ok(stats.includes('<strong>123.45</strong><span>Available UP</span>'),
-  'missing locale keys must use the Profile label fallback');
+assert.ok(stats.includes('<strong>123.45</strong><small class="profilePulseUnit">UP</small><span>Available Balance</span>'),
+  'missing locale keys must use the clean balance-label fallback');
+
+const css = fs.readFileSync(path.join(root, 'public/css/style.css'), 'utf8');
+assert.match(css, /\.profileOverviewCard\s*\{[^}]*display:\s*grid/,
+  'profile header must reserve a distinct grid column for the balance');
+assert.match(css, /\.profileBalanceMini\s*\{[^}]*position:\s*static/,
+  'profile balance must not float over the Gold rank badge');
+assert.match(css, /@media \(max-width: 420px\) \{[\s\S]*?\.profileBalanceMini \{[^}]*grid-column: 1 \/ -1/,
+  'narrow screens must place the balance on its own row');
+assert.match(css, /\.profilePulseGrid \.profilePulseUnit\s*\{[^}]*display:\s*block/,
+  'UP must render as its own line in the stats cards');
 
 const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 for (const asset of ['i18n.js', 'app.js', 'maintenanceGate.js', 'readModelCache.js', 'walletConnect.js']) {
-  assert.ok(indexHtml.includes(`/js/${asset}?v=up_v9_20261104_2`), `${asset} must use the new cache-busting version`);
+  assert.ok(indexHtml.includes(`/js/${asset}?v=up_v9_20261104_3`), `${asset} must use the latest cache-busting version`);
 }
-assert.ok(indexHtml.includes('/css/style.css?v=up_v9_20261104_2'), 'main CSS must use the new asset version');
-assert.ok(indexHtml.includes('/css/theme-selector.css?v=up_v9_20261104_2'), 'theme CSS must use the new asset version');
+assert.ok(indexHtml.includes('/css/style.css?v=up_v9_20261104_3'), 'main CSS must use the latest asset version');
+assert.ok(indexHtml.includes('/css/theme-selector.css?v=up_v9_20261104_3'), 'theme CSS must use the latest asset version');
 
-console.log('PASS — Profile stats render translated UP labels beneath the figure in all locales, use fallback on missing/blank keys, and reference cache-busted assets');
+console.log('PASS — Profile balance renders amount / UP / translated available-balance label; earned card is symmetric and header balance is reserved without overlap');

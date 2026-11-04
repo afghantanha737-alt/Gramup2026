@@ -2867,9 +2867,9 @@ function renderProfileMenu() {
     </section>
 
     <section class="profilePulseGrid" aria-label="${escapeHTML(t("tb_your_progress"))}">
-      <div><strong>${tokenAmount(state.points)}</strong><span>${t("wallet_points_card_title", null, "Available UP")}</span></div>
+      <div><strong>${tokenAmount(state.points)}</strong><small class="profilePulseUnit">UP</small><span>${t("wallet_points_card_title", null, "Available Balance")}</span></div>
       <div><strong>${formatNumber(state.invitedCount)}</strong><span>${t("referral_kpi_direct")}</span></div>
-      <div><strong>${tokenAmount(state.totalEarnedPoints)}</strong><span>${t("tb_earned")}</span></div>
+      <div><strong>${tokenAmount(state.totalEarnedPoints)}</strong><small class="profilePulseUnit">UP</small><span>${t("tb_earned")}</span></div>
     </section>
     <div class="card profileMenuPanel">
       <div class="profileMenuLabel">${t("menu_referral")}</div>

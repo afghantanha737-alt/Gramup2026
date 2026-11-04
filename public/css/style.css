@@ -2033,9 +2033,11 @@ html[data-theme="dark"] body {
 ========================================================= */
 .profileOverviewCard {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) minmax(112px, max-content);
   align-items: center;
-  gap: 13px;
+  column-gap: 13px;
+  row-gap: 10px;
   min-height: 116px;
   margin-bottom: 10px;
   padding: 16px;
@@ -2046,17 +2048,18 @@ html[data-theme="dark"] body {
   box-shadow: 0 12px 30px rgba(0,0,0,.18);
 }
 .profileOverviewCard::after { content: ""; position: absolute; width: 120px; height: 120px; inset-inline-end: -54px; bottom: -68px; border: 1px solid rgba(103,232,249,.16); border-radius: 50%; box-shadow: 0 0 0 18px rgba(103,232,249,.025); }
-.profileOverviewCard .profileHeadInfo { flex: 1; }
+.profileOverviewCard .profileHeadInfo { min-width: 0; }
 .profileOverviewCard .profileAvatarLg { width: 58px; height: 58px; flex-basis: 58px; border-width: 2px; box-shadow: 0 0 0 3px rgba(103,232,249,.10); }
 .profileOverviewCard .profileNameLg { margin-bottom: 7px; font-size: 18px; }
-.profileBalanceMini { position: absolute; inset-inline-end: 15px; bottom: 12px; display: grid; gap: 2px; text-align: end; direction: ltr; }
+.profileBalanceMini { position: static; grid-column: 3; grid-row: 1; display: grid; align-self: center; min-width: 112px; gap: 2px; padding-inline-start: 12px; border-inline-start: 1px solid rgba(103,232,249,.14); text-align: end; direction: ltr; }
 .profileBalanceMini span { color: #8994a7; font-size: 8px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .profileBalanceMini strong { color: #d7f8ff; font-size: 15px; font-variant-numeric: tabular-nums; }
 .profileBalanceMini small { color: #7dd3fc; font-size: 9px; }
 .profilePulseGrid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 7px; margin-bottom: 12px; }
-.profilePulseGrid > div { min-width: 0; padding: 10px 7px; border: 1px solid var(--product-border); border-radius: 15px; background: var(--product-surface); text-align: center; }
+.profilePulseGrid > div { display: flex; min-width: 0; min-height: 86px; flex-direction: column; align-items: center; justify-content: center; padding: 10px 7px; border: 1px solid var(--product-border); border-radius: 15px; background: var(--product-surface); text-align: center; }
 .profilePulseGrid strong { display: block; color: var(--text); font-size: 16px; font-weight: 900; line-height: 1.15; direction: ltr; }
-.profilePulseGrid span { display: block; overflow: hidden; margin-top: 4px; color: var(--text-muted); font-size: 8.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.profilePulseGrid .profilePulseUnit { display: block; margin-top: 3px; color: var(--text-muted); font-size: 8px; font-weight: 800; line-height: 1; direction: ltr; }
+.profilePulseGrid span { display: block; max-width: 100%; overflow: hidden; margin-top: 5px; color: var(--text-muted); font-size: 8.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .profileMenuPanel { padding-top: 13px; }
 .profileMenuLabel { margin: 0 2px 7px; color: var(--text-muted); font-size: 9px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .profileMenuPanel .profileList { padding: 0 3px; }
@@ -2102,10 +2105,14 @@ html[data-theme="light"] .tbWalletCard { background: #fff; box-shadow: 0 8px 22p
 html[data-theme="light"] .tbAct { background: #fff; }
 html[data-theme="light"] .referralDashboard .rf-kpi, html[data-theme="light"] .referralDashboard .rf-panel { background: #fff; }
 
+@media (max-width: 420px) {
+  .profileOverviewCard { grid-template-columns: 52px minmax(0, 1fr); min-height: 0; padding: 13px; column-gap: 10px; row-gap: 10px; align-items: start; }
+  .profileOverviewCard .profileAvatarLg { width: 52px; height: 52px; flex-basis: 52px; grid-column: 1; grid-row: 1; }
+  .profileOverviewCard .profileHeadInfo { grid-column: 2; grid-row: 1; }
+  .profileBalanceMini { grid-column: 1 / -1; grid-row: 2; display: flex; width: 100%; min-width: 0; align-items: baseline; justify-content: space-between; gap: 8px; padding: 8px 0 0; border-inline-start: 0; border-top: 1px solid rgba(103,232,249,.14); text-align: start; }
+}
+
 @media (max-width: 360px) {
-  .profileOverviewCard { min-height: 112px; padding: 13px; }
-  .profileOverviewCard .profileAvatarLg { width: 52px; height: 52px; flex-basis: 52px; }
-  .profileBalanceMini { inset-inline-end: 12px; bottom: 9px; }
   .profilePulseGrid strong { font-size: 14px; }
   .tbWalletCard { min-height: 132px; }
   .tbWalletValue { font-size: 19px; }
