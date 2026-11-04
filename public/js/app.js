@@ -26,9 +26,6 @@ const state = {
   activeTab: "home",
   language: "fa",
   user: null,
-  phoneVerificationRequired: false,
-  phoneCountryCode: "",
-  phoneContactRequestSent: false,
   referralMessageConsent: "unset",
   points: 0,
   gramBalance: 0,
@@ -567,10 +564,6 @@ function updateNavigation() {
 }
 let navigationSequence = 0;
 async function navigate(tab) {
-  if (state.phoneVerificationRequired) {
-    renderPhoneVerificationGate();
-    return;
-  }
   const requestId = ++navigationSequence;
   if (tab !== "profile") profileRenderSequence += 1;
   const validTabs = ["home", "tasks", "vip", "wallet", "profile"];
@@ -1089,8 +1082,6 @@ async function bootstrapAuth() {
   try {
     const data = await api(url);
     state.language = localStorage.getItem("appLanguage") || data.language || "fa";
-    state.phoneVerificationRequired = Boolean(data.phoneVerificationRequired);
-    state.phoneCountryCode = data.phoneCountryCode || "";
     state.referralMessageConsent = ["granted", "denied", "unset"].includes(data.referralMessageConsent)
       ? data.referralMessageConsent : "unset";
     state.user = { ...(state.user || {}), id: data.telegramId, telegramId: data.telegramId };
@@ -1103,70 +1094,6 @@ async function bootstrapAuth() {
     state.language = localStorage.getItem("appLanguage") || "fa";
   }
 }
-
-function renderPhoneVerificationGate(messageKey = "") {
-  if (!state.phoneVerificationRequired) return;
-  document.body.classList.add("phone-verification-required");
-  const content = $("#content");
-  if (!content) return;
-  content.innerHTML = `
-    <section class="phoneGate card" role="region" aria-labelledby="phoneGateTitle">
-      <div class="phoneGateIcon" aria-hidden="true">☎</div>
-      <span class="modalEyebrow">${t("phone_gate_eyebrow")}</span>
-      <h1 id="phoneGateTitle" class="phoneGateTitle">${t("phone_gate_title")}</h1>
-      <p class="phoneGateText">${t("phone_gate_desc")}</p>
-      <div class="phoneGateCodes" dir="ltr">${t("phone_gate_example")}</div>
-      <p class="phoneGatePrivacy">${t("phone_gate_privacy")}</p>
-      <div id="phoneGateMessage" class="phoneGateMessage" role="status" aria-live="polite">${messageKey ? t(messageKey) : (state.phoneContactRequestSent ? t("phone_gate_sent") : "")}</div>
-      <div class="phoneGateActions">
-        <button type="button" class="primaryBtn" onclick="requestPhoneContact()">${t("phone_gate_share")}</button>
-        <button type="button" class="secondaryBtn" onclick="refreshPhoneVerification()">${t("phone_gate_check")}</button>
-        <button type="button" class="textBtn" onclick="showLanguageOverlay()">${t("menu_language")}</button>
-      </div>
-    </section>`;
-}
-
-async function requestPhoneContact() {
-  try {
-    const data = await api("/api/auth/request-phone-contact", { method: "POST" });
-    if (data.alreadyVerified) return refreshPhoneVerification();
-    state.phoneContactRequestSent = true;
-    renderPhoneVerificationGate("phone_gate_sent");
-    if (data.botUrl) {
-      if (tg && typeof tg.openTelegramLink === "function") tg.openTelegramLink(data.botUrl);
-      else window.open(data.botUrl, "_blank", "noopener");
-    }
-  } catch (error) {
-    const node = $("#phoneGateMessage");
-    if (node) node.textContent = t("phone_gate_error");
-  }
-}
-window.requestPhoneContact = requestPhoneContact;
-
-async function refreshPhoneVerification() {
-  const button = $(".phoneGateActions .secondaryBtn");
-  if (button) button.disabled = true;
-  try {
-    const data = await api("/api/auth/me");
-    if (!data.phoneVerificationRequired) {
-      state.phoneVerificationRequired = false;
-      state.phoneCountryCode = data.phoneCountryCode || "";
-      state.referralMessageConsent = data.referralMessageConsent || "unset";
-      document.body.classList.remove("phone-verification-required");
-      state.initialized = false;
-      await boot();
-      return;
-    }
-    const node = $("#phoneGateMessage");
-    if (node) node.textContent = t("phone_gate_pending");
-  } catch (error) {
-    const node = $("#phoneGateMessage");
-    if (node) node.textContent = t("phone_gate_error");
-  } finally {
-    if (button) button.disabled = false;
-  }
-}
-window.refreshPhoneVerification = refreshPhoneVerification;
 
 const CLIENT_DATA_TTL_MS = 15000;
 let userDataRequestSequence = 0;
@@ -4281,10 +4208,6 @@ async function renderVipTab() {
 
 /* ================= TAB DISPATCH ================= */
 async function renderCurrentTab(requestId = navigationSequence) {
-  if (state.phoneVerificationRequired) {
-    renderPhoneVerificationGate();
-    return;
-  }
   const tab = state.activeTab;
   const isCurrentRender = () => requestId === navigationSequence && state.activeTab === tab;
   showLoading();
@@ -4380,11 +4303,6 @@ async function boot() {
 
   await bootstrapAuth();
   applyStaticTranslations();
-  if (state.phoneVerificationRequired) {
-    renderPhoneVerificationGate();
-    return;
-  }
-  document.body.classList.remove("phone-verification-required");
   if (typeof window.initGramupWalletConnect === "function") await window.initGramupWalletConnect();
 
   if (!termsAccepted()) {

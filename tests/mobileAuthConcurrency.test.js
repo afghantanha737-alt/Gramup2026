@@ -31,12 +31,17 @@ const MobileAuthChallenge = {
     if (challenge?._id === filter._id && challenge.status === filter.status) Object.assign(challenge, update.$set || {});
   }
 };
-const MobileSession = { create: async doc => { createdSessions += 1; return doc; } };
-const User = { findOne: async () => ({ _id: 'user-1', telegramId: '42', isBanned: false }) };
+const userDoc = { _id: 'user-1', telegramId: '42', isBanned: false, phoneCountryCode: '', phoneVerifiedAt: null };
+const User = { findOne: async () => userDoc };
+const mobileSession = { user: userDoc, save: async () => {} };
+const MobileSession = {
+  create: async doc => { createdSessions += 1; return doc; },
+  findOne: () => ({ populate: async () => mobileSession })
+};
 for (const [file, exports] of [[challengePath, MobileAuthChallenge], [sessionPath, MobileSession], [userPath, User]]) {
   require.cache[file] = { id: file, filename: file, loaded: true, exports };
 }
-const { createMobileChallenge, verifyMobileChallenge, consumeMobileChallenge } = require('../utils/mobileAuth');
+const { createMobileChallenge, verifyMobileChallenge, consumeMobileChallenge, requireMobileAuth } = require('../utils/mobileAuth');
 
 (async () => {
   const created = await createMobileChallenge();
@@ -53,5 +58,14 @@ const { createMobileChallenge, verifyMobileChallenge, consumeMobileChallenge } =
   assert.strictEqual(consumeResults.filter(Boolean).length, 1, 'only one concurrent consume receives an access token');
   assert.strictEqual(createdSessions, 1, 'exactly one mobile session is created for the one-time challenge');
   assert.strictEqual(challenge.status, 'consumed');
+  let authorized = false;
+  let authError = null;
+  await requireMobileAuth()(
+    { get: name => name.toLowerCase() === 'authorization' ? 'Bearer session-token' : '' },
+    { status(code) { authError = code; return this; }, json(payload) { authError = payload; } },
+    () => { authorized = true; }
+  );
+  assert.strictEqual(authorized, true, 'a valid session remains authorized without any verified phone number');
+  assert.strictEqual(authError, null);
   console.log('PASS — mobile auth challenge verification and session consumption are atomic under concurrency');
 })().catch(error => { console.error(error); process.exitCode = 1; });

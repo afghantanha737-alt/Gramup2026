@@ -45,7 +45,7 @@ assert.strictEqual((translations.match(/history_type_ad_reward:/g) || []).length
 assert.strictEqual((translations.match(/ad_task_title:/g) || []).length, 3);
 assert.strictEqual((translations.match(/mining_boost_button:/g) || []).length, 3);
 assert.match(index, /sad\.adsgram\.ai\/js\/sad\.min\.js/);
-assert.match(index, /v=up_v7_ads/);
-assert.doesNotMatch(index, /v=up_v7_phone/);
+assert.match(index, /v=up_v8_phone_optional/);
+assert.doesNotMatch(index, /v=up_v7_ads/);
 
 console.log('PASS — rewarded ad limits, cooldown, persistent fields, endpoints, Adsgram wrapper, and Mine boost controls');

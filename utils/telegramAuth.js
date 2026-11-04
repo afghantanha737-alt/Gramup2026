@@ -5,7 +5,6 @@ const User = require('../models/User');
 const { hashNetworkIdentifier, hashDeviceIdentifier, assessReferralRisk } = require('./referralRisk');
 const { linkReferral } = require('./referralSystem');
 const { referralIdentifierQuery } = require('./referralCore');
-const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 
 const MAX_INIT_DATA_AGE_SECONDS = 24 * 60 * 60;
 const MAX_INIT_DATA_LENGTH = 32 * 1024;
@@ -170,34 +169,20 @@ async function getOrCreateUser(tgUser, startParam, requestIp = '', requestUserAg
 
   const isFreshAccount = dbUser.createdAt && Date.now() - new Date(dbUser.createdAt).getTime() < 24 * 60 * 60 * 1000;
   if (!dbUser.referredBy && referrer && (isFreshAccount || Boolean(dbUser.pendingReferralIdentifier))) {
-    if (isVerifiedAllowedPhone(dbUser)) {
-      await linkReferral({
-        referredUserId: dbUser._id,
-        referrerId: referrer._id,
-        riskScore: referralRisk.score,
-        riskFlags: referralRisk.flags,
-        source: 'signup'
-      });
-      if (dbUser.pendingReferralIdentifier) {
-        await User.updateOne({ _id: dbUser._id }, { $set: { pendingReferralIdentifier: '' } });
-      }
-      dbUser = await User.findById(dbUser._id);
-    } else if (startParam && !dbUser.pendingReferralIdentifier) {
-      dbUser.pendingReferralIdentifier = String(startParam).slice(0, 64);
-      await dbUser.save();
+    await linkReferral({
+      referredUserId: dbUser._id,
+      referrerId: referrer._id,
+      riskScore: referralRisk.score,
+      riskFlags: referralRisk.flags,
+      source: 'signup'
+    });
+    if (dbUser.pendingReferralIdentifier) {
+      await User.updateOne({ _id: dbUser._id }, { $set: { pendingReferralIdentifier: '' } });
     }
+    dbUser = await User.findById(dbUser._id);
   }
 
   return dbUser;
-}
-
-function isPhoneVerificationBootstrapRequest(req) {
-  const path = String(req.originalUrl || '').split('?')[0].replace(/\/$/, '');
-  return new Set([
-    'GET /api/auth/me',
-    'PATCH /api/auth/language',
-    'POST /api/auth/request-phone-contact'
-  ]).has(`${req.method} ${path}`);
 }
 
 function getTelegramCredential(req) {
@@ -228,13 +213,6 @@ function requireTelegramAuth(botToken) {
       req.tgUser = verified.user;
       req.dbUser = dbUser;
       req.telegramStartParam = verified.startParam || '';
-      if (!isVerifiedAllowedPhone(dbUser) && !isPhoneVerificationBootstrapRequest(req)) {
-        return res.status(403).json({
-          success: false,
-          code: 'PHONE_VERIFICATION_REQUIRED',
-          message: 'برای ادامه، Contact تلگرام خود را با یک شمارهٔ بین‌المللی معتبر تأیید کنید.'
-        });
-      }
       next();
     } catch (error) {
       console.error('Telegram auth error:', error);

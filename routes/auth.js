@@ -28,7 +28,7 @@ router.get('/me', auth, async (req, res) => {
   // تا کاربران قدیمی نتوانند بعداً برای خودشان دعوت‌کننده ثبت کنند.
   const isFreshAccount = u.createdAt && Date.now() - new Date(u.createdAt).getTime() < 24 * 60 * 60 * 1000;
 
-  if (isVerifiedAllowedPhone(u) && !u.referredBy && referralQuery && isFreshAccount) {
+  if (!u.referredBy && referralQuery && isFreshAccount) {
     const referrer = await User.findOne(referralQuery).select('_id telegramId isBanned signupIpHash signupDeviceHash');
     // جلوگیری از خودارجاعی و دور رفرال (A دعوت‌کننده‌ی B و B دعوت‌کننده‌ی A)
     const isCycle = referrer && referrer.referredBy && String(referrer.referredBy) === String(u._id);
@@ -59,20 +59,19 @@ router.get('/me', auth, async (req, res) => {
 
   const maintenanceState = await getMaintenanceState();
   const maintenanceAllowed = isAllowedTelegramId(maintenanceState, u.telegramId);
-  const phoneVerified = isVerifiedAllowedPhone(u);
   res.json({
     success: true,
-    telegramId: phoneVerified ? u.telegramId : '',
-    firstName: phoneVerified ? u.firstName : '',
-    lastName: phoneVerified ? u.lastName : '',
-    username: phoneVerified ? u.username : '',
-    photoUrl: phoneVerified ? u.photoUrl : '',
-    points: phoneVerified ? u.points : 0,
-    referralCode: phoneVerified ? u.referralCode : '',
+    telegramId: u.telegramId,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    username: u.username,
+    photoUrl: u.photoUrl,
+    points: u.points,
+    referralCode: u.referralCode,
     language: u.language,
-    phoneVerificationRequired: !phoneVerified,
-    phoneCountryCode: phoneVerified ? u.phoneCountryCode : '',
-    referralMessageConsent: phoneVerified ? (u.referralMessageConsent || 'unset') : 'unset',
+    phoneVerificationRequired: false,
+    phoneCountryCode: u.phoneCountryCode || '',
+    referralMessageConsent: u.referralMessageConsent || 'unset',
     maintenance: {
       enabled: maintenanceState.enabled,
       allowed: maintenanceAllowed,

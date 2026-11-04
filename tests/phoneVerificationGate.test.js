@@ -62,14 +62,14 @@ function signedInitData() {
   });
   try {
     let response = await send('/api/secure');
-    assert.strictEqual(response.status, 403);
-    assert.strictEqual((await response.json()).code, 'PHONE_VERIFICATION_REQUIRED');
+    assert.strictEqual(response.status, 200, 'Telegram-authenticated users access protected APIs without phone verification');
     const bootstrap = await send('/api/auth/me');
-    assert.strictEqual(bootstrap.status, 200, 'the bootstrap endpoint stays available for the gate page');
+    assert.strictEqual(bootstrap.status, 200, 'the regular app bootstrap is available without phone verification');
     const bootstrapData = await bootstrap.json();
-    assert.strictEqual(bootstrapData.phoneVerificationRequired, true);
-    assert.strictEqual(bootstrapData.points, 0, 'unverified users do not receive balance data');
-    assert.strictEqual(bootstrapData.referralCode, '', 'unverified users do not receive referral identifiers');
+    assert.strictEqual(bootstrapData.phoneVerificationRequired, false);
+    assert.strictEqual(bootstrapData.telegramId, telegramId);
+    assert.strictEqual(bootstrapData.points, 500, 'users receive their balance without sharing a phone number');
+    assert.strictEqual(bootstrapData.referralCode, 'R123', 'users receive their referral identifier without phone verification');
     const contactRequest = await send('/api/auth/request-phone-contact', 'POST');
     assert.strictEqual(contactRequest.status, 200, 'the contact-request endpoint stays available');
     assert.strictEqual((await contactRequest.json()).botUrl, 'https://t.me/Gram_up_bot');
@@ -79,9 +79,15 @@ function signedInitData() {
     assert.strictEqual(repeatRequest.status, 200, 'users can retry the contact request at any time');
     assert.strictEqual((await repeatRequest.json()).botUrl, 'https://t.me/Gram_up_bot');
     assert.strictEqual(sentBotMessages.length, 2, 'a repeated request sends a fresh contact prompt instead of locking the user out');
-    assert.strictEqual((await send('/api/auth/language', 'PATCH', { language: 'en' })).status, 200, 'users can change the gate-page language');
+    assert.strictEqual((await send('/api/auth/language', 'PATCH', { language: 'en' })).status, 200, 'users can change language without phone verification');
     response = await send('/api/auth/referral-message-consent', 'PATCH', { consent: 'granted' });
-    assert.strictEqual(response.status, 403, 'unverified users cannot change messaging preferences');
+    assert.strictEqual(response.status, 200, 'unverified users can use protected account settings');
+    assert.strictEqual(user.referralMessageConsent, 'granted');
+
+    user.phoneCountryCode = '';
+    user.phoneVerifiedAt = null;
+    response = await send('/api/secure');
+    assert.strictEqual(response.status, 200, 'users with no phone number remain fully authenticated');
 
     user.phoneCountryCode = '+1';
     user.phoneVerifiedAt = new Date();
@@ -96,13 +102,13 @@ function signedInitData() {
     response = await send('/api/secure');
     assert.strictEqual(response.status, 200, 'a verified +98 contact unlocks protected APIs');
     response = await send('/api/auth/referral-message-consent', 'PATCH', { consent: 'granted' });
-    assert.strictEqual(response.status, 200, 'verified users can explicitly grant referral-message consent');
+    assert.strictEqual(response.status, 200, 'phone status does not change protected API access');
     assert.strictEqual(user.referralMessageConsent, 'granted');
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
 
-  console.log('ALL PASS — central Telegram auth gate accepts verified international contacts, including +93 and +98');
+  console.log('ALL PASS — Telegram authentication grants access without regional phone verification');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
