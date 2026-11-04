@@ -1124,7 +1124,8 @@ async function loadReferralData({ force = false } = {}) {
     state.referralHistory = Array.isArray(data?.referralHistory) ? data.referralHistory : [];
     state.referralNetworkLevels = Array.isArray(data?.networkLevels) ? data.networkLevels : [];
     state.referralTeam = Array.isArray(data?.team) ? data.team : [];
-    state.invitedCount = Number(data?.invitedCount) || 0;
+    const directInviteCount = Number(data?.referralStats?.totalReferrals ?? data?.invitedCount);
+    state.invitedCount = Number.isFinite(directInviteCount) && directInviteCount >= 0 ? directInviteCount : 0;
     state.activeInvitedCount = Number(data?.activeInvitedCount) || 0;
     state.invited = Array.isArray(data?.invited) ? data.invited : [];
     state.referralMinTasks = Number(data?.referralMinTasks) || 2;
@@ -1138,7 +1139,7 @@ async function loadReferralData({ force = false } = {}) {
   } finally {
     if (requestId !== referralDataRequestSequence) return;
     state.referralLoading = false;
-    if (state.activeTab === "profile" && profileView === "referral") renderProfile();
+    if (state.activeTab === "profile" && (profileView === "referral" || profileView === "menu")) renderProfile();
     else if (state.activeTab === "home") renderHome();
     else if (state.activeTab === "tasks") renderTasks();
   }
@@ -2844,6 +2845,9 @@ function openWeeklyCompetition() {
 window.openWeeklyCompetition = openWeeklyCompetition;
 
 function renderProfileMenu() {
+  const directInvitesValue = state.referralDataLoaded
+    ? formatNumber(state.invitedCount)
+    : state.referralError ? "—" : "…";
   const telegramUser = getTelegramUser();
   const user = state.user || telegramUser || {};
   const firstName = user.first_name || user.firstName || "";
@@ -2859,7 +2863,7 @@ function renderProfileMenu() {
         <div class="profileNameLg">${escapeHTML(firstName)}</div>
         <div class="tbPills">
           <span class="tbPill tbPillPurple tbPillSm">${t("tb_UP_chip", { n: formatPoints(state.points) })}</span>
-          <span class="tbPill tbPillOrange tbPillSm">${formatPoints(state.invitedCount)} ${t("tb_referrals")}</span>
+          <span class="tbPill tbPillOrange tbPillSm">${directInvitesValue} ${t("tb_referrals")}</span>
           <span class="tbPill tbPillGreen tbPillSm">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
         </div>
       </div>
@@ -2867,9 +2871,9 @@ function renderProfileMenu() {
     </section>
 
     <section class="profilePulseGrid" aria-label="${escapeHTML(t("tb_your_progress"))}">
-      <div><strong>${tokenAmount(state.points)}</strong><small class="profilePulseUnit">UP</small><span>${t("wallet_points_card_title", null, "Available Balance")}</span></div>
-      <div><strong>${formatNumber(state.invitedCount)}</strong><span>${t("referral_kpi_direct")}</span></div>
-      <div><strong>${tokenAmount(state.totalEarnedPoints)}</strong><small class="profilePulseUnit">UP</small><span>${t("tb_earned")}</span></div>
+      <div><strong>${formatPoints(state.points)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("wallet_points_card_title", null, "Available Balance")}</span></div>
+      <div><strong>${directInvitesValue}</strong><span class="profilePulseLabel">${t("referral_kpi_direct")}</span></div>
+      <div><strong>${formatPoints(state.totalEarnedPoints)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("tb_earned")}</span></div>
     </section>
     <div class="card profileMenuPanel">
       <div class="profileMenuLabel">${t("menu_referral")}</div>
@@ -3914,6 +3918,9 @@ async function renderProfile() {
   const isCurrentProfileRender = () => renderRequestId === profileRenderSequence
     && (state.activeTab === "profile" || (state.activeTab === "vip" && profileView === "vip"));
   const content = $("#content");
+  if (profileView === "menu" && !state.referralDataLoaded && !state.referralLoading && !state.referralError) {
+    void loadReferralData();
+  }
   if (profileView !== "leaderboard" || leaderboardMode !== "weekly") stopWeeklyCompetitionCountdown();
   if (profileView !== "vip") stopVipCountdown();
   if (profileView === "leaderboard" && state.leaderboard.length === 0) {
