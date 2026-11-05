@@ -119,10 +119,10 @@ async function main() {
 
   const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
   for (const asset of ['i18n.js', 'app.js', 'maintenanceGate.js', 'readModelCache.js', 'walletConnect.js']) {
-    assert.ok(indexHtml.includes(`/js/${asset}?v=up_v23_20261105_1`), `${asset} must use the latest cache-busting version`);
+    assert.ok(indexHtml.includes(`/js/${asset}?v=up_v24_20261105_1`), `${asset} must use the latest cache-busting version`);
   }
-  assert.ok(indexHtml.includes('/css/style.css?v=up_v23_20261105_1'), 'main CSS must use the latest asset version');
-  assert.ok(indexHtml.includes('/css/theme-selector.css?v=up_v23_20261105_1'), 'theme CSS must use the latest asset version');
+  assert.ok(indexHtml.includes('/css/style.css?v=up_v24_20261105_1'), 'main CSS must use the latest asset version');
+  assert.ok(indexHtml.includes('/css/theme-selector.css?v=up_v24_20261105_1'), 'theme CSS must use the latest asset version');
 
   const referralRoute = fs.readFileSync(path.join(root, 'routes/referral.js'), 'utf8');
   assert.match(referralRoute, /User\.countDocuments\(\{ referredBy: u\._id \}\)/,

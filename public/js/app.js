@@ -1456,6 +1456,7 @@ function startSpinCountdown() {
       button.disabled = true;
       button.classList.add('is-locked');
       button.textContent = `🔒 ${t('spin_spin_now', {}, 'SPIN NOW')}`;
+      const paidButton = document.querySelector('[data-paid-spin]'); if (paidButton) paidButton.disabled = true;
       return;
     }
     button.classList.remove('is-locked');
@@ -1463,11 +1464,13 @@ function startSpinCountdown() {
       label.textContent = t("spin_free");
       button.disabled = state.spinBusy;
       button.textContent = state.spinBusy ? t("spin_spinning") : t('spin_spin_now', {}, 'SPIN NOW');
+      const paidButton = document.querySelector('[data-paid-spin]'); if (paidButton) paidButton.disabled = state.spinBusy || state.points < 50;
       return;
     }
     label.textContent = t("spin_next", { time: spinRemainingText() });
     button.disabled = true;
     button.textContent = t("spin_next", { time: spinRemainingText() });
+    const paidButton = document.querySelector('[data-paid-spin]'); if (paidButton) paidButton.disabled = state.spinBusy || state.points < 50;
   };
   update();
   spinCountdownTimer = setInterval(update, 1000);
@@ -1485,7 +1488,7 @@ function renderLuckySpin() {
   return `<section class="spinCard ${eligible ? '' : 'is-locked'}" aria-label="${t("spin_aria")}">
     <div class="spinCardHeader"><span class="spinBadge">24H</span></div>
     <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRimGeometry" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${prizes.slice(0, 6).map((prize, index) => { const [top, bottom] = spinSliceText(prize, index); return `<span class="spinSliceLabel">${rewardIcon(prize, index)}<b>${escapeHTML(top)}</b><small>${escapeHTML(bottom)}</small></span>`; }).join("")}<div class="spinWheelHub" aria-hidden="true"><img src="/img/gramup-logo-new.png" alt=""><span class="spinHubDiamond">◇</span></div></div></div>
-    <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${!eligible ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : (available ? t("spin_free") : t("spin_next", { time: spinRemainingText() }))}</span><button id="spinButton" class="primaryBtn spinButton ${!eligible ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button></div>
+    <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${!eligible ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : (available ? t("spin_free") : t("spin_next", { time: spinRemainingText() }))}</span><button id="spinButton" class="primaryBtn spinButton ${!eligible ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button><button type="button" class="spinPaidButton" data-paid-spin onclick="paySpinAlternative()" ${!eligible || state.points < 50 ? "disabled" : ""}>${t('spin_pay_50', {}, 'Pay 50 UP to Spin')}</button></div>
     <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
   </section>`;
 }
@@ -1511,7 +1514,7 @@ function openLuckySpin() {
   haptic("light");
   closeLuckySpin();
   const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'luckySpinScreen';
-  overlay.innerHTML = `<main class="luckySpinPage" aria-label="Lucky Spin"><header class="luckySpinPageHeader"><button class="luckySpinClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></header><div class="spinHeaderStats" aria-label="Lucky Spin status"><div class="spinHeaderStat"><span>STATUS</span><strong data-spin-status>LOCKED</strong></div><div class="spinHeaderStat"><span>PRIZE</span><strong data-spin-prize>—</strong></div><div class="spinHeaderStat"><span>TICKETS</span><strong data-spin-tickets>0</strong></div></div><div class="luckySpinPageBody">${renderLuckySpin()}</div></main>`;
+  overlay.innerHTML = `<main class="luckySpinPage" aria-label="Lucky Spin"><header class="luckySpinPageHeader"><div class="spinBrand"><img src="/img/gramup-logo-new.png" alt="Gramup"><strong>Gramup Spinner</strong></div><button class="luckySpinClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></header><div class="spinHeaderStats" aria-label="Lucky Spin status"><div class="spinHeaderStat"><span>STATUS</span><strong data-spin-status>LOCKED</strong></div><div class="spinHeaderStat"><span>PRIZE</span><strong data-spin-prize>—</strong></div><div class="spinHeaderStat"><span>TICKETS</span><strong data-spin-tickets>0</strong></div></div><div class="luckySpinPageBody">${renderLuckySpin()}</div></main>`;
   document.body.appendChild(overlay); document.body.classList.add('luckySpinOpen'); state.spinModalOpen = true; startSpinCountdown();
 }
 window.openLuckySpin = openLuckySpin; window.closeLuckySpin = closeLuckySpin;
@@ -1546,6 +1549,20 @@ async function doSpin() {
   } finally { state.spinBusy = false; startSpinCountdown(); }
 }
 window.doSpin = doSpin;
+async function paySpinAlternative() {
+  if (!readModelActionAllowed() || !spinEligible() || state.spinBusy || state.points < 50) return;
+  state.spinBusy = true; haptic('medium');
+  const button = document.querySelector('[data-paid-spin]'); const wheel = document.querySelector('#spinWheel'); const resultBox = document.querySelector('#spinResult');
+  if (button) { button.disabled = true; button.textContent = t('spin_paying', {}, 'Processing 50 UP...'); }
+  if (wheel) { wheel.classList.remove('spinWheelRun'); void wheel.offsetWidth; wheel.classList.add('spinWheelRun'); }
+  try {
+    const result = await api('/api/points/spin/paid', { method: 'POST', headers: { 'Idempotency-Key': getPendingIdempotencyKey('spin_paid') } });
+    clearPendingIdempotencyKey('spin_paid'); state.points = Number(result.points) ?? state.points; state.gramBalance = Number(result.gramBalance) ?? state.gramBalance; state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
+    const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount); if (resultBox) resultBox.textContent = t('spin_result', { label }); toast(label, 'success'); haptic('success'); updateHeader();
+  } catch (error) { clearDefinitiveIdempotencyFailure('spin_paid', error); haptic('error'); if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message); toast(translateServerMessage(error.code, error.message), 'error'); }
+  finally { state.spinBusy = false; startSpinCountdown(); }
+}
+window.paySpinAlternative = paySpinAlternative;
 
 function completionStatus(taskId) {
   const found = state.completions.find(c => String(c.task) === String(taskId));

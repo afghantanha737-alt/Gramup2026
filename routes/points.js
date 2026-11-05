@@ -540,6 +540,44 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
   }
 });
 
+// POST /api/points/spin/paid — optional paid spin that bypasses the free-spin cooldown.
+router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) => {
+  const now = new Date();
+  const cost = 50;
+  const settings = await Settings.getGlobal();
+  const spin = spinPolicy(settings);
+  if (!spin.enabled) return res.status(409).json({ success: false, code: 'SPIN_DISABLED', message: 'Lucky Spin is currently disabled.' });
+  if (Number(req.dbUser?.streak || 0) < spin.requiredStreak) return res.status(403).json({ success: false, code: 'SPIN_STREAK_REQUIRED', requiredStreak: spin.requiredStreak, streak: Number(req.dbUser?.streak || 0), message: `Complete a ${spin.requiredStreak}-day Daily Check-in streak to unlock Lucky Spin.` });
+  const operationKey = String(req.get('Idempotency-Key') || '').trim();
+  try {
+    const outcome = await executeIdempotently({
+      userId: req.dbUser._id, scope: 'spin_paid', key: operationKey, body: { cost },
+      execute: async session => {
+        const prize = pickWeightedPrize(spin.prizes, crypto.randomInt(0, 1000000) / 10000);
+        const update = { $inc: { points: -cost } };
+        if (prize.kind === 'points') update.$inc.points += prize.amount;
+        if (prize.kind === 'gram') update.$inc.gramBalance = prize.amount;
+        if (prize.kind === 'boost') {
+          const currentBoostUntil = req.dbUser.miningBoostUntil && new Date(req.dbUser.miningBoostUntil) > now ? new Date(req.dbUser.miningBoostUntil) : now;
+          update.$set = { miningBoostUntil: new Date(currentBoostUntil.getTime() + 60 * 60 * 1000), miningBoostMultiplier: Math.max(1.1, Number(req.dbUser.miningBoostMultiplier) || 1) };
+        }
+        const updated = await User.findOneAndUpdate({ _id: req.dbUser._id, isBanned: { $ne: true }, points: { $gte: cost } }, update, { new: true, session });
+        if (!updated) { const error = new Error('You need 50 UP to use the paid spin.'); error.code = 'SPIN_PAYMENT_REQUIRED'; error.statusCode = 400; throw error; }
+        const debitSourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin_paid', key: operationKey, leg: 'debit' });
+        await recordLedgerRequired({ user: updated._id, type: 'spin_paid', currency: 'points', amount: -cost, description: 'Lucky Spin paid entry — 50 UP', balanceAfter: updated.points - (prize.kind === 'points' ? prize.amount : 0), sourceId: debitSourceId, session });
+        const rewardCurrency = prize.kind === 'gram' ? 'gram' : 'points';
+        const rewardSourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin_paid', key: operationKey, leg: 'reward' });
+        await recordLedgerRequired({ user: updated._id, type: 'spin', currency: rewardCurrency, amount: prize.amount, description: `Lucky Spin paid reward: ${prize.id}`, balanceAfter: rewardCurrency === 'gram' ? updated.gramBalance : updated.points, sourceId: rewardSourceId, session });
+        return { status: 200, body: { success: true, prizeId: prize.id, prizeKind: prize.kind, prizeLabel: prize.label, amount: prize.amount, points: updated.points, gramBalance: updated.gramBalance, boostUntil: updated.miningBoostUntil || null }, resourceId: rewardSourceId };
+      }
+    });
+    return res.status(outcome.status).json(outcome.body);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
+    throw error;
+  }
+});
+
 const round6 = n => Number(Number(n).toFixed(6));
 
 /**
