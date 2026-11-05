@@ -1444,12 +1444,12 @@ function startSpinCountdown() {
 function renderLuckySpin() {
   const available = spinAvailable();
   const eligible = spinEligible();
-  const slices = [["10%", "Mining"], ["+50", "UP"], ["+100", "UP"], ["+250", "UP"], ["+0.05", "GRAM"], ["Try", "Again"]];
+  const slices = [["10%", "Mining", "✦"], ["+50", "UP", "◈"], ["+100", "UP", "✧"], ["+250", "UP", "◆"], ["+0.05", "GRAM", "✦"], ["Try", "Again", "◇"]];
   const buttonLocked = !eligible || !available;
   const buttonLabel = !eligible ? `🔒 ${t('spin_button')}` : (available ? t("spin_button") : t("spin_next", { time: spinRemainingText() }));
   return `<section class="spinCard ${eligible ? '' : 'is-locked'}" aria-labelledby="spinTitle">
     <div class="spinCardHeader"><div><span class="spinEyebrow">${t("spin_subtitle")}</span><h2 id="spinTitle">${t("spin_title")}</h2></div><span class="spinBadge">24H</span></div>
-    <div class="spinStage"><div class="spinPointer" aria-hidden="true"></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}">${slices.map(([top, bottom]) => `<span><b>${top}</b><small>${bottom}</small></span>`).join("")}</div></div>
+    <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${slices.map(([top, bottom, rune]) => `<span><em>${rune}</em><b>${top}</b><small>${bottom}</small></span>`).join("")}<div class="spinWheelHub" aria-hidden="true"><span>UP</span></div></div></div>
     <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${!eligible ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : (available ? t("spin_free") : t("spin_next", { time: spinRemainingText() }))}</span><button id="spinButton" class="primaryBtn spinButton ${!eligible ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button></div>
     <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
   </section>`;
