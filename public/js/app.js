@@ -1444,12 +1444,23 @@ function renderLuckySpin() {
 }
 function renderLuckySpinBanner() {
   const eligible = state.spinEnabled && state.streak >= state.spinRequiredStreak;
-  const lockText = state.spinEnabled ? t('spin_unlock_progress', { n: Math.min(state.streak, state.spinRequiredStreak), required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Daily Check-ins to unlock`) : t('spin_disabled', {}, 'Lucky Spin is currently unavailable');
-  return `<section class="spinLaunchCard ${eligible ? 'is-ready' : 'is-locked'}" aria-labelledby="spinLaunchTitle"><div class="spinLaunchIcon">🎡</div><div class="spinLaunchCopy"><span>${t('spin_eyebrow', {}, '7-day streak reward')}</span><strong id="spinLaunchTitle">${t('spin_title')}</strong><small>${eligible ? t('spin_launch_ready', {}, 'Your Lucky Spin is ready to open') : lockText}</small></div><button class="spinLaunchButton" type="button" onclick="${eligible ? 'openLuckySpin()' : ''}" ${eligible ? '' : 'disabled'}>${eligible ? t('spin_open', {}, 'Open') : '🔒'}</button></section>`;
+  const subtitle = eligible
+    ? t('spin_launch_ready', {}, 'Your Lucky Spin is ready')
+    : (state.spinEnabled ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : t('spin_disabled', {}, 'Lucky Spin is currently unavailable'));
+  const status = eligible
+    ? `<span class="spinLaunchStatus is-ready">${t('spin_ready', {}, 'Ready')}</span>`
+    : `<span class="spinLaunchStatus"><span aria-hidden="true">🔒</span>${t('spin_locked', {}, 'Locked')}</span>`;
+  const lock = eligible ? '' : '<span class="spinLaunchButtonLock" aria-hidden="true">🔒</span>';
+  return `<section class="spinLaunchCard ${eligible ? 'is-ready' : 'is-locked'}" aria-labelledby="spinLaunchTitle">
+    <div class="spinLaunchIcon" aria-hidden="true"><span class="spinLaunchWheel"><i></i><i></i><i></i><i></i><i></i><i></i><b>✦</b></span></div>
+    <div class="spinLaunchCopy"><strong id="spinLaunchTitle">${t('spin_title')}</strong><small>${subtitle}</small></div>
+    <div class="spinLaunchAction">${status}<button class="spinLaunchButton" type="button" onclick="${eligible ? 'openLuckySpin()' : ''}" ${eligible ? '' : 'disabled'}>${lock}${t('spin_spin_button', {}, 'Spin')}</button></div>
+  </section>`;
 }
 function closeLuckySpin() { const overlay = document.querySelector('#luckySpinOverlay'); if (overlay) overlay.remove(); state.spinModalOpen = false; stopSpinCountdown(); }
 function openLuckySpin() {
   if (!state.spinEnabled || state.streak < state.spinRequiredStreak) return;
+  haptic("light");
   closeLuckySpin();
   const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'overlay';
   overlay.innerHTML = `<div class="modalBox luckySpinModal" role="dialog" aria-modal="true" aria-labelledby="spinTitle"><div class="modalHeader"><div><span class="modalEyebrow">${t('spin_eyebrow', {}, '7-day streak reward')}</span><h3>${t('spin_title')}</h3></div><button class="modalClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></div>${renderLuckySpin()}</div>`;
@@ -1535,13 +1546,17 @@ function renderHome() {
         <span class="auroraQuickIcon">↗</span><span>${t("menu_referral")}</span>
       </button>
     </section>
-    <section class="auroraDailyCard">
+    <section class="auroraDailyCard ${state.canCheckIn ? '' : 'is-claimed'}">
       <div class="auroraDailyIcon">🔥</div>
       <div class="auroraDailyCopy">
         <strong>${t("earn_daily_title")}</strong>
         <span>${state.canCheckIn ? t("earn_daily_sub_available") : t("earn_daily_sub_done")}</span>
       </div>
-      <button class="auroraInlineBtn" type="button" onclick="${state.canCheckIn ? "doCheckIn()" : "navigate('tasks')"}">${state.canCheckIn ? t("checkin_button") : t("tasks_title")}</button>
+      <div class="auroraDailyActions">
+        ${state.canCheckIn
+          ? `<button class="auroraInlineBtn" type="button" onclick="doCheckIn()">${t("checkin_button")}</button>`
+          : `<span class="auroraClaimedBadge"><span aria-hidden="true">✓</span>${t("checkin_claimed", {}, "Claimed")}</span><button class="auroraTasksLink" type="button" onclick="navigate('tasks')">${t("tasks_title")}</button>`}
+      </div>
     </section>
 
     ${renderLuckySpinBanner()}
