@@ -2690,7 +2690,7 @@ router.put('/settings', async (req, res) => {
     referralWelcomeRewardPoints: v => Number.isSafeInteger(v) && v >= 0 && v <= 1000000,
     dailyReminderLocalHour: v => Number.isInteger(v) && v >= 0 && v <= 23,
     dailyReminderLocalMinute: v => Number.isInteger(v) && v >= 0 && v <= 59,
-    luckySpinRequiredStreak: v => Number.isInteger(v) && v >= 1 && v <= 365,
+    luckySpinRequiredStreak: v => Number.isInteger(v) && v >= 7 && v <= 365,
     luckySpinCooldownHours: v => Number.isInteger(v) && v >= 1 && v <= 168
   };
 

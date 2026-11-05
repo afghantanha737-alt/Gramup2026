@@ -58,7 +58,7 @@ const SPIN_PRIZES = Object.freeze([
 ]);
 function spinPolicy(settings) {
   const cooldownHours = Number(settings?.luckySpinCooldownHours) || DEFAULT_SPIN_COOLDOWN_HOURS;
-  const requiredStreak = Number(settings?.luckySpinRequiredStreak) || DEFAULT_SPIN_REQUIRED_STREAK;
+  const requiredStreak = Math.max(DEFAULT_SPIN_REQUIRED_STREAK, Number(settings?.luckySpinRequiredStreak) || DEFAULT_SPIN_REQUIRED_STREAK);
   const prizes = Array.isArray(settings?.luckySpinPrizes) && settings.luckySpinPrizes.length >= 2
     ? settings.luckySpinPrizes.map(item => ({ id: String(item.id), kind: item.kind, amount: Number(item.amount) || 0, label: String(item.label || '') }))
     : SPIN_PRIZES;

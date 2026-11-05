@@ -7,12 +7,14 @@ const appSource = fs.readFileSync(require.resolve('../public/js/app.js'), 'utf8'
 const adminSource = fs.readFileSync(require.resolve('../routes/admin'), 'utf8');
 const settingsSource = fs.readFileSync(require.resolve('../models/Settings'), 'utf8');
 assert.equal(pointsRoute.spinPolicy({ luckySpinEnabled: true, luckySpinRequiredStreak: 7, luckySpinCooldownHours: 24 }).requiredStreak, 7);
+assert.equal(pointsRoute.spinPolicy({ luckySpinEnabled: true, luckySpinRequiredStreak: 3 }).requiredStreak, 7);
 assert.equal(pointsRoute.spinPolicy({ luckySpinEnabled: false }).enabled, false);
 assert.match(pointsSource, /SPIN_STREAK_REQUIRED/);
 assert.match(pointsSource, /spin\.requiredStreak/);
 assert.match(pointsSource, /spin\.prizes/);
 assert.match(appSource, /renderLuckySpinBanner/);
 assert.match(appSource, /openLuckySpin/);
+assert.match(appSource, /spin_spin_button/);
 const homeSource = appSource.slice(appSource.indexOf('function renderHome()'), appSource.indexOf('function renderTasks()'));
 assert.match(homeSource, /renderLuckySpinBanner/);
 assert.doesNotMatch(homeSource, /renderLuckySpin\(\)/);

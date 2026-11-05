@@ -54,7 +54,7 @@ assert.match(heroRowStyle, /border: 0/);
 assert.match(heroRowStyle, /background: transparent/);
 assert.match(css, /\.vipRedesign \.vipHeroClaimButton \{[^}]*width: 100%/);
 assert.match(css, /\.vipRedesign \.vipHeroPlanProgress \{[^}]*height: 3px/);
-assert.match(html, /style\.css\?v=up_v11_20261105_1/);
+assert.match(html, /style\.css\?v=up_v12_20261105_1/);
 
 const window = { state: { language: 'fa' } };
 vm.runInNewContext(fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8'), { window });
