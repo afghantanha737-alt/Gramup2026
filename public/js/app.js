@@ -1235,7 +1235,6 @@ function setTaskSection(section) {
   const next = ["daily", "vip", "invite"].includes(String(section)) ? String(section) : "daily";
   state.taskSection = next;
   if (next === "invite" && !state.referralDataLoaded && !state.referralLoading) void loadReferralData();
-  if (next === "invite" && !state.squadsLoaded && !state.squadsLoading) void loadSquads();
   renderTasks();
 }
 window.setTaskSection = setTaskSection;
@@ -1253,6 +1252,7 @@ async function loadSquads({ force = false } = {}) {
   } finally {
     state.squadsLoading = false;
     if (state.activeTab === "tasks" && state.taskSection === "invite") renderTasks();
+    if (state.activeTab === "profile" && profileView === "groups") renderProfile();
   }
 }
 function renderSquadsCard() {
@@ -2149,7 +2149,6 @@ function renderTasks() {
     : state.tasks.filter(task => taskSection === "vip" ? task.taskKind === "vip_activation" : task.taskKind !== "vip_activation");
   const referralHtml = isInviteSection ? renderReferralRewardTasks() : "";
   const referralTierHtml = isInviteSection ? renderReferralTierSummary() : "";
-  const squadsHtml = isInviteSection ? renderSquadsCard() : "";
   const dailyCheckinHtml = taskSection === "daily" ? renderDailyCheckinCard() : "";
   const taskErrorHtml = tasksLoadError ? `<div class="card" role="status"><div class="emptyDesc">${t("tasks_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryTasks()">${t("retry_button")}</button></div>` : "";
   const sectionTabs = `
@@ -2178,7 +2177,6 @@ function renderTasks() {
       ${taskErrorHtml}
       ${referralHtml}
       ${referralTierHtml}
-      ${squadsHtml}
       <div class="card emptyState">
         <div class="emptyIcon">🗂️</div>
         <div class="emptyTitle">${t("tasks_empty_title")}</div>
@@ -2196,7 +2194,6 @@ function renderTasks() {
       ${sectionTabs}
       ${referralHtml}
       ${referralTierHtml}
-      ${squadsHtml}
     `;
     return;
   }
@@ -3144,7 +3141,7 @@ async function shareToTelegramStory(context = "referral") {
 }
 window.shareToTelegramStory = shareToTelegramStory;
 
-let profileView = "menu"; // menu | referral | leaderboard | about | history
+let profileView = "menu"; // menu | referral | groups | leaderboard | about | history
 let pendingProfileView = null;
 let referralPreviousProfileView = "menu";
 let referralBackButtonHandlerBound = false;
@@ -3218,6 +3215,7 @@ function setProfileView(view) {
     state.referralFilter = "all";
     void loadReferralData();
   }
+  if (view === "groups" && !state.squadsLoaded && !state.squadsLoading) void loadSquads();
   renderProfile();
   syncReferralTelegramBackButton();
 }
@@ -3281,6 +3279,11 @@ function renderProfileMenu() {
           <div class="profileText">${t("menu_weekly_competition")}</div>
           <div class="profileChevron">‹</div>
         </div>
+        <div class="profileItem" onclick="setProfileView('groups')">
+          <div class="profileIcon">👥</div>
+          <div class="profileText">${t("squad_title")}</div>
+          <div class="profileChevron">‹</div>
+        </div>
         <div class="profileItem" onclick="setProfileView('history')">
           <div class="profileIcon">🧾</div>
           <div class="profileText">${t("menu_history")}</div>
@@ -3333,6 +3336,10 @@ function renderProfileMenu() {
   `;
 }
 
+function renderProfileGroups() {
+  return `<div class="profileGroupsView"><div class="sectionHeader"><button class="sectionMore" type="button" onclick="setProfileView('menu')">${t("referral_back")}</button><h2 class="sectionTitle">${t("squad_title")}</h2><span></span></div>${renderSquadsCard()}</div>`;
+}
+
 function renderProfileAbout() {
   return `
     <div class="profileAboutView">
@@ -3381,7 +3388,7 @@ function renderReferralRewardTasks() {
     }
 
     return `
-      <div class="taskItem referralTaskItem" style="margin-bottom:12px">
+      <div class="taskItem referralTaskItem ${action ? "has-action" : "no-action"}" style="margin-bottom:12px">
         <div class="taskIcon">👥</div>
         <div class="taskBody">
           <div class="taskTitle">${t("referral_task_invite", { n: formatPoints(task.requiredInvites) })}</div>
@@ -4406,6 +4413,8 @@ async function renderProfile() {
     if (leaderboardMode === "weekly") startWeeklyCompetitionCountdown();
   } else if (profileView === "about") {
     content.innerHTML = renderProfileAbout();
+  } else if (profileView === "groups") {
+    content.innerHTML = renderProfileGroups();
   } else if (profileView === "history") {
     content.innerHTML = renderProfileHistory();
   } else if (profileView === "vip") {
