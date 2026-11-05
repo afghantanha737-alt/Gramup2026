@@ -3835,13 +3835,8 @@ async function loadMiningStatus() {
 function renderMiningPanel() {
   const mining = state.mining;
   if (!mining) return '';
-  const percent = mining.maxStoragePoints ? Math.min(100, Math.round((mining.accumulatedPoints / mining.maxStoragePoints) * 100)) : 0;
-  const full = Boolean(mining.isStorageFull);
   const products = [['hash_boost_7d', '⚡', t('stars_hash_boost'), 150], ['vip_gold', '💎', t('stars_vip_gold'), 250]];
-  return `<section class="phase3MiningCard" aria-label="${t('mining_title')}">
-    <div class="phase3MiningTop"><div><span class="modalEyebrow">${t('mining_title')}</span><h3>${t('mining_rig_level', { n: mining.level })}</h3></div><strong>${formatNumber(mining.effectiveRatePerHour, 0)} ${t('mining_per_hour')}</strong></div>
-    <div class="phase3Vault"><div class="phase3VaultBar"><span style="width:${percent}%"></span></div><div class="phase3VaultMeta"><span>${full ? t('mining_vault_full') : t('mining_vault_running')}</span><b>${formatNumber(mining.accumulatedPoints, 0)} / ${formatNumber(mining.maxStoragePoints, 0)} UP</b></div></div>
-    <div class="phase3MiningActions"><button class="primaryBtn" type="button" onclick="claimMining()" ${mining.accumulatedPoints < 1 ? 'disabled' : ''}>${t('mining_claim')}</button><button class="secondaryBtn" type="button" onclick="upgradeMining('rig')" ${mining.nextRigUpgrade ? '' : 'disabled'}>${t('mining_upgrade_rig')} · ${mining.nextRigUpgrade ? formatPoints(mining.nextRigUpgrade.cost) : '—'} UP</button><button class="secondaryBtn" type="button" onclick="upgradeMining('storage')" ${mining.nextStorageUpgrade ? '' : 'disabled'}>${t('mining_upgrade_vault')} · ${mining.nextStorageUpgrade ? formatPoints(mining.nextStorageUpgrade.cost) : '—'} UP</button></div>
+  return `<section class="phase3MiningCard phase3StarsOnly" aria-label="${t('stars_shop_title')}">
     <div class="phase3StarsShop"><h4>${t('stars_shop_title')}</h4><div class="phase3StarsGrid">${products.map(([key, icon, label, stars]) => `<button type="button" class="phase3StarsCard" onclick="buyStarsProduct('${key}')"><span>${icon}</span><b>${label}</b><small>${stars} XTR</small></button>`).join('')}</div></div>
   </section>`;
 }
