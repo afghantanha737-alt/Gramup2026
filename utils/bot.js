@@ -182,6 +182,15 @@ function buildWebAppReplyMarkup(buttonText, webAppUrl) {
   return { inline_keyboard: [[{ text, web_app: { url: url.toString() } }]] };
 }
 
+function parseSafeTelegramUrl(value) {
+  let url;
+  try { url = new URL(String(value || '').trim()); }
+  catch { return null; }
+  if (!['https:', 'http:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
+  if (url.hostname.toLowerCase() === 't.me' && url.protocol !== 'https:') return null;
+  return url;
+}
+
 function buildBroadcastButtonReplyMarkup(buttonText, buttonUrl, webAppUrl) {
   const text = String(buttonText || '').trim();
   if (!text) return null;
@@ -190,16 +199,79 @@ function buildBroadcastButtonReplyMarkup(buttonText, buttonUrl, webAppUrl) {
   const customUrl = String(buttonUrl || '').trim();
   if (!customUrl) return buildWebAppReplyMarkup(text, webAppUrl);
 
-  let url;
-  try { url = new URL(customUrl); }
-  catch { throw new TypeError('Enter a valid HTTP(S) button link.'); }
-  if (!['https:', 'http:'].includes(url.protocol) || !url.hostname || url.username || url.password) {
-    throw new TypeError('Enter a valid HTTP(S) button link without credentials.');
-  }
-  if (url.hostname.toLowerCase() === 't.me' && url.protocol !== 'https:') {
-    throw new TypeError('Telegram bot and channel links must use HTTPS.');
-  }
+  const url = parseSafeTelegramUrl(customUrl);
+  if (!url) throw new TypeError('Enter a valid HTTP(S) button link without credentials; Telegram links must use HTTPS.');
   return { inline_keyboard: [[{ text, url: url.toString() }]] };
+}
+
+function escapeTelegramHtmlText(value) {
+  return String(value)
+    .replace(/&(?!amp;|lt;|gt;|quot;)/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeTelegramHtmlAttribute(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function sanitizeTelegramHtml(value) {
+  const source = String(value == null ? '' : value);
+  const tags = /<[^<>]*>/g;
+  const openTags = [];
+  let output = '';
+  let cursor = 0;
+  let match;
+
+  while ((match = tags.exec(source))) {
+    output += escapeTelegramHtmlText(source.slice(cursor, match.index));
+    const token = match[0];
+    const simpleOpen = token.match(/^<(b|i|code)\s*>$/i);
+    const simpleClose = token.match(/^<\/(b|i|code)\s*>$/i);
+    const anchorOpen = token.match(/^<a\s+href\s*=\s*(?:"([^"]*)"|'([^']*)')\s*>$/i);
+    const anchorClose = /^<\/a\s*>$/i.test(token);
+
+    if (simpleOpen) {
+      const tag = simpleOpen[1].toLowerCase();
+      const allowedContext = tag === 'code' ? openTags.length === 0 : !openTags.includes('code');
+      if (allowedContext) {
+        output += `<${tag}>`;
+        openTags.push(tag);
+      } else {
+        output += escapeTelegramHtmlText(token);
+      }
+    } else if (simpleClose) {
+      const tag = simpleClose[1].toLowerCase();
+      if (openTags[openTags.length - 1] === tag) {
+        openTags.pop();
+        output += `</${tag}>`;
+      } else {
+        output += escapeTelegramHtmlText(token);
+      }
+    } else if (anchorOpen) {
+      const url = parseSafeTelegramUrl(anchorOpen[1] || anchorOpen[2]);
+      if (url && !openTags.includes('a') && !openTags.includes('code')) {
+        output += `<a href="${escapeTelegramHtmlAttribute(url.toString())}">`;
+        openTags.push('a');
+      } else {
+        output += escapeTelegramHtmlText(token);
+      }
+    } else if (anchorClose && openTags[openTags.length - 1] === 'a') {
+      openTags.pop();
+      output += '</a>';
+    } else {
+      output += escapeTelegramHtmlText(token);
+    }
+    cursor = tags.lastIndex;
+  }
+
+  output += escapeTelegramHtmlText(source.slice(cursor));
+  while (openTags.length) output += `</${openTags.pop()}>`;
+  return output;
 }
 
 function getTelegramRetryAfterMs(error) {
@@ -352,4 +424,4 @@ async function broadcastCopyToActiveUsers(User, fromChatId, messageId) {
   return summary;
 }
 
-module.exports = { bot, buildTelegramWebhookPayload, buildWebAppReplyMarkup, buildBroadcastButtonReplyMarkup, getTelegramRetryAfterMs, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, isValidTelegramUserId, filterActiveTelegramRecipients, broadcastToActiveUsers, broadcastCopyToActiveUsers, withTelegramDeliveryDeadline };
+module.exports = { bot, buildTelegramWebhookPayload, buildWebAppReplyMarkup, buildBroadcastButtonReplyMarkup, sanitizeTelegramHtml, getTelegramRetryAfterMs, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, isValidTelegramUserId, filterActiveTelegramRecipients, broadcastToActiveUsers, broadcastCopyToActiveUsers, withTelegramDeliveryDeadline };

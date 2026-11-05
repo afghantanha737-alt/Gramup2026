@@ -10,7 +10,7 @@ const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
-const { bot, notifyUser, buildBroadcastButtonReplyMarkup, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers } = require('../utils/bot');
+const { bot, notifyUser, buildBroadcastButtonReplyMarkup, sanitizeTelegramHtml, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { postWithdrawalPaid } = require('../utils/payoutChannel');
 const { sendNotificationOnce } = require('../utils/notificationDelivery');
@@ -3097,10 +3097,11 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
   if (!bot) {
     return res.status(500).json({ success: false, message: 'ربات پیکربندی نشده.' });
   }
-  const text = String((req.body && req.body.text) || '').trim();
-  if (!text) {
+  const rawText = String((req.body && req.body.text) || '').trim();
+  if (!rawText) {
     return res.status(400).json({ success: false, message: 'متن پیام الزامی است.' });
   }
+  const text = sanitizeTelegramHtml(rawText);
 
   const buttonText = String((req.body && (req.body.button_text || req.body.buttonText)) || '').trim();
   const buttonUrl = String((req.body && (req.body.button_url || req.body.buttonUrl)) || '').trim();
@@ -3151,6 +3152,7 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
         recipients: users,
         replyMarkup,
         imageBuffer: req.file?.buffer,
+        sendOptions: { parse_mode: 'HTML' },
         onProgress: progress => BroadcastJob.updateOne({ _id: job._id }, {
           $set: { sent: progress.sent, failed: progress.failed, blocked: progress.blocked }
         })

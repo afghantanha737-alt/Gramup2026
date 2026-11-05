@@ -32,6 +32,10 @@
   button.danger{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
   button.success{background:rgba(34,197,94,.15);color:var(--success);border:1px solid rgba(34,197,94,.3)}
   button:disabled{opacity:.5;cursor:not-allowed}
+  .broadcastFormatToolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 8px;direction:rtl}
+  .broadcastFormatToolbar button{display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:38px;margin:0;padding:7px 10px}
+  .broadcastFormatToolbar button:focus-visible{outline:2px solid var(--primary2);outline-offset:2px}
+  .broadcastFormatToolbar code{font-size:12px;direction:ltr}
   .tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
   .tabs button{background:var(--surface2);color:var(--muted);border:1px solid var(--line)}
   .tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
@@ -51,6 +55,8 @@
     .tabs button{padding:8px 4px;font-size:12px}
     .adminHeaderActions{gap:7px}
     .adminHeaderActions button{padding:8px 5px;font-size:12px}
+    .broadcastFormatToolbar{gap:7px}
+    .broadcastFormatToolbar button{min-width:42px;min-height:40px}
   }
   @media (max-width:360px){
     .tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -413,6 +419,12 @@
         <p class="small">این پیام برای همه‌ی کاربران فعال (غیرمسدود) ربات ارسال می‌شود.</p>
         <br>
         <label>متن پیام</label>
+        <div class="broadcastFormatToolbar" role="toolbar" aria-label="Broadcast message formatting" dir="rtl">
+          <button type="button" class="secondary" title="Bold" aria-label="Bold" onclick="formatBroadcastMessage('bold')"><b>B</b></button>
+          <button type="button" class="secondary" title="Italic" aria-label="Italic" onclick="formatBroadcastMessage('italic')"><i>I</i></button>
+          <button type="button" class="secondary" title="Monospace / Code" aria-label="Monospace / Code" onclick="formatBroadcastMessage('code')"><code>&lt;/&gt;</code></button>
+          <button type="button" class="secondary" title="Inline Link" aria-label="Inline Link" onclick="formatBroadcastMessage('link')">🔗</button>
+        </div>
         <textarea id="broadcastText" placeholder="متن پیام همگانی..."></textarea>
         <label>متن دکمه‌ی Mini App (اختیاری)</label>
         <input id="broadcastButtonText" name="button_text" type="text" maxlength="64" value="Open Gramup 🚀" placeholder="Open Quests">
@@ -2013,6 +2025,64 @@ async function testWeeklyRewardNotification(id) {
 }
 
 /* ---------- BROADCAST ---------- */
+function normalizeBroadcastInlineLink(value) {
+  let url;
+  try { url = new URL(String(value || '').trim()); }
+  catch { return ''; }
+  if (!['https:', 'http:'].includes(url.protocol) || !url.hostname || url.username || url.password) return '';
+  if (url.hostname.toLowerCase() === 't.me' && url.protocol !== 'https:') return '';
+  return url.toString();
+}
+
+function escapeBroadcastHtmlAttribute(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function formatBroadcastMessage(format) {
+  const textarea = document.getElementById('broadcastText');
+  if (!textarea) return;
+  const start = Number.isInteger(textarea.selectionStart) ? textarea.selectionStart : textarea.value.length;
+  const end = Number.isInteger(textarea.selectionEnd) ? textarea.selectionEnd : start;
+  const selected = textarea.value.slice(start, end);
+  let openTag;
+  let closeTag;
+  let placeholder;
+
+  if (format === 'bold') {
+    openTag = '<b>';
+    closeTag = '</b>';
+    placeholder = 'bold text';
+  } else if (format === 'italic') {
+    openTag = '<i>';
+    closeTag = '</i>';
+    placeholder = 'italic text';
+  } else if (format === 'code') {
+    openTag = '<code>';
+    closeTag = '</code>';
+    placeholder = 'code';
+  } else if (format === 'link') {
+    const providedUrl = window.prompt('لینک را وارد کنید (https://...)', 'https://');
+    if (providedUrl === null) return;
+    const url = normalizeBroadcastInlineLink(providedUrl);
+    if (!url) {
+      document.getElementById('broadcastMsg').textContent = 'لینک معتبر HTTP(S) وارد کنید.';
+      return;
+    }
+    openTag = `<a href="${escapeBroadcastHtmlAttribute(url)}">`;
+    closeTag = '</a>';
+    placeholder = 'link text';
+  } else {
+    return;
+  }
+
+  const innerText = selected || placeholder;
+  const replacement = `${openTag}${innerText}${closeTag}`;
+  textarea.value = textarea.value.slice(0, start) + replacement + textarea.value.slice(end);
+  textarea.focus();
+  const innerStart = start + openTag.length;
+  textarea.setSelectionRange(innerStart, innerStart + innerText.length);
+}
+
 async function sendBroadcast() {
   const text = document.getElementById("broadcastText").value.trim();
   const fileInput = document.getElementById("broadcastImage");
