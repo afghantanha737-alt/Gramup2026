@@ -1470,14 +1470,14 @@ function renderLuckySpinBanner() {
     <div class="spinLaunchAction">${status}<button class="spinLaunchButton" type="button" onclick="${canOpen ? 'openLuckySpin()' : ''}" ${canOpen ? '' : 'disabled'}>${lock}${t('spin_spin_button', {}, 'Open')}</button></div>
   </section>`;
 }
-function closeLuckySpin() { const overlay = document.querySelector('#luckySpinOverlay'); if (overlay) overlay.remove(); state.spinModalOpen = false; stopSpinCountdown(); }
+function closeLuckySpin() { const overlay = document.querySelector('#luckySpinOverlay'); if (overlay) overlay.remove(); document.body.classList.remove('luckySpinOpen'); state.spinModalOpen = false; stopSpinCountdown(); }
 function openLuckySpin() {
   if (!state.spinEnabled) return;
   haptic("light");
   closeLuckySpin();
-  const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'overlay';
-  overlay.innerHTML = `<div class="modalBox luckySpinModal" role="dialog" aria-modal="true" aria-labelledby="spinTitle"><div class="modalHeader"><div><span class="modalEyebrow">${t('spin_eyebrow', {}, '7-day streak reward')}</span><h3>${t('spin_title')}</h3></div><button class="modalClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></div>${renderLuckySpin()}</div>`;
-  overlay.addEventListener('click', event => { if (event.target === overlay) closeLuckySpin(); }); document.body.appendChild(overlay); state.spinModalOpen = true; startSpinCountdown();
+  const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'luckySpinScreen';
+  overlay.innerHTML = `<main class="luckySpinPage" aria-labelledby="spinPageTitle"><header class="luckySpinPageHeader"><div><span class="modalEyebrow">${t('spin_eyebrow', {}, '7-day streak reward')}</span><h1 id="spinPageTitle">${t('spin_title')}</h1></div><button class="luckySpinClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></header><p class="luckySpinPageIntro">${t('spin_subtitle')}</p><div class="luckySpinPageBody">${renderLuckySpin()}</div></main>`;
+  document.body.appendChild(overlay); document.body.classList.add('luckySpinOpen'); state.spinModalOpen = true; startSpinCountdown();
 }
 window.openLuckySpin = openLuckySpin; window.closeLuckySpin = closeLuckySpin;
 async function doSpin() {
