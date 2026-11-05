@@ -9,6 +9,9 @@ const settingsSource = fs.readFileSync(require.resolve('../models/Settings'), 'u
 assert.equal(pointsRoute.spinPolicy({ luckySpinEnabled: true, luckySpinRequiredStreak: 7, luckySpinCooldownHours: 24 }).requiredStreak, 7);
 assert.equal(pointsRoute.spinPolicy({ luckySpinEnabled: true, luckySpinRequiredStreak: 3 }).requiredStreak, 7);
 assert.equal(pointsRoute.spinPolicy({ luckySpinEnabled: false }).enabled, false);
+assert.equal(pointsRoute.pickWeightedPrize(pointsRoute.SPIN_PRIZES, 0).id, 'hashrate_boost_10_1h');
+assert.equal(pointsRoute.pickWeightedPrize(pointsRoute.SPIN_PRIZES, 35).id, 'up_50');
+assert.equal(pointsRoute.spinPolicy({ luckySpinPrizes: [{ id: 'bad', kind: 'points', amount: 1, probability: 10 }] }).prizes.length, 6);
 assert.match(pointsSource, /SPIN_STREAK_REQUIRED/);
 assert.match(pointsSource, /spin\.requiredStreak/);
 assert.match(pointsSource, /spin\.prizes/);
@@ -20,4 +23,5 @@ assert.match(homeSource, /renderLuckySpinBanner/);
 assert.doesNotMatch(homeSource, /renderLuckySpin\(\)/);
 assert.match(settingsSource, /luckySpinRequiredStreak/);
 assert.match(adminSource, /INVALID_LUCKY_SPIN_PRIZES/);
+assert.match(adminSource, /probabilities total exactly 100/);
 console.log('PASS — Lucky Spin is gated by the 7-day streak and managed from admin settings');

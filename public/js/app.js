@@ -1407,9 +1407,9 @@ async function loadWeeklyLeaderboard() {
 function spinAvailable() { return !state.spinNextAt || state.spinNextAt <= Date.now(); }
 function spinRemainingText() { return formatCountdown(Math.max(0, Number(state.spinNextAt) - Date.now())); }
 function spinPrizeLabel(prizeId, amount) {
-  if (["up_5", "up_15", "up_30"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
-  if (prizeId === "boost_2x_1h") return t("spin_prize_boost");
-  if (prizeId === "gram_001") return t("spin_prize_gram", { n: formatNumber(amount, 2) });
+  if (["up_50", "up_100", "up_250"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
+  if (prizeId === "hashrate_boost_10_1h") return t("spin_prize_boost_10");
+  if (prizeId === "gram_005") return t("spin_prize_gram", { n: formatNumber(amount, 2) });
   return t("spin_prize_try_again");
 }
 function stopSpinCountdown() { if (spinCountdownTimer) clearInterval(spinCountdownTimer); spinCountdownTimer = null; }
@@ -1434,7 +1434,7 @@ function startSpinCountdown() {
 }
 function renderLuckySpin() {
   const available = spinAvailable();
-  const slices = [["+5", "UP"], ["+15", "UP"], ["+30", "UP"], ["2×", "Mining"], ["+0.01", "GRAM"], ["Try", "Again"]];
+  const slices = [["10%", "Mining"], ["+50", "UP"], ["+100", "UP"], ["+250", "UP"], ["+0.05", "GRAM"], ["Try", "Again"]];
   return `<section class="spinCard" aria-labelledby="spinTitle">
     <div class="spinCardHeader"><div><span class="spinEyebrow">${t("spin_subtitle")}</span><h2 id="spinTitle">${t("spin_title")}</h2></div><span class="spinBadge">24H</span></div>
     <div class="spinStage"><div class="spinPointer" aria-hidden="true"></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}">${slices.map(([top, bottom]) => `<span><b>${top}</b><small>${bottom}</small></span>`).join("")}</div></div>
@@ -1485,7 +1485,7 @@ async function doSpin() {
     state.spinNextAt = Date.parse(result.nextSpinAt) || Date.now() + state.spinCooldownHours * 3600000;
     state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
     haptic("success");
-    const label = spinPrizeLabel(result.prizeId, result.amount);
+    const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount);
     if (resultBox) resultBox.textContent = t("spin_result", { label });
     toast(label, "success");
     updateHeader();

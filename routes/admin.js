@@ -2719,8 +2719,9 @@ router.put('/settings', async (req, res) => {
   }
   if (Object.prototype.hasOwnProperty.call(body, 'luckySpinEnabled')) changes.luckySpinEnabled = body.luckySpinEnabled === true || body.luckySpinEnabled === 'true';
   if (Object.prototype.hasOwnProperty.call(body, 'luckySpinPrizes')) {
-    const prizes = Array.isArray(body.luckySpinPrizes) ? body.luckySpinPrizes.map(item => ({ id: String(item.id || '').trim(), kind: String(item.kind || ''), amount: Number(item.amount), label: String(item.label || '').trim() })) : null;
-    if (!prizes || prizes.length < 2 || prizes.length > 20 || prizes.some(item => !/^[a-z0-9_-]{2,64}$/i.test(item.id) || !['points', 'gram', 'boost', 'none'].includes(item.kind) || !Number.isFinite(item.amount) || item.amount < 0 || item.amount > 100000000)) return res.status(400).json({ success: false, code: 'INVALID_LUCKY_SPIN_PRIZES', message: 'Lucky Spin prizes must contain 2–20 valid prize entries.' });
+    const prizes = Array.isArray(body.luckySpinPrizes) ? body.luckySpinPrizes.map(item => ({ id: String(item.id || '').trim(), kind: String(item.kind || ''), amount: Number(item.amount), label: String(item.label || '').trim(), probability: Number(item.probability) })) : null;
+    const probabilityTotal = prizes?.reduce((sum, item) => sum + (Number.isFinite(item.probability) ? item.probability : 0), 0);
+    if (!prizes || prizes.length < 2 || prizes.length > 20 || prizes.some(item => !/^[a-z0-9_-]{2,64}$/i.test(item.id) || !['points', 'gram', 'boost', 'none'].includes(item.kind) || !Number.isFinite(item.amount) || item.amount < 0 || item.amount > 100000000 || !Number.isFinite(item.probability) || item.probability < 0 || item.probability > 100) || Math.abs(probabilityTotal - 100) > 0.0001) return res.status(400).json({ success: false, code: 'INVALID_LUCKY_SPIN_PRIZES', message: 'Lucky Spin prizes must contain 2–20 valid entries whose probabilities total exactly 100%.' });
     changes.luckySpinPrizes = prizes;
   }
   // dailyReminderEnabled یک boolean است، نه یک عدد؛ جدا از قاعده‌ی بالا پردازش می‌شود

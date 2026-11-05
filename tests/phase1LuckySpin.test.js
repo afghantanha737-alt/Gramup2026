@@ -5,10 +5,12 @@ const fs = require('fs');
 const pointsRoute = require('../routes/points');
 assert.strictEqual(pointsRoute.SPIN_COOLDOWN_MS, 24 * 60 * 60 * 1000);
 assert.deepStrictEqual(pointsRoute.SPIN_PRIZES.map(item => item.id), [
-  'up_5', 'up_15', 'up_30', 'boost_2x_1h', 'gram_001', 'try_again'
+  'hashrate_boost_10_1h', 'up_50', 'up_100', 'up_250', 'gram_005', 'try_again'
 ]);
 assert.strictEqual(pointsRoute.SPIN_PRIZES.filter(item => item.kind === 'points').length, 3);
-assert.strictEqual(pointsRoute.SPIN_PRIZES.find(item => item.id === 'gram_001').amount, 0.01);
+assert.strictEqual(pointsRoute.SPIN_PRIZES.find(item => item.id === 'gram_005').amount, 0.05);
+assert.strictEqual(pointsRoute.SPIN_PRIZES.reduce((sum, item) => sum + item.probability, 0), 100);
+assert.strictEqual(pointsRoute.SPIN_PRIZES[0].probability > pointsRoute.SPIN_PRIZES[1].probability, true);
 
 const source = fs.readFileSync(require.resolve('../routes/points'), 'utf8');
 assert.match(source, /scope: 'spin'/);

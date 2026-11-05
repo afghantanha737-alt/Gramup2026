@@ -49,19 +49,35 @@ const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
 const DEFAULT_SPIN_COOLDOWN_HOURS = 24;
 const DEFAULT_SPIN_REQUIRED_STREAK = 7;
 const SPIN_PRIZES = Object.freeze([
-  { id: 'up_5', kind: 'points', amount: 5, label: '+5 UP' },
-  { id: 'up_15', kind: 'points', amount: 15, label: '+15 UP' },
-  { id: 'up_30', kind: 'points', amount: 30, label: '+30 UP' },
-  { id: 'boost_2x_1h', kind: 'boost', amount: 0, label: '2× Mining · 1h' },
-  { id: 'gram_001', kind: 'gram', amount: 0.01, label: '+0.01 GRAM' },
-  { id: 'try_again', kind: 'none', amount: 0, label: 'Try again' }
+  { id: 'hashrate_boost_10_1h', kind: 'boost', amount: 10, label: '10% Mining Hashrate Boost · 1h', probability: 35 },
+  { id: 'up_50', kind: 'points', amount: 50, label: '+50 UP', probability: 25 },
+  { id: 'up_100', kind: 'points', amount: 100, label: '+100 UP', probability: 15 },
+  { id: 'up_250', kind: 'points', amount: 250, label: '+250 UP', probability: 10 },
+  { id: 'gram_005', kind: 'gram', amount: 0.05, label: '+0.05 GRAM', probability: 5 },
+  { id: 'try_again', kind: 'none', amount: 0, label: 'Try Again', probability: 10 }
 ]);
+function normalizeSpinPrizes(rawPrizes) {
+  if (!Array.isArray(rawPrizes) || rawPrizes.length < 2) return SPIN_PRIZES;
+  const prizes = rawPrizes.map(item => ({
+    id: String(item.id), kind: item.kind, amount: Number(item.amount) || 0,
+    label: String(item.label || ''), probability: Number(item.probability)
+  }));
+  const total = prizes.reduce((sum, item) => sum + (Number.isFinite(item.probability) ? item.probability : 0), 0);
+  if (prizes.some(item => !Number.isFinite(item.probability) || item.probability < 0) || Math.abs(total - 100) > 0.0001) return SPIN_PRIZES;
+  return prizes;
+}
+function pickWeightedPrize(prizes, roll = Math.random() * 100) {
+  let cursor = 0;
+  for (const prize of prizes) {
+    cursor += prize.probability;
+    if (roll < cursor) return prize;
+  }
+  return prizes[prizes.length - 1];
+}
 function spinPolicy(settings) {
   const cooldownHours = Number(settings?.luckySpinCooldownHours) || DEFAULT_SPIN_COOLDOWN_HOURS;
   const requiredStreak = Math.max(DEFAULT_SPIN_REQUIRED_STREAK, Number(settings?.luckySpinRequiredStreak) || DEFAULT_SPIN_REQUIRED_STREAK);
-  const prizes = Array.isArray(settings?.luckySpinPrizes) && settings.luckySpinPrizes.length >= 2
-    ? settings.luckySpinPrizes.map(item => ({ id: String(item.id), kind: item.kind, amount: Number(item.amount) || 0, label: String(item.label || '') }))
-    : SPIN_PRIZES;
+  const prizes = normalizeSpinPrizes(settings?.luckySpinPrizes);
   return { enabled: settings?.luckySpinEnabled !== false, cooldownHours, cooldownMs: cooldownHours * 60 * 60 * 1000, requiredStreak, prizes };
 }
 const SPIN_COOLDOWN_MS = DEFAULT_SPIN_COOLDOWN_HOURS * 60 * 60 * 1000;
@@ -419,7 +435,7 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
     const outcome = await executeIdempotently({
       userId: req.dbUser._id, scope: 'spin', key: operationKey, body: {},
       execute: async session => {
-        const prize = spin.prizes[crypto.randomInt(0, spin.prizes.length)];
+        const prize = pickWeightedPrize(spin.prizes, crypto.randomInt(0, 1000000) / 10000);
         const cooldownCutoff = new Date(now.getTime() - spin.cooldownMs);
         const update = { $set: { spinLastClaimAt: now } };
         if (prize.kind === 'points') update.$inc = { points: prize.amount };
@@ -428,7 +444,7 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
           const currentBoostUntil = req.dbUser.miningBoostUntil && new Date(req.dbUser.miningBoostUntil) > now
             ? new Date(req.dbUser.miningBoostUntil) : now;
           update.$set.miningBoostUntil = new Date(currentBoostUntil.getTime() + 60 * 60 * 1000);
-          update.$set.miningBoostMultiplier = 2;
+          update.$set.miningBoostMultiplier = Math.max(1.1, Number(req.dbUser.miningBoostMultiplier) || 1);
         }
         const updated = await User.findOneAndUpdate({
           _id: req.dbUser._id,
@@ -451,7 +467,7 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
         return {
           status: 200,
           body: {
-            success: true, prizeId: prize.id, prizeKind: prize.kind, amount: prize.amount,
+            success: true, prizeId: prize.id, prizeKind: prize.kind, prizeLabel: prize.label, amount: prize.amount,
             points: updated.points, gramBalance: updated.gramBalance,
             nextSpinAt: new Date(now.getTime() + spin.cooldownMs).toISOString(),
             boostUntil: updated.miningBoostUntil || null
@@ -1778,7 +1794,5 @@ router.get('/public-history', async (req, res) => {
 module.exports = router;
 module.exports.SPIN_COOLDOWN_MS = SPIN_COOLDOWN_MS;
 module.exports.SPIN_PRIZES = SPIN_PRIZES;
-
-module.exports.SPIN_PRIZES = SPIN_PRIZES;
-module.exports.SPIN_COOLDOWN_MS = SPIN_COOLDOWN_MS;
 module.exports.spinPolicy = spinPolicy;
+module.exports.pickWeightedPrize = pickWeightedPrize;
