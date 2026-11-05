@@ -386,6 +386,7 @@ router.get('/me', auth, async (req, res) => {
     spinRequiredStreak: spin.requiredStreak,
     spinEligible: spin.enabled && Number(u.streak || 0) >= spin.requiredStreak,
     spinCooldownHours: spin.cooldownHours,
+    spinPrizes: spin.prizes.map(({ id, kind, amount, label, probability }) => ({ id, kind, amount, label, probability })),
     miningBoostUntil: u.miningBoostUntil || null,
     nextResetAt: nextResetTimestamp(),
     language: u.language

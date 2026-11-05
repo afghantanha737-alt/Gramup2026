@@ -43,6 +43,7 @@ const state = {
   spinRequiredStreak: 7,
   spinEligible: false,
   spinCooldownHours: 24,
+  spinPrizes: [],
   spinModalOpen: false,
   miningBoostUntil: null,
   referralCode: "",
@@ -970,6 +971,7 @@ function applyCachedReadModel(entry) {
   state.spinRequiredStreak = Number(profile.spinRequiredStreak) || 7;
   state.spinEligible = Boolean(profile.spinEligible) || (state.spinEnabled && state.streak >= state.spinRequiredStreak);
   state.spinCooldownHours = Number(profile.spinCooldownHours) || 24;
+  state.spinPrizes = Array.isArray(profile.spinPrizes) ? profile.spinPrizes : [];
   state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + state.spinCooldownHours * 3600000 : 0;
   state.miningBoostUntil = profile.miningBoostUntil || null;
   state.totalEarnedPoints = Number(profile.totalEarnedPoints) || 0;
@@ -1090,6 +1092,7 @@ async function loadUserData({ force = false } = {}) {
   state.spinRequiredStreak = Number(data?.spinRequiredStreak) || 7;
   state.spinEligible = Boolean(data?.spinEligible) || (state.spinEnabled && state.streak >= state.spinRequiredStreak);
   state.spinCooldownHours = Number(data?.spinCooldownHours) || 24;
+  state.spinPrizes = Array.isArray(data?.spinPrizes) ? data.spinPrizes : [];
   state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + state.spinCooldownHours * 3600000 : 0;
   state.miningBoostUntil = data?.miningBoostUntil || null;
   state.totalEarnedPoints = Number(data?.totalEarnedPoints) || 0;
@@ -1413,6 +1416,13 @@ function spinPrizeLabel(prizeId, amount) {
   if (prizeId === "gram_005") return t("spin_prize_gram", { n: formatNumber(amount, 2) });
   return t("spin_prize_try_again");
 }
+function spinSliceText(prize, index) {
+  const fallback = [["10%", "Mining"], ["+50", "UP"], ["+100", "UP"], ["+250", "UP"], ["+0.05", "GRAM"], ["Try", "Again"]][index] || ["", ""];
+  const label = String(prize?.label || '').trim();
+  if (!label) return fallback;
+  const match = label.match(/^(\S+)\s+(.+)$/);
+  return match ? [match[1], match[2]] : [label, ''];
+}
 function stopSpinCountdown() { if (spinCountdownTimer) clearInterval(spinCountdownTimer); spinCountdownTimer = null; }
 function startSpinCountdown() {
   stopSpinCountdown();
@@ -1444,12 +1454,16 @@ function startSpinCountdown() {
 function renderLuckySpin() {
   const available = spinAvailable();
   const eligible = spinEligible();
-  const slices = [["10%", "Mining", "✦"], ["+50", "UP", "◈"], ["+100", "UP", "✧"], ["+250", "UP", "◆"], ["+0.05", "GRAM", "✦"], ["Try", "Again", "◇"]];
+  const prizes = Array.isArray(state.spinPrizes) && state.spinPrizes.length ? state.spinPrizes : [
+    { label: "10% Mining", kind: "boost" }, { label: "+50 UP", kind: "points" }, { label: "+100 UP", kind: "points" },
+    { label: "+250 UP", kind: "points" }, { label: "+0.05 GRAM", kind: "gram" }, { label: "Try Again", kind: "none" }
+  ];
+  const runes = ["✦", "◈", "✧", "◆", "✦", "◇"];
   const buttonLocked = !eligible || !available;
   const buttonLabel = !eligible ? `🔒 ${t('spin_button')}` : (available ? t("spin_button") : t("spin_next", { time: spinRemainingText() }));
   return `<section class="spinCard ${eligible ? '' : 'is-locked'}" aria-labelledby="spinTitle">
     <div class="spinCardHeader"><div><span class="spinEyebrow">${t("spin_subtitle")}</span><h2 id="spinTitle">${t("spin_title")}</h2></div><span class="spinBadge">24H</span></div>
-    <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${slices.map(([top, bottom, rune]) => `<span><em>${rune}</em><b>${top}</b><small>${bottom}</small></span>`).join("")}<div class="spinWheelHub" aria-hidden="true"><span>UP</span></div></div></div>
+    <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${prizes.slice(0, 6).map((prize, index) => { const [top, bottom] = spinSliceText(prize, index); return `<span><em>${runes[index]}</em><b>${escapeHTML(top)}</b><small>${escapeHTML(bottom)}</small></span>`; }).join("")}<div class="spinWheelHub" aria-hidden="true"><span>UP</span></div></div></div>
     <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${!eligible ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : (available ? t("spin_free") : t("spin_next", { time: spinRemainingText() }))}</span><button id="spinButton" class="primaryBtn spinButton ${!eligible ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button></div>
     <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
   </section>`;

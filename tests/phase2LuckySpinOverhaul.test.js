@@ -15,12 +15,16 @@ assert.equal(pointsRoute.spinPolicy({ luckySpinPrizes: [{ id: 'bad', kind: 'poin
 assert.match(pointsSource, /SPIN_STREAK_REQUIRED/);
 assert.match(pointsSource, /spin\.requiredStreak/);
 assert.match(pointsSource, /spin\.prizes/);
+assert.match(pointsSource, /spinPrizes: spin\.prizes/);
 assert.match(appSource, /renderLuckySpinBanner/);
 assert.match(appSource, /openLuckySpin/);
 assert.match(appSource, /spin_spin_button/);
 assert.match(appSource, /function spinEligible\(\)/);
 assert.match(appSource, /if \(!spinEligible\(\)\)/);
 assert.match(appSource, /const canOpen = state\.spinEnabled/);
+assert.match(appSource, /state\.spinPrizes/);
+assert.match(appSource, /function spinSliceText\(prize, index\)/);
+assert.match(appSource, /escapeHTML\(top\)/);
 assert.match(appSource, /className = 'luckySpinScreen'/);
 assert.match(appSource, /class="luckySpinPage"/);
 assert.match(appSource, /class="luckySpinClose"/);
