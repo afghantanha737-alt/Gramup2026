@@ -5,6 +5,7 @@ const TELEGRAM_DELIVERY_TIMEOUT_MS = 8000;
 const DELIVERY_METHODS = new Set(['sendMessage', 'sendPhoto', 'copyMessage', 'answerCallbackQuery']);
 const TELEGRAM_USER_ID_PATTERN = /^[1-9]\d{0,15}$/;
 const TELEGRAM_MAX_USER_ID = (1n << 52n) - 1n;
+const DEFAULT_BROADCAST_INTERVAL_MS = 50;
 
 class TelegramApiError extends Error {
   constructor(message, statusCode, body) {
@@ -168,9 +169,42 @@ function isTelegramDeliveryBlocked(error) {
   return Number(code) === 403 || /bot was blocked|user is deactivated|chat not found/i.test(message);
 }
 
-async function markTelegramBlocked(telegramId) {
+function buildWebAppReplyMarkup(buttonText, webAppUrl) {
+  const text = String(buttonText || '').trim();
+  if (!text) return null;
+  if (text.length > 64) throw new TypeError('WebApp button text must be 64 characters or fewer.');
+  let url;
+  try { url = new URL(String(webAppUrl || '').trim()); }
+  catch { throw new TypeError('A valid HTTPS Mini App URL is required for a WebApp button.'); }
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new TypeError('A valid HTTPS Mini App URL is required for a WebApp button.');
+  }
+  return { inline_keyboard: [[{ text, web_app: { url: url.toString() } }]] };
+}
+
+function getTelegramRetryAfterMs(error) {
+  const body = error?.response?.body || {};
+  const code = Number(body.error_code || error?.response?.statusCode || error?.statusCode);
+  const message = String(error?.message || error || '');
+  const rateLimited = code === 429 || error?.name === 'FloodWait' || /too many requests|flood.?wait/i.test(message);
+  if (!rateLimited) return null;
+
+  let seconds = body.parameters?.retry_after
+    ?? error?.parameters?.retry_after
+    ?? error?.retry_after
+    ?? error?.retryAfter
+    ?? error?.seconds;
+  if (seconds == null) {
+    const match = message.match(/retry\s+after\s+(\d+(?:\.\d+)?)/i);
+    seconds = match ? Number(match[1]) : 1;
+  }
+  const numericSeconds = Number(seconds);
+  return Math.max(DEFAULT_BROADCAST_INTERVAL_MS, Math.ceil((Number.isFinite(numericSeconds) && numericSeconds >= 0 ? numericSeconds : 1) * 1000));
+}
+
+async function markTelegramBlocked(telegramId, UserModel) {
   try {
-    const User = require('../models/User');
+    const User = UserModel || require('../models/User');
     await User.updateOne(
       { telegramId: String(telegramId), telegramBlockedAt: null },
       { $set: { telegramBlockedAt: new Date() } }
@@ -208,47 +242,94 @@ function filterActiveTelegramRecipients(users) {
   );
 }
 
-async function copyMessageSafe(User, telegramId, fromChatId, messageId) {
-  try {
-    await bot.copyMessage(telegramId, fromChatId, messageId);
-    return true;
-  } catch (error) {
-    if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(telegramId);
-    return false;
+async function deliverBroadcastRecipient(User, user, send, sleepFn) {
+  const telegramId = String(user?.telegramId || '');
+  while (true) {
+    try {
+      await send();
+      return 'sent';
+    } catch (error) {
+      if (isTelegramDeliveryBlocked(error)) {
+        await markTelegramBlocked(telegramId, User);
+        return 'blocked';
+      }
+
+      const retryAfterMs = getTelegramRetryAfterMs(error);
+      if (retryAfterMs !== null) {
+        console.warn(JSON.stringify({ event: 'telegram_broadcast_rate_limited', retryAfterMs, at: new Date().toISOString() }));
+        await sleepFn(retryAfterMs);
+        continue;
+      }
+
+      console.warn(JSON.stringify({
+        event: 'telegram_broadcast_delivery_failed',
+        errorCode: error?.response?.body?.error_code || error?.response?.statusCode || null,
+        error: String(error?.message || error).slice(0, 300),
+        at: new Date().toISOString()
+      }));
+      return 'failed';
+    }
   }
 }
 
-async function broadcastToActiveUsers(User, textOrFn) {
-  if (!bot) return;
-  const candidates = await User.find(activeTelegramUserFilter(), 'telegramId language');
+async function runBroadcastRecipients(User, users, sendForUser, options = {}) {
+  const intervalMs = Number.isFinite(Number(options.intervalMs))
+    ? Math.max(0, Number(options.intervalMs))
+    : DEFAULT_BROADCAST_INTERVAL_MS;
+  const sleepFn = typeof options.sleepFn === 'function'
+    ? options.sleepFn
+    : ms => new Promise(resolve => setTimeout(resolve, ms));
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+  const summary = { sent: 0, failed: 0, blocked: 0, total: users.length, processed: 0 };
+
+  async function reportProgress() {
+    if (!onProgress) return;
+    try { await onProgress({ ...summary }); }
+    catch (error) { console.warn('Broadcast progress update failed:', error.message || error); }
+  }
+
+  for (const user of users) {
+    const outcome = await deliverBroadcastRecipient(User, user, () => sendForUser(user), sleepFn);
+    summary[outcome] += 1;
+    summary.processed += 1;
+    if (summary.processed % 20 === 0 || summary.processed === summary.total) await reportProgress();
+    if (summary.processed < summary.total) await sleepFn(intervalMs);
+  }
+  if (summary.total === 0) await reportProgress();
+  return summary;
+}
+
+async function broadcastToActiveUsers(User, textOrFn, options = {}) {
+  if (!bot) return { sent: 0, failed: 0, blocked: 0, total: 0, processed: 0 };
+  const candidates = Array.isArray(options.recipients)
+    ? options.recipients
+    : await User.find(activeTelegramUserFilter(), 'telegramId language');
   const users = filterActiveTelegramRecipients(candidates);
   console.log(`📣 Text broadcast started: recipients=${users.length}`);
-  const BATCH_SIZE = 20;
-  const DELAY_MS = 1100;
   const textFor = typeof textOrFn === 'function' ? textOrFn : () => textOrFn;
-  for (let i = 0; i < users.length; i += BATCH_SIZE) {
-    const batch = users.slice(i, i + BATCH_SIZE);
-    await Promise.all(batch.map(u => notifyUser(u.telegramId, textFor(u))));
-    if (i + BATCH_SIZE < users.length) await new Promise(resolve => setTimeout(resolve, DELAY_MS));
-  }
+  const sendForUser = async user => {
+    const text = await textFor(user);
+    const sendOptions = { ...(options.sendOptions || {}) };
+    if (options.replyMarkup) sendOptions.reply_markup = options.replyMarkup;
+    if (options.imageBuffer) {
+      await bot.sendPhoto(user.telegramId, options.imageBuffer, { caption: text, ...sendOptions });
+    } else {
+      await bot.sendMessage(user.telegramId, text, sendOptions);
+    }
+  };
+  const summary = await runBroadcastRecipients(User, users, sendForUser, options);
+  console.log(`📣 Broadcast finished: sent=${summary.sent} failed=${summary.failed} blocked=${summary.blocked} total=${summary.total}`);
+  return summary;
 }
 
 async function broadcastCopyToActiveUsers(User, fromChatId, messageId) {
-  if (!bot) return 0;
+  if (!bot) return { sent: 0, failed: 0, blocked: 0, total: 0, processed: 0 };
   const candidates = await User.find(activeTelegramUserFilter(), 'telegramId isBanned telegramBlockedAt');
   const users = filterActiveTelegramRecipients(candidates);
   console.log(`📣 Copy broadcast started: recipients=${users.length}, source=${fromChatId}/${messageId}`);
-  const BATCH_SIZE = 20;
-  const DELAY_MS = 1100;
-  let sent = 0;
-  for (let i = 0; i < users.length; i += BATCH_SIZE) {
-    const batch = users.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(batch.map(u => copyMessageSafe(User, u.telegramId, fromChatId, messageId)));
-    sent += results.filter(Boolean).length;
-    if (i + BATCH_SIZE < users.length) await new Promise(resolve => setTimeout(resolve, DELAY_MS));
-  }
-  console.log(`📣 Copy broadcast finished: sent=${sent} failed=${users.length - sent} total=${users.length}`);
-  return sent;
+  const summary = await runBroadcastRecipients(User, users, user => bot.copyMessage(user.telegramId, fromChatId, messageId));
+  console.log(`📣 Copy broadcast finished: sent=${summary.sent} failed=${summary.failed} blocked=${summary.blocked} total=${summary.total}`);
+  return summary;
 }
 
-module.exports = { bot, buildTelegramWebhookPayload, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, isValidTelegramUserId, filterActiveTelegramRecipients, broadcastToActiveUsers, broadcastCopyToActiveUsers, withTelegramDeliveryDeadline };
+module.exports = { bot, buildTelegramWebhookPayload, buildWebAppReplyMarkup, getTelegramRetryAfterMs, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, isValidTelegramUserId, filterActiveTelegramRecipients, broadcastToActiveUsers, broadcastCopyToActiveUsers, withTelegramDeliveryDeadline };

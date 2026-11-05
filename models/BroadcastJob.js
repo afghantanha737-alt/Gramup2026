@@ -9,6 +9,7 @@ const broadcastJobSchema = new mongoose.Schema({
   totalRecipients: { type: Number, default: 0, min: 0 },
   sent: { type: Number, default: 0, min: 0 },
   failed: { type: Number, default: 0, min: 0 },
+  blocked: { type: Number, default: 0, min: 0 },
   lastError: { type: String, default: '', maxlength: 500 },
   startedAt: { type: Date, default: Date.now },
   finishedAt: { type: Date, default: null }

@@ -414,6 +414,8 @@
         <br>
         <label>متن پیام</label>
         <textarea id="broadcastText" placeholder="متن پیام همگانی..."></textarea>
+        <label>متن دکمه‌ی Mini App (اختیاری)</label>
+        <input id="broadcastButtonText" type="text" maxlength="64" value="Open Gramup 🚀" placeholder="Open Quests">
         <label>تصویر (اختیاری)</label>
         <input id="broadcastImage" type="file" accept="image/*">
         <button onclick="sendBroadcast()">ارسال به همه کاربران</button>
@@ -2012,6 +2014,7 @@ async function testWeeklyRewardNotification(id) {
 async function sendBroadcast() {
   const text = document.getElementById("broadcastText").value.trim();
   const fileInput = document.getElementById("broadcastImage");
+  const buttonText = document.getElementById("broadcastButtonText").value.trim();
   const msgEl = document.getElementById("broadcastMsg");
 
   if (!text) {
@@ -2021,6 +2024,7 @@ async function sendBroadcast() {
 
   const formData = new FormData();
   formData.append("text", text);
+  if (buttonText) formData.append("buttonText", buttonText);
   if (fileInput.files[0]) formData.append("image", fileInput.files[0]);
 
   msgEl.textContent = "در حال ارسال...";
@@ -2042,7 +2046,7 @@ async function pollBroadcastStatus(id, msgEl) {
       const result = await api(`/api/admin/broadcast/${encodeURIComponent(id)}`);
       const job = result.job || {};
       const state = job.status === "completed" ? "تکمیل شد" : job.status === "failed" ? "با خطا متوقف شد" : "در حال ارسال";
-      msgEl.textContent = `Broadcast ${state}: موفق ${job.sent || 0} · ناموفق ${job.failed || 0} · باقی‌مانده ${job.pending || 0}`;
+      msgEl.textContent = `Broadcast ${state}: موفق ${job.sent || 0} · ناموفق ${job.failed || 0} · مسدود ${job.blocked || 0} · باقی‌مانده ${job.pending || 0}`;
       if (job.status === "running" && Date.now() - startedAt < 30 * 60 * 1000) setTimeout(poll, 2000);
       else if (job.status === "failed" && job.lastError) msgEl.textContent += ` — ${job.lastError}`;
     } catch (error) {
