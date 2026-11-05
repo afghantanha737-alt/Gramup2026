@@ -1420,6 +1420,16 @@ async function loadWeeklyLeaderboard() {
 function spinAvailable() { return !state.spinNextAt || state.spinNextAt <= Date.now(); }
 function spinEligible() { return state.spinEnabled && state.streak >= state.spinRequiredStreak; }
 function spinRemainingText() { return formatCountdown(Math.max(0, Number(state.spinNextAt) - Date.now())); }
+function updateSpinHeaderStats() {
+  const eligible = spinEligible();
+  const available = spinAvailable();
+  const tickets = document.querySelector('[data-spin-tickets]');
+  const prize = document.querySelector('[data-spin-prize]');
+  const status = document.querySelector('[data-spin-status]');
+  if (tickets) tickets.textContent = eligible && available && !state.spinBusy ? '1' : '0';
+  if (prize) prize.textContent = !eligible ? '—' : available ? 'READY' : spinRemainingText();
+  if (status) { status.textContent = !state.spinEnabled ? 'OFF' : !eligible ? 'LOCKED' : available ? 'READY' : 'WAIT'; status.className = `spinHeaderStatValue ${eligible && available ? 'is-ready' : ''}`; }
+}
 function spinPrizeLabel(prizeId, amount) {
   if (["up_50", "up_100", "up_250"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
   if (prizeId === "hashrate_boost_10_1h") return t("spin_prize_boost_10");
@@ -1437,6 +1447,7 @@ function stopSpinCountdown() { if (spinCountdownTimer) clearInterval(spinCountdo
 function startSpinCountdown() {
   stopSpinCountdown();
   const update = () => {
+    updateSpinHeaderStats();
     const label = document.querySelector("[data-spin-countdown]");
     const button = document.querySelector("#spinButton");
     if (!label || !button) return stopSpinCountdown();
@@ -1500,7 +1511,7 @@ function openLuckySpin() {
   haptic("light");
   closeLuckySpin();
   const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'luckySpinScreen';
-  overlay.innerHTML = `<main class="luckySpinPage" aria-labelledby="spinPageTitle"><header class="luckySpinPageHeader"><div><span class="modalEyebrow">${t('spin_eyebrow', {}, '7-day streak reward')}</span><h1 id="spinPageTitle">${t('spin_title')}</h1></div><button class="luckySpinClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></header><p class="luckySpinPageIntro">${t('spin_subtitle')}</p><div class="luckySpinPageBody">${renderLuckySpin()}</div></main>`;
+  overlay.innerHTML = `<main class="luckySpinPage" aria-labelledby="spinPageTitle"><div class="spinHeaderStats" aria-label="Lucky Spin status"><div class="spinHeaderStat"><span>TICKETS</span><strong data-spin-tickets>0</strong></div><div class="spinHeaderStat"><span>PRIZE</span><strong data-spin-prize>—</strong></div><div class="spinHeaderStat"><span>STATUS</span><strong data-spin-status>LOCKED</strong></div></div><header class="luckySpinPageHeader"><div><span class="modalEyebrow">${t('spin_eyebrow', {}, '7-day streak reward')}</span><h1 id="spinPageTitle">${t('spin_title')}</h1></div><button class="luckySpinClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></header><p class="luckySpinPageIntro">${t('spin_subtitle')}</p><div class="luckySpinPageBody">${renderLuckySpin()}</div></main>`;
   document.body.appendChild(overlay); document.body.classList.add('luckySpinOpen'); state.spinModalOpen = true; startSpinCountdown();
 }
 window.openLuckySpin = openLuckySpin; window.closeLuckySpin = closeLuckySpin;

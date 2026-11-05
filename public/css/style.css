@@ -727,6 +727,9 @@ html[data-theme="light"] .progressTrack { background: rgba(20,22,28,.08); }
 .luckySpinOpen { overflow: hidden; }
 .luckySpinScreen { position: fixed; inset: 0; z-index: 550; overflow: hidden; background: radial-gradient(circle at 50% 18%,rgba(76,29,149,.3),transparent 35%),radial-gradient(circle at 0 100%,rgba(6,182,212,.12),transparent 32%),#070914; color:#f7f8ff; animation:overlayFade .2s ease; }
 .luckySpinPage { display:flex;flex-direction:column;width:min(100%,680px);height:100%;margin:0 auto;padding:calc(20px + env(safe-area-inset-top)) 20px calc(18px + env(safe-area-inset-bottom)); }
+.spinHeaderStats { display:grid;grid-template-columns:1fr 1fr 1fr;align-items:stretch;gap:8px;margin-bottom:18px;flex:0 0 auto; }
+.spinHeaderStat { min-width:0;padding:8px 10px;border:1px solid rgba(110,127,183,.3);border-radius:12px;background:linear-gradient(145deg,rgba(22,27,53,.85),rgba(8,13,29,.8));box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 14px rgba(73,53,154,.12);text-align:center; }
+.spinHeaderStat span { display:block;color:#7785a7;font-size:8px;font-weight:900;letter-spacing:1.2px;line-height:1; }.spinHeaderStat strong { display:block;margin-top:6px;color:#f4f0ff;font-size:13px;font-weight:1000;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 0 8px rgba(255,255,255,.16); }.spinHeaderStatValue.is-ready,.spinHeaderStat strong.is-ready { color:#67e8f9;text-shadow:0 0 9px rgba(103,232,249,.65); }
 .luckySpinPageHeader { display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex:0 0 auto; }
 .luckySpinPageHeader h1 { margin:5px 0 0;color:#fff;font-size:26px;letter-spacing:-.5px; }
 .luckySpinClose { display:grid;place-items:center;width:38px;height:38px;border:1px solid rgba(255,255,255,.14);border-radius:50%;background:rgba(255,255,255,.06);color:#cbd5e1;font-size:24px;line-height:1; }
