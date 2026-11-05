@@ -1478,16 +1478,16 @@ function startSpinCountdown() {
 function renderLuckySpin() {
   const available = spinAvailable();
   const eligible = spinEligible();
-  const prizes = Array.isArray(state.spinPrizes) && state.spinPrizes.length ? state.spinPrizes : [
-    { label: "10% Mining", kind: "boost" }, { label: "+50 UP", kind: "points" }, { label: "+100 UP", kind: "points" },
-    { label: "+250 UP", kind: "points" }, { label: "+0.05 GRAM", kind: "gram" }, { label: "Try Again", kind: "none" }
+  const prizes = [
+    { label: "10% Mining", kind: "boost" }, { label: "2 Extra Spins", kind: "none" }, { label: "0 UP", kind: "points", amount: 0 },
+    { label: "+50 UP", kind: "points", amount: 50 }, { label: "+100 UP", kind: "points", amount: 100 }, { label: "+250 UP", kind: "points", amount: 250 }
   ];
   const buttonLocked = !eligible || !available;
   const buttonLabel = !eligible ? `🔒 ${t('spin_spin_now', {}, 'SPIN NOW')}` : (available ? t('spin_spin_now', {}, 'SPIN NOW') : t("spin_next", { time: spinRemainingText() }));
-  const rewardIcon = (prize, index) => { const kind = ['points', 'gram', 'boost', 'none'].includes(prize?.kind) ? prize.kind : 'none'; const isExtraSpin = index === 5 && kind === 'none'; const icon = isExtraSpin ? '↻' : 'UP'; return `<em class="spinRewardIcon ${isExtraSpin ? 'spinRewardIcon--extra' : 'spinRewardIcon--up'}" aria-hidden="true">${icon}</em>`; };
+  const rewardIcon = (prize, index) => { const isExtraSpin = index === 1; const isMining = index === 0; const icon = isExtraSpin ? '⟳' : isMining ? 'ϟ' : 'UP'; return `<em class="spinRewardIcon ${isExtraSpin ? 'spinRewardIcon--extra' : isMining ? 'spinRewardIcon--boost' : 'spinRewardIcon--up'}" aria-hidden="true">${icon}</em>`; };
   return `<section class="spinCard ${eligible ? '' : 'is-locked'}" aria-label="${t("spin_aria")}">
     <div class="spinCardHeader"><span class="spinBadge">24H</span></div>
-    <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRimGeometry" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${prizes.slice(0, 6).map((prize, index) => { const [top, bottom] = spinSliceText(prize, index); return `<span class="spinSliceLabel">${rewardIcon(prize, index)}<b>${escapeHTML(top)}</b><small>${escapeHTML(bottom)}</small></span>`; }).join("")}<div class="spinWheelHub" aria-hidden="true"><span class="spinHubDiamond">◇</span></div></div></div>
+    <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRimGeometry" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${prizes.map((prize, index) => { const [top, bottom] = spinSliceText(prize, index); return `<span class="spinSliceLabel" style="--i:${index}">${rewardIcon(prize, index)}<b>${escapeHTML(top)}</b><small>${escapeHTML(bottom)}</small></span>`; }).join("")}<div class="spinWheelHub" aria-hidden="true"><img class="spinHubLogo" src="/img/gramup-logo-new.png" alt="Gramup"></div></div></div>
     <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${!eligible ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : (available ? t("spin_free") : t("spin_next", { time: spinRemainingText() }))}</span><button id="spinButton" class="primaryBtn spinButton ${!eligible ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button><button type="button" class="spinPaidButton" data-paid-spin onclick="paySpinAlternative()" ${!eligible || state.points < 50 ? "disabled" : ""}>${t('spin_pay_50', {}, 'Pay 50 UP to Spin')}</button></div>
     <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
   </section>`;
