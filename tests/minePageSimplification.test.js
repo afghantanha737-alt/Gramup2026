@@ -2,11 +2,12 @@
 const assert = require('assert');
 const fs = require('fs');
 const app = fs.readFileSync(require.resolve('../public/js/app.js'), 'utf8');
-const start = app.indexOf('function renderMiningPanel');
-const end = app.indexOf('async function claimMining', start);
+const start = app.indexOf('function renderProfileVip');
+const end = app.indexOf('async function claimVipReward', start);
 assert.ok(start >= 0 && end > start, 'Mine renderer must exist');
 const renderer = app.slice(start, end);
-assert.match(renderer, /stars_shop_title/);
-assert.match(renderer, /phase3StarsGrid/);
-assert.doesNotMatch(renderer, /phase3MiningTop|phase3Vault|phase3MiningActions|mining_claim|mining_upgrade_rig|mining_upgrade_vault|mining_rig_level/);
-console.log('PASS — Mine page starts with Telegram Stars and omits the removed mining header, progress, and controls');
+assert.doesNotMatch(renderer, /renderMiningPanel\(\)|stars_shop_title/);
+assert.match(renderer, /vipMiningHero/);
+assert.match(renderer, /vipCatalog/);
+assert.doesNotMatch(app.slice(app.indexOf('async function renderVipTab'), app.indexOf('/* ================= TAB DISPATCH')) , /loadMiningStatus/);
+console.log('PASS — Mine page omits Telegram Stars and retains Cloud Mining and miner packages');

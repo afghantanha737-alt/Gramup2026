@@ -4170,7 +4170,6 @@ function renderProfileVip() {
       .phase3MiningTop,.phase3VaultMeta{display:flex;justify-content:space-between;gap:12px;align-items:center}.phase3MiningTop h3{margin:5px 0 0}.phase3MiningTop strong{color:#67e8f9}.phase3Vault{margin:16px 0}.phase3VaultBar{height:10px;background:rgba(255,255,255,.1);border-radius:999px;overflow:hidden}.phase3VaultBar span{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#a78bfa);border-radius:inherit;transition:width .4s}.phase3VaultMeta{margin-top:8px;font-size:12px;color:#a8aec2}.phase3VaultMeta b{color:#f8fafc}.phase3MiningActions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.phase3MiningActions button{font-size:12px;padding:11px 7px}.phase3StarsShop{margin-top:18px}.phase3StarsShop h4{margin:0 0 10px}.phase3StarsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.phase3StarsCard{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.05);color:inherit}.phase3StarsCard span{font-size:22px}.phase3StarsCard b{font-size:11px;text-align:center}.phase3StarsCard small{color:#fbbf24}@media(max-width:500px){.phase3MiningActions,.phase3StarsGrid{grid-template-columns:1fr}.phase3MiningActions button{width:100%}}
     </style>
     <div class="vipRedesign">
-      ${renderMiningPanel()}
       <div class="sectionHeader">
         <button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button>
         <h2 class="sectionTitle">${t("vip_title")}</h2><span></span>
@@ -4374,9 +4373,9 @@ async function renderProfile() {
     await loadHistory(true);
     if (!isCurrentProfileRender()) return;
   }
-  if (profileView === "vip" && (!state.vipDataLoaded || !state.mining) && !state.vipLoading && !state.miningLoading) {
+  if (profileView === "vip" && !state.vipDataLoaded && !state.vipLoading) {
     content.innerHTML = `<div class="loading" style="height:300px"></div>`;
-    await Promise.all([loadVipPlans(), loadMiningStatus()]);
+    await loadVipPlans();
     if (!isCurrentProfileRender()) return;
   }
   if (profileView === "referral") {
@@ -4405,9 +4404,9 @@ async function renderProfile() {
 async function renderVipTab() {
   const renderRequestId = navigationSequence;
   profileView = "vip";
-  if ((!state.vipDataLoaded || !state.mining) && !state.vipLoading && !state.miningLoading) {
+  if (!state.vipDataLoaded && !state.vipLoading) {
     $("#content").innerHTML = `<div class="loading" style="height:300px"></div>`;
-    await Promise.all([loadVipPlans(), loadMiningStatus()]);
+    await loadVipPlans();
   }
   if (renderRequestId !== navigationSequence || state.activeTab !== "vip") return;
   $("#content").innerHTML = state.vipError
