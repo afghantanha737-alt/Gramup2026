@@ -525,7 +525,7 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
           status: 200,
           body: {
             success: true, prizeId: prize.id, prizeKind: prize.kind, prizeLabel: prize.label, amount: prize.amount,
-            points: updated.points, gramBalance: updated.gramBalance,
+            points: updated.points, upBalance: updated.points, gramBalance: updated.gramBalance,
             nextSpinAt: new Date(now.getTime() + spin.cooldownMs).toISOString(),
             boostUntil: updated.miningBoostUntil || null
           },
@@ -568,7 +568,7 @@ router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) =>
         const rewardCurrency = prize.kind === 'gram' ? 'gram' : 'points';
         const rewardSourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin_paid', key: operationKey, leg: 'reward' });
         await recordLedgerRequired({ user: updated._id, type: 'spin', currency: rewardCurrency, amount: prize.amount, description: `Lucky Spin paid reward: ${prize.id}`, balanceAfter: rewardCurrency === 'gram' ? updated.gramBalance : updated.points, sourceId: rewardSourceId, session });
-        return { status: 200, body: { success: true, prizeId: prize.id, prizeKind: prize.kind, prizeLabel: prize.label, amount: prize.amount, points: updated.points, gramBalance: updated.gramBalance, boostUntil: updated.miningBoostUntil || null }, resourceId: rewardSourceId };
+        return { status: 200, body: { success: true, prizeId: prize.id, prizeKind: prize.kind, prizeLabel: prize.label, amount: prize.amount, points: updated.points, upBalance: updated.points, gramBalance: updated.gramBalance, boostUntil: updated.miningBoostUntil || null }, resourceId: rewardSourceId };
       }
     });
     return res.status(outcome.status).json(outcome.body);
