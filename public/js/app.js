@@ -29,6 +29,7 @@ const state = {
   referralMessageConsent: "unset",
   points: 0,
   gramBalance: 0,
+  chainGramBalance: null,
   rate: 0,
   streak: 0,
   canCheckIn: false,
@@ -2079,7 +2080,8 @@ let exchangeDirection = "points_to_gram"; // "points_to_gram" | "gram_to_points"
 
 function showExchange() {
   if (!readModelActionAllowed()) return;
-  if (state.points <= 0 && state.gramBalance <= 0) {
+  const verifiedWalletAvailable = Boolean(window.gramupWallet?.isConnected?.() && window.gramupWallet?.isProofVerified?.());
+  if (getExchangeAvailableBalance("points_to_gram") <= 0 && getExchangeAvailableBalance("gram_to_points") <= 0 && !verifiedWalletAvailable) {
     toast(t("error_generic"), "warning");
     return;
   }
@@ -2090,6 +2092,7 @@ function showExchange() {
   if (error) error.textContent = "";
   setExchangeDirection("points_to_gram");
   if (overlay) overlay.style.display = "flex";
+  if (state.activeTab === "wallet" && state.chainGramBalance == null) void loadWalletChainBalance(walletRenderSequence);
 }
 window.showExchange = showExchange;
 
@@ -2124,14 +2127,70 @@ function setExchangeDirection(direction) {
   const error = $("#exchangeError");
   if (error) error.textContent = "";
   updateExchangePreview();
+  updateExchangeQuickSelectState();
 }
 window.setExchangeDirection = setExchangeDirection;
+
+function getExchangeAvailableBalance(direction = exchangeDirection) {
+  if (direction === "points_to_gram") {
+    const points = Number(state.points);
+    return Number.isFinite(points) ? Math.max(0, points) : 0;
+  }
+
+  const internalGram = Number(state.gramBalance);
+  const internalAvailable = Number.isFinite(internalGram) ? Math.max(0, internalGram) : 0;
+  const walletVerified = Boolean(window.gramupWallet?.isConnected?.() && window.gramupWallet?.isProofVerified?.());
+  const chainGram = Number(state.chainGramBalance);
+  const chainAvailable = walletVerified && Number.isFinite(chainGram) ? Math.max(0, chainGram) : 0;
+  // The current submit path uses either the internal balance or the connected wallet balance,
+  // rather than combining them into one transaction.
+  return Math.max(internalAvailable, chainAvailable);
+}
+
+function isExchangeAmountValid(amount) {
+  const value = Number(amount);
+  return Number.isFinite(value) && value > 0 && value <= getExchangeAvailableBalance();
+}
+
+function updateExchangeQuickSelectState() {
+  const availableBalance = getExchangeAvailableBalance();
+  document.querySelectorAll("#exchangeQuickAmounts .exchangeQuickBtn").forEach(button => {
+    button.disabled = !(Number.isFinite(availableBalance) && availableBalance > 0);
+  });
+}
+
+function setExchangeAmountPercent(percent) {
+  const input = $("#exchangePoints");
+  const percentage = Number(percent);
+  if (!input || ![25, 50, 75, 100].includes(percentage)) return;
+
+  const availableBalance = getExchangeAvailableBalance();
+  if (!Number.isFinite(availableBalance) || availableBalance <= 0) {
+    input.value = "";
+    updateExchangePreview();
+    return;
+  }
+
+  const precision = exchangeDirection === "points_to_gram" ? 3 : 9;
+  const scale = 10 ** precision;
+  const maxUnits = Math.floor(availableBalance * scale);
+  const selectedUnits = Math.floor(maxUnits * percentage / 100);
+  let amount = (selectedUnits / scale).toFixed(precision);
+  if (amount.includes(".")) amount = amount.replace(/0+$/, "").replace(/\.$/, "");
+  input.value = amount;
+  updateExchangePreview();
+}
+window.setExchangeAmountPercent = setExchangeAmountPercent;
 
 function updateExchangePreview() {
   const input = $("#exchangePoints");
   const preview = $("#exchangePreview");
   if (!input || !preview) return;
-  const amount = Number(input.value) || 0;
+  const rawValue = String(input.value || "").trim();
+  const parsedAmount = Number(rawValue);
+  const amount = Number.isFinite(parsedAmount) && parsedAmount >= 0 ? parsedAmount : 0;
+  const error = $("#exchangeError");
+  if (error) error.textContent = rawValue && !isExchangeAmountValid(parsedAmount) ? t("error_generic") : "";
 
   if (exchangeDirection === "points_to_gram") {
     const gram = amount * state.rate;
@@ -2150,11 +2209,7 @@ async function submitExchange() {
   const button = $("#submitExchange");
 
   const amount = Number(input?.value);
-  if (!amount || amount <= 0) {
-    if (error) error.textContent = t("error_generic");
-    return;
-  }
-  if (exchangeDirection === "points_to_gram" && amount > state.points) {
+  if (!isExchangeAmountValid(amount)) {
     if (error) error.textContent = t("error_generic");
     return;
   }
@@ -2174,6 +2229,7 @@ async function submitExchange() {
     if (exchangeDirection === "points_to_gram" || useInternalGramBalance) clearPendingIdempotencyKey(idempotencyScope);
     state.points = Number(result.points) ?? state.points;
     if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
+    if (exchangeDirection === "gram_to_points" && !useInternalGramBalance) state.chainGramBalance = null;
     haptic("success");
     toast(result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) }), "success");
     hideExchange();
@@ -2495,15 +2551,23 @@ async function loadWalletChainBalance(renderRequestId = walletRenderSequence) {
   const value = document.getElementById('walletChainBalanceValue');
   const meta = document.getElementById('walletChainBalanceMeta');
   if (!value || !meta) return;
+  state.chainGramBalance = null;
+  updateExchangeQuickSelectState();
   value.textContent = t('wallet_chain_balance_loading');
   meta.textContent = t('deposit_network_ton_mainnet');
   try {
     const result = await api('/api/points/wallet/chain-balance');
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
+    const balance = Number(result?.balance);
+    if (!Number.isFinite(balance) || balance < 0) throw new Error('Invalid wallet chain balance');
+    state.chainGramBalance = balance;
+    updateExchangeQuickSelectState();
     value.textContent = `${formatNumber(result.balance, 6)} GRAM`;
     meta.textContent = t('wallet_chain_balance_title');
   } catch (error) {
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
+    state.chainGramBalance = null;
+    updateExchangeQuickSelectState();
     value.textContent = t('wallet_chain_balance_unavailable');
     meta.textContent = error?.code === 'WALLET_NOT_CONNECTED' ? t('wallet_connected_withdraw_hint') : t('deposit_network_ton_mainnet');
   }
