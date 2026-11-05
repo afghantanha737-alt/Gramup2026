@@ -182,6 +182,26 @@ function buildWebAppReplyMarkup(buttonText, webAppUrl) {
   return { inline_keyboard: [[{ text, web_app: { url: url.toString() } }]] };
 }
 
+function buildBroadcastButtonReplyMarkup(buttonText, buttonUrl, webAppUrl) {
+  const text = String(buttonText || '').trim();
+  if (!text) return null;
+  if (text.length > 64) throw new TypeError('Button text must be 64 characters or fewer.');
+
+  const customUrl = String(buttonUrl || '').trim();
+  if (!customUrl) return buildWebAppReplyMarkup(text, webAppUrl);
+
+  let url;
+  try { url = new URL(customUrl); }
+  catch { throw new TypeError('Enter a valid HTTP(S) button link.'); }
+  if (!['https:', 'http:'].includes(url.protocol) || !url.hostname || url.username || url.password) {
+    throw new TypeError('Enter a valid HTTP(S) button link without credentials.');
+  }
+  if (url.hostname.toLowerCase() === 't.me' && url.protocol !== 'https:') {
+    throw new TypeError('Telegram bot and channel links must use HTTPS.');
+  }
+  return { inline_keyboard: [[{ text, url: url.toString() }]] };
+}
+
 function getTelegramRetryAfterMs(error) {
   const body = error?.response?.body || {};
   const code = Number(body.error_code || error?.response?.statusCode || error?.statusCode);
@@ -332,4 +352,4 @@ async function broadcastCopyToActiveUsers(User, fromChatId, messageId) {
   return summary;
 }
 
-module.exports = { bot, buildTelegramWebhookPayload, buildWebAppReplyMarkup, getTelegramRetryAfterMs, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, isValidTelegramUserId, filterActiveTelegramRecipients, broadcastToActiveUsers, broadcastCopyToActiveUsers, withTelegramDeliveryDeadline };
+module.exports = { bot, buildTelegramWebhookPayload, buildWebAppReplyMarkup, buildBroadcastButtonReplyMarkup, getTelegramRetryAfterMs, isChatMember, checkChatMembership, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, isValidTelegramUserId, filterActiveTelegramRecipients, broadcastToActiveUsers, broadcastCopyToActiveUsers, withTelegramDeliveryDeadline };

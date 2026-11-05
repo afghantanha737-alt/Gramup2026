@@ -415,7 +415,9 @@
         <label>متن پیام</label>
         <textarea id="broadcastText" placeholder="متن پیام همگانی..."></textarea>
         <label>متن دکمه‌ی Mini App (اختیاری)</label>
-        <input id="broadcastButtonText" type="text" maxlength="64" value="Open Gramup 🚀" placeholder="Open Quests">
+        <input id="broadcastButtonText" name="button_text" type="text" maxlength="64" value="Open Gramup 🚀" placeholder="Open Quests">
+        <label>لینک دکمه (اختیاری)</label>
+        <input id="button_url" name="button_url" type="text" maxlength="2048" placeholder="https://t.me/your_bot یا https://...">
         <label>تصویر (اختیاری)</label>
         <input id="broadcastImage" type="file" accept="image/*">
         <button onclick="sendBroadcast()">ارسال به همه کاربران</button>
@@ -2015,6 +2017,7 @@ async function sendBroadcast() {
   const text = document.getElementById("broadcastText").value.trim();
   const fileInput = document.getElementById("broadcastImage");
   const buttonText = document.getElementById("broadcastButtonText").value.trim();
+  const buttonUrl = document.getElementById("button_url").value.trim();
   const msgEl = document.getElementById("broadcastMsg");
 
   if (!text) {
@@ -2024,7 +2027,8 @@ async function sendBroadcast() {
 
   const formData = new FormData();
   formData.append("text", text);
-  if (buttonText) formData.append("buttonText", buttonText);
+  if (buttonText) formData.append("button_text", buttonText);
+  if (buttonUrl) formData.append("button_url", buttonUrl);
   if (fileInput.files[0]) formData.append("image", fileInput.files[0]);
 
   msgEl.textContent = "در حال ارسال...";

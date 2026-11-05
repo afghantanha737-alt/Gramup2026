@@ -10,7 +10,7 @@ const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
-const { bot, notifyUser, buildWebAppReplyMarkup, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers } = require('../utils/bot');
+const { bot, notifyUser, buildBroadcastButtonReplyMarkup, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { postWithdrawalPaid } = require('../utils/payoutChannel');
 const { sendNotificationOnce } = require('../utils/notificationDelivery');
@@ -3102,14 +3102,15 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
     return res.status(400).json({ success: false, message: 'متن پیام الزامی است.' });
   }
 
-  const buttonText = String((req.body && req.body.buttonText) || '').trim();
+  const buttonText = String((req.body && (req.body.button_text || req.body.buttonText)) || '').trim();
+  const buttonUrl = String((req.body && (req.body.button_url || req.body.buttonUrl)) || '').trim();
   let replyMarkup = null;
   if (buttonText) {
     const webAppUrl = String(process.env.MINI_APP_URL || process.env.APP_URL || '').trim();
     try {
-      replyMarkup = buildWebAppReplyMarkup(buttonText, webAppUrl);
+      replyMarkup = buildBroadcastButtonReplyMarkup(buttonText, buttonUrl, webAppUrl);
     } catch (error) {
-      return res.status(400).json({ success: false, message: error.message || 'متن دکمه یا آدرس Mini App معتبر نیست.' });
+      return res.status(400).json({ success: false, message: error.message || 'متن یا لینک دکمه معتبر نیست.' });
     }
   }
 

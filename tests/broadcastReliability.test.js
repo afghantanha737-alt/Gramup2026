@@ -17,13 +17,16 @@ assert.ok(source.includes('broadcastId: String(job._id)'));
 assert.ok(source.includes("status: 'completed'"));
 assert.ok(source.includes("status: 'failed'"));
 assert.ok(source.includes('BroadcastJob.updateOne'));
-assert.ok(source.includes('buildWebAppReplyMarkup(buttonText, webAppUrl)'));
+assert.ok(source.includes('buildBroadcastButtonReplyMarkup(buttonText, buttonUrl, webAppUrl)'));
 assert.ok(source.includes('process.env.MINI_APP_URL || process.env.APP_URL'));
+assert.ok(source.includes('req.body.button_url || req.body.buttonUrl'));
 assert.ok(source.includes('blocked: job.blocked || 0'));
 
 const adminHtml = fs.readFileSync(path.join(__dirname, '..', 'public/admin.html'), 'utf8');
 assert.ok(adminHtml.includes('id="broadcastButtonText"'));
-assert.ok(adminHtml.includes('formData.append("buttonText", buttonText)'));
+assert.ok(adminHtml.includes('id="button_url" name="button_url"'));
+assert.ok(adminHtml.includes('formData.append("button_text", buttonText)'));
+assert.ok(adminHtml.includes('formData.append("button_url", buttonUrl)'));
 assert.ok(adminHtml.includes('job.blocked || 0'));
 
 console.log('ALL PASS — durable Broadcast job status and delivery diagnostics contract');

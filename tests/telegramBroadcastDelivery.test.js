@@ -21,6 +21,7 @@ const {
   bot,
   broadcastToActiveUsers,
   buildWebAppReplyMarkup,
+  buildBroadcastButtonReplyMarkup,
   getTelegramRetryAfterMs
 } = require('../utils/bot');
 
@@ -32,6 +33,18 @@ const {
   assert.equal(buildWebAppReplyMarkup('', 'https://gramup.example/app'), null);
   assert.throws(() => buildWebAppReplyMarkup('Open Gramup', 'http://gramup.example/app'), /HTTPS/);
   assert.throws(() => buildWebAppReplyMarkup('x'.repeat(65), 'https://gramup.example/app'), /64 characters/);
+  const fallbackMarkup = buildBroadcastButtonReplyMarkup('Open Gramup 🚀', '', 'https://gramup.example/app');
+  assert.deepEqual(fallbackMarkup, markup, 'an empty custom URL falls back to the default WebApp button');
+  const customTelegramMarkup = buildBroadcastButtonReplyMarkup('Open Bot', 'https://t.me/gramup_bot', '');
+  assert.deepEqual(customTelegramMarkup, {
+    inline_keyboard: [[{ text: 'Open Bot', url: 'https://t.me/gramup_bot' }]]
+  });
+  const customWebMarkup = buildBroadcastButtonReplyMarkup('Visit Site', 'https://campaign.example/path', '');
+  assert.deepEqual(customWebMarkup, {
+    inline_keyboard: [[{ text: 'Visit Site', url: 'https://campaign.example/path' }]]
+  });
+  assert.throws(() => buildBroadcastButtonReplyMarkup('Unsafe', 'javascript:alert(1)', 'https://gramup.example/app'), /HTTP\(S\)/);
+  assert.throws(() => buildBroadcastButtonReplyMarkup('Open Bot', 'http://t.me/gramup_bot', 'https://gramup.example/app'), /HTTPS/);
   assert.equal(getTelegramRetryAfterMs({ response: { statusCode: 429, body: { parameters: { retry_after: 2 } } } }), 2000);
   assert.equal(getTelegramRetryAfterMs({ response: { statusCode: 500, body: {} }, message: 'Internal error' }), null);
 
@@ -84,6 +97,17 @@ const {
   assert.ok(delays.filter(value => value === 50).length >= 3, 'the worker paces recipients at no more than 20 messages per second');
   assert.ok(blockedUpdates.some(item => item.filter.telegramId === '103' && item.update.$set.telegramBlockedAt instanceof Date));
 
+  let customTextCall;
+  bot.sendMessage = async (telegramId, text, options) => { customTextCall = { telegramId, text, options }; };
+  const customTextSummary = await broadcastToActiveUsers({}, 'Custom URL text broadcast', {
+    recipients: [{ telegramId: '106' }],
+    replyMarkup: customTelegramMarkup,
+    intervalMs: 0,
+    sleepFn: async () => {}
+  });
+  assert.equal(customTextSummary.sent, 1);
+  assert.deepEqual(customTextCall.options.reply_markup, customTelegramMarkup);
+
   let photoCall;
   bot.sendPhoto = async (telegramId, image, options) => { photoCall = { telegramId, image, options }; };
   const photoSummary = await broadcastToActiveUsers({}, 'Photo broadcast', {
@@ -98,7 +122,19 @@ const {
   assert.equal(photoCall.options.caption, 'Photo broadcast');
   assert.deepEqual(photoCall.options.reply_markup, markup);
 
-  console.log('PASS — Telegram broadcasts pace deliveries, retry FloodWait, mark blocked recipients, report outcomes, and attach WebApp buttons');
+  let customPhotoCall;
+  bot.sendPhoto = async (telegramId, image, options) => { customPhotoCall = { telegramId, image, options }; };
+  const customPhotoSummary = await broadcastToActiveUsers({}, 'Custom URL photo broadcast', {
+    recipients: [{ telegramId: '107' }],
+    imageBuffer: Buffer.from('test-image'),
+    replyMarkup: customWebMarkup,
+    intervalMs: 0,
+    sleepFn: async () => {}
+  });
+  assert.equal(customPhotoSummary.sent, 1);
+  assert.deepEqual(customPhotoCall.options.reply_markup, customWebMarkup);
+
+  console.log('PASS — Telegram broadcasts pace deliveries, retry FloodWait, mark blocked recipients, report outcomes, and attach custom URL/WebApp buttons to text and photos');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
