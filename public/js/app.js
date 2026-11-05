@@ -1437,7 +1437,7 @@ function spinPrizeLabel(prizeId, amount) {
   return t("spin_prize_try_again");
 }
 function spinSliceText(prize, index) {
-  const fallback = [["10%", "Mining"], ["+50", "UP"], ["+100", "UP"], ["+250", "UP"], ["+0.05", "GRAM"], ["Try", "Again"]][index] || ["", ""];
+  const fallback = [["10%", "Mining"], ["+50", "UP"], ["+100", "UP"], ["+250", "UP"], ["0", "UP"], ["2 Extra", "Spins"]][index] || ["", ""];
   const label = String(prize?.label || '').trim();
   if (!label) return fallback;
   const match = label.match(/^(\S+)\s+(.+)$/);
@@ -1484,10 +1484,10 @@ function renderLuckySpin() {
   ];
   const buttonLocked = !eligible || !available;
   const buttonLabel = !eligible ? `🔒 ${t('spin_spin_now', {}, 'SPIN NOW')}` : (available ? t('spin_spin_now', {}, 'SPIN NOW') : t("spin_next", { time: spinRemainingText() }));
-  const rewardIcon = (prize, index) => { const kind = ['points', 'gram', 'boost', 'none'].includes(prize?.kind) ? prize.kind : 'none'; const icon = kind === 'points' ? 'UP' : kind === 'gram' ? '◇' : kind === 'boost' ? 'ϟ' : '✦'; return `<em class="spinRewardIcon spinRewardIcon--${kind}" aria-hidden="true">${icon}</em>`; };
+  const rewardIcon = (prize, index) => { const kind = ['points', 'gram', 'boost', 'none'].includes(prize?.kind) ? prize.kind : 'none'; const isExtraSpin = index === 5 && kind === 'none'; const icon = isExtraSpin ? '↻' : 'UP'; return `<em class="spinRewardIcon ${isExtraSpin ? 'spinRewardIcon--extra' : 'spinRewardIcon--up'}" aria-hidden="true">${icon}</em>`; };
   return `<section class="spinCard ${eligible ? '' : 'is-locked'}" aria-label="${t("spin_aria")}">
     <div class="spinCardHeader"><span class="spinBadge">24H</span></div>
-    <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRimGeometry" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${prizes.slice(0, 6).map((prize, index) => { const [top, bottom] = spinSliceText(prize, index); return `<span class="spinSliceLabel">${rewardIcon(prize, index)}<b>${escapeHTML(top)}</b><small>${escapeHTML(bottom)}</small></span>`; }).join("")}<div class="spinWheelHub" aria-hidden="true"><img src="/img/gramup-logo-new.png" alt=""><span class="spinHubDiamond">◇</span></div></div></div>
+    <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRimGeometry" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${prizes.slice(0, 6).map((prize, index) => { const [top, bottom] = spinSliceText(prize, index); return `<span class="spinSliceLabel">${rewardIcon(prize, index)}<b>${escapeHTML(top)}</b><small>${escapeHTML(bottom)}</small></span>`; }).join("")}<div class="spinWheelHub" aria-hidden="true"><span class="spinHubDiamond">◇</span></div></div></div>
     <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${!eligible ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : (available ? t("spin_free") : t("spin_next", { time: spinRemainingText() }))}</span><button id="spinButton" class="primaryBtn spinButton ${!eligible ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button><button type="button" class="spinPaidButton" data-paid-spin onclick="paySpinAlternative()" ${!eligible || state.points < 50 ? "disabled" : ""}>${t('spin_pay_50', {}, 'Pay 50 UP to Spin')}</button></div>
     <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
   </section>`;
