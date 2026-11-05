@@ -1405,6 +1405,7 @@ async function loadWeeklyLeaderboard() {
 
 /* ================= HOME ================= */
 function spinAvailable() { return !state.spinNextAt || state.spinNextAt <= Date.now(); }
+function spinEligible() { return state.spinEnabled && state.streak >= state.spinRequiredStreak; }
 function spinRemainingText() { return formatCountdown(Math.max(0, Number(state.spinNextAt) - Date.now())); }
 function spinPrizeLabel(prizeId, amount) {
   if (["up_50", "up_100", "up_250"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
@@ -1419,6 +1420,14 @@ function startSpinCountdown() {
     const label = document.querySelector("[data-spin-countdown]");
     const button = document.querySelector("#spinButton");
     if (!label || !button) return stopSpinCountdown();
+    if (!spinEligible()) {
+      label.textContent = t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`);
+      button.disabled = true;
+      button.classList.add('is-locked');
+      button.textContent = `🔒 ${t('spin_button')}`;
+      return;
+    }
+    button.classList.remove('is-locked');
     if (spinAvailable()) {
       label.textContent = t("spin_free");
       button.disabled = state.spinBusy;
@@ -1434,16 +1443,19 @@ function startSpinCountdown() {
 }
 function renderLuckySpin() {
   const available = spinAvailable();
+  const eligible = spinEligible();
   const slices = [["10%", "Mining"], ["+50", "UP"], ["+100", "UP"], ["+250", "UP"], ["+0.05", "GRAM"], ["Try", "Again"]];
-  return `<section class="spinCard" aria-labelledby="spinTitle">
+  const buttonLocked = !eligible || !available;
+  const buttonLabel = !eligible ? `🔒 ${t('spin_button')}` : (available ? t("spin_button") : t("spin_next", { time: spinRemainingText() }));
+  return `<section class="spinCard ${eligible ? '' : 'is-locked'}" aria-labelledby="spinTitle">
     <div class="spinCardHeader"><div><span class="spinEyebrow">${t("spin_subtitle")}</span><h2 id="spinTitle">${t("spin_title")}</h2></div><span class="spinBadge">24H</span></div>
     <div class="spinStage"><div class="spinPointer" aria-hidden="true"></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}">${slices.map(([top, bottom]) => `<span><b>${top}</b><small>${bottom}</small></span>`).join("")}</div></div>
-    <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${available ? t("spin_free") : t("spin_next", { time: spinRemainingText() })}</span><button id="spinButton" class="primaryBtn spinButton" type="button" onclick="doSpin()" ${available ? "" : "disabled"}>${available ? t("spin_button") : t("spin_next", { time: spinRemainingText() })}</button></div>
+    <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${!eligible ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : (available ? t("spin_free") : t("spin_next", { time: spinRemainingText() }))}</span><button id="spinButton" class="primaryBtn spinButton ${!eligible ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button></div>
     <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
   </section>`;
 }
 function renderLuckySpinBanner() {
-  const eligible = state.spinEnabled && state.streak >= state.spinRequiredStreak;
+  const eligible = spinEligible();
   const subtitle = eligible
     ? t('spin_launch_ready', {}, 'Your Lucky Spin is ready')
     : (state.spinEnabled ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : t('spin_disabled', {}, 'Lucky Spin is currently unavailable'));
@@ -1451,15 +1463,16 @@ function renderLuckySpinBanner() {
     ? `<span class="spinLaunchStatus is-ready">${t('spin_ready', {}, 'Ready')}</span>`
     : `<span class="spinLaunchStatus"><span aria-hidden="true">🔒</span>${t('spin_locked', {}, 'Locked')}</span>`;
   const lock = eligible ? '' : '<span class="spinLaunchButtonLock" aria-hidden="true">🔒</span>';
+  const canOpen = state.spinEnabled;
   return `<section class="spinLaunchCard ${eligible ? 'is-ready' : 'is-locked'}" aria-labelledby="spinLaunchTitle">
     <div class="spinLaunchIcon" aria-hidden="true"><span class="spinLaunchWheel"><i></i><i></i><i></i><i></i><i></i><i></i><b>✦</b></span></div>
     <div class="spinLaunchCopy"><strong id="spinLaunchTitle">${t('spin_title')}</strong><small>${subtitle}</small></div>
-    <div class="spinLaunchAction">${status}<button class="spinLaunchButton" type="button" onclick="${eligible ? 'openLuckySpin()' : ''}" ${eligible ? '' : 'disabled'}>${lock}${t('spin_spin_button', {}, 'Spin')}</button></div>
+    <div class="spinLaunchAction">${status}<button class="spinLaunchButton" type="button" onclick="${canOpen ? 'openLuckySpin()' : ''}" ${canOpen ? '' : 'disabled'}>${lock}${t('spin_spin_button', {}, 'Open')}</button></div>
   </section>`;
 }
 function closeLuckySpin() { const overlay = document.querySelector('#luckySpinOverlay'); if (overlay) overlay.remove(); state.spinModalOpen = false; stopSpinCountdown(); }
 function openLuckySpin() {
-  if (!state.spinEnabled || state.streak < state.spinRequiredStreak) return;
+  if (!state.spinEnabled) return;
   haptic("light");
   closeLuckySpin();
   const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'overlay';
@@ -1468,7 +1481,7 @@ function openLuckySpin() {
 }
 window.openLuckySpin = openLuckySpin; window.closeLuckySpin = closeLuckySpin;
 async function doSpin() {
-  if (!readModelActionAllowed() || state.spinBusy || !spinAvailable()) return;
+  if (!readModelActionAllowed() || !spinEligible() || state.spinBusy || !spinAvailable()) return;
   state.spinBusy = true;
   haptic("light");
   const button = document.querySelector("#spinButton");
