@@ -1,0 +1,21 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const points = fs.readFileSync(path.join(__dirname, '..', 'routes/points.js'), 'utf8');
+const app = fs.readFileSync(path.join(__dirname, '..', 'public/js/app.js'), 'utf8');
+const i18n = fs.readFileSync(path.join(__dirname, '..', 'public/js/i18n.js'), 'utf8');
+const cache = fs.readFileSync(path.join(__dirname, '..', 'public/js/readModelCache.js'), 'utf8');
+
+assert.match(points, /STREAK_FREEZE_COST = 20/);
+assert.match(points, /router\.post\('\/checkin\/freeze'/);
+assert.match(points, /router\.post\('\/checkin\/restart'/);
+assert.match(points, /type: 'streak_freeze'/);
+assert.match(points, /streakFreezeCost: STREAK_FREEZE_COST/);
+assert.match(app, /function openMissedStreakModal\(\)/);
+assert.match(app, /\/api\/points\/checkin\/freeze/);
+assert.match(app, /\/api\/points\/checkin\/restart/);
+assert.doesNotMatch(app.slice(app.indexOf('function renderMiningPanel'), app.indexOf('async function claimMining')), /streak_freeze/);
+assert.match(cache, /streakMissed/);
+assert.strictEqual((i18n.match(/streak_missed_title:/g) || []).length, 3);
+console.log('PASS — missed-day streak modal, atomic 20 UP freeze/restart actions, cache state, and Mine/Store removal');

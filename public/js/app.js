@@ -44,6 +44,10 @@ const state = {
   spinEligible: false,
   spinCooldownHours: 24,
   spinPrizes: [],
+  streakMissed: false,
+  streakMissedDays: 0,
+  streakFreezeCost: 20,
+  missedStreakPrompted: false,
   spinModalOpen: false,
   miningBoostUntil: null,
   referralCode: "",
@@ -972,6 +976,9 @@ function applyCachedReadModel(entry) {
   state.spinEligible = Boolean(profile.spinEligible) || (state.spinEnabled && state.streak >= state.spinRequiredStreak);
   state.spinCooldownHours = Number(profile.spinCooldownHours) || 24;
   state.spinPrizes = Array.isArray(profile.spinPrizes) ? profile.spinPrizes : [];
+  state.streakMissed = Boolean(profile.streakMissed);
+  state.streakMissedDays = Number(profile.streakMissedDays) || 0;
+  state.streakFreezeCost = Number(profile.streakFreezeCost) || 20;
   state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + state.spinCooldownHours * 3600000 : 0;
   state.miningBoostUntil = profile.miningBoostUntil || null;
   state.totalEarnedPoints = Number(profile.totalEarnedPoints) || 0;
@@ -1093,6 +1100,9 @@ async function loadUserData({ force = false } = {}) {
   state.spinEligible = Boolean(data?.spinEligible) || (state.spinEnabled && state.streak >= state.spinRequiredStreak);
   state.spinCooldownHours = Number(data?.spinCooldownHours) || 24;
   state.spinPrizes = Array.isArray(data?.spinPrizes) ? data.spinPrizes : [];
+  state.streakMissed = Boolean(data?.streakMissed);
+  state.streakMissedDays = Number(data?.streakMissedDays) || 0;
+  state.streakFreezeCost = Number(data?.streakFreezeCost) || 20;
   state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + state.spinCooldownHours * 3600000 : 0;
   state.miningBoostUntil = data?.miningBoostUntil || null;
   state.totalEarnedPoints = Number(data?.totalEarnedPoints) || 0;
@@ -2063,8 +2073,46 @@ async function doCheckIn() {
   }
 }
 window.doCheckIn = doCheckIn;
+function closeMissedStreakModal() {
+  document.querySelector('#missedStreakOverlay')?.remove();
+  if (state.streakMissed) state.missedStreakPrompted = false;
+}
+function openMissedStreakModal() {
+  if (state.activeTab !== 'tasks' || !state.streakMissed || document.querySelector('#missedStreakOverlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'missedStreakOverlay';
+  overlay.className = 'overlay missedStreakOverlay';
+  overlay.innerHTML = `<div class="modalBox missedStreakModal" role="dialog" aria-modal="true" aria-labelledby="missedStreakTitle">
+    <div class="missedStreakIcon">🔥</div><div class="modalEyebrow">${t('streak_missed_eyebrow', {}, 'Streak check')}</div>
+    <h3 id="missedStreakTitle">${t('streak_missed_title', {}, 'You missed a day')}</h3>
+    <p class="missedStreakLead">${t('streak_missed_desc', { n: formatPoints(state.streak) }, 'Your current streak is at risk. Choose how to continue.')}</p>
+    <div class="missedStreakChoices"><button type="button" class="missedStreakKeep" onclick="freezeMissedStreak()"><strong>${t('streak_freeze_action', { n: formatPoints(state.streakFreezeCost) }, 'Pay 20 UP to Freeze Streak')}</strong><small>${t('streak_freeze_help', {}, 'Keep your streak and claim today’s reward')}</small></button><button type="button" class="missedStreakRestart" onclick="restartMissedStreak()"><strong>${t('streak_restart_action', {}, 'Restart Streak')}</strong><small>${t('streak_restart_help', {}, 'Reset to Day 1 without a charge')}</small></button></div>
+    <button type="button" class="missedStreakLater" onclick="closeMissedStreakModal()">${t('streak_decide_later', {}, 'Decide later')}</button>
+  </div>`;
+  overlay.addEventListener('click', event => { if (event.target === overlay) closeMissedStreakModal(); });
+  document.body.appendChild(overlay);
+}
+async function freezeMissedStreak() {
+  if (!readModelActionAllowed()) return;
+  const button = document.querySelector('.missedStreakKeep');
+  if (button) button.disabled = true;
+  try { const result = await api('/api/points/checkin/freeze', { method: 'POST', body: {} }); state.points = Number(result.points) || state.points; closeMissedStreakModal(); await loadUserData({ force: true }); renderTasks(); toast(t('streak_freeze_success', {}, 'Your streak was frozen. Claim today’s reward.'), 'success'); haptic('success'); }
+  catch (error) { if (button) button.disabled = false; toast(translateServerMessage(error.code, error.message), 'error'); haptic('error'); }
+}
+async function restartMissedStreak() {
+  if (!readModelActionAllowed()) return;
+  const button = document.querySelector('.missedStreakRestart');
+  if (button) button.disabled = true;
+  try { const result = await api('/api/points/checkin/restart', { method: 'POST', body: {} }); state.points = Number(result.points) || state.points; closeMissedStreakModal(); await loadUserData({ force: true }); renderTasks(); toast(t('streak_restart_success', {}, 'Your streak was restarted at Day 1.'), 'success'); haptic('light'); }
+  catch (error) { if (button) button.disabled = false; toast(translateServerMessage(error.code, error.message), 'error'); haptic('error'); }
+}
+window.closeMissedStreakModal = closeMissedStreakModal; window.openMissedStreakModal = openMissedStreakModal; window.freezeMissedStreak = freezeMissedStreak; window.restartMissedStreak = restartMissedStreak;
 function renderTasks() {
   stopDailyCheckinCountdown();
+  if (state.streakMissed && !state.missedStreakPrompted) {
+    state.missedStreakPrompted = true;
+    setTimeout(openMissedStreakModal, 0);
+  }
   const content = $("#content");
   const taskSection = ["daily", "vip", "invite"].includes(state.taskSection) ? state.taskSection : "daily";
   const isInviteSection = taskSection === "invite";
@@ -3789,7 +3837,7 @@ function renderMiningPanel() {
   if (!mining) return '';
   const percent = mining.maxStoragePoints ? Math.min(100, Math.round((mining.accumulatedPoints / mining.maxStoragePoints) * 100)) : 0;
   const full = Boolean(mining.isStorageFull);
-  const products = [['streak_freeze', '⭐', t('stars_streak_freeze'), 50], ['hash_boost_7d', '⚡', t('stars_hash_boost'), 150], ['vip_gold', '💎', t('stars_vip_gold'), 250]];
+  const products = [['hash_boost_7d', '⚡', t('stars_hash_boost'), 150], ['vip_gold', '💎', t('stars_vip_gold'), 250]];
   return `<section class="phase3MiningCard" aria-label="${t('mining_title')}">
     <div class="phase3MiningTop"><div><span class="modalEyebrow">${t('mining_title')}</span><h3>${t('mining_rig_level', { n: mining.level })}</h3></div><strong>${formatNumber(mining.effectiveRatePerHour, 0)} ${t('mining_per_hour')}</strong></div>
     <div class="phase3Vault"><div class="phase3VaultBar"><span style="width:${percent}%"></span></div><div class="phase3VaultMeta"><span>${full ? t('mining_vault_full') : t('mining_vault_running')}</span><b>${formatNumber(mining.accumulatedPoints, 0)} / ${formatNumber(mining.maxStoragePoints, 0)} UP</b></div></div>

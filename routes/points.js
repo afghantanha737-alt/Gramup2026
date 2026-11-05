@@ -21,6 +21,7 @@ const { vipActivationTaskDefinition } = require('../utils/vipActivationTasks');
 const { idempotencyTransactionId, executeIdempotently } = require('../utils/idempotency');
 const { utcDayKey, wasUtcYesterday } = require('../utils/utcDay');
 const { claimDailyCheckin } = require('../utils/dailyAutoCheckin');
+const STREAK_FREEZE_COST = 20;
 const {
   DAY_MS,
   calculateTotalRewardCents,
@@ -214,6 +215,14 @@ function nextResetTimestamp() {
   return (currentDayKey + 1) * 86400000; // شروع روز UTC بعدی، به میلی‌ثانیه
 }
 
+function missedStreakState(user, now = new Date()) {
+  const streak = Math.max(0, Math.floor(Number(user?.streak) || 0));
+  const lastDay = utcDayKey(user?.lastCheckIn);
+  const today = utcDayKey(now);
+  const missedDays = lastDay == null || streak < 1 ? 0 : Math.max(0, today - lastDay - 1);
+  return { missed: missedDays > 0, missedDays, streak, lastDay, today };
+}
+
 function truncateAddress(address) {
   const s = String(address || '');
   if (s.length <= 14) return s;
@@ -349,6 +358,7 @@ router.get('/me', auth, async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
   const spin = spinPolicy(settings);
+  const missed = missedStreakState(u);
 
   const todayKey = utcDayKey(new Date());
   const canCheckIn = !u.lastCheckIn || utcDayKey(u.lastCheckIn) < todayKey;
@@ -387,6 +397,9 @@ router.get('/me', auth, async (req, res) => {
     spinEligible: spin.enabled && Number(u.streak || 0) >= spin.requiredStreak,
     spinCooldownHours: spin.cooldownHours,
     spinPrizes: spin.prizes.map(({ id, kind, amount, label, probability }) => ({ id, kind, amount, label, probability })),
+    streakMissed: missed.missed,
+    streakMissedDays: missed.missedDays,
+    streakFreezeCost: STREAK_FREEZE_COST,
     miningBoostUntil: u.miningBoostUntil || null,
     nextResetAt: nextResetTimestamp(),
     language: u.language
@@ -414,6 +427,49 @@ router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
     cycleDay: result.cycleDay,
     nextResetAt: nextResetTimestamp()
   });
+});
+
+router.post('/checkin/freeze', auth, sensitiveRateLimit('claim'), async (req, res) => {
+  const now = new Date();
+  const todayKey = utcDayKey(now);
+  const sourceId = `streak-freeze:${req.dbUser._id}:${todayKey}`;
+  const result = await withMongoTransaction(async session => {
+    const current = await User.findById(req.dbUser._id).session(session);
+    const missed = missedStreakState(current, now);
+    if (!current || !missed.missed) return { status: 'not_missed' };
+    if (Number(current.points) < STREAK_FREEZE_COST) return { status: 'insufficient_points', points: Number(current.points) || 0 };
+    const existing = await PointsLedger.findOne({ sourceId }).session(session);
+    if (existing) return { status: 'already_frozen', user: current };
+    const yesterday = new Date((todayKey - 1) * DAY_MS);
+    const updated = await User.findOneAndUpdate(
+      { _id: current._id, points: { $gte: STREAK_FREEZE_COST }, lastCheckIn: current.lastCheckIn, streak: current.streak },
+      { $set: { lastCheckIn: yesterday }, $inc: { points: -STREAK_FREEZE_COST } },
+      { new: true, session }
+    );
+    if (!updated) return { status: 'conflict' };
+    const ledgerResult = await recordLedgerRequired({ user: updated._id, type: 'streak_freeze', amount: -STREAK_FREEZE_COST, currency: 'points', description: 'Streak Freeze — 20 UP', balanceAfter: updated.points, sourceId, session });
+    if (!ledgerResult?.created) throw new Error('Streak Freeze ledger entry was not created.');
+    return { status: 'frozen', user: updated };
+  });
+  if (result.status === 'insufficient_points') return res.status(400).json({ success: false, code: 'STREAK_FREEZE_INSUFFICIENT_POINTS', required: STREAK_FREEZE_COST, points: result.points, message: `You need ${STREAK_FREEZE_COST} UP to freeze your streak.` });
+  if (result.status === 'not_missed') return res.status(409).json({ success: false, code: 'STREAK_NOT_MISSED', message: 'Your streak does not need a freeze.' });
+  if (result.status === 'conflict') return res.status(409).json({ success: false, code: 'STREAK_FREEZE_CONFLICT', message: 'Your streak changed. Please refresh and try again.' });
+  const user = result.user || req.dbUser;
+  res.json({ success: true, points: user.points, streak: user.streak, canCheckIn: true, cost: STREAK_FREEZE_COST });
+});
+
+router.post('/checkin/restart', auth, sensitiveRateLimit('claim'), async (req, res) => {
+  const now = new Date();
+  const current = await User.findById(req.dbUser._id);
+  const missed = missedStreakState(current, now);
+  if (!current || !missed.missed) return res.status(409).json({ success: false, code: 'STREAK_NOT_MISSED', message: 'Your streak does not need to be restarted.' });
+  const updated = await User.findOneAndUpdate(
+    { _id: current._id, lastCheckIn: current.lastCheckIn, streak: current.streak },
+    { $set: { streak: 0, lastCheckIn: null } },
+    { new: true }
+  );
+  if (!updated) return res.status(409).json({ success: false, code: 'STREAK_RESTART_CONFLICT', message: 'Your streak changed. Please refresh and try again.' });
+  res.json({ success: true, points: updated.points, streak: 0, canCheckIn: true });
 });
 
 // POST /api/points/spin — one server-authoritative free spin per 24 hours.
