@@ -1638,24 +1638,24 @@ function renderHome() {
     </div>
 
     <div class="tbSectionHead">
-      <h2 class="tbSectionTitle">${t("tb_your_progress")} <span class="tbSpark">✨</span></h2>
+      <h2 class="tbSectionTitle">${t("tb_your_progress")} <span class="tbSpark" aria-hidden="true">●</span></h2>
       <button class="tbLink" type="button" onclick="navigate('profile')">${t("tb_view_all")} <span class="tbLinkArrow">→</span></button>
     </div>
 
     <div class="tbStats">
       <div class="tbStat">
-        <div class="tbStatIcon tbIconMint">${tokenIconMarkup()}</div>
-        <div class="tbStatLabel tbColGreen">${t("tb_earned")}</div>
+        <div class="tbStatIcon">${tokenIconMarkup()}</div>
+        <div class="tbStatLabel">${t("tb_earned")}</div>
         <div class="tbStatValue">${tokenAmount(state.totalEarnedPoints)}</div>
       </div>
       <div class="tbStat">
-        <div class="tbStatIcon tbIconOrange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2A6.5 6.5 0 0 1 21.5 20"/></svg></div>
-        <div class="tbStatLabel tbColOrange">${t("tb_referrals")}</div>
+        <div class="tbStatIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2A6.5 6.5 0 0 1 21.5 20"/></svg></div>
+        <div class="tbStatLabel">${t("tb_referrals")}</div>
         <div class="tbStatValue">${formatPoints(state.invitedCount)}</div>
       </div>
       <div class="tbStat">
-        <div class="tbStatIcon tbIconPurple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17.5" rx="2.5"/><path d="M9 3.5h6v3H9z"/><path d="m9 13.5 2 2 4-4"/></svg></div>
-        <div class="tbStatLabel tbColPurple">${t("tb_tasks")}</div>
+        <div class="tbStatIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17.5" rx="2.5"/><path d="M9 3.5h6v3H9z"/><path d="m9 13.5 2 2 4-4"/></svg></div>
+        <div class="tbStatLabel">${t("tb_tasks")}</div>
         <div class="tbStatValue">${formatPoints(approvedTasks)}</div>
       </div>
     </div>
@@ -3870,9 +3870,11 @@ async function loadMiningStatus() {
 function renderMiningPanel() {
   const mining = state.mining;
   if (!mining) return '';
-  const products = [['hash_boost_7d', '⚡', t('stars_hash_boost'), 150], ['vip_gold', '💎', t('stars_vip_gold'), 250]];
+  const boltIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 11-14h-7l1-6z"/></svg>';
+  const diamondIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 12 0 4 6-10 12L2 9l4-6z"/><path d="M2 9h20M6 3l6 18 6-18"/></svg>';
+  const products = [['hash_boost_7d', boltIcon, t('stars_hash_boost'), 150], ['vip_gold', diamondIcon, t('stars_vip_gold'), 250]];
   return `<section class="phase3MiningCard phase3StarsOnly" aria-label="${t('stars_shop_title')}">
-    <div class="phase3StarsShop"><h4>${t('stars_shop_title')}</h4><div class="phase3StarsGrid">${products.map(([key, icon, label, stars]) => `<button type="button" class="phase3StarsCard" onclick="buyStarsProduct('${key}')"><span>${icon}</span><b>${label}</b><small>${stars} XTR</small></button>`).join('')}</div></div>
+    <div class="phase3StarsShop"><h4>${t('stars_shop_title')}</h4><div class="phase3StarsGrid">${products.map(([key, icon, label, stars]) => `<button type="button" class="phase3StarsCard" onclick="buyStarsProduct('${key}')"><span aria-hidden="true">${icon}</span><b>${label}</b><small>${stars} XTR</small></button>`).join('')}</div></div>
   </section>`;
 }
 
@@ -4115,7 +4117,7 @@ function renderProfileVip() {
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
-  const iconByPlan = { 1: "⚡", 2: "⚡", 3: "⚡", 4: "⚡", 5: "⚡", 6: "⚡", 7: "⚡", 8: "⚡", 9: "⚡", 10: "⚡" };
+  const planIconMarkup = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 11-14h-7l1-6z"/></svg>';
 
   const planCards = visiblePlans.map(plan => {
     const available = plan.enabled === true && plan.comingSoon !== true;
@@ -4146,7 +4148,7 @@ function renderProfileVip() {
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
       <article class="vipPlanCard vipPlanCard--${theme}">
-        <div class="vipPlanAccent" aria-hidden="true"><span class="vipPlanMark">${iconByPlan[planNumber] || "⚡"}</span></div>
+        <div class="vipPlanAccent" aria-hidden="true"><span class="vipPlanMark">${planIconMarkup}</span></div>
         <div class="vipPlanBody">
           <div class="vipPlanTopline">
             <div class="vipPlanTitleLine"><span class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</span><span class="vipPlanDuration">${formatPoints(plan.durationDays)}d</span>${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}</div>
@@ -4189,7 +4191,7 @@ function renderProfileVip() {
 
   return `
     <style>
-      .vipRedesign{--vip-ink:#f7f7ff;--vip-muted:#a8aec2;--vip-line:rgba(255,255,255,.1);margin:0 -2px;padding:4px 0 26px;background:radial-gradient(circle at 85% 0%,rgba(34,211,238,.12),transparent 31%),radial-gradient(circle at 5% 28%,rgba(124,58,237,.13),transparent 28%),linear-gradient(180deg,rgba(7,12,24,.28),transparent 70%);color:var(--vip-ink)}
+      .vipRedesign{--vip-ink:#f7f7ff;--vip-muted:#a8aec2;--vip-line:rgba(255,255,255,.1);margin:0 -2px;padding:4px 0 26px;background:radial-gradient(circle at 85% 0%,var(--brand-accent-glow),transparent 34%),linear-gradient(180deg,rgba(7,12,24,.28),transparent 70%);color:var(--vip-ink)}
       .phase3MiningCard{margin:0 0 16px;padding:18px;border:1px solid rgba(56,189,248,.22);border-radius:22px;background:linear-gradient(145deg,rgba(14,34,62,.92),rgba(8,13,27,.92));box-shadow:0 14px 34px rgba(0,0,0,.2)}
       .phase3MiningTop,.phase3VaultMeta{display:flex;justify-content:space-between;gap:12px;align-items:center}.phase3MiningTop h3{margin:5px 0 0}.phase3MiningTop strong{color:#67e8f9}.phase3Vault{margin:16px 0}.phase3VaultBar{height:10px;background:rgba(255,255,255,.1);border-radius:999px;overflow:hidden}.phase3VaultBar span{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#a78bfa);border-radius:inherit;transition:width .4s}.phase3VaultMeta{margin-top:8px;font-size:12px;color:#a8aec2}.phase3VaultMeta b{color:#f8fafc}.phase3MiningActions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.phase3MiningActions button{font-size:12px;padding:11px 7px}.phase3StarsShop{margin-top:18px}.phase3StarsShop h4{margin:0 0 10px}.phase3StarsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.phase3StarsCard{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.05);color:inherit}.phase3StarsCard span{font-size:22px}.phase3StarsCard b{font-size:11px;text-align:center}.phase3StarsCard small{color:#fbbf24}@media(max-width:500px){.phase3MiningActions,.phase3StarsGrid{grid-template-columns:1fr}.phase3MiningActions button{width:100%}}
     </style>

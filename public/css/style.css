@@ -2785,3 +2785,345 @@ html[data-theme="light"] .vipRedesign .vipPlanCard { color: #f7f7ff; }
 .vipPlanStat .upTokenAmount, .vipPlanReward .upTokenAmount, .vipPlanDaily .upTokenAmount { color:inherit; font-weight:inherit; }
 /* Phase 2: Squads leaderboard */
 .squadPanel{margin-top:14px}.squadPanel h3{font-size:14px;margin:18px 0 8px}.squadForm{display:grid;gap:9px;margin:14px 0}.squadForm input{width:100%;min-height:42px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);color:var(--text);font:inherit}.squadActions{display:flex;gap:8px}.squadActions>*{flex:1}.squadLeaderboard{list-style:none;margin:0;padding:0;display:grid;gap:7px}.squadRankRow{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:5px 8px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);font-size:11px}.squadRankRow>a{font-size:10px;color:var(--primary)}.squadRankRow>b{grid-column:2/3;font-size:11px}.squadRankRow>small{grid-column:3;grid-row:2;font-size:9px;color:var(--text-muted)}.squadCurrent{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;border-radius:12px;background:var(--surface-2)}.squadCurrent strong{flex:1}.referralTaskItem>.secondaryBtn{font-size:10px;white-space:nowrap}
+
+/* =========================================================
+   GRAMUP BRAND PALETTE — unified cyan/teal accent
+   Decorative accents are consistent across tabs; success, warning and error
+   colors remain semantic so status is still immediately understandable.
+========================================================= */
+:root {
+  --brand-accent: #35d7c8;
+  --brand-accent-strong: #69ecdf;
+  --brand-accent-text: #83f1e7;
+  --brand-accent-ink: #052a29;
+  --brand-accent-soft: rgba(53, 215, 200, .12);
+  --brand-accent-border: rgba(105, 236, 223, .28);
+  --brand-accent-glow: rgba(53, 215, 200, .17);
+  --primary: var(--brand-accent);
+  --primary-2: var(--brand-accent-strong);
+  --primary-soft: var(--brand-accent-soft);
+  --info: var(--brand-accent-text);
+  --info-soft: var(--brand-accent-soft);
+  --tb-grad: linear-gradient(135deg, var(--brand-accent-strong), var(--brand-accent));
+  --tb-blue: var(--brand-accent);
+  --product-brand: var(--brand-accent-text);
+  --product-brand-strong: var(--brand-accent);
+  --product-cyan: var(--brand-accent-text);
+  --aurora-grad-primary: linear-gradient(135deg, var(--brand-accent), var(--brand-accent-strong));
+  --aurora-shadow-glow: 0 0 18px var(--brand-accent-glow);
+}
+html[data-theme="light"] {
+  --brand-accent: #0f766e;
+  --brand-accent-strong: #0e7490;
+  --brand-accent-text: #0f766e;
+  --brand-accent-ink: #ffffff;
+  --brand-accent-soft: rgba(15, 118, 110, .09);
+  --brand-accent-border: rgba(15, 118, 110, .24);
+  --brand-accent-glow: rgba(15, 118, 110, .14);
+  --primary: var(--brand-accent);
+  --primary-2: var(--brand-accent-strong);
+  --primary-soft: var(--brand-accent-soft);
+  --info: var(--brand-accent);
+  --info-soft: var(--brand-accent-soft);
+  --tb-grad: linear-gradient(135deg, var(--brand-accent), var(--brand-accent-strong));
+  --tb-blue: var(--brand-accent);
+  --product-brand: var(--brand-accent);
+  --product-brand-strong: #115e59;
+  --product-cyan: var(--brand-accent);
+  --aurora-grad-primary: linear-gradient(135deg, var(--brand-accent), var(--brand-accent-strong));
+  --aurora-shadow-glow: 0 0 18px var(--brand-accent-glow);
+}
+html[data-theme="light"] body {
+  background: radial-gradient(circle at 85% -5%, var(--brand-accent-soft), transparent 38%), linear-gradient(180deg, #f5fbfa 0%, #f2f8f7 55%, #edf5f4 100%);
+  background-attachment: fixed;
+}
+html[data-theme="dark"] body {
+  background-image: radial-gradient(circle at 100% -10%, var(--brand-accent-glow), transparent 34%);
+}
+
+/* One wordmark color: the split markup is retained for localization/layout only. */
+.brandName span,
+.gateBrand .brandName span,
+.vipHeroBrand strong span { color: inherit !important; }
+.brandLogo, .avatar { box-shadow: 0 5px 16px var(--brand-accent-glow); }
+.headerIconBtn { color: var(--brand-accent-text); }
+.headerIconBtn svg { color: inherit; }
+.bottomNav button { color: var(--text-soft); }
+.bottomNav button::before { background: var(--brand-accent); }
+.bottomNav button.active {
+  color: var(--brand-accent-text);
+  background: var(--brand-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--brand-accent-border), 0 5px 16px var(--brand-accent-glow);
+}
+html[data-theme="light"] .bottomNav button.active { color: var(--brand-accent); }
+.sectionTitle, .tbSectionTitle {
+  border-inline-start: 3px solid var(--brand-accent);
+  padding-inline-start: 8px;
+  color: var(--text);
+}
+.tbSpark { color: var(--brand-accent-text); font-size: 8px; }
+.profileMenuLabel, .modalEyebrow { color: var(--brand-accent-text); }
+.tbLink, .sectionMore {
+  color: var(--brand-accent-text);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+html[data-theme="light"] .tbLink, html[data-theme="light"] .sectionMore { color: var(--brand-accent); }
+.tbLinkArrow { color: var(--brand-accent-text); }
+
+/* Shared primary actions and neutral/info badges use the same brand accent. */
+.primaryBtn, .tbBtnPrimary, .gateJoinBtn, .gateCheckBtn,
+.vipRedesign .vipHeroClaimButton:not(:disabled),
+.vipRedesign .vipPlanCard .vipPlanButton--primary {
+  color: var(--brand-accent-ink);
+  background: var(--tb-grad);
+  border-color: transparent;
+  box-shadow: 0 8px 20px var(--brand-accent-glow);
+}
+.taskAction:not(.done):not(.pending) {
+  color: var(--brand-accent-ink);
+  background: var(--tb-grad);
+  box-shadow: 0 7px 16px var(--brand-accent-glow);
+}
+.auroraInlineBtn { color: var(--brand-accent-ink); background: var(--tb-grad); border-color: transparent; }
+.badge.info { color: var(--brand-accent-text); border-color: var(--brand-accent-border); background: var(--brand-accent-soft); }
+.taskReward { color: var(--brand-accent-text); background: var(--brand-accent-soft); }
+html[data-theme="light"] .badge.info, html[data-theme="light"] .taskReward { color: var(--brand-accent); }
+
+/* Home: all progress icons, quick actions and value labels share one treatment. */
+.tbGemRing { color: var(--brand-accent-text); border-color: var(--brand-accent); }
+.tbStatIcon, .tbIconMint, .tbIconOrange, .tbIconPurple {
+  color: var(--brand-accent-text);
+  background: var(--brand-accent-soft);
+  border: 1px solid var(--brand-accent-border);
+  box-shadow: none;
+}
+.tbStatIcon .upTokenIcon { border: 0; }
+.tbStatLabel, .tbColGreen, .tbColOrange, .tbColPurple { color: var(--text-soft); }
+.tbStatValue { color: var(--text); }
+.tbPillGreen, .tbPillPurple, .tbPillOrange {
+  color: var(--brand-accent-text);
+  border: 1px solid var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+html[data-theme="light"] .tbPillGreen,
+html[data-theme="light"] .tbPillPurple,
+html[data-theme="light"] .tbPillOrange { color: var(--brand-accent); }
+.auroraQuickDeposit .auroraQuickIcon,
+.auroraQuickExchange .auroraQuickIcon,
+.auroraQuickTasks .auroraQuickIcon,
+.auroraQuickReferral .auroraQuickIcon {
+  color: var(--brand-accent-text);
+  border: 1px solid var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+.auroraDailyIcon { color: var(--brand-accent-text); background: var(--brand-accent-soft); }
+.tbExplore { border-color: var(--brand-accent-border); background: linear-gradient(135deg, var(--brand-accent-soft), rgba(255,255,255,.025)); }
+.tbExploreGem { box-shadow: 0 8px 20px var(--brand-accent-glow); }
+.tbExplore .tbExploreGem svg { color: var(--brand-accent); }
+.taskCategoryTab.active { color: var(--brand-accent-ink); background: var(--aurora-grad-primary); box-shadow: var(--aurora-shadow-glow); }
+.dayCell.today { border-color: var(--brand-accent); color: var(--brand-accent-text); background: var(--brand-accent-soft); }
+.dailyCheckDay.is-current { border-color: var(--brand-accent); box-shadow: 0 0 0 1px var(--brand-accent-border); }
+.dailyCheckDay.is-current .dailyCheckDayNumber { color: var(--brand-accent-ink); background: var(--brand-accent); }
+.dailyCheckCountdown, .depositMemoCode { color: var(--brand-accent-text); border-color: var(--brand-accent-border); background: var(--brand-accent-soft); }
+html[data-theme="light"] .dailyCheckCountdown, html[data-theme="light"] .depositMemoCode { color: var(--brand-accent); }
+.gateHero, .gateChIcon { color: var(--brand-accent-ink); background: var(--tb-grad); box-shadow: 0 8px 20px var(--brand-accent-glow); }
+.taskBrandWeb { background: linear-gradient(145deg, var(--brand-accent-strong), var(--brand-accent)); box-shadow: 0 7px 16px var(--brand-accent-glow); }
+
+/* Navigation icons in Profile and the Referral dashboard inherit the same accent. */
+.profileMenuPanel .profileIcon,
+.profileMenuPanel .profileItem:nth-child(n) .profileIcon,
+.profileSettingsPanel .profileItem:nth-child(n) .profileIcon {
+  color: var(--brand-accent-text);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+.referralDashboard { --rf-blue: var(--brand-accent-text); --rf-mint: var(--brand-accent-text); }
+.referralDashboard .rf-level-1,
+.referralDashboard .rf-level-2,
+.referralDashboard .rf-level-3,
+.referralDashboard .rf-level-4 { --rf-level: var(--brand-accent-text); }
+.referralDashboard .rf-kpi-icon,
+.referralDashboard .rf-panel-symbol,
+.referralDashboard .rf-section-glyph,
+.referralDashboard .rf-how-list li > span,
+.referralDashboard .rf-history-icon {
+  color: var(--brand-accent-text);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+.referralDashboard .rf-hero { border-color: var(--brand-accent-border); }
+.referralDashboard .rf-hero-badge, .referralDashboard .rf-network-total {
+  color: var(--brand-accent-text);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+.referralDashboard .rf-link-actions .referralCopyBtn { color: var(--brand-accent-ink); background: var(--tb-grad); box-shadow: 0 7px 18px var(--brand-accent-glow); }
+.referralDashboard .rf-link-actions .referralShareBtn { color: var(--brand-accent-text); border-color: var(--brand-accent-border); background: var(--brand-accent-soft); }
+
+/* Mine/VIP: unify plan tiers and controls; retain muted/disabled and full/error states. */
+.vipRedesign .vipMiningHero {
+  border-color: var(--brand-accent-border);
+  background: radial-gradient(circle at 88% 8%, var(--brand-accent-glow), transparent 38%), linear-gradient(145deg, #0e292a 0%, #101a24 58%, #11151d 100%);
+}
+.vipRedesign .vipMinerOrbit { border-color: var(--brand-accent-border); box-shadow: 0 0 24px var(--brand-accent-glow), inset 0 0 16px var(--brand-accent-soft); }
+.vipRedesign .vipMinerCoin {
+  color: var(--brand-accent-ink);
+  border-color: var(--brand-accent-strong);
+  background: radial-gradient(circle at 32% 25%, var(--brand-accent-strong), var(--brand-accent) 62%, #087e79);
+  box-shadow: 0 0 14px var(--brand-accent-glow), inset 0 2px 8px rgba(255,255,255,.22), inset 0 -5px 9px rgba(3,30,24,.28);
+}
+.vipRedesign .vipMinerSpark { color: var(--brand-accent-text); text-shadow: 0 0 9px var(--brand-accent-glow); }
+.vipRedesign .vipBalanceValue span,
+.vipRedesign .vipHeroPlanMeta [data-vip-live-rate],
+.vipRedesign .vipPlanInlineMeta span:first-child,
+.vipRedesign .vipPlanInlineMeta span:last-child,
+.vipRedesign .vipPastPlanRow b { color: var(--brand-accent-text); }
+.vipRedesign .vipStorageCountdown { border-color: var(--brand-accent-border); color: var(--brand-accent-text); }
+.vipRedesign .vipStorageCountdownProgress { stroke: var(--brand-accent); }
+.vipRedesign .vipHeroPlanProgress span { background: linear-gradient(90deg, var(--brand-accent), var(--brand-accent-strong)); box-shadow: 0 0 8px var(--brand-accent-glow); }
+.vipRedesign .vipHeroClaimButton:not(:disabled) { color: var(--brand-accent-ink); background: var(--tb-grad); }
+.vipRedesign .vipHeroClaimButton:not(:disabled) > b { color: var(--brand-accent-ink); }
+.vipRedesign .vipStatusPill.isActive { color: var(--brand-accent-text); border-color: var(--brand-accent-border); background: var(--brand-accent-soft); }
+.vipRedesign .vipStatusPill.isActive i { background: var(--brand-accent); box-shadow: 0 0 8px var(--brand-accent-glow); }
+.vipRedesign .vipStatusTab[aria-selected="true"],
+.vipRedesign .vipTierTab[aria-selected="true"] {
+  color: var(--brand-accent-text);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+  box-shadow: 0 5px 14px var(--brand-accent-glow);
+}
+.vipRedesign .vipPlanCard { border-color: var(--brand-accent-border); }
+.vipRedesign .vipPlanCard::before,
+.vipRedesign .vipPlanCard--bronze::before,
+.vipRedesign .vipPlanCard--silver::before,
+.vipRedesign .vipPlanCard--gold::before,
+.vipRedesign .vipPlanCard--neon::before,
+.vipRedesign .vipPlanCard--cyan::before,
+.vipRedesign .vipPlanCard--sapphire::before,
+.vipRedesign .vipPlanCard--emerald::before,
+.vipRedesign .vipPlanCard--ruby::before,
+.vipRedesign .vipPlanCard--ultimate::before { background: linear-gradient(180deg, var(--brand-accent-strong), var(--brand-accent)); }
+.vipRedesign .vipPlanMark { color: var(--brand-accent-text); border-color: var(--brand-accent-border); background: var(--brand-accent-soft); box-shadow: 0 0 13px var(--brand-accent-glow); }
+.vipRedesign .vipPlanBadge,
+.vipRedesign .vipPlanBadge--owned,
+.vipRedesign .vipPlanBadge--popular,
+.vipRedesign .vipPlanBadge--recommended,
+.vipRedesign .vipPlanBadge--best-value,
+.vipRedesign .vipPlanBadge--status {
+  color: var(--brand-accent-text);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+  box-shadow: none;
+}
+.vipRedesign .vipPlanCard .vipPlanButton--primary {
+  color: var(--brand-accent-ink);
+  background: var(--tb-grad);
+  box-shadow: 0 7px 16px var(--brand-accent-glow);
+}
+.vipRedesign .vipPlanFact b,
+.vipRedesign .vipPlanFact--cost b,
+.vipRedesign .vipPlanFact--daily b { color: var(--text); }
+.vipRedesign .vipCatalogHeading h3 { color: var(--text); border-inline-start: 3px solid var(--brand-accent); padding-inline-start: 8px; }
+.vipRedesign .vipTierTab:focus-visible,
+.vipRedesign .vipStatusTab:focus-visible,
+.vipRedesign .vipHeroClaimButton:focus-visible,
+.vipRedesign .vipPlanButton:focus-visible { outline-color: var(--brand-accent-strong); }
+
+
+/* Theme-specific overrides for legacy selectors with higher specificity. */
+.tbCard.tbBalance {
+  border-color: var(--brand-accent-border);
+  background: radial-gradient(circle at 100% 0%, var(--brand-accent-soft), transparent 38%), linear-gradient(145deg, #151c22, #101219 68%);
+}
+.tbBalance .tbAmountUnit { color: var(--brand-accent-text); }
+html[data-theme="light"] .tbCard.tbBalance {
+  border-color: var(--brand-accent-border);
+  background: radial-gradient(circle at 100% 0%, var(--brand-accent-soft), rgba(255,255,255,0) 38%), #ffffff;
+}
+html[data-theme="light"] .tbCard.tbBalance .tbAmountNum { color: var(--text); }
+html[data-theme="light"] .tbCard.tbBalance .tbAmountUnit { color: var(--brand-accent); }
+html[data-theme="light"] .tbStat {
+  color: var(--text);
+  border-color: rgba(17, 24, 39, .08);
+  background: #ffffff;
+  box-shadow: 0 5px 18px rgba(17, 24, 39, .06);
+}
+html[data-theme="light"] .tbStatLabel { color: #4b5563; }
+html[data-theme="light"] .tbStatValue { color: #111827; }
+html[data-theme="dark"] .tbPillGreen,
+html[data-theme="dark"] .tbPillPurple,
+html[data-theme="dark"] .tbPillOrange {
+  color: var(--brand-accent-text);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+html[data-theme="light"] .tbPillGreen,
+html[data-theme="light"] .tbPillPurple,
+html[data-theme="light"] .tbPillOrange {
+  color: var(--brand-accent);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+html[data-theme="dark"] .tbLink,
+html[data-theme="dark"] .sectionMore,
+html[data-theme="dark"] .bottomNav button.active {
+  color: var(--brand-accent-text);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+html[data-theme="light"] .tbLink,
+html[data-theme="light"] .sectionMore,
+html[data-theme="light"] .bottomNav button.active {
+  color: var(--brand-accent);
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+html[data-theme="dark"] .bottomNav button.active::before,
+html[data-theme="light"] .bottomNav button.active::before { background: var(--brand-accent); }
+.auroraDailyCard .auroraInlineBtn {
+  color: var(--brand-accent-ink);
+  border-color: transparent;
+  background: var(--tb-grad);
+}
+
+
+html[data-theme="light"] .bottomNav button.active,
+html[data-theme="light"] .bottomNav button.active .tabIcon,
+html[data-theme="light"] .bottomNav button.active .tabLabel {
+  color: var(--brand-accent) !important;
+}
+html[data-theme="light"] .bottomNav button.active::before { background: var(--brand-accent) !important; }
+html[data-theme="light"] .auroraDailyCard .auroraInlineBtn {
+  color: var(--brand-accent-ink) !important;
+  border-color: transparent !important;
+  background: var(--tb-grad) !important;
+}
+
+
+.appContent .vipRedesign {
+  background: radial-gradient(circle at 86% 0%, var(--brand-accent-glow), transparent 36%), transparent;
+}
+.appContent .vipRedesign .vipHero {
+  color: #f7f7ff;
+  border-color: var(--brand-accent-border);
+  background: radial-gradient(circle at 100% 0%, var(--brand-accent-glow), transparent 40%), linear-gradient(145deg, #0e292a, #101a24 58%, #11151d 100%);
+  box-shadow: 0 12px 28px var(--brand-accent-glow);
+}
+
+.vipRedesign .vipPlanMark svg { display: block; width: 14px; height: 14px; color: inherit; stroke: currentColor; }
+
+.appContent .vipRedesign .phase3MiningCard {
+  border-color: var(--brand-accent-border);
+  background: radial-gradient(circle at 100% 0%, var(--brand-accent-soft), transparent 42%), linear-gradient(145deg, rgba(53, 215, 200, .08), rgba(8, 13, 27, .92));
+  box-shadow: 0 14px 34px var(--brand-accent-glow);
+}
+.appContent .vipRedesign .phase3MiningTop strong { color: var(--brand-accent-text); }
+.appContent .vipRedesign .phase3VaultBar span { background: linear-gradient(90deg, var(--brand-accent-strong), var(--brand-accent)); }
+.appContent .vipRedesign .phase3StarsCard {
+  border-color: var(--brand-accent-border);
+  background: var(--brand-accent-soft);
+}
+.appContent .vipRedesign .phase3StarsCard span { color: var(--brand-accent-text); }
+.appContent .vipRedesign .phase3StarsCard span svg { display: block; width: 22px; height: 22px; stroke: currentColor; }
+.appContent .vipRedesign .phase3StarsCard small { color: var(--brand-accent-text); }
