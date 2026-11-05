@@ -46,6 +46,11 @@ const state = {
   referralMiniAppConfigured: false,
   referralLevelRates: [],
   referralStats: null,
+  squadsLoaded: false,
+  squadsLoading: false,
+  squads: [],
+  mySquad: null,
+  squadsError: "",
   referralTeam: [],
   referralLoading: false,
   referralDataLoaded: false,
@@ -1202,11 +1207,57 @@ function setTaskSection(section) {
   const next = ["daily", "vip", "invite"].includes(String(section)) ? String(section) : "daily";
   state.taskSection = next;
   if (next === "invite" && !state.referralDataLoaded && !state.referralLoading) void loadReferralData();
+  if (next === "invite" && !state.squadsLoaded && !state.squadsLoading) void loadSquads();
   renderTasks();
 }
 window.setTaskSection = setTaskSection;
-
-
+async function loadSquads({ force = false } = {}) {
+  if (state.squadsLoading || (!force && state.squadsLoaded)) return;
+  state.squadsLoading = true;
+  state.squadsError = "";
+  try {
+    const data = await api("/api/squads");
+    state.squads = Array.isArray(data?.leaderboard) ? data.leaderboard : [];
+    state.mySquad = data?.squad || null;
+    state.squadsLoaded = true;
+  } catch (error) {
+    state.squadsError = error?.message || t("squad_load_error");
+  } finally {
+    state.squadsLoading = false;
+    if (state.activeTab === "tasks" && state.taskSection === "invite") renderTasks();
+  }
+}
+function renderSquadsCard() {
+  const leaderboard = state.squads.map(row => `<li class="squadRankRow"><span>#${formatPoints(row.rank)}</span><strong>${escapeHTML(row.title)}</strong><a href="${escapeHTML(row.url)}" target="_blank" rel="noopener">@${escapeHTML(row.username)}</a><b>${tokenAmount(Number(row.score) || 0)} UP</b><small>${formatPoints(row.membersCount)} ${t("squad_members")}</small></li>`).join("");
+  const mySquad = state.mySquad ? `<div class="squadCurrent"><strong>${escapeHTML(state.mySquad.title)}</strong><a href="${escapeHTML(state.mySquad.url)}" target="_blank" rel="noopener">@${escapeHTML(state.mySquad.username)}</a><button type="button" class="secondaryBtn" onclick="leaveSquad()">${t("squad_leave")}</button></div>` : "";
+  return `<section class="card squadPanel"><div class="cardHeader"><div class="cardTitle">${t("squad_title")}</div><button type="button" class="secondaryBtn" onclick="loadSquads({force:true})">${t("squad_refresh")}</button></div><p class="cardSubtitle">${t("squad_desc")}</p>${state.squadsError ? `<p class="errorText">${escapeHTML(state.squadsError)}</p>` : ""}${mySquad}<div class="squadForm"><input id="squadTelegramLink" type="text" maxlength="200" placeholder="${escapeHTML(t("squad_link_placeholder"))}" autocomplete="off"><input id="squadTitleInput" type="text" maxlength="64" placeholder="${escapeHTML(t("squad_name_placeholder"))}" autocomplete="off"><div class="squadActions"><button type="button" class="primaryBtn" onclick="createSquad()" ${state.mySquad ? "disabled" : ""}>${t("squad_create")}</button><button type="button" class="secondaryBtn" onclick="joinSquad()" ${state.mySquad ? "disabled" : ""}>${t("squad_join")}</button></div></div><h3>${t("squad_top20")}</h3>${leaderboard ? `<ol class="squadLeaderboard">${leaderboard}</ol>` : `<p class="emptyDesc">${state.squadsLoading ? t("history_loading") : t("squad_empty")}</p>`}</section>`;
+}
+function renderReferralTierSummary() {
+  const stats = state.referralStats || {};
+  const numberOrDash = value => state.referralDataLoaded ? formatNumber(Number(value) || 0) : "—";
+  const amountOrDash = value => state.referralDataLoaded ? tokenAmount(Number(value) || 0) : "—";
+  return `<section class="card referralTierSummary"><div class="cardHeader"><div class="cardTitle">${t("referral_team_commission_title")}</div></div><div class="squadCurrent"><span><strong>${t("referral_tier1_members")}</strong><small> · 10% · ${numberOrDash(stats.tier1Members)} ${t("referral_members_label")}</small></span><b>${amountOrDash(stats.miningCommissionByTier?.["1"])} UP</b></div><div class="squadCurrent" style="margin-top:8px"><span><strong>${t("referral_tier2_members")}</strong><small> · 2.5% · ${numberOrDash(stats.tier2Members)} ${t("referral_members_label")}</small></span><b>${amountOrDash(stats.miningCommissionByTier?.["2"])} UP</b></div></section>`;
+}
+async function createSquad() {
+  const telegramLink = document.getElementById("squadTelegramLink")?.value.trim();
+  const title = document.getElementById("squadTitleInput")?.value.trim();
+  try { await api("/api/squads", { method: "POST", body: JSON.stringify({ telegramLink, title }) }); toast(t("squad_created"), "success"); await loadSquads({ force: true }); }
+  catch (error) { toast(error.message || t("error_generic"), "error"); }
+}
+async function joinSquad() {
+  const telegramLink = document.getElementById("squadTelegramLink")?.value.trim();
+  try { await api("/api/squads/join", { method: "POST", body: JSON.stringify({ telegramLink }) }); toast(t("squad_joined"), "success"); await loadSquads({ force: true }); }
+  catch (error) { toast(error.message || t("error_generic"), "error"); }
+}
+async function leaveSquad() {
+  if (!confirm(t("squad_leave_confirm"))) return;
+  try { await api("/api/squads/me", { method: "DELETE" }); toast(t("squad_left"), "success"); await loadSquads({ force: true }); }
+  catch (error) { toast(error.message || t("error_generic"), "error"); }
+}
+window.loadSquads = loadSquads;
+window.createSquad = createSquad;
+window.joinSquad = joinSquad;
+window.leaveSquad = leaveSquad;
 let tasksRequestSequence = 0;
 let tasksLoadError = null;
 async function loadTasks({ force = false } = {}) {
@@ -1950,6 +2001,8 @@ function renderTasks() {
     ? []
     : state.tasks.filter(task => taskSection === "vip" ? task.taskKind === "vip_activation" : task.taskKind !== "vip_activation");
   const referralHtml = isInviteSection ? renderReferralRewardTasks() : "";
+  const referralTierHtml = isInviteSection ? renderReferralTierSummary() : "";
+  const squadsHtml = isInviteSection ? renderSquadsCard() : "";
   const dailyCheckinHtml = taskSection === "daily" ? renderDailyCheckinCard() : "";
   const taskErrorHtml = tasksLoadError ? `<div class="card" role="status"><div class="emptyDesc">${t("tasks_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryTasks()">${t("retry_button")}</button></div>` : "";
   const sectionTabs = `
@@ -1968,8 +2021,7 @@ function renderTasks() {
     content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}${taskErrorHtml}`;
     return;
   }
-  const inviteHasContent = isInviteSection && state.referralTasks.length > 0;
-  if ((!isInviteSection && visibleTasks.length === 0) || (isInviteSection && !inviteHasContent)) {
+  if (!isInviteSection && visibleTasks.length === 0) {
     clearInterval(latestPostCooldownTimer);
     latestPostCooldownTimer = null;
     content.innerHTML = `
@@ -1978,6 +2030,8 @@ function renderTasks() {
       ${dailyCheckinHtml}
       ${taskErrorHtml}
       ${referralHtml}
+      ${referralTierHtml}
+      ${squadsHtml}
       <div class="card emptyState">
         <div class="emptyIcon">🗂️</div>
         <div class="emptyTitle">${t("tasks_empty_title")}</div>
@@ -1994,6 +2048,8 @@ function renderTasks() {
       <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
       ${sectionTabs}
       ${referralHtml}
+      ${referralTierHtml}
+      ${squadsHtml}
     `;
     return;
   }
@@ -2923,6 +2979,23 @@ function shareReferralLink() {
   }
 }
 window.shareReferralLink = shareReferralLink;
+async function shareToTelegramStory(context = "referral") {
+  const link = String(state.shareLink || "").trim();
+  if (!link) return toast(t("referral_link_unavailable"), "error");
+  const text = context === "milestone" ? t("story_milestone_text", { link }) : t("story_referral_text", { link });
+  const telegram = window.Telegram?.WebApp;
+  if (telegram && typeof telegram.shareToStory === "function") {
+    try {
+      const mediaUrl = new URL("/img/gramup-logo-new.png", window.location.origin).toString();
+      telegram.shareToStory(mediaUrl, { text, widget_link: { url: link, name: "Gramup" } });
+      return;
+    } catch (error) { console.warn("Story sharing unavailable; using Telegram share fallback", error); }
+  }
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+  if (telegram?.openTelegramLink) telegram.openTelegramLink(shareUrl);
+  else window.open(shareUrl, "_blank", "noopener,noreferrer");
+}
+window.shareToTelegramStory = shareToTelegramStory;
 
 let profileView = "menu"; // menu | referral | leaderboard | about | history
 let pendingProfileView = null;
@@ -3176,6 +3249,7 @@ function renderReferralRewardTasks() {
           </div>
         </div>
         ${action}
+        <button class="secondaryBtn" type="button" onclick="shareToTelegramStory('milestone')">${t("story_share_button")}</button>
       </div>`;
   }).join("");
 
@@ -3222,6 +3296,10 @@ function renderReferralStatsCard() {
         ${levelRows}
         <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_invite_rewards")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.totalInviteRewardsPoints) || 0)}</div></div>
         <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_team_commission")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.totalTeamCommissionPoints) || 0)}</div></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_tier1_members")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.tier1Members) || 0)}</div><small>${t("referral_tier1_rate")}</small></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_tier2_members")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.tier2Members) || 0)}</div><small>${t("referral_tier2_rate")}</small></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_mining_commission_t1")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.miningCommissionByTier?.["1"]) || 0)}</div></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_mining_commission_t2")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.miningCommissionByTier?.["2"]) || 0)}</div></div>
       </div>
     </div>`;
 }
@@ -3358,12 +3436,21 @@ function renderProfileReferral() {
         <article class="rf-kpi rf-kpi-level"><span class="rf-kpi-icon">✧</span><strong>${escapeHTML(currentLevelLabel)}</strong><small>${t("referral_kpi_level")}</small></article>
       </section>
 
+      <section class="rf-panel" aria-label="${escapeHTML(t("referral_mining_commission_t1"))}">
+        <div class="rf-section-heading"><div><span class="rf-overline">${t("referral_team_commission_title")}</span><h2>${t("referral_tier1_members")} / ${t("referral_tier2_members")}</h2></div></div>
+        <div class="rf-network-list">
+          <div class="rf-network-row"><span class="rf-network-level">${t("referral_tier1_members")} · 10%</span><span class="rf-network-count">${formatNumber(Number(stats.tier1Members) || 0)} <small>${t("referral_members_label")}</small></span><span class="rf-network-active">${tokenAmount(Number(stats.miningCommissionByTier?.["1"]) || 0)} UP</span></div>
+          <div class="rf-network-row"><span class="rf-network-level">${t("referral_tier2_members")} · 2.5%</span><span class="rf-network-count">${formatNumber(Number(stats.tier2Members) || 0)} <small>${t("referral_members_label")}</small></span><span class="rf-network-active">${tokenAmount(Number(stats.miningCommissionByTier?.["2"]) || 0)} UP</span></div>
+        </div>
+      </section>
+
       <section class="rf-panel rf-link-panel" aria-labelledby="rfLinkTitle">
         <div class="rf-panel-heading"><span class="rf-panel-symbol">↗</span><div><span class="rf-overline">${t("referral_link_eyebrow")}</span><h2 id="rfLinkTitle">${t("referral_link_title_new")}</h2></div></div>
         <div class="rf-link-box" dir="ltr"><span aria-hidden="true">⌁</span><b title="${escapeHTML(state.shareLink || "")}">${escapeHTML(state.shareLink || "—")}</b></div>
         <div class="referralLinkActions rf-link-actions">
           <button type="button" class="referralCopyBtn" onclick="copyReferralLink()" ${state.shareLink ? "" : "disabled"}>▢ ${t("referral_copy_button")}</button>
           <button type="button" class="referralShareBtn" onclick="shareReferralLink()" ${state.shareLink ? "" : "disabled"}>↗ ${t("referral_share_button")}</button>
+          <button type="button" class="referralShareBtn" onclick="shareToTelegramStory()" ${state.shareLink ? "" : "disabled"}>${t("story_share_button")}</button>
         </div>
         <p class="rf-panel-note">${state.referralMiniAppConfigured ? t("referral_link_note") : t("referral_link_config_missing")}</p>
       </section>

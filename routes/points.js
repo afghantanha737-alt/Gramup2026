@@ -1451,6 +1451,15 @@ router.post('/vip/claim-all', auth, sensitiveRateLimit('claim'), async (req, res
               session
             });
             if (!rewardLedger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'پاداش قبلاً ثبت شده است.', 409);
+            await require('../utils/referralSystem').distributeMiningClaimCommissions({
+              ...(rewardLedger.entry || {}),
+              user: user._id,
+              type: 'vip_daily_reward',
+              currency: 'points',
+              amount: rewardPoints,
+              sourceId: `vip:${item.subscription._id}:bulk-claim:${ledgerSequence}:reward`,
+              transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_bulk_claim', key, leg: `${index}-${item.subscription._id}-reward-${ledgerSequence}` })
+            }, session);
           }
         }
 
@@ -1607,6 +1616,15 @@ router.post('/vip/:subscriptionId/claim', auth, sensitiveRateLimit('claim'), asy
             session
           });
           if (!rewardLedger.created) throw vipError('VIP_LEDGER_DUPLICATE', 'پاداش قبلاً ثبت شده است.', 409);
+          await require('../utils/referralSystem').distributeMiningClaimCommissions({
+            ...(rewardLedger.entry || {}),
+            user: user._id,
+            type: 'vip_daily_reward',
+            currency: 'points',
+            amount: rewardPoints,
+            sourceId: `vip:${subscription._id}:partial-claim:${ledgerSequence}:reward`,
+            transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip_partial_claim', key, leg: `${subscription._id}-reward-${ledgerSequence}` })
+          }, session);
         }
 
         return { body: {

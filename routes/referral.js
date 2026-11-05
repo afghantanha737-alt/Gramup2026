@@ -44,7 +44,7 @@ router.get('/me', auth, async (req, res) => {
   catch { referralLevelRates = normalizeReferralRates(); }
 
   const monthStart = utcMonthStart();
-  const [totalReferralCount, networkRows, referralLedgerRows, commissionSummaryRows, monthlyRows, historyRows] = await Promise.all([
+  const [totalReferralCount, networkRows, referralLedgerRows, commissionSummaryRows, monthlyRows, historyRows, miningCommissionRows] = await Promise.all([
     User.countDocuments({ referredBy: u._id }),
     User.aggregate([
       { $match: { _id: u._id } },
@@ -78,7 +78,11 @@ router.get('/me', auth, async (req, res) => {
       .select('_id type amount createdAt referralLevel commissionRatePercent earningTransactionId transactionId')
       .sort({ createdAt: -1, _id: -1 })
       .limit(HISTORY_LIMIT)
-      .lean()
+      .lean(),
+    PointsLedger.aggregate([
+      { $match: { user: u._id, currency: 'points', type: 'referral_commission', sourceId: /^mining-referral:/, amount: { $gt: 0 } } },
+      { $group: { _id: '$referralLevel', total: { $sum: '$amount' } } }
+    ])
   ]);
 
   const commissionSummary = commissionSummaryRows[0] || {};
@@ -185,6 +189,10 @@ router.get('/me', auth, async (req, res) => {
       welcomeRewardPoints,
       totalInviteRewardsPoints: initialInviteRewardPoints + milestoneRewardPoints + welcomeRewardPoints,
       totalTeamCommissionPoints,
+      miningCommissionRates: [10, 2.5],
+      miningCommissionByTier: Object.fromEntries(miningCommissionRows.map(row => [String(row._id), Number(row.total) || 0])),
+      tier1Members: Number(referralView.levelCounts['1']) || 0,
+      tier2Members: Number(referralView.levelCounts['2']) || 0,
       levelCounts: referralView.levelCounts,
       activeLevelCounts: activeCounts,
       earningsByLevel: referralView.earningsByLevel

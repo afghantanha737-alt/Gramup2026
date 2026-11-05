@@ -119,6 +119,7 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
         { _id: invitee._id, referredBy: null },
         { $set: {
           referredBy: referrer._id,
+          referredByTier2: referrer.referredBy || null,
           referralInitialRewardEligible: true,
           referralRiskScore: Math.max(0, Number(riskScore) || 0),
           referralRiskFlags: Array.isArray(riskFlags) ? riskFlags : []
@@ -484,6 +485,72 @@ async function distributeReferralCommissions(earningEntry, session) {
   return paid;
 }
 
+function calculateMiningCommissionAmount(amount, ratePercent) {
+  const base = Number(amount);
+  const rate = Number(ratePercent);
+  if (!Number.isFinite(base) || base <= 0 || !Number.isFinite(rate) || rate <= 0) return 0;
+  return Math.floor(base * rate) / 100;
+}
+
+/** Mining commissions are 10% to the direct inviter and 2.5% to the grandparent. */
+async function distributeMiningClaimCommissions(earningEntry, session) {
+  const amount = Number(earningEntry?.amount);
+  if (!session || !earningEntry?.user || !earningEntry?.sourceId || !Number.isFinite(amount) || amount <= 0
+    || earningEntry.currency !== 'points' || earningEntry.type !== 'vip_daily_reward') return [];
+  const origin = await sessionQuery(User.findById(earningEntry.user).select(
+    '_id referredBy referredByTier2 isBanned accountReviewStatus referralRiskBlocked referralRiskScore referralEligibilityStatus referralEligibleAt'
+  ), session);
+  if (!origin?.referredBy || origin.referralEligibilityStatus !== 'eligible' || !origin.referralEligibleAt
+    || reviewStatusOf(origin) !== 'active') return [];
+  const direct = await sessionQuery(User.findById(origin.referredBy).select(
+    '_id referredBy isBanned accountReviewStatus referralRiskBlocked referralRiskScore points'
+  ), session);
+  const indirectId = origin.referredByTier2 || direct?.referredBy || null;
+  const indirect = indirectId ? await sessionQuery(User.findById(indirectId).select(
+    '_id referredBy isBanned accountReviewStatus referralRiskBlocked referralRiskScore points'
+  ), session) : null;
+  const paid = [];
+  for (const { recipient, level, rate } of [
+    { recipient: direct, level: 1, rate: 10 },
+    { recipient: indirect, level: 2, rate: 2.5 }
+  ]) {
+    if (!recipient || String(recipient._id) === String(origin._id) || reviewStatusOf(recipient) !== 'active') continue;
+    const commission = calculateMiningCommissionAmount(amount, rate);
+    if (!Number.isFinite(commission) || commission <= 0) continue;
+    const sourceId = `mining-referral:${earningEntry.sourceId}:recipient:${recipient._id}:tier:${level}`;
+    const PointsLedger = require('../models/PointsLedger');
+    const existing = await sessionQuery(PointsLedger.findOne({ sourceId }).select('_id'), session);
+    if (existing) continue;
+    const updated = await User.findByIdAndUpdate(recipient._id, { $inc: { points: commission } }, { new: true, session });
+    if (!updated) throw new Error('Mining referral commission recipient no longer exists.');
+    const { recordLedgerRequired } = require('./ledger');
+    const transactionId = deterministicTransactionId('MRC', sourceId);
+    const ledger = await recordLedgerRequired({
+      user: recipient._id,
+      type: 'referral_commission',
+      currency: 'points',
+      amount: commission,
+      description: `Mining referral commission tier ${level} from user ${origin._id}`,
+      balanceAfter: updated.points,
+      sourceId,
+      transactionId,
+      referralLevel: level,
+      sourceUserId: origin._id,
+      recipientUserId: recipient._id,
+      commissionRatePercent: rate,
+      earningTransactionId: earningEntry.transactionId || earningEntry.sourceId,
+      session
+    });
+    if (!ledger.created) {
+      const error = new Error('Mining referral commission already exists; abort to preserve idempotency.');
+      error.code = 'MINING_REFERRAL_COMMISSION_DUPLICATE';
+      throw error;
+    }
+    paid.push({ level, recipientId: recipient._id, amount: commission, transactionId });
+  }
+  return paid;
+}
+
 module.exports = {
   DEFAULT_REFERRAL_WELCOME_REWARD_POINTS,
   linkReferral,
@@ -491,5 +558,7 @@ module.exports = {
   linkReferralByIdentifier,
   linkReferralByCode,
   distributeReferralCommissions,
+  distributeMiningClaimCommissions,
+  calculateMiningCommissionAmount,
   deterministicTransactionId
 };

@@ -37,6 +37,7 @@ const userSchema = new mongoose.Schema(
 
     referralCode: { type: String, required: true, unique: true, index: true },
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    referredByTier2: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
     referralInitialRewardEligible: { type: Boolean, default: false },
     accountReviewStatus: { type: String, enum: ['normal', 'under_review', 'restricted', 'fraud_review'], default: 'normal', index: true },
     // فقط HMAC هش شبکه و Device ذخیره می‌شود؛ IP/User-Agent خام هرگز در دیتابیس ثبت نمی‌شود.
