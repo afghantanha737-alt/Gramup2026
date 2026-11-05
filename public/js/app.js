@@ -39,6 +39,11 @@ const state = {
   spinLastClaimAt: null,
   spinNextAt: 0,
   spinBusy: false,
+  spinEnabled: true,
+  spinRequiredStreak: 7,
+  spinEligible: false,
+  spinCooldownHours: 24,
+  spinModalOpen: false,
   miningBoostUntil: null,
   referralCode: "",
   shareLink: "",
@@ -961,7 +966,11 @@ function applyCachedReadModel(entry) {
   state.minWithdrawGram = Number(profile.minWithdrawGram) || 0;
   state.nextResetAt = Number(profile.nextResetAt) || 0;
   state.spinLastClaimAt = profile.spinLastClaimAt || null;
-  state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + 86400000 : 0;
+  state.spinEnabled = profile.spinEnabled !== false;
+  state.spinRequiredStreak = Number(profile.spinRequiredStreak) || 7;
+  state.spinEligible = Boolean(profile.spinEligible) || (state.spinEnabled && state.streak >= state.spinRequiredStreak);
+  state.spinCooldownHours = Number(profile.spinCooldownHours) || 24;
+  state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + state.spinCooldownHours * 3600000 : 0;
   state.miningBoostUntil = profile.miningBoostUntil || null;
   state.totalEarnedPoints = Number(profile.totalEarnedPoints) || 0;
   state.level = profile.level || null;
@@ -1000,7 +1009,7 @@ function persistReadModelCache() {
       points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
       canCheckIn: state.canCheckIn, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
-      spinLastClaimAt: state.spinLastClaimAt, miningBoostUntil: state.miningBoostUntil,
+      spinLastClaimAt: state.spinLastClaimAt, spinEnabled: state.spinEnabled, spinRequiredStreak: state.spinRequiredStreak, spinEligible: state.spinEligible, spinCooldownHours: state.spinCooldownHours, miningBoostUntil: state.miningBoostUntil,
       withdrawalProgress: state.withdrawalProgress, withdrawalRemainingGram: state.withdrawalRemainingGram,
       gramUsdPrice: state.gramUsdPrice, firstName: state.user?.first_name || ""
     },
@@ -1077,7 +1086,11 @@ async function loadUserData({ force = false } = {}) {
   state.minWithdrawGram = Number(data?.minWithdrawGram) || 0;
   state.nextResetAt = Number(data?.nextResetAt) || 0;
   state.spinLastClaimAt = data?.spinLastClaimAt || null;
-  state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + 86400000 : 0;
+  state.spinEnabled = data?.spinEnabled !== false;
+  state.spinRequiredStreak = Number(data?.spinRequiredStreak) || 7;
+  state.spinEligible = Boolean(data?.spinEligible) || (state.spinEnabled && state.streak >= state.spinRequiredStreak);
+  state.spinCooldownHours = Number(data?.spinCooldownHours) || 24;
+  state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + state.spinCooldownHours * 3600000 : 0;
   state.miningBoostUntil = data?.miningBoostUntil || null;
   state.totalEarnedPoints = Number(data?.totalEarnedPoints) || 0;
   state.level = data?.level || null;
@@ -1429,6 +1442,20 @@ function renderLuckySpin() {
     <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
   </section>`;
 }
+function renderLuckySpinBanner() {
+  const eligible = state.spinEnabled && state.streak >= state.spinRequiredStreak;
+  const lockText = state.spinEnabled ? t('spin_unlock_progress', { n: Math.min(state.streak, state.spinRequiredStreak), required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Daily Check-ins to unlock`) : t('spin_disabled', {}, 'Lucky Spin is currently unavailable');
+  return `<section class="spinLaunchCard ${eligible ? 'is-ready' : 'is-locked'}" aria-labelledby="spinLaunchTitle"><div class="spinLaunchIcon">🎡</div><div class="spinLaunchCopy"><span>${t('spin_eyebrow', {}, '7-day streak reward')}</span><strong id="spinLaunchTitle">${t('spin_title')}</strong><small>${eligible ? t('spin_launch_ready', {}, 'Your Lucky Spin is ready to open') : lockText}</small></div><button class="spinLaunchButton" type="button" onclick="${eligible ? 'openLuckySpin()' : ''}" ${eligible ? '' : 'disabled'}>${eligible ? t('spin_open', {}, 'Open') : '🔒'}</button></section>`;
+}
+function closeLuckySpin() { const overlay = document.querySelector('#luckySpinOverlay'); if (overlay) overlay.remove(); state.spinModalOpen = false; stopSpinCountdown(); }
+function openLuckySpin() {
+  if (!state.spinEnabled || state.streak < state.spinRequiredStreak) return;
+  closeLuckySpin();
+  const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'overlay';
+  overlay.innerHTML = `<div class="modalBox luckySpinModal" role="dialog" aria-modal="true" aria-labelledby="spinTitle"><div class="modalHeader"><div><span class="modalEyebrow">${t('spin_eyebrow', {}, '7-day streak reward')}</span><h3>${t('spin_title')}</h3></div><button class="modalClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></div>${renderLuckySpin()}</div>`;
+  overlay.addEventListener('click', event => { if (event.target === overlay) closeLuckySpin(); }); document.body.appendChild(overlay); state.spinModalOpen = true; startSpinCountdown();
+}
+window.openLuckySpin = openLuckySpin; window.closeLuckySpin = closeLuckySpin;
 async function doSpin() {
   if (!readModelActionAllowed() || state.spinBusy || !spinAvailable()) return;
   state.spinBusy = true;
@@ -1444,7 +1471,7 @@ async function doSpin() {
     state.points = Number(result.points) ?? state.points;
     state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
     state.spinLastClaimAt = new Date().toISOString();
-    state.spinNextAt = Date.parse(result.nextSpinAt) || Date.now() + 86400000;
+    state.spinNextAt = Date.parse(result.nextSpinAt) || Date.now() + state.spinCooldownHours * 3600000;
     state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
     haptic("success");
     const label = spinPrizeLabel(result.prizeId, result.amount);
@@ -1517,7 +1544,7 @@ function renderHome() {
       <button class="auroraInlineBtn" type="button" onclick="${state.canCheckIn ? "doCheckIn()" : "navigate('tasks')"}">${state.canCheckIn ? t("checkin_button") : t("tasks_title")}</button>
     </section>
 
-    ${renderLuckySpin()}
+    ${renderLuckySpinBanner()}
 
     <div class="card" style="padding:14px 16px">
       <div class="cardHeader" style="margin-bottom:8px">

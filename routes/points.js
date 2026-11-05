@@ -46,15 +46,25 @@ const { comment } = require('@ton/ton');
 const { withMembership } = require('../utils/membership');
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
 
-const SPIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_SPIN_COOLDOWN_HOURS = 24;
+const DEFAULT_SPIN_REQUIRED_STREAK = 7;
 const SPIN_PRIZES = Object.freeze([
-  { id: 'up_5', kind: 'points', amount: 5 },
-  { id: 'up_15', kind: 'points', amount: 15 },
-  { id: 'up_30', kind: 'points', amount: 30 },
-  { id: 'boost_2x_1h', kind: 'boost', amount: 0 },
-  { id: 'gram_001', kind: 'gram', amount: 0.01 },
-  { id: 'try_again', kind: 'none', amount: 0 }
+  { id: 'up_5', kind: 'points', amount: 5, label: '+5 UP' },
+  { id: 'up_15', kind: 'points', amount: 15, label: '+15 UP' },
+  { id: 'up_30', kind: 'points', amount: 30, label: '+30 UP' },
+  { id: 'boost_2x_1h', kind: 'boost', amount: 0, label: '2× Mining · 1h' },
+  { id: 'gram_001', kind: 'gram', amount: 0.01, label: '+0.01 GRAM' },
+  { id: 'try_again', kind: 'none', amount: 0, label: 'Try again' }
 ]);
+function spinPolicy(settings) {
+  const cooldownHours = Number(settings?.luckySpinCooldownHours) || DEFAULT_SPIN_COOLDOWN_HOURS;
+  const requiredStreak = Number(settings?.luckySpinRequiredStreak) || DEFAULT_SPIN_REQUIRED_STREAK;
+  const prizes = Array.isArray(settings?.luckySpinPrizes) && settings.luckySpinPrizes.length >= 2
+    ? settings.luckySpinPrizes.map(item => ({ id: String(item.id), kind: item.kind, amount: Number(item.amount) || 0, label: String(item.label || '') }))
+    : SPIN_PRIZES;
+  return { enabled: settings?.luckySpinEnabled !== false, cooldownHours, cooldownMs: cooldownHours * 60 * 60 * 1000, requiredStreak, prizes };
+}
+const SPIN_COOLDOWN_MS = DEFAULT_SPIN_COOLDOWN_HOURS * 60 * 60 * 1000;
 
 function vipError(code, message, statusCode = 400, extra = {}) {
   const error = new Error(message);
@@ -322,6 +332,7 @@ const { cycleDayForStreak, dailyCheckinReward } = require('../utils/dailyCheckin
 router.get('/me', auth, async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
+  const spin = spinPolicy(settings);
 
   const todayKey = utcDayKey(new Date());
   const canCheckIn = !u.lastCheckIn || utcDayKey(u.lastCheckIn) < todayKey;
@@ -355,6 +366,10 @@ router.get('/me', auth, async (req, res) => {
     firstName: u.firstName,
     minWithdrawGram,
     spinLastClaimAt: u.spinLastClaimAt || null,
+    spinEnabled: spin.enabled,
+    spinRequiredStreak: spin.requiredStreak,
+    spinEligible: spin.enabled && Number(u.streak || 0) >= spin.requiredStreak,
+    spinCooldownHours: spin.cooldownHours,
     miningBoostUntil: u.miningBoostUntil || null,
     nextResetAt: nextResetTimestamp(),
     language: u.language
@@ -387,8 +402,14 @@ router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
 // POST /api/points/spin — one server-authoritative free spin per 24 hours.
 router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
   const now = new Date();
+  const settings = await Settings.getGlobal();
+  const spin = spinPolicy(settings);
+  if (!spin.enabled) return res.status(409).json({ success: false, code: 'SPIN_DISABLED', message: 'Lucky Spin is currently disabled.' });
+  if (Number(req.dbUser?.streak || 0) < spin.requiredStreak) {
+    return res.status(403).json({ success: false, code: 'SPIN_STREAK_REQUIRED', requiredStreak: spin.requiredStreak, streak: Number(req.dbUser?.streak || 0), message: `Complete a ${spin.requiredStreak}-day Daily Check-in streak to unlock Lucky Spin.` });
+  }
   const nextAllowedAt = req.dbUser?.spinLastClaimAt
-    ? new Date(new Date(req.dbUser.spinLastClaimAt).getTime() + SPIN_COOLDOWN_MS)
+    ? new Date(new Date(req.dbUser.spinLastClaimAt).getTime() + spin.cooldownMs)
     : null;
   if (nextAllowedAt && nextAllowedAt > now) {
     return res.status(429).json({ success: false, code: 'SPIN_COOLDOWN', nextSpinAt: nextAllowedAt.toISOString(), message: 'گردونه شانس هر ۲۴ ساعت یک‌بار قابل استفاده است.' });
@@ -398,8 +419,8 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
     const outcome = await executeIdempotently({
       userId: req.dbUser._id, scope: 'spin', key: operationKey, body: {},
       execute: async session => {
-        const prize = SPIN_PRIZES[crypto.randomInt(0, SPIN_PRIZES.length)];
-        const cooldownCutoff = new Date(now.getTime() - SPIN_COOLDOWN_MS);
+        const prize = spin.prizes[crypto.randomInt(0, spin.prizes.length)];
+        const cooldownCutoff = new Date(now.getTime() - spin.cooldownMs);
         const update = { $set: { spinLastClaimAt: now } };
         if (prize.kind === 'points') update.$inc = { points: prize.amount };
         if (prize.kind === 'gram') update.$inc = { gramBalance: prize.amount };
@@ -432,7 +453,7 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
           body: {
             success: true, prizeId: prize.id, prizeKind: prize.kind, amount: prize.amount,
             points: updated.points, gramBalance: updated.gramBalance,
-            nextSpinAt: new Date(now.getTime() + SPIN_COOLDOWN_MS).toISOString(),
+            nextSpinAt: new Date(now.getTime() + spin.cooldownMs).toISOString(),
             boostUntil: updated.miningBoostUntil || null
           },
           resourceId: sourceId
@@ -1757,3 +1778,7 @@ router.get('/public-history', async (req, res) => {
 module.exports = router;
 module.exports.SPIN_COOLDOWN_MS = SPIN_COOLDOWN_MS;
 module.exports.SPIN_PRIZES = SPIN_PRIZES;
+
+module.exports.SPIN_PRIZES = SPIN_PRIZES;
+module.exports.SPIN_COOLDOWN_MS = SPIN_COOLDOWN_MS;
+module.exports.spinPolicy = spinPolicy;

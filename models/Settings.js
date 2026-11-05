@@ -50,7 +50,21 @@ const settingsSchema = new mongoose.Schema(
     vipPolicyVersion: { type: String, enum: ['legacy_v1', 'v2_100d'], default: 'legacy_v1' },
     vipPolicyEffectiveAt: { type: Date, default: null },
     vipNewPurchasesEnabled: { type: Boolean, default: false },
-    vipPayoutsEnabled: { type: Boolean, default: false }
+    vipPayoutsEnabled: { type: Boolean, default: false },
+    luckySpinEnabled: { type: Boolean, default: true },
+    luckySpinRequiredStreak: { type: Number, default: 7, min: 1, max: 365 },
+    luckySpinCooldownHours: { type: Number, default: 24, min: 1, max: 168 },
+    luckySpinPrizes: {
+      type: [{ _id: false, id: String, kind: { type: String, enum: ['points', 'gram', 'boost', 'none'] }, amount: { type: Number, min: 0 }, label: { type: String, default: '' } }],
+      default: () => [
+        { id: 'up_5', kind: 'points', amount: 5, label: '+5 UP' },
+        { id: 'up_15', kind: 'points', amount: 15, label: '+15 UP' },
+        { id: 'up_30', kind: 'points', amount: 30, label: '+30 UP' },
+        { id: 'boost_2x_1h', kind: 'boost', amount: 0, label: '2× Mining · 1h' },
+        { id: 'gram_001', kind: 'gram', amount: 0.01, label: '+0.01 GRAM' },
+        { id: 'try_again', kind: 'none', amount: 0, label: 'Try again' }
+      ]
+    }
   },
   { timestamps: true }
 );

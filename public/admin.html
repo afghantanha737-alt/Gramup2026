@@ -548,6 +548,17 @@
       </div>
 
       <div class="card">
+        <div class="card" style="border-color:rgba(167,139,250,.35)">
+          <div class="flexBetween"><b>Lucky Spin Management</b><span class="small">Server-enforced 7-day streak gate and prize policy</span></div>
+          <div class="row" style="margin-top:10px">
+            <label style="flex:1;min-width:180px">Enabled <select id="luckySpinEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></label>
+            <label style="flex:1;min-width:180px">Required streak days<input id="luckySpinRequiredStreak" type="number" min="1" max="365"></label>
+            <label style="flex:1;min-width:180px">Cooldown hours<input id="luckySpinCooldownHours" type="number" min="1" max="168"></label>
+          </div>
+          <label>Prize configuration JSON</label>
+          <textarea id="luckySpinPrizes" rows="8" dir="ltr" placeholder='[{"id":"up_5","kind":"points","amount":5,"label":"+5 UP"}]'></textarea>
+          <p class="small">Allowed kinds: points, gram, boost, none. Changes are validated server-side and logged.</p>
+        </div>
         <div class="flexBetween"><b>VIP Plan Settings</b><span class="small">قیمت‌ها و سیاست پاداش کاتالوگ در راه‌اندازی سرور همگام می‌شوند.</span></div>
         <p class="small">قیمت خرید از UP کسر می‌شود. تغییر کاتالوگ روی خریدهای جدید اثر دارد؛ اشتراک‌های قبلی کاربران تغییر نمی‌کنند.</p>
         <div role="tablist" aria-label="VIP plan categories" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
@@ -2702,6 +2713,10 @@ async function loadSettings() {
     document.getElementById("setDepositNetwork").value = "TON Mainnet";
     document.getElementById("setDepositWalletAddress").value = s.depositWalletAddress || "";
     document.getElementById("setMinimumDepositGram").value = s.minimumDepositGram ?? 1;
+    document.getElementById("luckySpinEnabled").value = String(s.luckySpinEnabled !== false);
+    document.getElementById("luckySpinRequiredStreak").value = s.luckySpinRequiredStreak || 7;
+    document.getElementById("luckySpinCooldownHours").value = s.luckySpinCooldownHours || 24;
+    document.getElementById("luckySpinPrizes").value = JSON.stringify(s.luckySpinPrizes || [], null, 2);
   } catch (error) {
     showMsg(error.message, "error");
   }
@@ -2728,7 +2743,11 @@ async function saveSettings() {
     depositEnabled: document.getElementById("setDepositEnabled").checked,
     depositNetwork: "TON_MAINNET",
     depositWalletAddress: document.getElementById("setDepositWalletAddress").value.trim(),
-    minimumDepositGram: Number(document.getElementById("setMinimumDepositGram").value)
+    minimumDepositGram: Number(document.getElementById("setMinimumDepositGram").value),
+    luckySpinEnabled: document.getElementById("luckySpinEnabled").value === "true",
+    luckySpinRequiredStreak: Number(document.getElementById("luckySpinRequiredStreak").value),
+    luckySpinCooldownHours: Number(document.getElementById("luckySpinCooldownHours").value),
+    luckySpinPrizes: JSON.parse(document.getElementById("luckySpinPrizes").value || "[]")
   };
   try {
     const data = await api("/api/admin/settings", { method: "PUT", body: JSON.stringify(body) });
