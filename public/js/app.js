@@ -36,6 +36,10 @@ const state = {
   totalCheckins: 0,
   minWithdrawGram: 0,
   nextResetAt: 0,
+  spinLastClaimAt: null,
+  spinNextAt: 0,
+  spinBusy: false,
+  miningBoostUntil: null,
   referralCode: "",
   shareLink: "",
   referralTelegramId: "",
@@ -95,6 +99,7 @@ const latestPostOpenedTaskIds = new Set();
 const latestPostOpenedAt = new Map();
 const latestPostOpeningTaskIds = new Set();
 let dailyCheckinTimer = null;
+let spinCountdownTimer = null;
 
 // The browser bundle exports an already-created cache instance (the CommonJS
 // factory is only for tests). Optional cache failure must never stop boot.
@@ -493,7 +498,7 @@ function setupNavigation() {
     button.addEventListener("click", () => {
       const tab = button.dataset.tab;
       if (!tab) return;
-      haptic("selection");
+      haptic("light");
       navigate(tab);
     });
   });
@@ -721,6 +726,7 @@ function termsAccepted() {
 }
 function showTerms() {
   const overlay = $("#termsOverlay");
+  haptic("light");
   if (overlay) overlay.style.display = "flex";
 }
 function hideTerms() {
@@ -735,6 +741,7 @@ window.showTerms = showTerms;
 /* ================= PRIVACY POLICY ================= */
 function showPrivacy() {
   const overlay = $("#privacyOverlay");
+  haptic("light");
   if (overlay) overlay.style.display = "flex";
 }
 function hidePrivacy() {
@@ -758,6 +765,7 @@ function maybeShowOnboarding() {
   if (onboardingSeen()) return;
   onboardingStep = 0;
   const overlay = $("#onboardingOverlay");
+  haptic("light");
   if (overlay) overlay.style.display = "flex";
   renderOnboardingStep();
 }
@@ -798,6 +806,7 @@ window.skipOnboarding = skipOnboarding;
 window.showOnboarding = () => {
   onboardingStep = 0;
   const overlay = $("#onboardingOverlay");
+  haptic("light");
   if (overlay) overlay.style.display = "flex";
   renderOnboardingStep();
 };
@@ -820,6 +829,7 @@ function showCaptcha() {
   const overlay = $("#captchaOverlay");
   if (!overlay) return;
   createCaptcha();
+  haptic("light");
   overlay.style.display = "flex";
 }
 function hideCaptcha() {
@@ -849,6 +859,7 @@ window.submitCaptcha = submitCaptcha;
 /* ================= LANGUAGE ================= */
 function showLanguageOverlay() {
   const overlay = $("#languageOverlay");
+  haptic("light");
   if (overlay) overlay.style.display = "flex";
 }
 window.showLanguageOverlay = showLanguageOverlay;
@@ -897,6 +908,7 @@ function showReferralMessageConsent(required = false) {
   if (status) status.textContent = t("referral_message_consent_status", { status: t(stateKey) });
   const feedback = $("#referralMessageConsentFeedback");
   if (feedback) feedback.textContent = "";
+  haptic("light");
   overlay.style.display = "flex";
 }
 window.showReferralMessageConsent = showReferralMessageConsent;
@@ -941,6 +953,9 @@ function applyCachedReadModel(entry) {
   state.totalCheckins = Number(profile.totalCheckins) || 0;
   state.minWithdrawGram = Number(profile.minWithdrawGram) || 0;
   state.nextResetAt = Number(profile.nextResetAt) || 0;
+  state.spinLastClaimAt = profile.spinLastClaimAt || null;
+  state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + 86400000 : 0;
+  state.miningBoostUntil = profile.miningBoostUntil || null;
   state.totalEarnedPoints = Number(profile.totalEarnedPoints) || 0;
   state.level = profile.level || null;
   state.withdrawalProgress = Number(profile.withdrawalProgress) || 0;
@@ -978,6 +993,7 @@ function persistReadModelCache() {
       points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
       canCheckIn: state.canCheckIn, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
+      spinLastClaimAt: state.spinLastClaimAt, miningBoostUntil: state.miningBoostUntil,
       withdrawalProgress: state.withdrawalProgress, withdrawalRemainingGram: state.withdrawalRemainingGram,
       gramUsdPrice: state.gramUsdPrice, firstName: state.user?.first_name || ""
     },
@@ -1053,6 +1069,9 @@ async function loadUserData({ force = false } = {}) {
   state.totalCheckins = Number(data?.totalCheckins) || 0;
   state.minWithdrawGram = Number(data?.minWithdrawGram) || 0;
   state.nextResetAt = Number(data?.nextResetAt) || 0;
+  state.spinLastClaimAt = data?.spinLastClaimAt || null;
+  state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + 86400000 : 0;
+  state.miningBoostUntil = data?.miningBoostUntil || null;
   state.totalEarnedPoints = Number(data?.totalEarnedPoints) || 0;
   state.level = data?.level || null;
   state.withdrawalProgress = Number(data?.withdrawalProgress) || 0;
@@ -1319,6 +1338,76 @@ async function loadWeeklyLeaderboard() {
 }
 
 /* ================= HOME ================= */
+function spinAvailable() { return !state.spinNextAt || state.spinNextAt <= Date.now(); }
+function spinRemainingText() { return formatCountdown(Math.max(0, Number(state.spinNextAt) - Date.now())); }
+function spinPrizeLabel(prizeId, amount) {
+  if (["up_5", "up_15", "up_30"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
+  if (prizeId === "boost_2x_1h") return t("spin_prize_boost");
+  if (prizeId === "gram_001") return t("spin_prize_gram", { n: formatNumber(amount, 2) });
+  return t("spin_prize_try_again");
+}
+function stopSpinCountdown() { if (spinCountdownTimer) clearInterval(spinCountdownTimer); spinCountdownTimer = null; }
+function startSpinCountdown() {
+  stopSpinCountdown();
+  const update = () => {
+    const label = document.querySelector("[data-spin-countdown]");
+    const button = document.querySelector("#spinButton");
+    if (!label || !button) return stopSpinCountdown();
+    if (spinAvailable()) {
+      label.textContent = t("spin_free");
+      button.disabled = state.spinBusy;
+      button.textContent = state.spinBusy ? t("spin_spinning") : t("spin_button");
+      return;
+    }
+    label.textContent = t("spin_next", { time: spinRemainingText() });
+    button.disabled = true;
+    button.textContent = t("spin_next", { time: spinRemainingText() });
+  };
+  update();
+  spinCountdownTimer = setInterval(update, 1000);
+}
+function renderLuckySpin() {
+  const available = spinAvailable();
+  const slices = [["+5", "UP"], ["+15", "UP"], ["+30", "UP"], ["2×", "Mining"], ["+0.01", "GRAM"], ["Try", "Again"]];
+  return `<section class="spinCard" aria-labelledby="spinTitle">
+    <div class="spinCardHeader"><div><span class="spinEyebrow">${t("spin_subtitle")}</span><h2 id="spinTitle">${t("spin_title")}</h2></div><span class="spinBadge">24H</span></div>
+    <div class="spinStage"><div class="spinPointer" aria-hidden="true"></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}">${slices.map(([top, bottom]) => `<span><b>${top}</b><small>${bottom}</small></span>`).join("")}</div></div>
+    <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${available ? t("spin_free") : t("spin_next", { time: spinRemainingText() })}</span><button id="spinButton" class="primaryBtn spinButton" type="button" onclick="doSpin()" ${available ? "" : "disabled"}>${available ? t("spin_button") : t("spin_next", { time: spinRemainingText() })}</button></div>
+    <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
+  </section>`;
+}
+async function doSpin() {
+  if (!readModelActionAllowed() || state.spinBusy || !spinAvailable()) return;
+  state.spinBusy = true;
+  haptic("light");
+  const button = document.querySelector("#spinButton");
+  const wheel = document.querySelector("#spinWheel");
+  const resultBox = document.querySelector("#spinResult");
+  if (button) { button.disabled = true; button.textContent = t("spin_spinning"); }
+  if (wheel) { wheel.classList.remove("spinWheelRun"); void wheel.offsetWidth; wheel.classList.add("spinWheelRun"); }
+  try {
+    const result = await api("/api/points/spin", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey("spin") } });
+    clearPendingIdempotencyKey("spin");
+    state.points = Number(result.points) ?? state.points;
+    state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
+    state.spinLastClaimAt = new Date().toISOString();
+    state.spinNextAt = Date.parse(result.nextSpinAt) || Date.now() + 86400000;
+    state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
+    haptic("success");
+    const label = spinPrizeLabel(result.prizeId, result.amount);
+    if (resultBox) resultBox.textContent = t("spin_result", { label });
+    toast(label, "success");
+    updateHeader();
+  } catch (error) {
+    clearDefinitiveIdempotencyFailure("spin", error);
+    haptic("error");
+    if (error.code === "SPIN_COOLDOWN" && error.nextSpinAt) state.spinNextAt = Date.parse(error.nextSpinAt) || state.spinNextAt;
+    if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message);
+    toast(translateServerMessage(error.code, error.message), "error");
+  } finally { state.spinBusy = false; startSpinCountdown(); }
+}
+window.doSpin = doSpin;
+
 function completionStatus(taskId) {
   const found = state.completions.find(c => String(c.task) === String(taskId));
   return found ? found.status : null;
@@ -1374,6 +1463,8 @@ function renderHome() {
       </div>
       <button class="auroraInlineBtn" type="button" onclick="${state.canCheckIn ? "doCheckIn()" : "navigate('tasks')"}">${state.canCheckIn ? t("checkin_button") : t("tasks_title")}</button>
     </section>
+
+    ${renderLuckySpin()}
 
     <div class="card" style="padding:14px 16px">
       <div class="cardHeader" style="margin-bottom:8px">
@@ -1431,6 +1522,7 @@ function renderHome() {
     </section>
 
   `;
+  startSpinCountdown();
 }
 
 /* ================= TASKS ================= */
@@ -1807,6 +1899,7 @@ async function doCheckIn() {
   if (!readModelActionAllowed()) return;
   const button = document.querySelector("#checkinBtn");
   if (button) { button.disabled = true; button.textContent = t("checkin_processing"); }
+  haptic("light");
   try {
     const result = await api("/api/points/checkin", { method: "POST" });
     state.points = Number(result.points) || state.points;
@@ -1865,6 +1958,11 @@ function renderTasks() {
       <button type="button" role="tab" aria-selected="${taskSection === "vip"}" class="taskCategoryTab ${taskSection === "vip" ? "active" : ""}" onclick="setTaskSection('vip')">💎 ${t("vip_title")}</button>
       <button type="button" role="tab" aria-selected="${taskSection === "invite"}" class="taskCategoryTab ${taskSection === "invite" ? "active" : ""}" onclick="setTaskSection('invite')">👥 ${t("menu_referral")}</button>
     </div>`;
+
+  if (!state.readModelTasksConfirmed && !tasksLoadError && !isInviteSection) {
+    content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}<div class="taskSkeletonGrid"><div class="loading" style="height:118px"></div><div class="loading" style="height:118px"></div><div class="loading" style="height:118px"></div></div>`;
+    return;
+  }
 
   if (!state.tasks.length && tasksLoadError && !isInviteSection) {
     content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}${taskErrorHtml}`;
@@ -2021,6 +2119,7 @@ function showWithdraw() {
     return;
   }
   const overlay = $("#withdrawOverlay");
+  haptic("light");
   const pointsInput = $("#withdrawPoints");
   const addressInput = $("#withdrawAddress");
   const error = $("#withdrawError");
@@ -2087,6 +2186,7 @@ function showExchange() {
     return;
   }
   const overlay = $("#exchangeOverlay");
+  haptic("light");
   const input = $("#exchangePoints");
   const error = $("#exchangeError");
   if (input) input.value = "";
@@ -2211,6 +2311,7 @@ async function submitExchange() {
 
   const amount = Number(input?.value);
   if (!isExchangeAmountValid(amount)) {
+    haptic("error");
     if (error) error.textContent = t("error_generic");
     return;
   }
@@ -2365,6 +2466,7 @@ window.retryDepositHistory = retryDepositHistory;
 function showDeposit() {
   if (!readModelActionAllowed()) return;
   const overlay = $("#depositOverlay");
+  haptic("light");
   const panel = $("#depositPanel");
   const disabled = $("#depositDisabledMessage");
   const message = $("#depositMessage");

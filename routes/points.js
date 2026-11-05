@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('crypto');
 const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
@@ -44,6 +45,16 @@ const { comment } = require('@ton/ton');
 // احراز هویت تلگرام + بررسی عضویت فعلی در کانال‌های اجباری (روی هر درخواست محافظت‌شده)
 const { withMembership } = require('../utils/membership');
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
+
+const SPIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const SPIN_PRIZES = Object.freeze([
+  { id: 'up_5', kind: 'points', amount: 5 },
+  { id: 'up_15', kind: 'points', amount: 15 },
+  { id: 'up_30', kind: 'points', amount: 30 },
+  { id: 'boost_2x_1h', kind: 'boost', amount: 0 },
+  { id: 'gram_001', kind: 'gram', amount: 0.01 },
+  { id: 'try_again', kind: 'none', amount: 0 }
+]);
 
 function vipError(code, message, statusCode = 400, extra = {}) {
   const error = new Error(message);
@@ -343,6 +354,8 @@ router.get('/me', auth, async (req, res) => {
     totalCheckins: u.totalCheckins,
     firstName: u.firstName,
     minWithdrawGram,
+    spinLastClaimAt: u.spinLastClaimAt || null,
+    miningBoostUntil: u.miningBoostUntil || null,
     nextResetAt: nextResetTimestamp(),
     language: u.language
   });
@@ -369,6 +382,68 @@ router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
     cycleDay: result.cycleDay,
     nextResetAt: nextResetTimestamp()
   });
+});
+
+// POST /api/points/spin — one server-authoritative free spin per 24 hours.
+router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
+  const now = new Date();
+  const nextAllowedAt = req.dbUser?.spinLastClaimAt
+    ? new Date(new Date(req.dbUser.spinLastClaimAt).getTime() + SPIN_COOLDOWN_MS)
+    : null;
+  if (nextAllowedAt && nextAllowedAt > now) {
+    return res.status(429).json({ success: false, code: 'SPIN_COOLDOWN', nextSpinAt: nextAllowedAt.toISOString(), message: 'گردونه شانس هر ۲۴ ساعت یک‌بار قابل استفاده است.' });
+  }
+  const operationKey = String(req.get('Idempotency-Key') || '').trim();
+  try {
+    const outcome = await executeIdempotently({
+      userId: req.dbUser._id, scope: 'spin', key: operationKey, body: {},
+      execute: async session => {
+        const prize = SPIN_PRIZES[crypto.randomInt(0, SPIN_PRIZES.length)];
+        const cooldownCutoff = new Date(now.getTime() - SPIN_COOLDOWN_MS);
+        const update = { $set: { spinLastClaimAt: now } };
+        if (prize.kind === 'points') update.$inc = { points: prize.amount };
+        if (prize.kind === 'gram') update.$inc = { gramBalance: prize.amount };
+        if (prize.kind === 'boost') {
+          const currentBoostUntil = req.dbUser.miningBoostUntil && new Date(req.dbUser.miningBoostUntil) > now
+            ? new Date(req.dbUser.miningBoostUntil) : now;
+          update.$set.miningBoostUntil = new Date(currentBoostUntil.getTime() + 60 * 60 * 1000);
+          update.$set.miningBoostMultiplier = 2;
+        }
+        const updated = await User.findOneAndUpdate({
+          _id: req.dbUser._id,
+          isBanned: { $ne: true },
+          $or: [{ spinLastClaimAt: null }, { spinLastClaimAt: { $lte: cooldownCutoff } }]
+        }, update, { new: true, session });
+        if (!updated) {
+          const error = new Error('گردونه شانس هر ۲۴ ساعت یک‌بار قابل استفاده است.');
+          error.code = 'SPIN_COOLDOWN';
+          error.statusCode = 429;
+          throw error;
+        }
+        const currency = prize.kind === 'gram' ? 'gram' : 'points';
+        const balanceAfter = currency === 'gram' ? updated.gramBalance : updated.points;
+        const sourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin', key: operationKey, leg: 'reward' });
+        await recordLedgerRequired({
+          user: updated._id, type: 'spin', currency, amount: prize.amount,
+          description: `Lucky Spin: ${prize.id}`, balanceAfter, sourceId, session
+        });
+        return {
+          status: 200,
+          body: {
+            success: true, prizeId: prize.id, prizeKind: prize.kind, amount: prize.amount,
+            points: updated.points, gramBalance: updated.gramBalance,
+            nextSpinAt: new Date(now.getTime() + SPIN_COOLDOWN_MS).toISOString(),
+            boostUntil: updated.miningBoostUntil || null
+          },
+          resourceId: sourceId
+        };
+      }
+    });
+    return res.status(outcome.status).json(outcome.body);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message, nextSpinAt: nextAllowedAt?.toISOString() || null });
+    throw error;
+  }
 });
 
 const round6 = n => Number(Number(n).toFixed(6));
@@ -1662,3 +1737,5 @@ router.get('/public-history', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.SPIN_COOLDOWN_MS = SPIN_COOLDOWN_MS;
+module.exports.SPIN_PRIZES = SPIN_PRIZES;

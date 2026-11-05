@@ -44,22 +44,26 @@ function getMiningState(user, now = new Date()) {
   const rigConfig = RIG_LEVELS.find(r => r.level === level) || RIG_LEVELS[0];
   const storageConfig = STORAGE_LEVELS.find(s => s.level === storageLevel) || STORAGE_LEVELS[0];
   const nowMs = now.getTime();
+  const boostUntilMs = user.miningBoostUntil ? new Date(user.miningBoostUntil).getTime() : 0;
+  const boostActive = Number.isFinite(boostUntilMs) && boostUntilMs > nowMs && Number(user.miningBoostMultiplier) > 1;
+  const multiplier = boostActive ? Math.min(2, Number(user.miningBoostMultiplier) || 1) : 1;
   // A missing miningLastClaimAt means mining has not started. Anchor at the
   // current server time so legacy users never receive retroactive accrual.
   const lastClaimAt = user.miningLastClaimAt ? new Date(user.miningLastClaimAt) : now;
   const lastClaimMs = lastClaimAt.getTime();
   const totalElapsedMs = Math.max(0, nowMs - lastClaimMs);
-  const baseRatePerMs = rigConfig.ratePerHour / (3600 * 1000);
+  const baseRatePerMs = (rigConfig.ratePerHour * multiplier) / (3600 * 1000);
   const newlyAccumulatedPoints = totalElapsedMs * baseRatePerMs;
   const savedPoints = Number(user.miningSavedPoints) || 0;
   const totalRawPoints = savedPoints + newlyAccumulatedPoints;
-  const maxStoragePoints = Math.max(1, Math.floor(storageConfig.maxHours * rigConfig.ratePerHour));
+  const maxStoragePoints = Math.max(1, Math.floor(storageConfig.maxHours * rigConfig.ratePerHour * multiplier));
   const accumulatedPoints = Math.max(0, Math.min(maxStoragePoints, Math.floor(totalRawPoints)));
   const nextRig = RIG_LEVELS.find(r => r.level === level + 1) || null;
   const nextStorage = STORAGE_LEVELS.find(s => s.level === storageLevel + 1) || null;
   return {
     level, storageLevel, rigName: rigConfig.name, storageName: storageConfig.name,
-    baseRatePerHour: rigConfig.ratePerHour, effectiveRatePerHour: rigConfig.ratePerHour,
+    baseRatePerHour: rigConfig.ratePerHour, effectiveRatePerHour: rigConfig.ratePerHour * multiplier,
+    boostActive, boostMultiplier: multiplier, boostUntil: boostActive ? new Date(boostUntilMs).toISOString() : null,
     maxStorageHours: storageConfig.maxHours, maxStoragePoints, accumulatedPoints,
     isStorageFull: accumulatedPoints >= maxStoragePoints,
     elapsedSeconds: Math.floor(totalElapsedMs / 1000),

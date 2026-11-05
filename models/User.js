@@ -29,6 +29,10 @@ const userSchema = new mongoose.Schema(
     streak: { type: Number, default: 0, min: 0 },
     totalCheckins: { type: Number, default: 0, min: 0 },
     lastCheckIn: { type: Date, default: null },
+    // Lucky Spin is server-authoritative; absent legacy values mean the first spin is available.
+    spinLastClaimAt: { type: Date, default: null },
+    miningBoostUntil: { type: Date, default: null },
+    miningBoostMultiplier: { type: Number, default: 1, min: 1, max: 2 },
 
 
     referralCode: { type: String, required: true, unique: true, index: true },
