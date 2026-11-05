@@ -1786,12 +1786,13 @@ function renderDailyCheckinCard() {
     const day = index + 1;
     const completed = day <= completedDays;
     const current = state.canCheckIn && day === nextDay;
+    const rewardLabel = `+${formatPoints(reward)} UP`;
     return `<div class="dailyCheckDay ${completed ? "is-complete" : ""} ${current ? "is-current" : ""}">
       ${completed
         ? `<span class="dailyCheckDayNumber isClaimed" aria-label="${t("checkin_done_button")}">✓</span>`
         : `<span class="dailyCheckDayNumber dailyCheckToken"><img src="/img/gramup-logo-new.png" alt="UP" width="25" height="25"></span>`}
       <strong>${t("day_label", { n: day })}</strong>
-      <small class="dailyCheckReward" aria-label="+${tokenAmount(reward)} UP">+${tokenAmount(reward)} <img src="/img/gramup-logo-new.png" alt="UP" width="10" height="10"></small>
+      <small class="dailyCheckReward" aria-label="${rewardLabel}"><span>${rewardLabel}</span><img src="/img/gramup-logo-new.png" alt="" aria-hidden="true" width="10" height="10"></small>
     </div>`;
   }).join("");
   return `<section class="card dailyCheckCard" aria-labelledby="dailyCheckTitle">

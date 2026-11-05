@@ -2373,26 +2373,28 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionBanner { back
 html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionTitle { color: #5b4210; }
 html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription { color: #786d58; }
 
-/* Daily Check moved into Tasks: isolated styles, preserving the existing theme. */
-.dailyCheckCard{margin:14px 0;padding:16px;border:1px solid rgba(167,139,250,.22);border-radius:22px;background:linear-gradient(145deg,rgba(76,29,149,.2),rgba(17,24,39,.92));}
+/* Daily Check moved into Tasks: glassmorphism cards with plain-text rewards. */
+.dailyCheckCard{margin:14px 0;padding:16px;border:1px solid rgba(167,139,250,.28);border-radius:24px;background:radial-gradient(circle at 100% 0%,rgba(103,232,249,.12),transparent 34%),linear-gradient(145deg,rgba(76,29,149,.28),rgba(17,24,39,.94));box-shadow:0 16px 36px rgba(0,0,0,.2);}
 .dailyCheckHeader,.dailyCheckFooter{display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .dailyCheckHeader h2{margin:3px 0 0;font-size:20px;letter-spacing:-.2px;}
 .dailyCheckSubtitle{margin:10px 0 14px;color:var(--text-muted);font-size:12px;line-height:1.7;}
-.dailyCheckGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}
-.dailyCheckDay{min-width:0;padding:9px 3px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(0,0,0,.14);text-align:center;}
-.dailyCheckDayNumber{display:grid;place-items:center;width:25px;height:25px;margin:0 auto 6px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-muted);font-size:11px;font-weight:900;}
-.dailyCheckToken{width:30px;height:30px;padding:2px;border:1px solid rgba(103,232,249,.5);background:rgba(5,15,24,.8);box-shadow:0 0 9px rgba(34,211,238,.14);}
+.dailyCheckGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;}
+.dailyCheckDay{min-width:0;min-height:78px;padding:10px 3px 8px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.025));text-align:center;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
+.dailyCheckDay:hover{transform:translateY(-2px);border-color:rgba(103,232,249,.42);}
+.dailyCheckDayNumber{display:grid;place-items:center;width:28px;height:28px;margin:0 auto 7px;border-radius:10px;background:rgba(255,255,255,.09);color:var(--text-muted);font-size:11px;font-weight:900;}
+.dailyCheckToken{width:32px;height:32px;padding:2px;border:1px solid rgba(103,232,249,.58);background:rgba(5,15,24,.82);box-shadow:0 0 14px rgba(34,211,238,.2);}
 .dailyCheckToken img{display:block;width:100%;height:100%;border-radius:50%;object-fit:cover;}
-.dailyCheckDayNumber.isClaimed{background:#10b981;color:#06140f;}
+.dailyCheckDayNumber.isClaimed{background:linear-gradient(135deg,#34d399,#10b981);color:#06140f;box-shadow:0 5px 12px rgba(16,185,129,.24);}
 .dailyCheckDay strong,.dailyCheckDay small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.dailyCheckDay strong{font-size:9px;color:var(--text-muted);}.dailyCheckDay small{margin-top:5px;color:var(--text);font-size:9px;font-weight:800;}
-.dailyCheckReward{display:flex!important;align-items:center;justify-content:center;gap:2px;font-variant-numeric:tabular-nums;}
-.dailyCheckReward img{width:9px;height:9px;flex:0 0 9px;border-radius:50%;object-fit:cover;}
-.dailyCheckDay.is-complete{border-color:rgba(52,211,153,.35);background:rgba(16,185,129,.12);}
-.dailyCheckDay.is-current{border-color:rgba(167,139,250,.8);box-shadow:0 0 0 1px rgba(167,139,250,.2);}.dailyCheckDay.is-current .dailyCheckDayNumber{background:#8b5cf6;color:#fff;}
-.dailyCheckFooter{margin-top:15px;color:var(--text-muted);font-size:11px;}.dailyCheckFooter .primaryBtn{margin:0;padding:10px 14px;}
-.dailyCheckCountdown{margin-top:10px;padding:9px 12px;border:1px solid rgba(103,232,249,.18);border-radius:12px;background:rgba(6,21,27,.42);color:#67e8f9;font-size:11px;font-weight:800;text-align:center;letter-spacing:.15px;}
-@media (max-width:420px){.dailyCheckGrid{gap:3px}.dailyCheckDay{padding:8px 2px}.dailyCheckDay small{font-size:8px}.dailyCheckFooter{align-items:stretch;flex-direction:column}.dailyCheckFooter .primaryBtn{width:100%;}}
+.dailyCheckDay strong{color:var(--text-muted);font-size:9px;font-weight:800;}.dailyCheckDay small{margin-top:6px;color:var(--text);font-size:9px;font-weight:850;}
+.dailyCheckReward{display:flex!important;align-items:center;justify-content:center;gap:3px;font-variant-numeric:tabular-nums;}
+.dailyCheckReward span{display:inline-block;line-height:1;}
+.dailyCheckReward img{width:10px;height:10px;flex:0 0 10px;border-radius:50%;object-fit:cover;}
+.dailyCheckDay.is-complete{border-color:rgba(52,211,153,.42);background:linear-gradient(160deg,rgba(16,185,129,.18),rgba(16,185,129,.05));}
+.dailyCheckDay.is-current{border-color:rgba(167,139,250,.92);box-shadow:0 0 0 2px rgba(167,139,250,.16),0 8px 18px rgba(124,58,237,.16);}.dailyCheckDay.is-current .dailyCheckDayNumber{background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;}
+.dailyCheckFooter{margin-top:16px;color:var(--text-muted);font-size:11px;}.dailyCheckFooter .primaryBtn{margin:0;padding:10px 14px;}
+.dailyCheckCountdown{margin-top:10px;padding:10px 12px;border:1px solid rgba(103,232,249,.22);border-radius:14px;background:rgba(6,21,27,.5);color:#67e8f9;font-size:11px;font-weight:800;text-align:center;letter-spacing:.15px;}
+@media (max-width:420px){.dailyCheckGrid{gap:4px}.dailyCheckDay{min-height:73px;padding:8px 2px}.dailyCheckDay small{font-size:8px}.dailyCheckFooter{align-items:stretch;flex-direction:column}.dailyCheckFooter .primaryBtn{width:100%;}}
 
 /* =========================================================
    BOTTOM NAVIGATION POLISH — five-item layout only
