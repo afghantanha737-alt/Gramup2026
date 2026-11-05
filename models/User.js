@@ -12,10 +12,15 @@ const userSchema = new mongoose.Schema(
 
     points: { type: Number, default: 0, min: 0 },
     // Mining state is server-authoritative; a missing claim anchor means mining has not started.
-    miningLevel: { type: Number, default: 1, min: 1, max: 10 },
-    miningStorageLevel: { type: Number, default: 1, min: 1, max: 6 },
+    miningLevel: { type: Number, default: 1, min: 1, max: 5 },
+    miningStorageLevel: { type: Number, default: 1, min: 1, max: 3 },
     miningSavedPoints: { type: Number, default: 0, min: 0 },
     miningLastClaimAt: { type: Date, default: null },
+    miningBoostExpiresAt: { type: Date, default: null },
+    miningStorageFullNotifiedAt: { type: Date, default: null },
+    streakFreezeCredits: { type: Number, default: 0, min: 0 },
+    vipGoldUntil: { type: Date, default: null },
+    zeroFeeSwapUntil: { type: Date, default: null },
     totalMinedPoints: { type: Number, default: 0, min: 0 },
     antiBotVerifiedAt: { type: Date, default: null },
     antiBotVerificationVersion: { type: String, default: '' },

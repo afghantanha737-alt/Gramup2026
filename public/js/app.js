@@ -88,6 +88,8 @@ const state = {
   vipError: "",
   vipServerOffsetMs: 0,
   vipServerNowMs: 0,
+  mining: null,
+  miningLoading: false,
   captchaA: 0,
   captchaB: 0,
   initialized: false,
@@ -3698,6 +3700,60 @@ async function loadVipPlans() {
   }
 }
 
+async function loadMiningStatus() {
+  if (state.miningLoading) return false;
+  state.miningLoading = true;
+  try {
+    const data = await api('/api/mining/status');
+    state.mining = data?.mining || null;
+    return true;
+  } catch (error) {
+    console.warn('Mining status failed:', error);
+    return false;
+  } finally {
+    state.miningLoading = false;
+  }
+}
+
+function renderMiningPanel() {
+  const mining = state.mining;
+  if (!mining) return '';
+  const percent = mining.maxStoragePoints ? Math.min(100, Math.round((mining.accumulatedPoints / mining.maxStoragePoints) * 100)) : 0;
+  const full = Boolean(mining.isStorageFull);
+  const products = [['streak_freeze', '⭐', t('stars_streak_freeze'), 50], ['hash_boost_7d', '⚡', t('stars_hash_boost'), 150], ['vip_gold', '💎', t('stars_vip_gold'), 250]];
+  return `<section class="phase3MiningCard" aria-label="${t('mining_title')}">
+    <div class="phase3MiningTop"><div><span class="modalEyebrow">${t('mining_title')}</span><h3>${t('mining_rig_level', { n: mining.level })}</h3></div><strong>${formatNumber(mining.effectiveRatePerHour, 0)} ${t('mining_per_hour')}</strong></div>
+    <div class="phase3Vault"><div class="phase3VaultBar"><span style="width:${percent}%"></span></div><div class="phase3VaultMeta"><span>${full ? t('mining_vault_full') : t('mining_vault_running')}</span><b>${formatNumber(mining.accumulatedPoints, 0)} / ${formatNumber(mining.maxStoragePoints, 0)} UP</b></div></div>
+    <div class="phase3MiningActions"><button class="primaryBtn" type="button" onclick="claimMining()" ${mining.accumulatedPoints < 1 ? 'disabled' : ''}>${t('mining_claim')}</button><button class="secondaryBtn" type="button" onclick="upgradeMining('rig')" ${mining.nextRigUpgrade ? '' : 'disabled'}>${t('mining_upgrade_rig')} · ${mining.nextRigUpgrade ? formatPoints(mining.nextRigUpgrade.cost) : '—'} UP</button><button class="secondaryBtn" type="button" onclick="upgradeMining('storage')" ${mining.nextStorageUpgrade ? '' : 'disabled'}>${t('mining_upgrade_vault')} · ${mining.nextStorageUpgrade ? formatPoints(mining.nextStorageUpgrade.cost) : '—'} UP</button></div>
+    <div class="phase3StarsShop"><h4>${t('stars_shop_title')}</h4><div class="phase3StarsGrid">${products.map(([key, icon, label, stars]) => `<button type="button" class="phase3StarsCard" onclick="buyStarsProduct('${key}')"><span>${icon}</span><b>${label}</b><small>${stars} XTR</small></button>`).join('')}</div></div>
+  </section>`;
+}
+
+async function claimMining() {
+  if (!readModelActionAllowed()) return;
+  haptic('medium');
+  const scope = 'mining_claim';
+  try { const result = await api('/api/mining/claim', { method: 'POST', body: {}, headers: { 'Idempotency-Key': getPendingIdempotencyKey(scope) } }); clearPendingIdempotencyKey(scope); state.mining = result.mining; state.points = Number(result.newBalance) || state.points; haptic('success'); toast(t('mining_claim_success', { n: formatPoints(result.claimedPoints) }), 'success'); rerenderActiveUserDataView(); }
+  catch (error) { haptic('error'); toast(error.message, 'error'); }
+}
+window.claimMining = claimMining;
+
+async function upgradeMining(type) {
+  if (!readModelActionAllowed()) return;
+  haptic('selection');
+  const scope = `mining_upgrade_${type}`;
+  try { const result = await api('/api/mining/upgrade', { method: 'POST', body: { type }, headers: { 'Idempotency-Key': getPendingIdempotencyKey(scope) } }); clearPendingIdempotencyKey(scope); state.mining = result.mining; state.points = Number(result.newBalance) || state.points; haptic('success'); toast(t('mining_upgrade_success'), 'success'); rerenderActiveUserDataView(); }
+  catch (error) { haptic('error'); toast(error.message, 'error'); }
+}
+window.upgradeMining = upgradeMining;
+
+async function buyStarsProduct(product) {
+  haptic('selection');
+  try { await api('/api/mining/stars/invoice', { method: 'POST', body: { product } }); toast(t('stars_invoice_sent'), 'success'); }
+  catch (error) { haptic('error'); toast(error.message, 'error'); }
+}
+window.buyStarsProduct = buyStarsProduct;
+
 function formatVipCountdown(milliseconds) {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
   const days = Math.floor(totalSeconds / 86400);
@@ -3987,8 +4043,11 @@ function renderProfileVip() {
   return `
     <style>
       .vipRedesign{--vip-ink:#f7f7ff;--vip-muted:#a8aec2;--vip-line:rgba(255,255,255,.1);margin:0 -2px;padding:4px 0 26px;background:radial-gradient(circle at 85% 0%,rgba(34,211,238,.12),transparent 31%),radial-gradient(circle at 5% 28%,rgba(124,58,237,.13),transparent 28%),linear-gradient(180deg,rgba(7,12,24,.28),transparent 70%);color:var(--vip-ink)}
+      .phase3MiningCard{margin:0 0 16px;padding:18px;border:1px solid rgba(56,189,248,.22);border-radius:22px;background:linear-gradient(145deg,rgba(14,34,62,.92),rgba(8,13,27,.92));box-shadow:0 14px 34px rgba(0,0,0,.2)}
+      .phase3MiningTop,.phase3VaultMeta{display:flex;justify-content:space-between;gap:12px;align-items:center}.phase3MiningTop h3{margin:5px 0 0}.phase3MiningTop strong{color:#67e8f9}.phase3Vault{margin:16px 0}.phase3VaultBar{height:10px;background:rgba(255,255,255,.1);border-radius:999px;overflow:hidden}.phase3VaultBar span{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#a78bfa);border-radius:inherit;transition:width .4s}.phase3VaultMeta{margin-top:8px;font-size:12px;color:#a8aec2}.phase3VaultMeta b{color:#f8fafc}.phase3MiningActions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.phase3MiningActions button{font-size:12px;padding:11px 7px}.phase3StarsShop{margin-top:18px}.phase3StarsShop h4{margin:0 0 10px}.phase3StarsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.phase3StarsCard{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.05);color:inherit}.phase3StarsCard span{font-size:22px}.phase3StarsCard b{font-size:11px;text-align:center}.phase3StarsCard small{color:#fbbf24}@media(max-width:500px){.phase3MiningActions,.phase3StarsGrid{grid-template-columns:1fr}.phase3MiningActions button{width:100%}}
     </style>
     <div class="vipRedesign">
+      ${renderMiningPanel()}
       <div class="sectionHeader">
         <button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button>
         <h2 class="sectionTitle">${t("vip_title")}</h2><span></span>
@@ -4192,9 +4251,9 @@ async function renderProfile() {
     await loadHistory(true);
     if (!isCurrentProfileRender()) return;
   }
-  if (profileView === "vip" && !state.vipDataLoaded && !state.vipLoading) {
+  if (profileView === "vip" && (!state.vipDataLoaded || !state.mining) && !state.vipLoading && !state.miningLoading) {
     content.innerHTML = `<div class="loading" style="height:300px"></div>`;
-    await loadVipPlans();
+    await Promise.all([loadVipPlans(), loadMiningStatus()]);
     if (!isCurrentProfileRender()) return;
   }
   if (profileView === "referral") {
@@ -4223,9 +4282,9 @@ async function renderProfile() {
 async function renderVipTab() {
   const renderRequestId = navigationSequence;
   profileView = "vip";
-  if (!state.vipDataLoaded && !state.vipLoading) {
+  if ((!state.vipDataLoaded || !state.mining) && !state.vipLoading && !state.miningLoading) {
     $("#content").innerHTML = `<div class="loading" style="height:300px"></div>`;
-    await loadVipPlans();
+    await Promise.all([loadVipPlans(), loadMiningStatus()]);
   }
   if (renderRequestId !== navigationSequence || state.activeTab !== "vip") return;
   $("#content").innerHTML = state.vipError

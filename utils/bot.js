@@ -2,7 +2,7 @@
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_DELIVERY_TIMEOUT_MS = 8000;
-const DELIVERY_METHODS = new Set(['sendMessage', 'sendPhoto', 'copyMessage', 'answerCallbackQuery']);
+const DELIVERY_METHODS = new Set(['sendMessage', 'sendPhoto', 'copyMessage', 'answerCallbackQuery', 'sendInvoice', 'answerPreCheckoutQuery']);
 const TELEGRAM_USER_ID_PATTERN = /^[1-9]\d{0,15}$/;
 const TELEGRAM_MAX_USER_ID = (1n << 52n) - 1n;
 const DEFAULT_BROADCAST_INTERVAL_MS = 50;
@@ -63,6 +63,12 @@ class TelegramBotClient {
 
   sendMessage(chatId, text, options = {}) {
     return this.call('sendMessage', { chat_id: chatId, text, ...options });
+  }
+  sendInvoice(chatId, invoice) {
+    return this.call('sendInvoice', { chat_id: chatId, ...invoice });
+  }
+  answerPreCheckoutQuery(preCheckoutQueryId, ok, errorMessage = '') {
+    return this.call('answerPreCheckoutQuery', { pre_checkout_query_id: preCheckoutQueryId, ok: Boolean(ok), ...(ok ? {} : { error_message: String(errorMessage || 'Payment could not be verified.') }) });
   }
 
   async sendPhoto(chatId, buffer, options = {}) {

@@ -9,6 +9,7 @@ const { recordLedgerRequired } = require('../utils/ledger');
 const PointsLedger = require('../models/PointsLedger');
 const { sensitiveRateLimit } = require('../utils/apiSecurity');
 const { validateIdempotencyKey, executeIdempotently, idempotencyTransactionId } = require('../utils/idempotency');
+const { bot, notifyUser } = require('../utils/bot');
 const User = require('../models/User');
 
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
@@ -19,23 +20,20 @@ const RIG_LEVELS = [
   { level: 2, ratePerHour: 45, upgradeCost: 150, name: 'Dual-Core Rig' },
   { level: 3, ratePerHour: 90, upgradeCost: 400, name: 'Quad-Core ASIC' },
   { level: 4, ratePerHour: 160, upgradeCost: 1000, name: 'Octa GPU Station' },
-  { level: 5, ratePerHour: 260, upgradeCost: 2500, name: 'Quantum Cluster' },
-  { level: 6, ratePerHour: 400, upgradeCost: 5000, name: 'Server Farm Rig' },
-  { level: 7, ratePerHour: 600, upgradeCost: 10000, name: 'Hydra Supercomputer' },
-  { level: 8, ratePerHour: 900, upgradeCost: 20000, name: 'Nebula Mining Array' },
-  { level: 9, ratePerHour: 1400, upgradeCost: 45000, name: 'Dyson Swarm Harvester' },
-  { level: 10, ratePerHour: 2200, upgradeCost: 100000, name: 'Singularity Core' }
+  { level: 5, ratePerHour: 260, upgradeCost: 2500, name: 'Quantum Cluster' }
 ];
 
 // Battery / Storage Levels (Max hours of offline accumulation before storage is full)
 const STORAGE_LEVELS = [
   { level: 1, maxHours: 3, upgradeCost: 0, name: 'Standard Battery (3h)' },
   { level: 2, maxHours: 6, upgradeCost: 100, name: 'Extended Pack (6h)' },
-  { level: 3, maxHours: 12, upgradeCost: 300, name: 'Lithium Array (12h)' },
-  { level: 4, maxHours: 18, upgradeCost: 750, name: 'Graphene Cell (18h)' },
-  { level: 5, maxHours: 24, upgradeCost: 1500, name: 'Fusion Battery (24h)' },
-  { level: 6, maxHours: 48, upgradeCost: 4000, name: 'Perpetual Cell (48h)' }
+  { level: 3, maxHours: 8, upgradeCost: 300, name: 'Lithium Array (8h)' }
 ];
+const STARS_PRODUCTS = Object.freeze({
+  streak_freeze: { title: 'Streak Freeze / Missed Day Recovery', description: 'Protect or recover one missed daily streak day.', stars: 50 },
+  hash_boost_7d: { title: '7-Day 2x Hashrate Boost', description: 'Double your mining hashrate for seven days.', stars: 150 },
+  vip_gold: { title: 'VIP Gold Badge & Zero-Fee Swap', description: 'Unlock VIP Gold status and zero-fee swaps.', stars: 250 }
+});
 
 function getMiningState(user, now = new Date()) {
   // Missing legacy state is anchored at first observation; no retroactive payout.
@@ -44,7 +42,7 @@ function getMiningState(user, now = new Date()) {
   const rigConfig = RIG_LEVELS.find(r => r.level === level) || RIG_LEVELS[0];
   const storageConfig = STORAGE_LEVELS.find(s => s.level === storageLevel) || STORAGE_LEVELS[0];
   const nowMs = now.getTime();
-  const boostUntilMs = user.miningBoostUntil ? new Date(user.miningBoostUntil).getTime() : 0;
+  const boostUntilMs = (user.miningBoostExpiresAt || user.miningBoostUntil) ? new Date(user.miningBoostExpiresAt || user.miningBoostUntil).getTime() : 0;
   const boostActive = Number.isFinite(boostUntilMs) && boostUntilMs > nowMs && Number(user.miningBoostMultiplier) > 1;
   const multiplier = boostActive ? Math.min(2, Number(user.miningBoostMultiplier) || 1) : 1;
   // A missing miningLastClaimAt means mining has not started. Anchor at the
@@ -83,6 +81,14 @@ function miningError(code, message, statusCode = 400) {
   return error;
 }
 
+async function notifyMiningVaultIfFull(user, state) {
+  if (!state.isStorageFull || !user?.telegramId || user.miningStorageFullNotifiedAt) return false;
+  const marked = await User.findOneAndUpdate({ _id: user._id, miningStorageFullNotifiedAt: null }, { $set: { miningStorageFullNotifiedAt: new Date() } }, { new: true }).lean();
+  if (!marked) return false;
+  void notifyUser(user.telegramId, '⚡ Your Gramup mining vault is full! Claim your tokens now to continue mining.');
+  return true;
+}
+
 function optimisticUserFilter(user) {
   return {
     _id: user._id,
@@ -99,7 +105,19 @@ router.get('/status', auth, async (req, res) => {
   if (!user) return res.status(404).json({ success: false, message: 'User not found' });
   const history = await PointsLedger.find({ user: user._id, currency: 'points', type: { $in: ['mining_claim', 'mining_upgrade'] } })
     .sort({ createdAt: -1, _id: -1 }).limit(50).lean();
-  return res.json({ success: true, mining: getMiningState(user, new Date()), history });
+  const mining = getMiningState(user, new Date());
+  void notifyMiningVaultIfFull(user, mining).catch(error => console.warn('Mining vault alert failed:', error.message || error));
+  return res.json({ success: true, mining, history });
+});
+
+router.post('/stars/invoice', auth, async (req, res) => {
+  const productKey = String(req.body?.product || '').trim();
+  const product = STARS_PRODUCTS[productKey];
+  if (!product) return res.status(400).json({ success: false, code: 'STARS_PRODUCT_INVALID', message: 'محصول Stars نامعتبر است.' });
+  if (!bot) return res.status(503).json({ success: false, code: 'TELEGRAM_BOT_UNAVAILABLE', message: 'پرداخت تلگرام موقتاً در دسترس نیست.' });
+  const payload = `gramup-stars:v1:${req.dbUser._id}:${productKey}:${crypto.randomUUID()}`;
+  await bot.sendInvoice(String(req.dbUser.telegramId), { title: product.title, description: product.description, payload, currency: 'XTR', prices: [{ label: product.title, amount: product.stars }] });
+  return res.json({ success: true, product: product.title, stars: product.stars, message: 'Invoice به ربات تلگرام شما ارسال شد.' });
 });
 
 router.post('/claim', auth, sensitiveRateLimit('mining_claim'), async (req, res) => {
@@ -115,7 +133,7 @@ router.post('/claim', auth, sensitiveRateLimit('mining_claim'), async (req, res)
       const pointsToClaim = state.accumulatedPoints;
       if (pointsToClaim < 1) throw miningError('MINING_NO_POINTS', 'هنوز UP برای دریافت جمع نشده است.', 400);
       const updated = await User.findOneAndUpdate(optimisticUserFilter(current), {
-        $set: { miningSavedPoints: 0, miningLastClaimAt: now },
+        $set: { miningSavedPoints: 0, miningLastClaimAt: now, miningStorageFullNotifiedAt: null },
         $inc: { points: pointsToClaim, totalMinedPoints: pointsToClaim }
       }, { new: true, session });
       if (!updated) throw miningError('MINING_CONFLICT', 'وضعیت استخراج تغییر کرده است؛ دوباره تلاش کنید.', 409);
@@ -152,7 +170,7 @@ router.post('/upgrade', auth, sensitiveRateLimit('mining_upgrade'), async (req, 
       const pendingPoints = state.accumulatedPoints;
       const newBalance = (Number(current.points) || 0) + pendingPoints - next.cost;
       if (newBalance < 0) throw miningError('MINING_INSUFFICIENT_POINTS', `UP کافی نیست. هزینه ارتقاء: ${next.cost} UP.`);
-      const setFields = { miningSavedPoints: 0, miningLastClaimAt: now, points: newBalance };
+      const setFields = { miningSavedPoints: 0, miningLastClaimAt: now, points: newBalance, miningStorageFullNotifiedAt: null };
       if (type === 'rig') setFields.miningLevel = next.level;
       else setFields.miningStorageLevel = next.level;
       const updated = await User.findOneAndUpdate(optimisticUserFilter(current), {
@@ -189,3 +207,5 @@ module.exports = router;
 module.exports.getMiningState = getMiningState;
 module.exports.RIG_LEVELS = RIG_LEVELS;
 module.exports.STORAGE_LEVELS = STORAGE_LEVELS;
+module.exports.STARS_PRODUCTS = STARS_PRODUCTS;
+module.exports.notifyMiningVaultIfFull = notifyMiningVaultIfFull;

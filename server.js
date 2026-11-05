@@ -146,8 +146,6 @@ app.use('/api/onboarding', require('./routes/onboarding'));
 app.use('/api/mining', require('./routes/mining'));
 app.use('/api/ton-proof', require('./routes/tonProof'));
 app.use('/api/points', require('./routes/points'));
-app.use('/api/mining', require('./routes/mining'));
-app.use('/api/onboarding', require('./routes/onboarding'));
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/squads', require('./routes/squads'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));

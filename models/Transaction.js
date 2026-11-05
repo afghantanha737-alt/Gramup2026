@@ -10,6 +10,7 @@ const TRANSACTION_TYPES = [
   'spin',
   'mining_claim',
   'mining_upgrade',
+  'stars_purchase',
   'referral_bonus',
   'referral_initial',
   'referral_welcome',
