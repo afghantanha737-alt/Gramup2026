@@ -3127,3 +3127,82 @@ html[data-theme="light"] .auroraDailyCard .auroraInlineBtn {
 .appContent .vipRedesign .phase3StarsCard span { color: var(--brand-accent-text); }
 .appContent .vipRedesign .phase3StarsCard span svg { display: block; width: 22px; height: 22px; stroke: currentColor; }
 .appContent .vipRedesign .phase3StarsCard small { color: var(--brand-accent-text); }
+
+
+/* Spinner visual refresh — transparent cyan cube marks and clean slice iconography. */
+.luckySpinPage .spinBrand img {
+  width: 34px;
+  height: 34px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, .42));
+}
+.luckySpinPage .spinWheelHub {
+  width: 84px;
+  height: 84px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.luckySpinPage .spinWheelHub::before,
+.luckySpinPage .spinWheelHub::after { display: none; }
+.luckySpinPage .spinHubLogo {
+  width: 80px;
+  height: 80px;
+  padding: 0;
+  border-radius: 0;
+  object-fit: contain;
+  image-rendering: auto;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, .42));
+}
+.luckySpinPage .spinRewardIcon {
+  display: block !important;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  margin: 0 0 5px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  object-fit: contain;
+}
+.luckySpinPage .spinRewardIcon--up {
+  filter: drop-shadow(0 0 5px rgba(34, 211, 238, .45));
+}
+.luckySpinPage .spinRewardIcon--boost {
+  width: 29px;
+  height: 29px;
+  flex-basis: 29px;
+  color: #55f0ff;
+  filter: drop-shadow(0 0 5px rgba(34, 211, 238, .88));
+}
+.luckySpinPage .spinRewardIcon--extra {
+  color: #e3fbff;
+  filter: drop-shadow(0 0 5px rgba(34, 211, 238, .65));
+}
+.luckySpinPage .spinWheel > span {
+  width: 84px;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+.luckySpinPage .spinWheel b {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 1000;
+  line-height: 1.05;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, .98), 0 0 7px rgba(255, 255, 255, .24);
+}
+.luckySpinPage .spinWheel small {
+  color: #fff;
+  font-size: 10px;
+  font-weight: 1000;
+  line-height: 1.12;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, .98);
+}
+.bottomNav .tabSvg { stroke-width: 2; }
