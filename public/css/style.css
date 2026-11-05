@@ -3206,3 +3206,12 @@ html[data-theme="light"] .auroraDailyCard .auroraInlineBtn {
   text-shadow: 0 2px 4px rgba(0, 0, 0, .98);
 }
 .bottomNav .tabSvg { stroke-width: 2; }
+
+.bottomNav .minePickaxeIcon { transition: filter .2s ease; }
+.bottomNav button.active[data-tab="vip"] .minePickaxeIcon {
+  filter: drop-shadow(0 0 4px var(--brand-accent-glow));
+}
+.bottomNav button.active[data-tab="vip"] .minePickaxeIcon [data-pickaxe-head] {
+  fill: currentColor;
+  fill-opacity: .16;
+}
