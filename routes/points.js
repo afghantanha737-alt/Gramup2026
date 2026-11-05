@@ -47,7 +47,6 @@ const { comment } = require('@ton/ton');
 const { withMembership } = require('../utils/membership');
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
 
-const DEFAULT_SPIN_COOLDOWN_HOURS = 24;
 const DEFAULT_SPIN_REQUIRED_STREAK = 7;
 const SPIN_PRIZES = Object.freeze([
   { id: 'hashrate_boost_10_1h', kind: 'boost', amount: 10, label: '10% Mining Hashrate Boost · 1h', probability: 35 },
@@ -76,12 +75,10 @@ function pickWeightedPrize(prizes, roll = Math.random() * 100) {
   return prizes[prizes.length - 1];
 }
 function spinPolicy(settings) {
-  const cooldownHours = Number(settings?.luckySpinCooldownHours) || DEFAULT_SPIN_COOLDOWN_HOURS;
   const requiredStreak = Math.max(DEFAULT_SPIN_REQUIRED_STREAK, Number(settings?.luckySpinRequiredStreak) || DEFAULT_SPIN_REQUIRED_STREAK);
   const prizes = normalizeSpinPrizes(settings?.luckySpinPrizes);
-  return { enabled: settings?.luckySpinEnabled !== false, cooldownHours, cooldownMs: cooldownHours * 60 * 60 * 1000, requiredStreak, prizes };
+  return { enabled: settings?.luckySpinEnabled !== false, requiredStreak, prizes };
 }
-const SPIN_COOLDOWN_MS = DEFAULT_SPIN_COOLDOWN_HOURS * 60 * 60 * 1000;
 
 function vipError(code, message, statusCode = 400, extra = {}) {
   const error = new Error(message);
@@ -387,6 +384,7 @@ router.get('/me', auth, async (req, res) => {
     gramBalance: u.gramBalance,
     rate: settings.rate,
     streak: u.streak,
+    tickets: Number(u.tickets) || 0,
     canCheckIn,
     totalCheckins: u.totalCheckins,
     firstName: u.firstName,
@@ -394,8 +392,6 @@ router.get('/me', auth, async (req, res) => {
     spinLastClaimAt: u.spinLastClaimAt || null,
     spinEnabled: spin.enabled,
     spinRequiredStreak: spin.requiredStreak,
-    spinEligible: spin.enabled && Number(u.streak || 0) >= spin.requiredStreak,
-    spinCooldownHours: spin.cooldownHours,
     spinPrizes: spin.prizes.map(({ id, kind, amount, label, probability }) => ({ id, kind, amount, label, probability })),
     streakMissed: missed.missed,
     streakMissedDays: missed.missedDays,
@@ -412,7 +408,9 @@ router.post('/daily-chest', auth, async (req, res) => {
 });
 // POST /api/points/checkin
 router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
-  const result = await claimDailyCheckin(req.dbUser._id, { now: new Date() });
+  const checkinNow = new Date();
+  const spin = spinPolicy(await Settings.getGlobal());
+  const result = await claimDailyCheckin(req.dbUser._id, { now: checkinNow, spinTicketStreakDays: spin.requiredStreak });
   if (result.status === 'already_claimed') {
     return res.status(400).json({ success: false, message: 'امروز قبلاً ورود روزانه ثبت شده است.', code: 'ALREADY_CHECKED_IN' });
   }
@@ -424,6 +422,8 @@ router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
     earned: result.amount,
     points: result.user.points,
     streak: result.streak,
+    tickets: Number(result.user.tickets) || 0,
+    ticketAwarded: Boolean(result.ticketAwarded),
     cycleDay: result.cycleDay,
     nextResetAt: nextResetTimestamp()
   });
@@ -472,31 +472,21 @@ router.post('/checkin/restart', auth, sensitiveRateLimit('claim'), async (req, r
   res.json({ success: true, points: updated.points, streak: 0, canCheckIn: true });
 });
 
-// POST /api/points/spin — one server-authoritative free spin per 24 hours.
+// POST /api/points/spin — eligible users may claim free spins consecutively.
 router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
   const now = new Date();
   const settings = await Settings.getGlobal();
   const spin = spinPolicy(settings);
   if (!spin.enabled) return res.status(409).json({ success: false, code: 'SPIN_DISABLED', message: 'Lucky Spin is currently disabled.' });
-  if (Number(req.dbUser?.streak || 0) < spin.requiredStreak) {
-    return res.status(403).json({ success: false, code: 'SPIN_STREAK_REQUIRED', requiredStreak: spin.requiredStreak, streak: Number(req.dbUser?.streak || 0), message: `Complete a ${spin.requiredStreak}-day Daily Check-in streak to unlock Lucky Spin.` });
-  }
-  const nextAllowedAt = req.dbUser?.spinLastClaimAt
-    ? new Date(new Date(req.dbUser.spinLastClaimAt).getTime() + spin.cooldownMs)
-    : null;
-  if (nextAllowedAt && nextAllowedAt > now) {
-    return res.status(429).json({ success: false, code: 'SPIN_COOLDOWN', nextSpinAt: nextAllowedAt.toISOString(), message: 'گردونه شانس هر ۲۴ ساعت یک‌بار قابل استفاده است.' });
-  }
   const operationKey = String(req.get('Idempotency-Key') || '').trim();
   try {
     const outcome = await executeIdempotently({
       userId: req.dbUser._id, scope: 'spin', key: operationKey, body: {},
       execute: async session => {
         const prize = pickWeightedPrize(spin.prizes, crypto.randomInt(0, 1000000) / 10000);
-        const cooldownCutoff = new Date(now.getTime() - spin.cooldownMs);
-        const update = { $set: { spinLastClaimAt: now } };
-        if (prize.kind === 'points') update.$inc = { points: prize.amount };
-        if (prize.kind === 'gram') update.$inc = { gramBalance: prize.amount };
+        const update = { $set: { spinLastClaimAt: now }, $inc: { tickets: -1 } };
+        if (prize.kind === 'points') update.$inc.points = prize.amount;
+        if (prize.kind === 'gram') update.$inc.gramBalance = prize.amount;
         if (prize.kind === 'boost') {
           const currentBoostUntil = req.dbUser.miningBoostUntil && new Date(req.dbUser.miningBoostUntil) > now
             ? new Date(req.dbUser.miningBoostUntil) : now;
@@ -506,12 +496,12 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
         const updated = await User.findOneAndUpdate({
           _id: req.dbUser._id,
           isBanned: { $ne: true },
-          $or: [{ spinLastClaimAt: null }, { spinLastClaimAt: { $lte: cooldownCutoff } }]
+          tickets: { $gte: 1 }
         }, update, { new: true, session });
         if (!updated) {
-          const error = new Error('گردونه شانس هر ۲۴ ساعت یک‌بار قابل استفاده است.');
-          error.code = 'SPIN_COOLDOWN';
-          error.statusCode = 429;
+          const error = new Error(`Complete a ${spin.requiredStreak}-day streak to earn a free spin ticket.`);
+          error.code = 'SPIN_TICKET_REQUIRED';
+          error.statusCode = 400;
           throw error;
         }
         const currency = prize.kind === 'gram' ? 'gram' : 'points';
@@ -525,8 +515,7 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
           status: 200,
           body: {
             success: true, prizeId: prize.id, prizeKind: prize.kind, prizeLabel: prize.label, amount: prize.amount,
-            points: updated.points, upBalance: updated.points, gramBalance: updated.gramBalance,
-            nextSpinAt: new Date(now.getTime() + spin.cooldownMs).toISOString(),
+            points: updated.points, upBalance: updated.points, gramBalance: updated.gramBalance, tickets: Number(updated.tickets) || 0,
             boostUntil: updated.miningBoostUntil || null
           },
           resourceId: sourceId
@@ -535,19 +524,18 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
     });
     return res.status(outcome.status).json(outcome.body);
   } catch (error) {
-    if (error.statusCode) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message, nextSpinAt: nextAllowedAt?.toISOString() || null });
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
     throw error;
   }
 });
 
-// POST /api/points/spin/paid — optional paid spin that bypasses the free-spin cooldown.
+// POST /api/points/spin/paid — optional 50-UP spin.
 router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) => {
   const now = new Date();
   const cost = 50;
   const settings = await Settings.getGlobal();
   const spin = spinPolicy(settings);
   if (!spin.enabled) return res.status(409).json({ success: false, code: 'SPIN_DISABLED', message: 'Lucky Spin is currently disabled.' });
-  if (Number(req.dbUser?.streak || 0) < spin.requiredStreak) return res.status(403).json({ success: false, code: 'SPIN_STREAK_REQUIRED', requiredStreak: spin.requiredStreak, streak: Number(req.dbUser?.streak || 0), message: `Complete a ${spin.requiredStreak}-day Daily Check-in streak to unlock Lucky Spin.` });
   const operationKey = String(req.get('Idempotency-Key') || '').trim();
   try {
     const outcome = await executeIdempotently({
@@ -568,7 +556,7 @@ router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) =>
         const rewardCurrency = prize.kind === 'gram' ? 'gram' : 'points';
         const rewardSourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin_paid', key: operationKey, leg: 'reward' });
         await recordLedgerRequired({ user: updated._id, type: 'spin', currency: rewardCurrency, amount: prize.amount, description: `Lucky Spin paid reward: ${prize.id}`, balanceAfter: rewardCurrency === 'gram' ? updated.gramBalance : updated.points, sourceId: rewardSourceId, session });
-        return { status: 200, body: { success: true, prizeId: prize.id, prizeKind: prize.kind, prizeLabel: prize.label, amount: prize.amount, points: updated.points, upBalance: updated.points, gramBalance: updated.gramBalance, boostUntil: updated.miningBoostUntil || null }, resourceId: rewardSourceId };
+        return { status: 200, body: { success: true, prizeId: prize.id, prizeKind: prize.kind, prizeLabel: prize.label, amount: prize.amount, points: updated.points, upBalance: updated.points, gramBalance: updated.gramBalance, tickets: Number(updated.tickets) || 0, boostUntil: updated.miningBoostUntil || null }, resourceId: rewardSourceId };
       }
     });
     return res.status(outcome.status).json(outcome.body);
@@ -1887,7 +1875,6 @@ router.get('/public-history', async (req, res) => {
 });
 
 module.exports = router;
-module.exports.SPIN_COOLDOWN_MS = SPIN_COOLDOWN_MS;
 module.exports.SPIN_PRIZES = SPIN_PRIZES;
 module.exports.spinPolicy = spinPolicy;
 module.exports.pickWeightedPrize = pickWeightedPrize;

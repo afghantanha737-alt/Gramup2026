@@ -53,7 +53,7 @@ const settingsSchema = new mongoose.Schema(
     vipPayoutsEnabled: { type: Boolean, default: false },
     luckySpinEnabled: { type: Boolean, default: true },
     luckySpinRequiredStreak: { type: Number, default: 7, min: 7, max: 365 },
-    luckySpinCooldownHours: { type: Number, default: 24, min: 1, max: 168 },
+    luckySpinCooldownHours: { type: Number, default: 0, min: 0, max: 0 },
     luckySpinPrizes: {
       type: [{ _id: false, id: String, kind: { type: String, enum: ['points', 'gram', 'boost', 'none'] }, amount: { type: Number, min: 0 }, label: { type: String, default: '' }, probability: { type: Number, min: 0, max: 100 } }],
       default: () => [

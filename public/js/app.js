@@ -37,12 +37,10 @@ const state = {
   minWithdrawGram: 0,
   nextResetAt: 0,
   spinLastClaimAt: null,
-  spinNextAt: 0,
+  tickets: 0,
   spinBusy: false,
   spinEnabled: true,
   spinRequiredStreak: 7,
-  spinEligible: false,
-  spinCooldownHours: 24,
   spinPrizes: [],
   streakMissed: false,
   streakMissedDays: 0,
@@ -116,7 +114,6 @@ const latestPostOpenedTaskIds = new Set();
 const latestPostOpenedAt = new Map();
 const latestPostOpeningTaskIds = new Set();
 let dailyCheckinTimer = null;
-let spinCountdownTimer = null;
 
 // The browser bundle exports an already-created cache instance (the CommonJS
 // factory is only for tests). Optional cache failure must never stop boot.
@@ -478,7 +475,7 @@ function updateHeader() {
   }
   const uid = user.id || user.telegramId || "";
   if (idLine) idLine.textContent = uid ? `ID ${uid}` : "";
-  updateSpinHeaderStats();
+  updateSpinControls();
 }
 
 function applyDirection() {
@@ -972,15 +969,13 @@ function applyCachedReadModel(entry) {
   state.minWithdrawGram = Number(profile.minWithdrawGram) || 0;
   state.nextResetAt = Number(profile.nextResetAt) || 0;
   state.spinLastClaimAt = profile.spinLastClaimAt || null;
+  state.tickets = Number(profile.tickets) || 0;
   state.spinEnabled = profile.spinEnabled !== false;
   state.spinRequiredStreak = Number(profile.spinRequiredStreak) || 7;
-  state.spinEligible = Boolean(profile.spinEligible) || (state.spinEnabled && state.streak >= state.spinRequiredStreak);
-  state.spinCooldownHours = Number(profile.spinCooldownHours) || 24;
   state.spinPrizes = Array.isArray(profile.spinPrizes) ? profile.spinPrizes : [];
   state.streakMissed = Boolean(profile.streakMissed);
   state.streakMissedDays = Number(profile.streakMissedDays) || 0;
   state.streakFreezeCost = Number(profile.streakFreezeCost) || 20;
-  state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + state.spinCooldownHours * 3600000 : 0;
   state.miningBoostUntil = profile.miningBoostUntil || null;
   state.totalEarnedPoints = Number(profile.totalEarnedPoints) || 0;
   state.level = profile.level || null;
@@ -1019,7 +1014,7 @@ function persistReadModelCache() {
       points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
       canCheckIn: state.canCheckIn, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
-      spinLastClaimAt: state.spinLastClaimAt, spinEnabled: state.spinEnabled, spinRequiredStreak: state.spinRequiredStreak, spinEligible: state.spinEligible, spinCooldownHours: state.spinCooldownHours, miningBoostUntil: state.miningBoostUntil,
+      spinLastClaimAt: state.spinLastClaimAt, tickets: state.tickets, spinEnabled: state.spinEnabled, spinRequiredStreak: state.spinRequiredStreak, miningBoostUntil: state.miningBoostUntil,
       withdrawalProgress: state.withdrawalProgress, withdrawalRemainingGram: state.withdrawalRemainingGram,
       gramUsdPrice: state.gramUsdPrice, firstName: state.user?.first_name || ""
     },
@@ -1096,15 +1091,13 @@ async function loadUserData({ force = false } = {}) {
   state.minWithdrawGram = Number(data?.minWithdrawGram) || 0;
   state.nextResetAt = Number(data?.nextResetAt) || 0;
   state.spinLastClaimAt = data?.spinLastClaimAt || null;
+  state.tickets = Number(data?.tickets) || 0;
   state.spinEnabled = data?.spinEnabled !== false;
   state.spinRequiredStreak = Number(data?.spinRequiredStreak) || 7;
-  state.spinEligible = Boolean(data?.spinEligible) || (state.spinEnabled && state.streak >= state.spinRequiredStreak);
-  state.spinCooldownHours = Number(data?.spinCooldownHours) || 24;
   state.spinPrizes = Array.isArray(data?.spinPrizes) ? data.spinPrizes : [];
   state.streakMissed = Boolean(data?.streakMissed);
   state.streakMissedDays = Number(data?.streakMissedDays) || 0;
   state.streakFreezeCost = Number(data?.streakFreezeCost) || 20;
-  state.spinNextAt = state.spinLastClaimAt ? Date.parse(state.spinLastClaimAt) + state.spinCooldownHours * 3600000 : 0;
   state.miningBoostUntil = data?.miningBoostUntil || null;
   state.totalEarnedPoints = Number(data?.totalEarnedPoints) || 0;
   state.level = data?.level || null;
@@ -1418,25 +1411,21 @@ async function loadWeeklyLeaderboard() {
 }
 
 /* ================= HOME ================= */
-function spinAvailable() { return !state.spinNextAt || state.spinNextAt <= Date.now(); }
-function spinEligible() { return state.spinEnabled && state.streak >= state.spinRequiredStreak; }
-function spinRemainingText() { return formatCountdown(Math.max(0, Number(state.spinNextAt) - Date.now())); }
 function updateSpinHeaderStats() {
-  const eligible = spinEligible();
-  const available = spinAvailable();
+  const enabled = state.spinEnabled;
   const tickets = document.querySelector('[data-spin-tickets]');
   const balance = document.querySelector('[data-spin-balance]');
   const status = document.querySelector('[data-spin-status]');
   const paidButton = document.querySelector('[data-paid-spin]');
   const paymentNotice = document.querySelector('[data-spin-payment-notice]');
-  if (tickets) tickets.textContent = eligible && available && !state.spinBusy ? '1' : '0';
+  if (tickets) tickets.textContent = formatNumber(Number(state.tickets) || 0);
   if (balance) balance.innerHTML = `<span class="spinBalanceAmount">${escapeHTML(formatPoints(state.points))}</span>${tokenIconMarkup()}<span class="spinBalanceUnit">UP</span>`;
-  if (paidButton) paidButton.disabled = !eligible || state.spinBusy || Number(state.points) < 50;
+  if (paidButton) paidButton.disabled = !enabled || state.spinBusy || Number(state.points) < 50;
   if (paymentNotice) {
     paymentNotice.hidden = Number(state.points) >= 50;
     paymentNotice.textContent = paymentNotice.hidden ? '' : t('spin_insufficient_balance', {}, 'You need at least 50 UP to spin.');
   }
-  if (status) { status.textContent = !state.spinEnabled ? 'OFF' : !eligible ? 'LOCKED' : available ? 'READY' : 'NO TICKET'; status.className = `spinHeaderStatValue ${eligible && available ? 'is-ready' : ''}`; }
+  if (status) { status.textContent = enabled ? t('spin_ready', {}, 'READY') : t('spin_disabled', {}, 'OFF'); status.className = `spinHeaderStatValue ${enabled ? 'is-ready' : ''}`; }
 }
 function spinPrizeLabel(prizeId, amount) {
   if (["up_50", "up_100", "up_250"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
@@ -1451,80 +1440,73 @@ function spinSliceText(prize, index) {
   const match = label.match(/^(\S+)\s+(.+)$/);
   return match ? [match[1], match[2]] : [label, ''];
 }
-function stopSpinCountdown() { if (spinCountdownTimer) clearInterval(spinCountdownTimer); spinCountdownTimer = null; }
-function startSpinCountdown() {
-  stopSpinCountdown();
-  const update = () => {
-    updateSpinHeaderStats();
-    const label = document.querySelector("[data-spin-countdown]");
-    const button = document.querySelector("#spinButton");
-    if (!label || !button) return stopSpinCountdown();
-    if (!spinEligible()) {
-      label.textContent = t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`);
-      button.disabled = true;
-      button.classList.add('is-locked');
-      button.textContent = `🔒 ${t('spin_spin_now', {}, 'SPIN NOW')}`;
-      return;
-    }
-    button.classList.remove('is-locked');
-    if (spinAvailable()) {
-      label.textContent = t("spin_free");
-      button.disabled = state.spinBusy;
-      button.textContent = state.spinBusy ? t("spin_spinning") : t('spin_spin_now', {}, 'SPIN NOW');
-      return;
-    }
-    label.textContent = t("spin_next", { time: spinRemainingText() });
+function updateSpinControls() {
+  updateSpinHeaderStats();
+  const label = document.querySelector("[data-spin-availability]");
+  const button = document.querySelector("#spinButton");
+  if (!label || !button) return;
+  const tickets = Number(state.tickets) || 0;
+  if (!state.spinEnabled) {
+    label.textContent = t('spin_disabled', {}, 'Lucky Spin is currently unavailable');
     button.disabled = true;
-    button.textContent = t("spin_next", { time: spinRemainingText() });
-  };
-  update();
-  spinCountdownTimer = setInterval(update, 1000);
+    button.classList.add('is-locked');
+    button.textContent = t('spin_spin_now', {}, 'SPIN NOW');
+    return;
+  }
+  label.textContent = tickets > 0
+    ? t('spin_ticket_ready', { count: tickets }, `${tickets} free spin ticket${tickets === 1 ? '' : 's'} ready`)
+    : t('spin_ticket_after_streak', { days: state.spinRequiredStreak }, `Complete a ${state.spinRequiredStreak}-day streak to get 1 free spin`);
+  button.classList.toggle('is-locked', tickets < 1);
+  button.disabled = state.spinBusy || tickets < 1;
+  button.textContent = state.spinBusy ? t("spin_spinning") : t('spin_spin_now', {}, 'SPIN NOW');
 }
 function renderLuckySpin() {
-  const available = spinAvailable();
-  const eligible = spinEligible();
+  const enabled = state.spinEnabled;
+  const tickets = Number(state.tickets) || 0;
   const prizes = [
     { label: "10% Mining", kind: "boost" }, { label: "2 Extra Spins", kind: "none" }, { label: "0 UP", kind: "points", amount: 0 },
     { label: "+50 UP", kind: "points", amount: 50 }, { label: "+100 UP", kind: "points", amount: 100 }, { label: "+250 UP", kind: "points", amount: 250 }
   ];
-  const buttonLocked = !eligible || !available;
-  const buttonLabel = !eligible ? `🔒 ${t('spin_spin_now', {}, 'SPIN NOW')}` : (available ? t('spin_spin_now', {}, 'SPIN NOW') : t("spin_next", { time: spinRemainingText() }));
+  const buttonLocked = !enabled || tickets < 1;
+  const buttonLabel = t('spin_spin_now', {}, 'SPIN NOW');
   const rewardIcon = (_prize, index) => {
     if (index === 1) return `<svg class="spinRewardIcon spinRewardIcon--extra" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M4.9 9a8 8 0 0 1 13.2-2L20 12M4 17v-5h5"/><path d="M19.1 15a8 8 0 0 1-13.2 2L4 12"/></svg>`;
     if (index === 0) return `<svg class="spinRewardIcon spinRewardIcon--boost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8.2c5.1-5.1 12.9-5.1 18 0l-3.7 3.7c-3-3-7.6-3-10.6 0L3.2 8.2Z"/><path d="m8.5 13.5 10 10M5.5 16.5l-3 3"/></svg>`;
     return `<img class="spinRewardIcon spinRewardIcon--up" src="/img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">`;
   };
-  return `<section class="spinCard ${eligible ? '' : 'is-locked'}" aria-label="${t("spin_aria")}">
-    <div class="spinCardHeader"><span class="spinBadge">24H</span></div>
+  return `<section class="spinCard ${enabled ? '' : 'is-locked'}" aria-label="${t("spin_aria")}">
     <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRimGeometry" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${prizes.map((prize, index) => { const [top, bottom] = spinSliceText(prize, index); return `<span class="spinSliceLabel" style="--i:${index}">${rewardIcon(prize, index)}<b>${escapeHTML(top)}</b><small>${escapeHTML(bottom)}</small></span>`; }).join("")}<div class="spinWheelHub" aria-hidden="true"><img class="spinHubLogo" src="/img/gramup-logo-cube-transparent.png" alt=""></div></div></div>
-    <div class="spinFooter"><span class="spinCountdown" data-spin-countdown>${!eligible ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : (available ? t("spin_free") : t("spin_next", { time: spinRemainingText() }))}</span><button id="spinButton" class="primaryBtn spinButton ${!eligible ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button><button type="button" class="spinPaidButton" data-paid-spin onclick="paySpinAlternative()" ${!eligible || state.points < 50 ? "disabled" : ""}>${t('spin_pay_50', {}, 'Pay 50 UP to Spin')}</button><small class="spinBalanceNotice" data-spin-payment-notice role="alert" hidden></small></div>
+    <div class="spinFooter"><span class="spinAvailability" data-spin-availability>${tickets > 0 ? t('spin_ticket_ready', { count: tickets }, `${tickets} free spin ticket${tickets === 1 ? '' : 's'} ready`) : t('spin_ticket_after_streak', { days: state.spinRequiredStreak }, `Complete a ${state.spinRequiredStreak}-day streak to get 1 free spin`)}</span><button id="spinButton" class="primaryBtn spinButton ${buttonLocked ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button><button type="button" class="spinPaidButton" data-paid-spin onclick="paySpinAlternative()" ${!enabled || state.spinBusy || state.points < 50 ? "disabled" : ""}>${t('spin_pay_50', {}, 'Pay 50 UP to Spin')}</button><small class="spinBalanceNotice" data-spin-payment-notice role="alert" hidden></small></div>
     <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
   </section>`;
 }
 function renderLuckySpinBanner() {
-  const eligible = spinEligible();
-  const subtitle = eligible
-    ? t('spin_launch_ready', {}, 'Your Lucky Spin is ready')
-    : (state.spinEnabled ? t('spin_locked_subtitle', { required: state.spinRequiredStreak }, `Complete ${state.spinRequiredStreak} Days to unlock`) : t('spin_disabled', {}, 'Lucky Spin is currently unavailable'));
-  const status = eligible
+  const enabled = state.spinEnabled;
+  const tickets = Number(state.tickets) || 0;
+  const subtitle = !enabled
+    ? t('spin_disabled', {}, 'Lucky Spin is currently unavailable')
+    : tickets > 0
+      ? t('spin_ticket_ready', { count: tickets }, `${tickets} free spin ticket${tickets === 1 ? '' : 's'} ready`)
+      : t('spin_ticket_after_streak', { days: state.spinRequiredStreak }, `Complete a ${state.spinRequiredStreak}-day streak to get 1 free spin`);
+  const status = enabled
     ? `<span class="spinLaunchStatus is-ready">${t('spin_ready', {}, 'Ready')}</span>`
-    : `<span class="spinLaunchStatus"><span aria-hidden="true">🔒</span>${t('spin_locked', {}, 'Locked')}</span>`;
-  const lock = eligible ? '' : '<span class="spinLaunchButtonLock" aria-hidden="true">🔒</span>';
+    : `<span class="spinLaunchStatus">${t('spin_disabled', {}, 'Unavailable')}</span>`;
+  const lock = '';
   const canOpen = state.spinEnabled;
-  return `<section class="spinLaunchCard ${eligible ? 'is-ready' : 'is-locked'}" aria-labelledby="spinLaunchTitle">
+  return `<section class="spinLaunchCard ${enabled ? 'is-ready' : 'is-locked'}" aria-labelledby="spinLaunchTitle">
     <div class="spinLaunchIcon" aria-hidden="true"><span class="spinLaunchWheel"><i></i><i></i><i></i><i></i><i></i><i></i><b>✦</b></span></div>
     <div class="spinLaunchCopy"><strong id="spinLaunchTitle">${t('spin_title')}</strong><small>${subtitle}</small></div>
     <div class="spinLaunchAction">${status}<button class="spinLaunchButton" type="button" onclick="${canOpen ? 'openLuckySpin()' : ''}" ${canOpen ? '' : 'disabled'}>${lock}${t('spin_spin_button', {}, 'Open')}</button></div>
   </section>`;
 }
-function closeLuckySpin() { const overlay = document.querySelector('#luckySpinOverlay'); if (overlay) overlay.remove(); document.body.classList.remove('luckySpinOpen'); state.spinModalOpen = false; stopSpinCountdown(); }
+function closeLuckySpin() { const overlay = document.querySelector('#luckySpinOverlay'); if (overlay) overlay.remove(); document.body.classList.remove('luckySpinOpen'); state.spinModalOpen = false; }
 function openLuckySpin() {
   if (!state.spinEnabled) return;
   haptic("light");
   closeLuckySpin();
   const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'luckySpinScreen';
-  overlay.innerHTML = `<main class="luckySpinPage" aria-label="Lucky Spin"><header class="luckySpinPageHeader"><div class="spinBrand"><img src="/img/gramup-logo-cube-transparent.png" alt="Gramup"><div class="spinBrandCopy"><strong>Gramup Spinner</strong><small>Collect tickets, spin the wheel!</small></div></div><button class="luckySpinClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></header><div class="spinHeaderStats" aria-label="Lucky Spin status"><div class="spinHeaderStat"><span>TICKETS</span><strong data-spin-tickets>0</strong></div><div class="spinHeaderStat"><span>${t('spin_balance_label', {}, 'UP BALANCE')}</span><strong class="spinHeaderBalance" data-spin-balance></strong></div><div class="spinHeaderStat"><span>STATUS</span><strong data-spin-status>LOCKED</strong></div></div><div class="luckySpinPageBody">${renderLuckySpin()}</div></main>`;
-  document.body.appendChild(overlay); document.body.classList.add('luckySpinOpen'); state.spinModalOpen = true; startSpinCountdown();
+  overlay.innerHTML = `<main class="luckySpinPage" aria-label="Lucky Spin"><header class="luckySpinPageHeader"><div class="spinBrand"><img src="/img/gramup-logo-cube-transparent.png" alt="Gramup"><div class="spinBrandCopy"><strong>Gramup Spinner</strong><small>Collect tickets, spin the wheel!</small></div></div><button class="luckySpinClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></header><div class="spinHeaderStats" aria-label="Lucky Spin status"><div class="spinHeaderStat"><span>STATUS</span><strong data-spin-status>READY</strong></div><div class="spinHeaderStat"><span>${t('spin_balance_label', {}, 'UP BALANCE')}</span><strong class="spinHeaderBalance" data-spin-balance></strong></div><div class="spinHeaderStat"><span>TICKETS</span><strong data-spin-tickets>0</strong></div></div><div class="luckySpinPageBody">${renderLuckySpin()}</div></main>`;
+  document.body.appendChild(overlay); document.body.classList.add('luckySpinOpen'); state.spinModalOpen = true; updateSpinControls();
 }
 window.openLuckySpin = openLuckySpin; window.closeLuckySpin = closeLuckySpin;
 function runSpinWheelAnimation(wheel) {
@@ -1556,8 +1538,9 @@ function runSpinWheelAnimation(wheel) {
   });
 }
 async function doSpin() {
-  if (!readModelActionAllowed() || !spinEligible() || state.spinBusy || !spinAvailable()) return;
+  if (!readModelActionAllowed() || !state.spinEnabled || Number(state.tickets) < 1 || state.spinBusy) return;
   state.spinBusy = true;
+  updateSpinControls();
   haptic("light");
   const button = document.querySelector("#spinButton");
   const wheel = document.querySelector("#spinWheel");
@@ -1569,10 +1552,10 @@ async function doSpin() {
     clearPendingIdempotencyKey("spin");
     const updatedBalance = Number(result.upBalance ?? result.points);
     if (Number.isFinite(updatedBalance)) state.points = updatedBalance;
+    state.tickets = Number(result.tickets) || 0;
     const updatedGramBalance = Number(result.gramBalance);
     if (Number.isFinite(updatedGramBalance)) state.gramBalance = updatedGramBalance;
     state.spinLastClaimAt = new Date().toISOString();
-    state.spinNextAt = Date.parse(result.nextSpinAt) || Date.now() + state.spinCooldownHours * 3600000;
     state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
     haptic("success");
     const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount);
@@ -1582,25 +1565,25 @@ async function doSpin() {
   } catch (error) {
     clearDefinitiveIdempotencyFailure("spin", error);
     haptic("error");
-    if (error.code === "SPIN_COOLDOWN" && error.nextSpinAt) state.spinNextAt = Date.parse(error.nextSpinAt) || state.spinNextAt;
     if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message);
     toast(translateServerMessage(error.code, error.message), "error");
-  } finally { state.spinBusy = false; startSpinCountdown(); }
+  } finally { state.spinBusy = false; updateSpinControls(); }
 }
 window.doSpin = doSpin;
 async function paySpinAlternative() {
-  if (!readModelActionAllowed() || !spinEligible() || state.spinBusy) return;
+  if (!readModelActionAllowed() || !state.spinEnabled || state.spinBusy) return;
   if (Number(state.points) < 50) { toast(t('spin_insufficient_balance', {}, 'You need at least 50 UP to spin.'), 'error'); return; }
   state.spinBusy = true; haptic('medium');
   const button = document.querySelector('[data-paid-spin]'); const wheel = document.querySelector('#spinWheel'); const resultBox = document.querySelector('#spinResult');
   if (button) { button.disabled = true; button.textContent = t('spin_paying', {}, 'Processing 50 UP...'); }
-  updateSpinHeaderStats();
+  updateSpinControls();
   try {
     const result = await api('/api/points/spin/paid', { method: 'POST', headers: { 'Idempotency-Key': getPendingIdempotencyKey('spin_paid') } });
     await runSpinWheelAnimation(wheel);
     clearPendingIdempotencyKey('spin_paid');
     const updatedBalance = Number(result.upBalance ?? result.points);
     if (Number.isFinite(updatedBalance)) state.points = updatedBalance;
+    state.tickets = Number(result.tickets) || 0;
     const updatedGramBalance = Number(result.gramBalance);
     if (Number.isFinite(updatedGramBalance)) state.gramBalance = updatedGramBalance;
     state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
@@ -1609,7 +1592,7 @@ async function paySpinAlternative() {
   finally {
     state.spinBusy = false;
     if (button) button.textContent = t('spin_pay_50', {}, 'Pay 50 UP to Spin');
-    startSpinCountdown();
+    updateSpinControls();
   }
 }
 window.paySpinAlternative = paySpinAlternative;
@@ -1732,7 +1715,7 @@ function renderHome() {
     </section>
 
   `;
-  startSpinCountdown();
+  updateSpinControls();
 }
 
 /* ================= TASKS ================= */
@@ -2114,6 +2097,7 @@ async function doCheckIn() {
     const result = await api("/api/points/checkin", { method: "POST" });
     state.points = Number(result.points) || state.points;
     state.streak = Number(result.streak) || state.streak;
+    state.tickets = Number(result.tickets) || 0;
     state.canCheckIn = false;
     state.totalCheckins += 1;
     state.nextResetAt = Number(result.nextResetAt) || state.nextResetAt;

@@ -576,7 +576,7 @@
         <div class="row" style="margin-top:12px">
           <label style="flex:1;min-width:180px">Enabled <select id="luckySpinEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></label>
           <label style="flex:1;min-width:180px">Required streak days<input id="luckySpinRequiredStreak" type="number" min="7" max="365"></label>
-          <label style="flex:1;min-width:180px">Cooldown hours<input id="luckySpinCooldownHours" type="number" min="1" max="168"></label>
+          <label style="flex:1;min-width:180px">Cooldown hours (disabled)<input id="luckySpinCooldownHours" type="number" min="0" max="0" value="0" readonly></label>
         </div>
         <div id="luckySpinProbabilityTotal" class="small" style="margin:8px 0"></div>
         <div style="overflow:auto"><table dir="ltr" style="min-width:760px"><thead><tr><th>ID</th><th>Label</th><th>Kind</th><th>Amount</th><th>Probability %</th><th></th></tr></thead><tbody id="luckySpinRewardsRows"></tbody></table></div>
@@ -2705,7 +2705,7 @@ function updateLuckySpinProbabilityTotal() {
 }
 function addLuckySpinRewardRow() { const rows = document.querySelector('#luckySpinRewardsRows'); if (rows) { rows.insertAdjacentHTML('beforeend', luckySpinRewardRow()); updateLuckySpinProbabilityTotal(); } }
 function readLuckySpinRewards() { return Array.from(document.querySelectorAll('.luckySpinRewardRow')).map(row => { const get = key => row.querySelector(`[data-spin-field="${key}"]`); return { id: get('id').value.trim(), label: get('label').value.trim(), kind: get('kind').value, amount: Number(get('amount').value), probability: Number(get('probability').value) }; }); }
-async function loadLuckySpinSettings() { try { const data = await api('/api/admin/settings'); const s = data.settings || {}; document.getElementById('luckySpinEnabled').value = String(s.luckySpinEnabled !== false); document.getElementById('luckySpinRequiredStreak').value = Math.max(7, s.luckySpinRequiredStreak || 7); document.getElementById('luckySpinCooldownHours').value = s.luckySpinCooldownHours || 24; renderLuckySpinRewards(s.luckySpinPrizes || []); } catch (error) { showMsg(error.message, 'error'); } }
+async function loadLuckySpinSettings() { try { const data = await api('/api/admin/settings'); const s = data.settings || {}; document.getElementById('luckySpinEnabled').value = String(s.luckySpinEnabled !== false); document.getElementById('luckySpinRequiredStreak').value = Math.max(7, s.luckySpinRequiredStreak || 7); document.getElementById('luckySpinCooldownHours').value = 0; renderLuckySpinRewards(s.luckySpinPrizes || []); } catch (error) { showMsg(error.message, 'error'); } }
 async function saveLuckySpinSettings() { try { const data = await api('/api/admin/settings', { method: 'PUT', body: JSON.stringify({ luckySpinEnabled: document.getElementById('luckySpinEnabled').value === 'true', luckySpinRequiredStreak: Number(document.getElementById('luckySpinRequiredStreak').value), luckySpinCooldownHours: Number(document.getElementById('luckySpinCooldownHours').value), luckySpinPrizes: readLuckySpinRewards() }) }); renderLuckySpinRewards(data.settings?.luckySpinPrizes || []); showMsg('Lucky Spin settings saved.', 'success'); } catch (error) { showMsg(error.message, 'error'); } }
 
 async function loadSettings() {

@@ -2691,7 +2691,7 @@ router.put('/settings', async (req, res) => {
     dailyReminderLocalHour: v => Number.isInteger(v) && v >= 0 && v <= 23,
     dailyReminderLocalMinute: v => Number.isInteger(v) && v >= 0 && v <= 59,
     luckySpinRequiredStreak: v => Number.isInteger(v) && v >= 7 && v <= 365,
-    luckySpinCooldownHours: v => Number.isInteger(v) && v >= 1 && v <= 168
+    luckySpinCooldownHours: v => v === 0
   };
 
   const changes = {};

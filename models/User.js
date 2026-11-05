@@ -32,9 +32,10 @@ const userSchema = new mongoose.Schema(
     vipClaimLockVersion: { type: Number, default: 0, min: 0 },
     gramBalance: { type: Number, default: 0, min: 0 },
     streak: { type: Number, default: 0, min: 0 },
+    tickets: { type: Number, default: 0, min: 0 },
     totalCheckins: { type: Number, default: 0, min: 0 },
     lastCheckIn: { type: Date, default: null },
-    // Lucky Spin is server-authoritative; absent legacy values mean the first spin is available.
+    // Informational last-spin timestamp; it does not impose a cooldown.
     spinLastClaimAt: { type: Date, default: null },
     miningBoostUntil: { type: Date, default: null },
     miningBoostMultiplier: { type: Number, default: 1, min: 1, max: 2 },
