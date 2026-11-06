@@ -6,8 +6,7 @@ const SPIN_PRIZES = Object.freeze([
   Object.freeze({ id: 'up_0', kind: 'points', amount: 0, label: '0 UP', probability: 2.5 }),
   Object.freeze({ id: 'up_50', kind: 'points', amount: 50, label: '+50 UP', probability: 25 }),
   Object.freeze({ id: 'up_100', kind: 'points', amount: 100, label: '+100 UP', probability: 15 }),
-  Object.freeze({ id: 'up_250', kind: 'points', amount: 250, label: '+250 UP', probability: 10 }),
-  Object.freeze({ id: 'try_again', kind: 'none', amount: 0, label: 'Try Again', probability: 10 })
+  Object.freeze({ id: 'up_250', kind: 'points', amount: 250, label: '+250 UP', probability: 20 })
 ]);
 
 function defaultSpinPrizes() {

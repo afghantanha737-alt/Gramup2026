@@ -1435,8 +1435,7 @@ const DEFAULT_SPIN_WHEEL_SLICES = Object.freeze([
   Object.freeze({ id: 'up_0', kind: 'points', amount: 0, label: '0 UP' }),
   Object.freeze({ id: 'up_50', kind: 'points', amount: 50, label: '+50 UP' }),
   Object.freeze({ id: 'up_100', kind: 'points', amount: 100, label: '+100 UP' }),
-  Object.freeze({ id: 'up_250', kind: 'points', amount: 250, label: '+250 UP' }),
-  Object.freeze({ id: 'try_again', kind: 'none', amount: 0, label: 'Try Again' })
+  Object.freeze({ id: 'up_250', kind: 'points', amount: 250, label: '+250 UP' })
 ]);
 function spinPrizeLabel(prizeId, amount) {
   if (prizeId === 'extra_spins_2') return t('spin_prize_extra_spins', {}, '2 Extra Spins');
@@ -1451,7 +1450,7 @@ function spinSliceText(prize, index) {
   const fixedText = {
     hashrate_boost_10_1h: ["10%", "Mining"], extra_spins_2: ["2 Extra", "Spins"],
     up_0: ["0", "UP"], up_50: ["+50", "UP"], up_100: ["+100", "UP"],
-    up_250: ["+250", "UP"], try_again: ["Try", "Again"]
+    up_250: ["+250", "UP"]
   };
   if (fixedText[prize?.id]) return fixedText[prize.id];
   const fallback = ["", ""];

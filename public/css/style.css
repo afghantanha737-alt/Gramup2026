@@ -3401,25 +3401,24 @@ html[data-theme="light"] .auroraDailyCard .auroraInlineBtn {
 }
 
 
-/* Lucky Spin canonical seven-slice wheel; matches backend reward order. */
+/* Lucky Spin canonical six-slice wheel; matches backend reward order. */
 .spinWheel {
-  background: conic-gradient(#35a7e8 0deg 51.428571deg, #6352d8 51.428571deg 102.857143deg, #ee8d48 102.857143deg 154.285714deg, #20b69b 154.285714deg 205.714286deg, #e45c89 205.714286deg 257.142857deg, #778aa6 257.142857deg 308.571429deg, #4f7fc0 308.571429deg 360deg);
+  background: conic-gradient(#35a7e8 0deg 60deg, #6352d8 60deg 120deg, #ee8d48 120deg 180deg, #20b69b 180deg 240deg, #e45c89 240deg 300deg, #778aa6 300deg 360deg);
 }
 .spinWheelRun { transform: rotate(var(--spin-target-rotation, 1440deg)); }
-.spinWheel > span { transform: rotate(calc(var(--i) * 51.428571deg)) translateY(-61px) rotate(calc(var(--i) * -51.428571deg)); }
+.spinWheel > span { transform: rotate(calc(var(--i) * 60deg)) translateY(-61px) rotate(calc(var(--i) * -60deg)); }
 .luckySpinPage .spinWheel {
-  --spin-slice-step: 51.428571deg;
+  --spin-slice-step: 60deg;
   background:
-    repeating-conic-gradient(from -25.714286deg, transparent 0deg 50.65deg, #d8b76a 50.65deg 51.428571deg),
-    conic-gradient(from -25.714286deg,
-      #7042b8 0deg 51.428571deg,
-      #29a9d2 51.428571deg 102.857143deg,
-      #8ccce7 102.857143deg 154.285714deg,
-      #c43b86 154.285714deg 205.714286deg,
-      #c88b32 205.714286deg 257.142857deg,
-      #299d72 257.142857deg 308.571429deg,
-      #6373bd 308.571429deg 360deg);
+    repeating-conic-gradient(from -30deg, transparent 0deg 59deg, #d8b76a 59deg 60deg),
+    conic-gradient(from -30deg,
+      #7042b8 0deg 60deg,
+      #29a9d2 60deg 120deg,
+      #8ccce7 120deg 180deg,
+      #c43b86 180deg 240deg,
+      #c88b32 240deg 300deg,
+      #299d72 300deg 360deg);
 }
 .luckySpinPage .spinWheel > span {
-  transform: rotate(calc(var(--i) * 51.428571deg)) translateY(-101px) rotate(calc(var(--i) * -51.428571deg));
+  transform: rotate(calc(var(--i) * 60deg)) translateY(-101px) rotate(calc(var(--i) * -60deg));
 }

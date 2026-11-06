@@ -22,7 +22,7 @@ assert.equal(pointsRoute.spinPolicy({ luckySpinEnabled: false }).enabled, false)
 assert.equal(pointsRoute.pickWeightedPrize(pointsRoute.SPIN_PRIZES, 0).id, 'hashrate_boost_10_1h');
 assert.equal(pointsRoute.pickWeightedPrize(pointsRoute.SPIN_PRIZES, 35).id, 'extra_spins_2');
 assert.equal(pointsRoute.pickWeightedPrize(pointsRoute.SPIN_PRIZES, 37.5).id, 'up_0');
-assert.equal(pointsRoute.spinPolicy({ luckySpinPrizes: [{ id: 'bad', kind: 'points', amount: 1, probability: 10 }] }).prizes.length, 7);
+assert.equal(pointsRoute.spinPolicy({ luckySpinPrizes: [{ id: 'bad', kind: 'points', amount: 1, probability: 10 }] }).prizes.length, 6);
 assert.match(pointsSource, /SPIN_TICKET_REQUIRED/);
 assert(winnersRouteStart >= 0 && winnersRouteEnd > winnersRouteStart, 'recent winners must have a dedicated GET endpoint');
 assert.match(winnersRouteSource, /sensitiveRateLimit\('general'\)/);

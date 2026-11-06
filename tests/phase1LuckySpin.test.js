@@ -5,12 +5,12 @@ const fs = require('fs');
 const pointsRoute = require('../routes/points');
 assert.strictEqual(pointsRoute.spinPolicy({ luckySpinCooldownHours: 24 }).cooldownHours, undefined);
 assert.deepStrictEqual(pointsRoute.SPIN_PRIZES.map(item => item.id), [
-  'hashrate_boost_10_1h', 'extra_spins_2', 'up_0', 'up_50', 'up_100', 'up_250', 'try_again'
+  'hashrate_boost_10_1h', 'extra_spins_2', 'up_0', 'up_50', 'up_100', 'up_250'
 ]);
 assert.strictEqual(pointsRoute.SPIN_PRIZES.filter(item => item.kind === 'points').length, 4);
 assert.strictEqual(pointsRoute.SPIN_PRIZES.find(item => item.id === 'extra_spins_2').amount, 2);
 assert.strictEqual(pointsRoute.SPIN_PRIZES.find(item => item.id === 'up_0').amount, 0);
-assert.deepStrictEqual(pointsRoute.SPIN_PRIZES.map(item => item.probability), [35, 2.5, 2.5, 25, 15, 10, 10]);
+assert.deepStrictEqual(pointsRoute.SPIN_PRIZES.map(item => item.probability), [35, 2.5, 2.5, 25, 15, 20]);
 assert.strictEqual(pointsRoute.SPIN_PRIZES.some(item => ['up_20', 'gram_005'].includes(item.id)), false);
 assert.strictEqual(pointsRoute.SPIN_PRIZES.reduce((sum, item) => sum + item.probability, 0), 100);
 assert.strictEqual(pointsRoute.SPIN_PRIZES[0].probability > pointsRoute.SPIN_PRIZES[1].probability, true);
