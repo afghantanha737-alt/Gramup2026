@@ -6,7 +6,6 @@ const { DAY_MS, utcDayKey, wasUtcYesterday } = require('./utcDay');
 const AUTO_CHECKIN_HOUR_UTC = 2;
 const AUTO_CHECKIN_MINUTE_UTC = 30;
 const DEFAULT_BATCH_SIZE = 20;
-const DEFAULT_SPIN_TICKET_STREAK_DAYS = 7;
 const NOTIFICATION_LEASE_MS = 10 * 60 * 1000;
 const NOTIFICATION_TYPE = 'daily_checkin';
 
@@ -149,10 +148,6 @@ async function claimDailyCheckin(userId, options = {}) {
     const newStreak = wasYesterday ? Math.max(0, Math.floor(Number(current.streak) || 0)) + 1 : 1;
     const reward = validateRewardAmount((options.rewardForStreak || dailyCheckinReward)(newStreak));
     const cycleDay = cycleDayForStreak(newStreak);
-    const ticketStreakDays = Math.max(DEFAULT_SPIN_TICKET_STREAK_DAYS, Math.floor(Number(options.spinTicketStreakDays) || DEFAULT_SPIN_TICKET_STREAK_DAYS));
-    const ticketAwarded = newStreak >= ticketStreakDays && newStreak % ticketStreakDays === 0;
-    const increments = { points: reward, totalCheckins: 1 };
-    if (ticketAwarded) increments.tickets = 1;
     const updateFilter = {
       _id: current._id || userId,
       isBanned: false,
@@ -162,7 +157,7 @@ async function claimDailyCheckin(userId, options = {}) {
     const updated = await updateUser(
       User,
       updateFilter,
-      { $set: { streak: newStreak, lastCheckIn: now }, $inc: increments },
+      { $set: { streak: newStreak, lastCheckIn: now }, $inc: { points: reward, totalCheckins: 1 } },
       session
     );
 
@@ -202,8 +197,6 @@ async function claimDailyCheckin(userId, options = {}) {
       amount: reward,
       cycleDay,
       streak: newStreak,
-      ticketAwarded,
-      tickets: Number(updated.tickets) || 0,
       user: updated
     };
   });

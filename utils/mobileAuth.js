@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const MobileAuthChallenge = require('../models/MobileAuthChallenge');
 const MobileSession = require('../models/MobileSession');
 const User = require('../models/User');
+const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -85,6 +86,9 @@ function requireMobileAuth() {
       if (!session) return res.status(401).json({ success: false, code: 'MOBILE_AUTH_REQUIRED', message: 'ورود موبایل لازم است.' });
       req.mobileSession = session;
       req.dbUser = session.user;
+      if (!isVerifiedAllowedPhone(session.user)) {
+        return res.status(403).json({ success: false, code: 'PHONE_VERIFICATION_REQUIRED', message: 'برای ادامه، Contact تلگرام خود را با شمارهٔ +93 یا +98 تأیید کنید.' });
+      }
       next();
     } catch (error) { next(error); }
   };

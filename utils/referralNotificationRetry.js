@@ -6,6 +6,7 @@ const {
   retryDelayMs: defaultRetryDelayMs,
   sendNotificationOnce: defaultSendNotificationOnce
 } = require('./notificationDelivery');
+const { isVerifiedAllowedPhone: defaultIsVerifiedAllowedPhone } = require('./telegramPhoneContact');
 
 const REFERRAL_NOTIFICATION_MAX_ATTEMPTS = 5;
 const REFERRAL_NOTIFICATION_RETRY_INTERVAL_MS = 60 * 1000;
@@ -52,16 +53,17 @@ async function resolveUser(User, id) {
   if (!User || typeof User.findById !== 'function') return null;
   let query = User.findById(id);
   if (query && typeof query.select === 'function') {
-    query = query.select('_id telegramId isBanned telegramBlockedAt referralMessageConsent');
+    query = query.select('_id telegramId isBanned telegramBlockedAt phoneCountryCode phoneVerifiedAt referralMessageConsent');
   }
   return query;
 }
 
-function gatePassed(user) {
+function gatePassed(user, isVerifiedAllowedPhone) {
   return Boolean(
     user
       && !user.isBanned
       && !user.telegramBlockedAt
+      && isVerifiedAllowedPhone(user)
       && user.referralMessageConsent === 'granted'
   );
 }
@@ -91,6 +93,7 @@ async function runReferralNotificationRetrySweep(options = {}) {
   const Model = options.NotificationDelivery || options.notificationDeliveryModel || require('../models/NotificationDelivery');
   const User = options.User || DefaultUser;
   const sendNotificationOnce = options.sendNotificationOnce || defaultSendNotificationOnce;
+  const isVerifiedAllowedPhone = options.isVerifiedAllowedPhone || defaultIsVerifiedAllowedPhone;
   const now = asDate(options.now || new Date());
   const maxAttempts = Math.max(1, Number(options.maxAttempts || REFERRAL_NOTIFICATION_MAX_ATTEMPTS));
   const limit = Math.max(1, Math.min(1000, Number(options.limit || 100)));
@@ -108,13 +111,13 @@ async function runReferralNotificationRetrySweep(options = {}) {
 
   for (const row of rows) {
     const user = await resolveUser(User, row.user);
-    if (!gatePassed(user)) {
+    if (!gatePassed(user, isVerifiedAllowedPhone)) {
       summary.skipped += 1;
       const reason = !user ? 'user_missing'
         : user.isBanned ? 'banned'
           : user.telegramBlockedAt ? 'telegram_blocked'
           : user.referralMessageConsent !== 'granted' ? 'consent'
-            : 'consent';
+            : 'phone';
       await deferGateBlocked(Model, row, now, reason);
       continue;
     }
