@@ -9,7 +9,7 @@ assert.strictEqual(rewards.SPIN_PRIZES.length, 6, 'paid spin must use the six-sl
 assert.strictEqual(rewards.SPIN_PRIZES.reduce((sum, prize) => sum + prize.probability, 0), 100, 'spin probabilities must total 100%');
 assert.deepStrictEqual(
   rewards.SPIN_PRIZES.map(prize => prize.id),
-  ['hashrate_boost_10_1h', 'extra_spins_2', 'up_0', 'up_50', 'up_100', 'up_250']
+  ['hashrate_boost_10_1h', 'gram_005', 'up_0', 'up_50', 'up_100', 'up_250']
 );
 
 const paidRoute = route.slice(route.indexOf("router.post('/spin/paid'"), route.indexOf("router.post('/exchange'"));

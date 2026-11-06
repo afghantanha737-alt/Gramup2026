@@ -7,19 +7,19 @@ const pointsRoute = require('../routes/points');
 const Settings = require('../models/Settings');
 
 const expectedIds = [
-  'hashrate_boost_10_1h', 'extra_spins_2', 'up_0', 'up_50', 'up_100', 'up_250'
+  'hashrate_boost_10_1h', 'gram_005', 'up_0', 'up_50', 'up_100', 'up_250'
 ];
 assert.deepStrictEqual(SPIN_PRIZES.map(prize => prize.id), expectedIds);
 assert.deepStrictEqual(SPIN_PRIZES.map(prize => prize.probability), [35, 2.5, 2.5, 25, 15, 20]);
 assert.strictEqual(SPIN_PRIZES.reduce((sum, prize) => sum + prize.probability, 0), 100);
 assert.strictEqual(SPIN_PRIZES.find(prize => prize.id === 'hashrate_boost_10_1h').label, '10% Mining Hashrate Boost');
-assert.deepStrictEqual(SPIN_PRIZES.find(prize => prize.id === 'extra_spins_2'), {
-  id: 'extra_spins_2', kind: 'spins', amount: 2, label: '2 Extra Spins', probability: 2.5
+assert.deepStrictEqual(SPIN_PRIZES.find(prize => prize.id === 'gram_005'), {
+  id: 'gram_005', kind: 'gram', amount: 0.05, label: '+0.05 GRAM', probability: 2.5
 });
 assert.deepStrictEqual(SPIN_PRIZES.find(prize => prize.id === 'up_0'), {
   id: 'up_0', kind: 'points', amount: 0, label: '0 UP', probability: 2.5
 });
-assert.strictEqual(SPIN_PRIZES.some(prize => ['up_20', 'gram_005'].includes(prize.id)), false);
+assert.strictEqual(SPIN_PRIZES.some(prize => ['up_20', 'extra_spins_2'].includes(prize.id)), false);
 assert.strictEqual(isValidSpinPrizePool(defaultSpinPrizes()), true);
 
 const stalePool = [
@@ -46,7 +46,7 @@ const i18nSource = fs.readFileSync(require.resolve('../public/js/i18n.js'), 'utf
 const cssSource = fs.readFileSync(require.resolve('../public/css/style.css'), 'utf8');
 
 const expectedPicks = [
-  [0, 'hashrate_boost_10_1h'], [35, 'extra_spins_2'], [37.5, 'up_0'],
+  [0, 'hashrate_boost_10_1h'], [35, 'gram_005'], [37.5, 'up_0'],
   [40, 'up_50'], [65, 'up_100'], [80, 'up_250']
 ];
 for (const [roll, prizeId] of expectedPicks) {
@@ -62,13 +62,13 @@ assert.match(adminSource, /luckySpinPrizes: normalizeSpinPrizes\(settings\.lucky
 assert.match(adminPage, /data-spin-field="kind" disabled/);
 assert.match(adminPage, /data-spin-field="probability"/);
 assert.doesNotMatch(adminPage, /onclick="addLuckySpinRewardRow\(\)"/);
-assert.match(appSource, /extra_spins_2: \["2 Extra", "Spins"\]/);
+assert.match(appSource, /gram_005: \["\+0\.05", "GRAM"\]/);
 assert.match(appSource, /up_0: \["0", "UP"\]/);
 assert.match(appSource, /spinPrizeTargetRotation\(prizeId\)/);
 assert.match(appSource, /runSpinWheelAnimation\(wheel, result\.prizeId \?\? result\.prize\?\.id\)/);
 assert.match(cssSource, /60deg/);
 assert.match(i18nSource, /spin_prize_zero_up:/);
-assert.match(i18nSource, /spin_prize_extra_spins:/);
+assert.match(i18nSource, /spin_prize_gram:/);
 assert.match(i18nSource, /spin_extra_spins_added:/);
 
 console.log('PASS — canonical six-spin pool, 100% odds, ticket rewards, ledger amounts, Admin contract, and result-aligned wheel');

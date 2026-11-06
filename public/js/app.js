@@ -1431,14 +1431,13 @@ function updateSpinHeaderStats() {
 }
 const DEFAULT_SPIN_WHEEL_SLICES = Object.freeze([
   Object.freeze({ id: 'hashrate_boost_10_1h', kind: 'boost', amount: 10, label: '10% Mining Hashrate Boost' }),
-  Object.freeze({ id: 'extra_spins_2', kind: 'spins', amount: 2, label: '2 Extra Spins' }),
+  Object.freeze({ id: 'gram_005', kind: 'gram', amount: 0.05, label: '+0.05 GRAM' }),
   Object.freeze({ id: 'up_0', kind: 'points', amount: 0, label: '0 UP' }),
   Object.freeze({ id: 'up_50', kind: 'points', amount: 50, label: '+50 UP' }),
   Object.freeze({ id: 'up_100', kind: 'points', amount: 100, label: '+100 UP' }),
   Object.freeze({ id: 'up_250', kind: 'points', amount: 250, label: '+250 UP' })
 ]);
 function spinPrizeLabel(prizeId, amount) {
-  if (prizeId === 'extra_spins_2') return t('spin_prize_extra_spins', {}, '2 Extra Spins');
   if (prizeId === 'up_0') return t('spin_prize_zero_up', {}, '0 UP');
   if (["up_50", "up_100", "up_250", "up_20"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
   if (prizeId === "hashrate_boost_10_1h") return t("spin_prize_boost_10");
@@ -1448,7 +1447,7 @@ function spinPrizeLabel(prizeId, amount) {
 }
 function spinSliceText(prize, index) {
   const fixedText = {
-    hashrate_boost_10_1h: ["10%", "Mining"], extra_spins_2: ["2 Extra", "Spins"],
+    hashrate_boost_10_1h: ["10%", "Mining"], gram_005: ["+0.05", "GRAM"],
     up_0: ["0", "UP"], up_50: ["+50", "UP"], up_100: ["+100", "UP"],
     up_250: ["+250", "UP"]
   };

@@ -2,7 +2,7 @@
 
 const SPIN_PRIZES = Object.freeze([
   Object.freeze({ id: 'hashrate_boost_10_1h', kind: 'boost', amount: 10, label: '10% Mining Hashrate Boost', probability: 35 }),
-  Object.freeze({ id: 'extra_spins_2', kind: 'spins', amount: 2, label: '2 Extra Spins', probability: 2.5 }),
+  Object.freeze({ id: 'gram_005', kind: 'gram', amount: 0.05, label: '+0.05 GRAM', probability: 2.5 }),
   Object.freeze({ id: 'up_0', kind: 'points', amount: 0, label: '0 UP', probability: 2.5 }),
   Object.freeze({ id: 'up_50', kind: 'points', amount: 50, label: '+50 UP', probability: 25 }),
   Object.freeze({ id: 'up_100', kind: 'points', amount: 100, label: '+100 UP', probability: 15 }),
