@@ -10,36 +10,6 @@ const MESSAGES = {
     ps: name => `سلام ${name} 👋\nGramup ته ښه راغلاست!\nد دندو ترسره کولو، ملګرو بلنې او ورځني ننوتلو سره پوائنټونه راټول کړئ او GRAM ته یې بدل کړئ.`,
     en: name => `Hi ${name} 👋\nWelcome to Gramup!\nComplete tasks, invite friends and check in daily to earn points and convert them to GRAM.`
   },
-  phoneContactRequest: {
-    fa: () => 'برای ادامهٔ ورود، شمارهٔ خودتان را با دکمهٔ زیر از طریق Telegram به اشتراک بگذارید. فقط شماره‌های +93 و +98 پذیرفته می‌شوند. شمارهٔ کامل ذخیره نمی‌شود؛ فقط کد کشور و زمان تأیید ثبت می‌شود.',
-    ps: () => 'د ننوتلو د دوام لپاره، د لاندې تڼۍ له لارې خپل د Telegram Contact شریک کړئ. یوازې د +93 او +98 شمېرې منل کېږي. بشپړه شمېره نه ساتل کېږي؛ یوازې د هېواد کوډ او د تایید وخت ثبتېږي.',
-    en: () => 'To continue signing in, share your own Telegram contact with the button below. Only +93 and +98 numbers are accepted. Your full number is not stored; only the country code and verification time are recorded.'
-  },
-  phoneShareButton: {
-    fa: () => 'اشتراک شمارهٔ خودم',
-    ps: () => 'خپل شمېره شریکول',
-    en: () => 'Share my phone number'
-  },
-  phoneContactNotSelf: {
-    fa: () => 'لطفاً Contact خودتان را با دکمهٔ اشتراک‌گذاری تلگرام بفرستید؛ شمارهٔ شخص دیگری پذیرفته نمی‌شود.',
-    ps: () => 'مهرباني وکړئ د Telegram د شریکولو تڼۍ له لارې خپل Contact واستوئ؛ د بل چا شمېره نه منل کېږي.',
-    en: () => 'Please share your own contact using Telegram’s share button. Someone else’s number cannot be used.'
-  },
-  phoneContactUnsupported: {
-    fa: () => 'استفاده از Gramup فقط برای شماره‌های +93 و +98 امکان‌پذیر است. این شماره تأیید نمی‌شود و حساب شما مسدود نشده است؛ اگر شمارهٔ مجاز دیگری دارید، Contact خودتان را دوباره با دکمهٔ زیر بفرستید.',
-    ps: () => 'Gramup یوازې د +93 او +98 شمېرو لپاره کار کوي. دا شمېره نه تاییدېږي او ستاسو حساب نه دی بند شوی؛ که بله منل شوې شمېره لرئ، خپل Contact د لاندې تڼۍ له لارې بیا واستوئ.',
-    en: () => 'Gramup is available only for +93 and +98 numbers. This number cannot be verified, but your account has not been blocked; if you have another eligible number, share your own contact again with the button below.'
-  },
-  phoneContactVerified: {
-    fa: () => '✅ شمارهٔ شما با موفقیت تأیید شد. حالا می‌توانید به Gramup برگردید.',
-    ps: () => '✅ ستاسو شمېره تایید شوه. اوس بېرته Gramup ته ستنېدای شئ.',
-    en: () => '✅ Your phone number is verified. You can now return to Gramup.'
-  },
-  phoneContactNotRegistered: {
-    fa: () => 'ابتدا Gramup را باز کنید و سپس دوباره برای تأیید شماره تلاش کنید.',
-    ps: () => 'لومړی Gramup پرانیزئ، بیا د شمېرې د تایید هڅه وکړئ.',
-    en: () => 'Open Gramup first, then try phone verification again.'
-  },
   taskNew: {
     fa: (title, reward, sponsorName) => `🎯 ${sponsorName ? 'تسک اسپانسری جدید' : 'تسک جدید'} اضافه شد!\n\n${title}${sponsorName ? `\nاسپانسر: ${sponsorName}` : ''}\nپاداش: ${reward} پوینت\n\nهمین حالا از تب «تسک‌ها» انجامش بده.`,
     ps: (title, reward, sponsorName) => `🎯 ${sponsorName ? 'نوې سپانسر شوې دنده' : 'نوې دنده'} اضافه شوه!\n\n${title}${sponsorName ? `\nاسپانسر: ${sponsorName}` : ''}\nپاداش: ${reward} پوائنټ\n\nاوس مهال یې د «دندې» ټب څخه ترسره کړئ.`,

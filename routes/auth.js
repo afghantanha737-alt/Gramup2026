@@ -3,12 +3,10 @@ const express = require('express');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
 const { requireUnifiedAuth, isNativeSessionRequest } = require('../utils/unifiedAuth');
-const { requireTelegramAuth } = require('../utils/telegramAuth');
 const User = require('../models/User');
 const { hashNetworkIdentifier, hashDeviceIdentifier, assessReferralRisk } = require('../utils/referralRisk');
 const { linkReferral } = require('../utils/referralSystem');
 const { referralIdentifierQuery } = require('../utils/referralCore');
-const { isVerifiedAllowedPhone, contactRequestKeyboard } = require('../utils/telegramPhoneContact');
 const { bot } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { sendWelcomeMessage, welcomeTriggerKey } = require('../utils/telegramStart');
@@ -16,7 +14,6 @@ const { getMaintenanceState, isAllowedTelegramId } = require('../utils/maintenan
 const { safelySendTelegram } = require('../utils/telegramNotification');
 
 const auth = requireUnifiedAuth(process.env.BOT_TOKEN);
-const telegramAuth = requireTelegramAuth(process.env.BOT_TOKEN);
 
 // GET /api/auth/me — بوت اولیه کاربر + اعمال کد رفرال از URL (fallback وقتی startapp نداریم)
 router.get('/me', auth, async (req, res) => {
@@ -28,7 +25,7 @@ router.get('/me', auth, async (req, res) => {
   // تا کاربران قدیمی نتوانند بعداً برای خودشان دعوت‌کننده ثبت کنند.
   const isFreshAccount = u.createdAt && Date.now() - new Date(u.createdAt).getTime() < 24 * 60 * 60 * 1000;
 
-  if (isVerifiedAllowedPhone(u) && !u.referredBy && referralQuery && isFreshAccount) {
+  if (!u.referredBy && referralQuery && isFreshAccount) {
     const referrer = await User.findOne(referralQuery).select('_id telegramId isBanned signupIpHash signupDeviceHash');
     // جلوگیری از خودارجاعی و دور رفرال (A دعوت‌کننده‌ی B و B دعوت‌کننده‌ی A)
     const isCycle = referrer && referrer.referredBy && String(referrer.referredBy) === String(u._id);
@@ -59,20 +56,17 @@ router.get('/me', auth, async (req, res) => {
 
   const maintenanceState = await getMaintenanceState();
   const maintenanceAllowed = isAllowedTelegramId(maintenanceState, u.telegramId);
-  const phoneVerified = isVerifiedAllowedPhone(u);
   res.json({
     success: true,
-    telegramId: phoneVerified ? u.telegramId : '',
-    firstName: phoneVerified ? u.firstName : '',
-    lastName: phoneVerified ? u.lastName : '',
-    username: phoneVerified ? u.username : '',
-    photoUrl: phoneVerified ? u.photoUrl : '',
-    points: phoneVerified ? u.points : 0,
-    referralCode: phoneVerified ? u.referralCode : '',
+    telegramId: u.telegramId,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    username: u.username,
+    photoUrl: u.photoUrl,
+    points: u.points,
+    referralCode: u.referralCode,
     language: u.language,
-    phoneVerificationRequired: !phoneVerified,
-    phoneCountryCode: phoneVerified ? u.phoneCountryCode : '',
-    referralMessageConsent: phoneVerified ? (u.referralMessageConsent || 'unset') : 'unset',
+    referralMessageConsent: u.referralMessageConsent || 'unset',
     maintenance: {
       enabled: maintenanceState.enabled,
       allowed: maintenanceAllowed,
@@ -81,31 +75,6 @@ router.get('/me', auth, async (req, res) => {
   });
 });
 
-// Telegram-only bootstrap: requireTelegramAuth deliberately permits this route
-// before phone verification so the bot can receive the user's Contact.
-router.post('/request-phone-contact', telegramAuth, async (req, res) => {
-  if (isVerifiedAllowedPhone(req.dbUser)) return res.json({ success: true, alreadyVerified: true });
-  const username = String(process.env.BOT_USERNAME || '').replace(/^@/, '').trim();
-  if (!username || !/^[A-Za-z0-9_]{5,32}$/.test(username)) {
-    return res.status(503).json({ success: false, code: 'PHONE_CONTACT_BOT_UNAVAILABLE', message: 'ربات برای تأیید شماره در دسترس نیست.' });
-  }
-  const botUrl = `https://t.me/${username}`;
-  const previousRequestAt = req.dbUser.phoneContactRequestedAt;
-  req.dbUser.phoneContactRequestedAt = new Date();
-  await req.dbUser.save();
-  try {
-    if (!bot) throw new Error('Telegram bot is unavailable');
-    const language = req.dbUser.language || 'fa';
-    await bot.sendMessage(String(req.dbUser.telegramId), botText('phoneContactRequest', language), {
-      reply_markup: contactRequestKeyboard(botText('phoneShareButton', language))
-    });
-  } catch (error) {
-    req.dbUser.phoneContactRequestedAt = previousRequestAt || null;
-    await req.dbUser.save().catch(() => {});
-    return res.status(503).json({ success: false, code: 'PHONE_CONTACT_DELIVERY_FAILED', message: 'ارسال درخواست تأیید شماره ناموفق بود.' });
-  }
-  res.json({ success: true, botUrl });
-});
 
 router.patch('/referral-message-consent', auth, async (req, res) => {
   const consent = String(req.body?.consent || '');

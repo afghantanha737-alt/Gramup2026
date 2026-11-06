@@ -2,8 +2,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const { contactRequestKeyboard } = require('./telegramPhoneContact');
-const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 const { safelySendTelegram, logTelegramNotificationFailure } = require('./telegramNotification');
 const START_COMMAND = /^\/start(?:@[A-Za-z0-9_]+)?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/;
 const DEFAULT_WELCOME_IMAGE_PATH = path.join(__dirname, '..', 'public', 'img', 'welcome-bot.jpg');
@@ -132,13 +130,14 @@ async function handleTelegramStart({
   User,
   appUrl,
   generateReferralCode,
-  linkReferralByCode,
   botText,
   welcomeImagePath = process.env.WELCOME_IMAGE_PATH || DEFAULT_WELCOME_IMAGE_PATH,
   logger = console
 }) {
   const command = parseTelegramStart(message?.text);
   if (!command) return null;
+  // Ignore the retired contact-verification deep link and launch normally.
+  const payload = command.payload === 'phone_contact' ? null : command.payload;
   if (!message?.from?.id || !message?.chat?.id || !bot || !User) {
     throw new TypeError('A valid Telegram message, bot client, and User model are required.');
   }
@@ -165,20 +164,8 @@ async function handleTelegramStart({
     }
   }
 
-  const language = user.language || 'fa';
-  if (command.payload === 'phone_contact') {
-    const delivered = await safelySendTelegram(() => {
-      if (isVerifiedAllowedPhone(user)) {
-        return bot.sendMessage(message.chat.id, botText('phoneContactVerified', language), { reply_markup: { remove_keyboard: true } });
-      }
-      return bot.sendMessage(message.chat.id, botText('phoneContactRequest', language),
-        { reply_markup: contactRequestKeyboard(botText('phoneShareButton', language)) });
-    }, { context: 'start_phone_contact', logger });
-    return { isNewUser, hadReferralPayload: false, welcomeSent: delivered, hasMiniAppButton: false, phoneContactRequested: true };
-  }
-
-  if (isNewUser && command.payload) {
-    user.pendingReferralIdentifier = String(command.payload).slice(0, 64);
+  if (isNewUser && payload) {
+    user.pendingReferralIdentifier = String(payload).slice(0, 64);
     if (typeof user.save === 'function') await user.save();
   }
 
@@ -187,7 +174,7 @@ async function handleTelegramStart({
     user,
     bot,
     appUrl,
-    payload: command.payload,
+    payload,
     isNewUser,
     botText,
     User,
@@ -198,7 +185,7 @@ async function handleTelegramStart({
 
   return {
     isNewUser,
-    hadReferralPayload: Boolean(command.payload),
+    hadReferralPayload: Boolean(payload),
     welcomeSent: sentWelcome.sent,
     hasMiniAppButton: sentWelcome.hasMiniAppButton
   };

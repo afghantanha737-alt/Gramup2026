@@ -6,7 +6,6 @@ const Settings = require('../models/Settings');
 const ReferralRelationship = require('../models/ReferralRelationship');
 const { withMongoTransaction } = require('./mongoTransaction');
 const notificationDelivery = require('./notificationDelivery');
-const { isVerifiedAllowedPhone } = require('./telegramPhoneContact');
 const {
   DEFAULT_REFERRAL_LEVEL_RATES,
   DEFAULT_REFERRAL_INITIAL_REWARD_POINTS,
@@ -316,7 +315,6 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
       referrerId: referrer._id,
       referredUserId: invitee._id,
       notification: initialCreditCreated && initialPaid && Number(initialRewardPoints) === 10
-        && isVerifiedAllowedPhone(referrer)
         && referrer.referralMessageConsent === 'granted' ? {
         eventKey: `referral-initial:${invitee._id}`,
         type: 'referral_initial',
@@ -420,7 +418,7 @@ async function distributeReferralCommissions(earningEntry, session) {
   const seen = new Set([String(origin._id)]);
   let child = origin;
   for (let level = 1; level <= rates.length && child?.referredBy; level += 1) {
-    const ancestor = await sessionQuery(User.findById(child.referredBy).select('_id telegramId referredBy isBanned accountReviewStatus referralRiskBlocked referralRiskScore phoneCountryCode phoneVerifiedAt referralMessageConsent telegramBlockedAt language'), session);
+    const ancestor = await sessionQuery(User.findById(child.referredBy).select('_id telegramId referredBy isBanned accountReviewStatus referralRiskBlocked referralRiskScore referralMessageConsent telegramBlockedAt language'), session);
     if (!ancestor || seen.has(String(ancestor._id))) break;
     seen.add(String(ancestor._id));
     pathUsers.push(ancestor);

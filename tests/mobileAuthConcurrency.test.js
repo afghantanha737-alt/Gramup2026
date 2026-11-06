@@ -31,12 +31,17 @@ const MobileAuthChallenge = {
     if (challenge?._id === filter._id && challenge.status === filter.status) Object.assign(challenge, update.$set || {});
   }
 };
-const MobileSession = { create: async doc => { createdSessions += 1; return doc; } };
-const User = { findOne: async () => ({ _id: 'user-1', telegramId: '42', isBanned: false }) };
+const noPhoneUser = { _id: 'user-1', telegramId: '42', isBanned: false };
+const mobileSession = { _id: 'session-1', user: noPhoneUser, save: async () => {} };
+const MobileSession = {
+  create: async doc => { createdSessions += 1; return doc; },
+  findOne: () => ({ populate: async () => mobileSession })
+};
+const User = { findOne: async () => noPhoneUser };
 for (const [file, exports] of [[challengePath, MobileAuthChallenge], [sessionPath, MobileSession], [userPath, User]]) {
   require.cache[file] = { id: file, filename: file, loaded: true, exports };
 }
-const { createMobileChallenge, verifyMobileChallenge, consumeMobileChallenge } = require('../utils/mobileAuth');
+const { createMobileChallenge, verifyMobileChallenge, consumeMobileChallenge, requireMobileAuth } = require('../utils/mobileAuth');
 
 (async () => {
   const created = await createMobileChallenge();
@@ -53,5 +58,12 @@ const { createMobileChallenge, verifyMobileChallenge, consumeMobileChallenge } =
   assert.strictEqual(consumeResults.filter(Boolean).length, 1, 'only one concurrent consume receives an access token');
   assert.strictEqual(createdSessions, 1, 'exactly one mobile session is created for the one-time challenge');
   assert.strictEqual(challenge.status, 'consumed');
-  console.log('PASS — mobile auth challenge verification and session consumption are atomic under concurrency');
+  const consumed = consumeResults.find(Boolean);
+  let passed = false;
+  const req = { get: name => name === 'authorization' ? `Bearer ${consumed.accessToken}` : '' };
+  const res = { status() { return this; }, json() { throw new Error('phone-free session should not be rejected'); } };
+  await requireMobileAuth()(req, res, () => { passed = true; });
+  assert.strictEqual(passed, true, 'mobile business APIs accept a valid session when the user has no phone data');
+  assert.strictEqual(req.dbUser, noPhoneUser);
+  console.log('PASS — mobile challenge consumption is atomic and phone-free Bearer sessions authorize normally');
 })().catch(error => { console.error(error); process.exitCode = 1; });

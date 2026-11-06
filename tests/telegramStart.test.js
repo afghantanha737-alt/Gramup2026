@@ -69,7 +69,7 @@ function fixture(existingUser = null) {
   });
   assert.deepStrictEqual(freshResult, { isNewUser: true, hadReferralPayload: true, welcomeSent: true, hasMiniAppButton: true });
   assert.strictEqual(fresh.users.size, 1);
-  assert.strictEqual(fresh.linked.length, 0, 'referral reward linking waits until phone verification');
+  assert.strictEqual(fresh.linked.length, 0, 'referral attribution is applied during authenticated Mini App bootstrap');
   assert.strictEqual(fresh.users.get('123').pendingReferralIdentifier, 'inviter_42');
   assert.strictEqual(fresh.sent.length, 1);
   assert.strictEqual(fresh.sent[0][1], 'welcome:fa:Ava');
@@ -84,14 +84,15 @@ function fixture(existingUser = null) {
   assert.strictEqual(duplicateStart.welcomeSent, false, 'duplicate delivery is not reported as a newly sent welcome');
   assert.strictEqual(fresh.sent.length, 1, 'the same start payload must not send a duplicate welcome');
 
-  const contactRequest = fixture();
-  const contactResult = await handleTelegramStart({
-    ...contactRequest.dependencies,
+  const legacyPhoneLink = fixture();
+  const legacyResult = await handleTelegramStart({
+    ...legacyPhoneLink.dependencies,
     message: { text: '/start phone_contact', from: { id: 124 }, chat: { id: 124 } }
   });
-  assert.deepStrictEqual(contactResult, { isNewUser: true, hadReferralPayload: false, welcomeSent: true, hasMiniAppButton: false, phoneContactRequested: true });
-  assert.strictEqual(contactRequest.sent[0][1], 'phoneContactRequest:fa:undefined');
-  assert.strictEqual(contactRequest.sent[0][2].reply_markup.keyboard[0][0].request_contact, true);
+  assert.deepStrictEqual(legacyResult, { isNewUser: true, hadReferralPayload: false, welcomeSent: true, hasMiniAppButton: true });
+  assert.strictEqual(legacyPhoneLink.sent.length, 1, 'the retired contact deep link now launches the normal welcome flow');
+  assert.strictEqual(legacyPhoneLink.sent[0][2].reply_markup.inline_keyboard[0][0].text, 'Open Mini App');
+  assert.strictEqual(JSON.stringify(legacyPhoneLink.sent[0]).includes('request_contact'), false);
 
   const existingUser = { _id: 'existing-id', telegramId: '456', language: 'en', referredBy: 'original-referrer' };
   const returning = fixture(existingUser);
@@ -135,7 +136,7 @@ function fixture(existingUser = null) {
   assert.strictEqual(metrics.webhookSecretRejections, 1);
   assert.strictEqual(metrics.updatesReceived, 1);
 
-  console.log('ALL PASS — Telegram /start welcome, deferred referral linking, contact request and webhook diagnostics');
+  console.log('PASS — Telegram /start welcome, referral payload handling, direct Mini App launch and webhook diagnostics');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

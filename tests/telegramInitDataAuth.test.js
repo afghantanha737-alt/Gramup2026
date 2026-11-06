@@ -7,7 +7,7 @@ const botToken = 'test-bot-token';
 const user = {
   _id: 'user-42', telegramId: '42', createdAt: new Date(now * 1000 - 60_000),
   username: '', firstName: 'Test', lastName: '', photoUrl: '', isBanned: false,
-  phoneCountryCode: '+93', phoneVerifiedAt: new Date(), referralMessageConsent: 'unset'
+  referralMessageConsent: 'unset'
 };
 require.cache[userPath] = {
   id: userPath,
