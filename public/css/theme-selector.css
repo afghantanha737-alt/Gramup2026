@@ -106,7 +106,7 @@ html[data-theme="light"] button:disabled { color: #64748b; }
 .profileThemePicker { padding: 14px 16px 16px; border-top: 1px solid var(--line); }
 .profileThemeHeading { display: flex; align-items: center; gap: 9px; color: var(--text); font-size: 13px; }
 .profileThemeHeading .profileIcon { margin: 0; }
-.profileThemeChoices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 11px; }
+.profileThemeChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 11px; }
 .themeChoice {
   min-height: 62px; padding: 8px 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   border: 1px solid var(--line-strong); border-radius: 13px; color: var(--text-soft); background: var(--surface-3);
@@ -122,3 +122,199 @@ html[data-theme="light"] button:disabled { color: #64748b; }
   .profileThemeChoices { gap: 5px; }
   .themeChoice { font-size: 8px; }
 }
+
+
+/* Silver Metallic: brushed platinum surfaces, graphite text, and a restrained chrome accent. */
+html[data-theme="silver"] {
+  color-scheme: light;
+  --bg: #d9dfe5;
+  --bg-soft: #e6eaee;
+  --surface: rgba(246, 248, 250, .92);
+  --surface-2: #edf0f3;
+  --surface-3: #e1e6eb;
+  --text: #0f172a;
+  --text-soft: #334155;
+  --text-muted: #64748b;
+  --line: rgba(255, 255, 255, .72);
+  --line-strong: rgba(100, 116, 139, .28);
+  --brand-accent: #64748b;
+  --brand-accent-strong: #334155;
+  --brand-accent-text: #334155;
+  --brand-accent-ink: #0f172a;
+  --brand-accent-soft: rgba(100, 116, 139, .12);
+  --brand-accent-border: rgba(71, 85, 105, .28);
+  --brand-accent-glow: rgba(100, 116, 139, .16);
+  --primary: #64748b;
+  --primary-2: #334155;
+  --primary-soft: rgba(100, 116, 139, .12);
+  --info: #475569;
+  --info-soft: rgba(100, 116, 139, .12);
+  --shadow: 0 4px 20px rgba(0, 0, 0, .06);
+  --shadow-soft: 0 3px 12px rgba(15, 23, 42, .07);
+  --tb-grad: linear-gradient(135deg, #f8fafc 0%, #d8dee5 48%, #eef1f4 100%);
+  --tb-card: linear-gradient(145deg, rgba(255,255,255,.96), rgba(226,232,238,.96));
+  --tb-card-shadow: 0 4px 20px rgba(0,0,0,.06);
+  --product-bg: #d9dfe5;
+  --product-surface: #eef1f4;
+  --product-surface-raised: #f7f8fa;
+  --product-border: rgba(255,255,255,.82);
+  --product-brand: #475569;
+  --product-brand-strong: #334155;
+  --product-cyan: #64748b;
+}
+html[data-theme="silver"] body {
+  color: var(--text) !important;
+  background-color: var(--bg) !important;
+  background-image: linear-gradient(138deg, #e6eaee 0%, #d9dfe5 48%, #e4e8ec 100%) !important;
+  background-attachment: fixed;
+}
+html[data-theme="silver"] #app,
+html[data-theme="silver"] #content,
+html[data-theme="silver"] .appContent { color: var(--text); background: transparent; }
+html[data-theme="silver"] #appHeader {
+  color: var(--text) !important;
+  background: linear-gradient(145deg, rgba(248,250,252,.94), rgba(220,226,232,.9)) !important;
+  border-bottom: 1px solid rgba(255,255,255,.85) !important;
+  box-shadow: 0 4px 18px rgba(15,23,42,.07);
+  backdrop-filter: blur(18px);
+}
+html[data-theme="silver"] .bottomNav {
+  color: var(--text-soft);
+  background: linear-gradient(145deg, rgba(245,247,249,.97), rgba(216,222,228,.96)) !important;
+  border-top: 1px solid rgba(255,255,255,.88) !important;
+  box-shadow: 0 -8px 24px rgba(15,23,42,.08);
+  backdrop-filter: blur(18px);
+}
+html[data-theme="silver"] .bottomNav button { color: #64748b; }
+html[data-theme="silver"] .bottomNav button.active { color: #0f172a !important; background: rgba(255,255,255,.56) !important; }
+html[data-theme="silver"] .bottomNav button::before { background: #475569 !important; box-shadow: 0 0 8px rgba(71,85,105,.2) !important; }
+html[data-theme="silver"] .tabSvg { color: currentColor; }
+
+/* Shared surfaces cover Home, Tasks, Mine, Wallet, Profile, referrals, dialogs, and nested panels. */
+html[data-theme="silver"] :is(.card, .tbCard, .tbStat, .taskItem, .hero, .heroPremium, [class*="Card"], [class*="Panel"], [class*="Modal"]) {
+  color: var(--text);
+  background: linear-gradient(145deg, rgba(250,251,252,.94), rgba(225,230,235,.97)) !important;
+  border-color: rgba(255,255,255,.82) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.06) !important;
+}
+html[data-theme="silver"] :is(.cardTitle, .cardSubtitle, .sectionTitle, .sectionHeader, .profileNameLg, .profileText, .profileChevron, .tbAmountNum, .tbAmountUnit, .tbStatValue, .tbStatLabel, .vipPlanName, .vipPlanStat, .vipPlanReward, .rf-hero-total, .rf-kpi, .rf-panel, .spinCard h2, .spinBrand, .spinAvailability) {
+  color: var(--text) !important;
+  text-shadow: none !important;
+}
+html[data-theme="silver"] :is(p, small, label, .text-muted, .cardSubtitle, .profileItem small, .vipPlanDaily, .rf-caption, .rf-panel-subtitle) {
+  color: var(--text-soft) !important;
+}
+html[data-theme="silver"] :is(.profileHeaderCard, .profileOverviewCard, .profileMenuPanel, .profileHistoryView > .card, .profileAboutView .card, .walletOverview, .walletChainBalance, .withdrawBox, .exchangeModal, .referralDashboard .rf-hero, .referralDashboard .rf-kpi, .referralDashboard .rf-panel, .spinLaunchCard, .spinCard, .modalBox, .vipRedesign .vipMiningHero, .vipRedesign .vipHero) {
+  color: var(--text) !important;
+  background: linear-gradient(145deg, rgba(250,251,252,.96), rgba(222,228,234,.98)) !important;
+  border-color: rgba(255,255,255,.84) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.06) !important;
+}
+html[data-theme="silver"] :is(input, textarea, select, .formControl, .exchangeInput, .withdrawInput, .addressField) {
+  color: #0f172a !important;
+  background: linear-gradient(145deg, #f8fafc, #e2e8ee) !important;
+  border-color: rgba(100,116,139,.28) !important;
+  box-shadow: inset 0 1px 3px rgba(15,23,42,.05) !important;
+}
+html[data-theme="silver"] input::placeholder,
+html[data-theme="silver"] textarea::placeholder { color: #64748b !important; opacity: 1; }
+html[data-theme="silver"] :is(.primaryBtn, .secondaryBtn, .heroRingBtn, .taskAction:not(.done):not(.pending), .spinButton, .spinPaidButton, .spinLaunchButton, .vipHeroClaimButton, .referralCopyBtn, .exchangeSubmit, .withdrawSubmit) {
+  color: #0f172a !important;
+  background: linear-gradient(135deg, #f8fafc 0%, #cbd2da 48%, #edf0f3 100%) !important;
+  border: 1px solid rgba(255,255,255,.92) !important;
+  box-shadow: 0 4px 12px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.9) !important;
+  text-shadow: none !important;
+}
+html[data-theme="silver"] :is(.primaryBtn, .secondaryBtn, .heroRingBtn, .taskAction, .spinButton, .spinPaidButton, .spinLaunchButton, .vipHeroClaimButton):active:not(:disabled) {
+  transform: translateY(1px) scale(.985);
+  box-shadow: inset 0 2px 5px rgba(15,23,42,.12) !important;
+}
+html[data-theme="silver"] button:disabled { color: #64748b !important; filter: grayscale(.55); box-shadow: none !important; }
+html[data-theme="silver"] :is(.secondaryBtn, .taskAction.done, .taskAction.pending, .sectionMore, .tbAct, .profileItem, .spinAvailability) {
+  color: #334155 !important;
+  border-color: rgba(100,116,139,.24) !important;
+}
+html[data-theme="silver"] :is(.badge, .badge.info, .taskReward, .vipStatusPill, .rf-hero-badge, .rf-network-total, .spinHeaderStat, .spinLaunchStatus) {
+  color: #334155 !important;
+  border-color: rgba(100,116,139,.26) !important;
+  background: linear-gradient(145deg, rgba(255,255,255,.74), rgba(203,210,218,.56)) !important;
+  text-shadow: none !important;
+}
+html[data-theme="silver"] .vipRedesign .vipMiningHero,
+html[data-theme="silver"] .vipRedesign .vipHero,
+html[data-theme="silver"] .vipRedesign .vipPlanCard,
+html[data-theme="silver"] .vipRedesign .vipPlanStat,
+html[data-theme="silver"] .vipRedesign .vipHeroPlanRow {
+  color: var(--text) !important;
+  background: linear-gradient(145deg, #f7f8fa, #dce2e8) !important;
+  border-color: rgba(255,255,255,.86) !important;
+}
+html[data-theme="silver"] .vipRedesign :is(.vipActivePlanName, .vipSubscriptionsTitle, .vipPlanStat span, .vipPlanDaily, .vipBalanceValue, .vipHeroPlanMeta) { color: #334155 !important; }
+html[data-theme="silver"] .vipRedesign :is(.vipMinerOrbit, .vipMinerCoin) { color: #334155 !important; border-color: #c1c9d2 !important; background: linear-gradient(145deg,#f8fafc,#bfc8d2) !important; box-shadow: 0 4px 15px rgba(15,23,42,.1) !important; }
+
+/* Six-slice Spinner: chrome rim, brushed reward faces, graphite lettering, and silver controls. */
+html[data-theme="silver"] .luckySpinScreen { color: #0f172a !important; background: linear-gradient(145deg,#e6eaee,#d9dfe5 52%,#e7ebef) !important; }
+html[data-theme="silver"] .luckySpinPage .spinCard { color: #0f172a !important; background: linear-gradient(145deg,rgba(250,251,252,.97),rgba(220,226,232,.98)) !important; border: 1px solid rgba(255,255,255,.9) !important; box-shadow: 0 4px 20px rgba(0,0,0,.07) !important; }
+html[data-theme="silver"] .spinBrand,
+html[data-theme="silver"] .luckySpinPageHeader h1,
+html[data-theme="silver"] .luckySpinPage .spinBrandCopy strong,
+html[data-theme="silver"] .luckySpinPage .spinHeaderStat strong { color: #0f172a !important; text-shadow: none !important; }
+html[data-theme="silver"] .luckySpinPage .spinBrandCopy small,
+html[data-theme="silver"] .luckySpinPage .spinHeaderStat span,
+html[data-theme="silver"] .luckySpinPageIntro,
+html[data-theme="silver"] .spinAvailability { color: #475569 !important; }
+html[data-theme="silver"] .luckySpinPage .spinHeaderStat { background: linear-gradient(145deg,#f8fafc,#dce2e8) !important; border-color: rgba(255,255,255,.92) !important; box-shadow: 0 3px 12px rgba(15,23,42,.07) !important; }
+html[data-theme="silver"] .luckySpinPage .spinWheel {
+  border: 12px solid #b9c2cb !important;
+  background: conic-gradient(from -30deg,#e4e8ec 0 16.1%,#aeb8c2 16.1% 16.666%,#d3d9df 16.666% 32.766%,#aeb8c2 32.766% 33.332%,#f2f4f6 33.332% 49.432%,#aeb8c2 49.432% 49.998%,#c7cfd7 49.998% 66.098%,#aeb8c2 66.098% 66.664%,#e9ecef 66.664% 82.764%,#aeb8c2 82.764% 83.33%,#d9dfe5 83.33% 99.43%,#aeb8c2 99.43% 100%) !important;
+  box-shadow: inset 0 0 0 4px #f8fafc, inset 0 0 0 8px #9ba6b1, 0 0 0 4px #e9edf1, 0 0 0 9px #aab4be, 0 14px 30px rgba(15,23,42,.16) !important;
+}
+html[data-theme="silver"] .luckySpinPage .spinWheel:before { border-color: rgba(255,255,255,.94) !important; box-shadow: inset 0 0 12px rgba(255,255,255,.65),0 0 10px rgba(71,85,105,.16) !important; }
+html[data-theme="silver"] .luckySpinPage .spinWheel > span { color: #0f172a !important; text-shadow: none !important; }
+html[data-theme="silver"] .luckySpinPage .spinWheel b,
+html[data-theme="silver"] .luckySpinPage .spinWheel small { color: #0f172a !important; text-shadow: none !important; }
+html[data-theme="silver"] .luckySpinPage .spinWheel > span em { color: #334155 !important; text-shadow: none !important; }
+html[data-theme="silver"] .spinRimGeometry i { background: linear-gradient(90deg,#7b8793,#f8fafc 45%,#8995a1) !important; box-shadow: 0 0 5px rgba(255,255,255,.8) !important; }
+html[data-theme="silver"] .spinRivets i { border-color: #fff !important; background: radial-gradient(circle at 32% 28%,#fff 0 16%,#d5dbe1 35%,#8995a1 78%,#e7ebef 100%) !important; box-shadow: 0 1px 3px rgba(15,23,42,.32),0 0 4px rgba(255,255,255,.7) !important; }
+html[data-theme="silver"] .spinWheelHub { border-color: #a6b0ba !important; background: radial-gradient(circle at 30% 24%,#fff,#c5cdd5 48%,#8995a1 84%,#edf0f3) !important; box-shadow: inset 0 0 0 3px #f8fafc,0 0 0 4px #a8b1ba,0 5px 14px rgba(15,23,42,.2) !important; }
+html[data-theme="silver"] .spinWheelHub:before { border-color: rgba(255,255,255,.9) !important; }
+html[data-theme="silver"] .spinWheelHub:after { border-color: rgba(71,85,105,.38) !important; }
+html[data-theme="silver"] .luckySpinPage .spinPointer { border-top-color: #64748b !important; filter: drop-shadow(0 2px 3px rgba(15,23,42,.25)) !important; }
+html[data-theme="silver"] .luckySpinPage .spinButton { color: #0f172a !important; background: linear-gradient(135deg,#f8fafc,#bcc5ce 50%,#e9edf1) !important; border: 1px solid rgba(255,255,255,.95) !important; box-shadow: 0 5px 16px rgba(15,23,42,.12) !important; }
+html[data-theme="silver"] .luckySpinPage .spinButton.is-locked,
+html[data-theme="silver"] .luckySpinPage .spinPaidButton:disabled { color: #64748b !important; background: linear-gradient(135deg,#e2e6ea,#cbd2d9) !important; }
+html[data-theme="silver"] .luckySpinClose { color: #334155 !important; background: linear-gradient(145deg,#f8fafc,#d7dde3) !important; border-color: rgba(255,255,255,.9) !important; }
+
+html[data-theme="silver"] .themeChoice[data-theme-choice="silver"] { color: #0f172a; background: linear-gradient(145deg,#f8fafc,#bfc8d2); }
+html[data-theme="silver"] .profileThemeChoices { grid-template-columns: repeat(2,minmax(0,1fr)); }
+html[data-theme="silver"] :is(.toast, .toastMessage, .notificationToast) { color: #0f172a; }
+
+
+/* Exchange, wallet, and form details that use bespoke rather than generic card classes. */
+html[data-theme="silver"] .exchangeDirectionToggle { padding: 4px; border: 1px solid rgba(255,255,255,.84); border-radius: 15px; background: linear-gradient(145deg,#e3e8ed,#f7f8fa); box-shadow: inset 0 1px 3px rgba(15,23,42,.05); }
+html[data-theme="silver"] .exchangeDirectionBtn { color: #475569 !important; background: transparent !important; border-color: transparent !important; }
+html[data-theme="silver"] .exchangeDirectionBtn.active { color: #0f172a !important; background: linear-gradient(145deg,#fff,#cbd2da) !important; border-color: rgba(255,255,255,.96) !important; box-shadow: 0 3px 9px rgba(15,23,42,.1) !important; }
+html[data-theme="silver"] .exchangeQuickBtn { color: #334155 !important; background: linear-gradient(145deg,#f8fafc,#d8dee5) !important; border: 1px solid rgba(255,255,255,.9) !important; box-shadow: 0 2px 7px rgba(15,23,42,.07) !important; }
+html[data-theme="silver"] #exchangePreview,
+html[data-theme="silver"] .walletLivePill,
+html[data-theme="silver"] .walletOverviewTop,
+html[data-theme="silver"] .walletOverviewValue { color: #334155 !important; }
+html[data-theme="silver"] .closeBtn,
+html[data-theme="silver"] .headerIconBtn,
+html[data-theme="silver"] .profileIcon,
+html[data-theme="silver"] .profileChevron { color: #475569 !important; }
+html[data-theme="silver"] .profileMenuItem { color: #0f172a !important; border-color: rgba(100,116,139,.18) !important; }
+html[data-theme="silver"] .profileThemePicker { border-top-color: rgba(100,116,139,.18) !important; }
+html[data-theme="silver"] .themeChoice[data-theme-choice="silver"] { color: #0f172a; background: linear-gradient(145deg,#f8fafc,#bfc8d2); }
+html[data-theme="silver"] .themeChoice[data-theme-choice="silver"].is-active { border-color: #475569; box-shadow: 0 0 0 3px rgba(100,116,139,.18); }
+
+html[data-theme="silver"] .referralDashboard .rf-hero,
+html[data-theme="silver"] .referralDashboard .rf-kpi,
+html[data-theme="silver"] .referralDashboard .rf-panel {
+  color: #0f172a !important;
+  background: linear-gradient(145deg,rgba(250,251,252,.96),rgba(222,228,234,.98)) !important;
+  border-color: rgba(255,255,255,.84) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.06) !important;
+}
+
+.themeChoice[data-theme-choice="silver"] { color: #0f172a; background: linear-gradient(145deg,#f8fafc 0%,#bfc8d2 52%,#e9edf1 100%); }

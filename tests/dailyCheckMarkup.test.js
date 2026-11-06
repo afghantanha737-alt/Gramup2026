@@ -28,7 +28,7 @@ assert.match(css, /\.dailyCheckDay\{[^}]*border-radius:16px/);
 assert.match(css, /\.dailyCheckDay\.is-complete\{/);
 assert.match(css, /\.dailyCheckDay\.is-current\{/);
 assert.match(index, /style\.css\?v=up_v28_20261106_3/);
-assert.match(index, /i18n\.js\?v=up_v28_20261106_4/);
-assert.match(index, /app\.js\?v=up_v29_spinner_gram005/);
+assert.match(index, /i18n\.js\?v=up_v30_silver_theme/);
+assert.match(index, /app\.js\?v=up_v30_silver_theme/);
 
 console.log('PASS — Daily Check rewards use plain +N UP labels, safe markup, seven-card layout, and fresh asset versions');

@@ -66,12 +66,12 @@ assert.match(css, /\.appContent \.vipRedesign \.phase3VaultBar span \{ backgroun
   'Mine vault progress must not introduce a separate violet accent');
 
 assert.ok(html.includes('/css/style.css?v=up_v28_20261106_3'), 'style.css must use the win modal cache version');
-assert.ok(html.includes('/css/theme-selector.css?v=up_v28_20261105_2'), 'theme-selector.css must use the fresh cache version');
+assert.ok(html.includes('/css/theme-selector.css?v=up_v29_silver_theme'), 'theme-selector.css must use the Silver theme cache version');
 for (const asset of ['maintenanceGate.js', 'readModelCache.js', 'walletConnect.js']) {
   assert.ok(html.includes(`/js/${asset}?v=up_v28_20261105_2`), `${asset} must use the fresh cache version`);
 }
-assert.ok(html.includes('/js/i18n.js?v=up_v28_20261106_4'), 'i18n.js must use the paid-spin error cache version');
-assert.ok(html.includes('/js/app.js?v=up_v29_spinner_gram005'), 'app.js must use the GRAM spinner reward cache version');
+assert.ok(html.includes('/js/i18n.js?v=up_v30_silver_theme'), 'i18n.js must use the Silver theme cache version');
+assert.ok(html.includes('/js/app.js?v=up_v30_silver_theme'), 'app.js must use the Silver theme cache version');
 assert.ok(html.includes('/js/gamification.js?v=up_v28_20261106_1'), 'gamification.js must use the current Spinner feedback cache version');
 assert.ok(html.includes('/js/spinCelebration.js?v=up_v28_20261106_3'), 'spinCelebration.js must use the current cache version');
 

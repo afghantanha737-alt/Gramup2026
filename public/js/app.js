@@ -198,6 +198,7 @@ function getTelegramUser() {
 
 /* ================= LOCAL STORAGE / THEME ================= */
 const THEME_KEY = "miniAppTheme";
+const THEME_PERSIST_KEY = "gramup_theme";
 
 /*
  * Theme registry: add future themes here first. The renderer, persistence,
@@ -207,11 +208,12 @@ const THEME_KEY = "miniAppTheme";
 const THEME_REGISTRY = Object.freeze({
   midnight: Object.freeze({ labelKey: "theme_midnight", icon: "🌙", chrome: "#050609", cssTheme: "midnight" }),
   aurora: Object.freeze({ labelKey: "theme_aurora", icon: "🌌", chrome: "#06151b", cssTheme: "aurora" }),
-  pearl: Object.freeze({ labelKey: "theme_pearl", icon: "☀️", chrome: "#f8fafc", cssTheme: "light" })
+  pearl: Object.freeze({ labelKey: "theme_pearl", icon: "☀️", chrome: "#f8fafc", cssTheme: "light" }),
+  silver: Object.freeze({ labelKey: "theme_silver", icon: "🩶", chrome: "#dfe4e9", cssTheme: "silver" })
 });
 const VALID_THEMES = Object.freeze(Object.keys(THEME_REGISTRY));
 function getTheme() {
-  const saved = localStorage.getItem(THEME_KEY);
+  const saved = localStorage.getItem(THEME_PERSIST_KEY) || localStorage.getItem(THEME_KEY);
   return VALID_THEMES.includes(saved) ? saved : "midnight";
 }
 function applyTheme(theme) {
@@ -221,6 +223,7 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = definition.cssTheme;
   document.documentElement.dataset.themeName = selected;
   localStorage.setItem(THEME_KEY, selected);
+  localStorage.setItem(THEME_PERSIST_KEY, selected);
   try {
     if (tg && tg.setHeaderColor) tg.setHeaderColor(definition.chrome);
     if (tg && tg.setBackgroundColor) tg.setBackgroundColor(definition.chrome);
