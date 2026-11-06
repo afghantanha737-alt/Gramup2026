@@ -142,12 +142,9 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/required-channels', require('./routes/membership'));
 app.use('/api/app-info', require('./routes/appInfo'));
 app.use('/api/tasks', require('./routes/tasks'));
-app.use('/api/onboarding', require('./routes/onboarding'));
-app.use('/api/mining', require('./routes/mining'));
 app.use('/api/ton-proof', require('./routes/tonProof'));
 app.use('/api/points', require('./routes/points'));
 app.use('/api/referral', require('./routes/referral'));
-app.use('/api/squads', require('./routes/squads'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/mobile-auth', require('./routes/mobileAuth'));
 app.use('/api/admin', require('./routes/admin'));
@@ -327,15 +324,15 @@ async function startServer() {
       void runJob('weekly-campaign-notification', 'Scheduled weekly campaign notification', runWeeklyCampaignNotification);
     }, 60 * 1000);
 
-    // Legacy VIP principal settlement is never a startup or timer job.
-    // Matured VIP balances settle only through the user's explicit claim action.
+    const { settleMaturedVipSubscriptions } = require('./utils/vipSettlement');
+    void runJob('vip-principal-settlement', 'Initial VIP principal settlement', () => settleMaturedVipSubscriptions());
+    setInterval(() => { void runJob('vip-principal-settlement', 'Scheduled VIP principal settlement', () => settleMaturedVipSubscriptions()); }, 60 * 1000);
 
-    // A single consolidated user-level sweep replaces any legacy per-plan alerts.
     const { runVipRewardNotificationSweep } = require('./utils/vipRewardNotification');
-    void runJob('vip-storage-full-notification-sweep', 'Initial VIP storage-full notification sweep', runVipRewardNotificationSweep);
+    void runJob('vip-reward-notification-sweep', 'Initial VIP reward notification sweep', runVipRewardNotificationSweep);
     setInterval(() => {
-      void runJob('vip-storage-full-notification-sweep', 'Scheduled VIP storage-full notification sweep', runVipRewardNotificationSweep);
-    }, 60 * 1000);
+      void runJob('vip-reward-notification-sweep', 'Scheduled VIP reward notification sweep', runVipRewardNotificationSweep);
+    }, 5 * 60 * 1000);
 
     server = app.listen(PORT, () => {
       server.requestTimeout = 120000;

@@ -64,7 +64,7 @@
 | R-39 | Low/Medium | Operations | verify-production فقط health/readiness را GET می‌کند و smoke مالی/index/provider ندارد. | `scripts/verify-production.js:17-25,41-54` |
 | R-40 | Low | Supply chain | lockfile integrity دارد، اما policy صریح `npm ci`، Node pin و audit دوره‌ای در scriptها مستند/پیاده نشده؛ vulnerability قطعی اثبات نشد. | `package-lock.json:1-20`؛ `package.json:9-11` |
 
-**کنترل‌های مثبت مستند:** `User.telegramId` و `referralCode` unique هستند؛ `referredBy` با شرط null اتمیک set می‌شود؛ link و payout در transaction انجام می‌شوند؛ cycle detection، webhook `update_id` dedup و gateهای risk/review وجود دارند؛ HMAC اصلی و timing-safe compare در `telegramAuth.js`، Telegram identity gate، مصرف اتمیک mobile challenge، hash/revocation/TTL session، secret webhook fail-closed، rate limit مشترک DB و برخی indexهای هویتی موجودند.
+**کنترل‌های مثبت مستند:** `User.telegramId` و `referralCode` unique هستند؛ `referredBy` با شرط null اتمیک set می‌شود؛ link و payout در transaction انجام می‌شوند؛ cycle detection، webhook `update_id` dedup و gateهای risk/review وجود دارند؛ HMAC اصلی و timing-safe compare در `telegramAuth.js`، phone self-contact/country gate، مصرف اتمیک mobile challenge، hash/revocation/TTL session، secret webhook fail-closed، rate limit مشترک DB و برخی indexهای هویتی موجودند.
 
 ## ۳. وضعیت فعلی requirementهای کاربر
 

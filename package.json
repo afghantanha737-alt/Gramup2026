@@ -22,10 +22,6 @@
     "mongoose": "^8.5.0",
     "multer": "2.5.0"
   },
-  "overrides": {
-    "zod": "4.6.7",
-    "follow-redirects": "1.16.2"
-  },
   "engines": {
     "node": ">=18.0.0"
   }
