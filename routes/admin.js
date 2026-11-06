@@ -9,9 +9,8 @@ const Task = require('../models/Task');
 const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
-const { normalizeSpinPrizes, isValidSpinPrizePool, coerceSpinPrizePool } = require('../utils/spinRewards');
 const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
-const { bot, notifyUser, buildBroadcastButtonReplyMarkup, sanitizeTelegramHtml, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers } = require('../utils/bot');
+const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, broadcastToActiveUsers } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { postWithdrawalPaid } = require('../utils/payoutChannel');
 const { sendNotificationOnce } = require('../utils/notificationDelivery');
@@ -22,24 +21,17 @@ const { normalizeTaskUrl } = require('../utils/taskUrl');
 const AdminLog = require('../models/AdminLog');
 const TaskCompletion = require('../models/TaskCompletion');
 const PointsLedger = require('../models/PointsLedger');
-const Transaction = require('../models/Transaction');
 const BalanceAudit = require('../models/BalanceAudit');
 const ReferralRelationship = require('../models/ReferralRelationship');
 const WeeklyLeaderboardAward = require('../models/WeeklyLeaderboardAward');
 const LatestPostEngagementState = require('../models/LatestPostEngagementState');
 const Deposit = require('../models/Deposit');
-const GramSwapIntent = require('../models/GramSwapIntent');
-const MobileAuthChallenge = require('../models/MobileAuthChallenge');
-const MobileSession = require('../models/MobileSession');
-const OnboardingChallenge = require('../models/OnboardingChallenge');
 const NotificationDelivery = require('../models/NotificationDelivery');
 const BroadcastJob = require('../models/BroadcastJob');
 const IdempotencyOperation = require('../models/IdempotencyOperation');
 const VipPlan = require('../models/VipPlan');
 const VipSubscription = require('../models/VipSubscription');
 const VipReserve = require('../models/VipReserve');
-const TaskReactionState = require('../models/TaskReactionState');
-const TelegramAdminConversation = require('../models/TelegramAdminConversation');
 const { isValidAdminKey } = require('../utils/adminKey');
 const RequiredChannel = require('../models/RequiredChannel');
 const { membership, validateChannelRef, normalizeChannelInput } = require('../utils/membership');
@@ -60,9 +52,8 @@ const { calculateTotalRewardCents } = require('../utils/vipRewards');
 const { toVipAdminRecord } = require('../utils/vipAdminReadModel');
 const { toCents: vipReserveToCents, fundReserve: fundVipReserve, reserveSnapshot: vipReserveSnapshot } = require('../utils/vipReserve');
 const { isTestEnvironment, normalizeAllowedTelegramIds } = require('../utils/maintenance');
-const { hasUserDeletionConfirmation } = require('../utils/adminUserDeletion');
+const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
 const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/depositFinance');
-const TonProofChallenge = require('../models/TonProofChallenge');
 const { buildVipReserveReport, buildVipReserveWorkbook } = require('../utils/vipReserveReport');
 const { pricingForVipPlan, pricePointsForVipPlan } = require('../utils/vipPricing');
 const { newVipPolicyForPlan, dailyPointsCentsFromBps, periodRewardPercentForPlan } = require('../utils/vipPolicy');
@@ -74,15 +65,6 @@ function pageParams(query, defaultLimit = 100, maxLimit = 300) {
   const page = Math.max(1, Math.floor(Number(query.page) || 1));
   const limit = Math.min(maxLimit, Math.max(1, Math.floor(Number(query.limit) || defaultLimit)));
   return { page, limit, skip: (page - 1) * limit };
-}
-
-async function sendTaskSubmissionTelegramNotifications(notifications) {
-  const deliverable = notifications.filter(item => item?.telegramId && item?.text);
-  const results = await Promise.allSettled(deliverable.map(item => notifyUser(item.telegramId, item.text)));
-  const sent = results.filter(result => result.status === 'fulfilled' && result.value === true).length;
-  const failed = results.length - sent;
-  if (failed) console.warn(`Task submission Telegram notifications incomplete: sent=${sent}, failed=${failed}`);
-  return { attempted: deliverable.length, sent, failed };
 }
 
 function safeAdminReferralRates(settings) {
@@ -709,226 +691,21 @@ router.get('/task-submissions', async (req, res) => {
   if (requestedStatus !== 'all' && !allowedStatuses.includes(requestedStatus)) {
     return res.status(400).json({ success: false, message: 'وضعیت submission نامعتبر است.' });
   }
-  const requestedPage = Number.parseInt(req.query.page, 10);
-  const requestedLimit = Number.parseInt(req.query.limit, 10);
-  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 20) : 20;
-  const skip = (page - 1) * limit;
   const filter = { proofMimeType: { $in: ['image/jpeg', 'image/png', 'image/webp'] } };
   if (requestedStatus !== 'all') filter.status = requestedStatus;
-  const [submissions, total, pendingCount] = await Promise.all([
+  const [submissions, pendingCount] = await Promise.all([
     TaskCompletion.find(filter)
       .select('user task reward status proofMimeType submittedAt reviewedAt reviewedBy adminNote createdAt')
       .populate('user', 'telegramId firstName lastName username')
       .populate('task', 'title reward verifyType')
       .sort({ submittedAt: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
       .lean(),
-    TaskCompletion.countDocuments(filter),
     TaskCompletion.countDocuments({
       proofMimeType: { $in: ['image/jpeg', 'image/png', 'image/webp'] },
       status: 'pending'
     })
   ]);
-  const totalPages = Math.ceil(total / limit);
-  res.json({
-    success: true,
-    submissions,
-    pendingCount,
-    pagination: { page, limit, total, totalPages, hasPrevious: page > 1, hasNext: page < totalPages }
-  });
-});
-
-router.post('/task-submissions/bulk-action', async (req, res) => {
-  const requestedIds = Array.isArray(req.body?.ids) ? req.body.ids : [];
-  const ids = [...new Set(requestedIds.map(String))];
-  const action = String(req.body?.action || '').trim().toLowerCase();
-  const note = String(req.body?.note || '').trim().slice(0, 500);
-  if (!ids.length || ids.length > 100 || ids.some(id => !mongoose.isValidObjectId(id))) {
-    return res.status(400).json({ success: false, message: 'فهرست submissionها نامعتبر است.' });
-  }
-  if (!['approve', 'reject'].includes(action)) {
-    return res.status(400).json({ success: false, message: 'عملیات bulk نامعتبر است.' });
-  }
-
-  const imageFilter = { proofMimeType: { $in: ['image/jpeg', 'image/png', 'image/webp'] } };
-  const pendingFilter = { _id: { $in: ids }, status: 'pending', ...imageFilter };
-  const reviewedAt = new Date();
-
-  if (action === 'reject') {
-    const submissions = await TaskCompletion.find(pendingFilter)
-      .select('user task')
-      .populate('user', 'telegramId')
-      .populate('task', 'title')
-      .lean();
-    const result = await TaskCompletion.updateMany(
-      pendingFilter,
-      { $set: { status: 'rejected', adminNote: note, reviewedAt, reviewedBy: req.adminActor } }
-    );
-    const processed = result.modifiedCount ?? result.nModified ?? 0;
-    const notifications = await sendTaskSubmissionTelegramNotifications(submissions.slice(0, processed).map(submission => ({
-      telegramId: submission.user?.telegramId,
-      text: `Your task ${submission.task?.title || 'Unknown task'} was rejected.${note ? ` ${note}` : ''}`
-    })));
-    recordAdminLog({
-      actor: req.adminActor,
-      action: 'task_submission_bulk_reject',
-      targetType: 'task_completion',
-      targetId: ids.join(','),
-      details: `${processed} screenshot submission رد شد${note ? ` — ${note}` : ''}`
-    });
-    return res.json({ success: true, action, processed, requested: ids.length, notifications });
-  }
-
-  try {
-    const settings = await Settings.getGlobal();
-    const payment = await withMongoTransaction(async session => {
-      const submissions = await TaskCompletion.find(pendingFilter)
-        .select('user task reward status proofMimeType')
-        .session(session)
-        .lean();
-      if (!submissions.length) {
-        const error = new Error('هیچ submission در انتظار بررسی در فهرست انتخاب‌شده وجود ندارد.');
-        error.code = 'NO_PENDING_SUBMISSIONS';
-        throw error;
-      }
-
-      const taskIds = [...new Set(submissions.map(submission => String(submission.task)))];
-      const userIds = [...new Set(submissions.map(submission => String(submission.user)))];
-      const [tasks, users] = await Promise.all([
-        Task.find({ _id: { $in: taskIds } }).select('title maxCompletions completedCount isSponsored sponsorPriceUsd').session(session).lean(),
-        User.find({ _id: { $in: userIds } }).select('_id points telegramId').session(session).lean()
-      ]);
-      const taskById = new Map(tasks.map(task => [String(task._id), task]));
-      const userById = new Map(users.map(user => [String(user._id), user]));
-      const taskCounts = new Map();
-      const userRewards = new Map();
-      const sourceIds = [];
-      for (const submission of submissions) {
-        const taskId = String(submission.task);
-        const userId = String(submission.user);
-        const task = taskById.get(taskId);
-        const user = userById.get(userId);
-        const reward = Number(submission.reward);
-        if (!task || !user || !Number.isFinite(reward) || reward <= 0) {
-          const error = new Error('یکی از submissionهای انتخاب‌شده داده‌ی معتبر ندارد.');
-          error.code = 'INVALID_SUBMISSION_DATA';
-          throw error;
-        }
-        taskCounts.set(taskId, (taskCounts.get(taskId) || 0) + 1);
-        userRewards.set(userId, (userRewards.get(userId) || 0) + reward);
-        sourceIds.push(`task:${taskId}:user:${userId}`);
-      }
-
-      const existingLedger = await PointsLedger.find({ sourceId: { $in: sourceIds } }).select('sourceId').session(session).lean();
-      if (existingLedger.length) {
-        const error = new Error('حداقل یکی از پاداش‌های انتخاب‌شده قبلاً پرداخت شده است.');
-        error.code = 'TASK_REWARD_ALREADY_PAID';
-        throw error;
-      }
-
-      const taskOperations = [];
-      for (const [taskId, count] of taskCounts) {
-        const task = taskById.get(taskId);
-        if (task.maxCompletions != null && Number(task.completedCount || 0) + count > Number(task.maxCompletions)) {
-          const error = new Error(`ظرفیت task «${task.title || taskId}» برای تأیید گروهی کافی نیست.`);
-          error.code = 'TASK_FULL';
-          throw error;
-        }
-        taskOperations.push({ updateOne: { filter: { _id: task._id }, update: { $inc: { completedCount: count } } } });
-      }
-      const taskResult = await Task.bulkWrite(taskOperations, { session, ordered: true });
-      const updatedTasks = taskResult.modifiedCount ?? taskResult.nModified ?? 0;
-      if (updatedTasks !== taskOperations.length) {
-        const error = new Error('وضعیت ظرفیت یکی از taskها هم‌زمان تغییر کرده است.');
-        error.code = 'TASK_CAPACITY_CHANGED';
-        throw error;
-      }
-
-      const userOperations = [];
-      for (const [userId, reward] of userRewards) {
-        const user = userById.get(userId);
-        userOperations.push({ updateOne: { filter: { _id: user._id }, update: { $inc: { points: reward } } } });
-      }
-      const userResult = await User.bulkWrite(userOperations, { session, ordered: true });
-      const updatedUsers = userResult.modifiedCount ?? userResult.nModified ?? 0;
-      if (updatedUsers !== userOperations.length) {
-        const error = new Error('یکی از کاربران submission پیدا نشد یا هم‌زمان تغییر کرد.');
-        error.code = 'SUBMISSION_USER_NOT_FOUND';
-        throw error;
-      }
-
-      const submissionResult = await TaskCompletion.updateMany(
-        pendingFilter,
-        { $set: { status: 'approved', reviewedAt, reviewedBy: req.adminActor } },
-        { session }
-      );
-      const updatedSubmissions = submissionResult.modifiedCount ?? submissionResult.nModified ?? 0;
-      if (updatedSubmissions !== submissions.length) {
-        const error = new Error('برخی submissionها هم‌زمان توسط ادمین دیگری بررسی شدند.');
-        error.code = 'SUBMISSION_NOT_PENDING';
-        throw error;
-      }
-
-      const ledgerBalances = new Map(userIds.map(userId => [userId, Number(userById.get(userId).points || 0)]));
-      for (const submission of submissions) {
-        const task = taskById.get(String(submission.task));
-        const reward = Number(submission.reward);
-        const sourceId = `task:${submission.task}:user:${submission.user}`;
-        const userId = String(submission.user);
-        ledgerBalances.set(userId, ledgerBalances.get(userId) + reward);
-        const ledger = await recordLedgerRequired({
-          user: submission.user,
-          type: 'task',
-          amount: reward,
-          description: `Task Reward — ${task.title}`,
-          balanceAfter: ledgerBalances.get(userId),
-          sourceId,
-          session
-        });
-        if (!ledger.created) {
-          const error = new Error('ثبت یکی از پاداش‌ها تکراری بود؛ عملیات لغو شد.');
-          error.code = 'TASK_REWARD_ALREADY_PAID';
-          throw error;
-        }
-      }
-
-      await TaskCompletion.bulkWrite(submissions.map(submission => ({
-        updateOne: {
-          filter: { _id: submission._id, status: 'approved' },
-          update: {
-            $set: {
-              revenueUsd: taskById.get(String(submission.task)).isSponsored ? Number(taskById.get(String(submission.task)).sponsorPriceUsd) || 0 : 0,
-              costUsd: rewardCostUsd(Number(submission.reward), settings.rate, settings.gramUsdPrice)
-            }
-          }
-        }
-      })), { session, ordered: true });
-      return {
-        processed: submissions.length,
-        totalReward: submissions.reduce((sum, submission) => sum + Number(submission.reward), 0),
-        notifications: submissions.map(submission => ({
-          telegramId: userById.get(String(submission.user)).telegramId,
-          text: `Your task ${taskById.get(String(submission.task)).title || 'Unknown task'} has been approved! You received ${Number(submission.reward)} UP.`
-        }))
-      };
-    });
-
-    recordAdminLog({
-      actor: req.adminActor,
-      action: 'task_submission_bulk_approve',
-      targetType: 'task_completion',
-      targetId: ids.join(','),
-      details: `${payment.processed} screenshot submission تأیید شد — مجموع پاداش ${payment.totalReward} UP`
-    });
-    const notifications = await sendTaskSubmissionTelegramNotifications(payment.notifications);
-    return res.json({ success: true, action, processed: payment.processed, requested: ids.length, totalReward: payment.totalReward, notifications });
-  } catch (error) {
-    const status = ['NO_PENDING_SUBMISSIONS', 'INVALID_SUBMISSION_DATA', 'TASK_FULL', 'TASK_CAPACITY_CHANGED', 'SUBMISSION_USER_NOT_FOUND', 'SUBMISSION_NOT_PENDING', 'TASK_REWARD_ALREADY_PAID'].includes(error.code) ? 409 : 500;
-    if (status === 500) console.error('Bulk screenshot task approval failed:', error);
-    return res.status(status).json({ success: false, message: error.message || 'تأیید گروهی submissionها انجام نشد.', code: error.code || 'SERVER_ERROR' });
-  }
+  res.json({ success: true, submissions, pendingCount });
 });
 
 router.get('/task-submissions/:id/image', async (req, res) => {
@@ -1886,15 +1663,11 @@ router.post('/users/:id/unban', async (req, res) => {
 });
 
 router.delete('/users/:id', async (req, res) => {
+  if (!isTestDeleteEnvironment()) {
+    return res.status(403).json({ success: false, code: 'TEST_ONLY', message: 'حذف User فقط در محیط TEST مجاز است.' });
+  }
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
     return res.status(400).json({ success: false, message: 'شناسه کاربر نامعتبر است.' });
-  }
-  if (!hasUserDeletionConfirmation(req.body?.confirmation, req.params.id)) {
-    return res.status(400).json({
-      success: false,
-      code: 'USER_DELETION_CONFIRMATION_REQUIRED',
-      message: `برای حذف دائمی، تأیید دقیق «DELETE USER ${req.params.id}» الزامی است.`
-    });
   }
 
   const transactionStatus = getMongoTransactionStatus();
@@ -1902,7 +1675,7 @@ router.delete('/users/:id', async (req, res) => {
     return res.status(503).json({
       success: false,
       code: 'TRANSACTIONS_UNAVAILABLE',
-      message: 'حذف انجام نشد؛ قابلیت امن MongoDB Transaction در دسترس نیست.',
+      message: 'حذف انجام نشد؛ MongoDB Transaction در محیط TEST در دسترس نیست.',
       reason: transactionStatus.reason || 'Transaction capability was not confirmed.'
     });
   }
@@ -1912,79 +1685,46 @@ router.delete('/users/:id', async (req, res) => {
       const user = await User.findById(req.params.id).session(session);
       if (!user) return { missing: true };
 
-      // Keep unsettled operations connected to a live account until they can be
-      // resolved safely; completed financial history never blocks profile deletion.
-      const [pendingDeposit, openWithdrawal, pendingSwap, openAward, activeVipPlan] = await Promise.all([
-        Deposit.exists({ user: user._id, status: 'pending' }).session(session),
-        Withdrawal.exists({ user: user._id, status: { $in: ['pending', 'approved', 'processing'] } }).session(session),
-        GramSwapIntent.exists({ user: user._id, status: 'pending' }).session(session),
-        WeeklyLeaderboardAward.exists({ user: user._id, status: { $in: ['pending', 'processing', 'failed'] } }).session(session),
-        VipSubscription.exists({ user: user._id, status: 'active' }).session(session)
+      const dependentCount = await User.countDocuments({ referredBy: user._id }).session(session);
+      if (dependentCount > 0) return { hasDependents: true, dependentCount };
+
+      const financialLinks = { $or: [
+        { user: user._id }, { sourceUserId: user._id }, { recipientUserId: user._id }
+      ] };
+      const [ledgerHistory, transactionHistory] = await Promise.all([
+        PointsLedger.exists(financialLinks).session(session),
+        require('../models/Transaction').exists(financialLinks).session(session)
       ]);
-      if (pendingDeposit || openWithdrawal || pendingSwap || openAward || activeVipPlan) {
-        return { hasOpenFinancialOperations: true };
-      }
+      if (ledgerHistory || transactionHistory) return { hasFinancialHistory: true };
 
-      const referrerIds = new Set();
-      if (user.referredBy) referrerIds.add(String(user.referredBy));
-      const linkedReferrers = await User.find({ activeReferralIds: user._id })
-        .select('_id activeReferralIds').session(session);
-      for (const referrer of linkedReferrers) referrerIds.add(String(referrer._id));
-      const referrersToUpdate = referrerIds.size
-        ? await User.find({ _id: { $in: [...referrerIds] } }).select('_id activeReferralIds').session(session)
-        : [];
-
-      // Detach direct invitees and remove the deleted ID from every cached
-      // referral list before deleting the profile; financial reward journals
-      // remain unchanged and continue to reconcile by their internal IDs.
-      await User.updateMany({ referredBy: user._id }, { $set: { referredBy: null } }, { session });
-      await User.updateMany({ activeReferralIds: user._id }, { $pull: { activeReferralIds: user._id } }, { session });
-      if (user.telegramId) {
-        await Settings.updateOne(
-          { key: 'global' },
-          { $pull: { maintenanceAllowedTelegramIds: String(user.telegramId) } },
-          { session }
-        );
-      }
+      const referrer = user.referredBy
+        ? await User.findById(user.referredBy).session(session)
+        : null;
 
       await ReferralRelationship.deleteMany({
         $or: [{ referrerId: user._id }, { referredUserId: user._id }]
       }).session(session);
       await TaskCompletion.deleteMany({ user: user._id }).session(session);
       await LatestPostEngagementState.deleteMany({ user: user._id }).session(session);
+      await Withdrawal.deleteMany({ user: user._id }).session(session);
+      await Deposit.deleteMany({ user: user._id }).session(session);
+      await VipSubscription.deleteMany({ user: user._id }).session(session);
+      await WeeklyLeaderboardAward.deleteMany({ user: user._id }).session(session);
       await NotificationDelivery.deleteMany({
         $or: [
           { user: user._id },
-          { telegramId: String(user.telegramId) },
           { eventKey: `referral-initial:${user._id}` }
         ]
       }).session(session);
       await IdempotencyOperation.deleteMany({ userId: user._id }).session(session);
-      await MobileSession.deleteMany({ user: user._id }).session(session);
-      await MobileAuthChallenge.deleteMany({ telegramId: String(user.telegramId) }).session(session);
-      await OnboardingChallenge.deleteMany({ user: user._id }).session(session);
-      await TonProofChallenge.deleteMany({ user: user._id }).session(session);
-      await TaskReactionState.deleteMany({ telegramUserId: String(user.telegramId) }).session(session);
-      await TelegramAdminConversation.deleteMany({ telegramId: String(user.telegramId) }).session(session);
-      await AdminLog.updateMany({
-        targetType: 'user',
-        targetId: { $in: [String(user._id), String(user.telegramId)] }
-      }, {
-        $set: { targetId: '', details: '[target account details redacted after account deletion]' }
-      }, { session });
-      await recordAdminLogRequired({
-        actor: req.adminActor,
-        action: 'user_delete_anonymized',
-        targetType: 'user',
-        targetId: '',
-        details: 'Admin-confirmed profile and access deletion; personal operational data removed. Immutable financial and audit history retained without a profile.'
-      }, session);
+      await BalanceAudit.deleteMany({ userId: user._id }).session(session);
       await User.deleteOne({ _id: user._id }).session(session);
 
-      for (const referrer of referrersToUpdate) {
+      if (referrer) {
         const remainingInvitedCount = await User.countDocuments({ referredBy: referrer._id }).session(session);
-        const activeReferralIds = (Array.isArray(referrer.activeReferralIds) ? referrer.activeReferralIds : [])
-          .filter(id => String(id) !== String(user._id));
+        const activeReferralIds = Array.isArray(referrer.activeReferralIds)
+          ? referrer.activeReferralIds.filter(id => String(id) !== String(user._id))
+          : [];
         await User.updateOne(
           { _id: referrer._id },
           {
@@ -2002,11 +1742,18 @@ router.delete('/users/:id', async (req, res) => {
     });
 
     if (outcome.missing) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
-    if (outcome.hasOpenFinancialOperations) {
-      return res.status(409).json({ success: false, code: 'OPEN_FINANCIAL_OPERATIONS',
-        message: 'حذف انجام نشد؛ ابتدا واریز، برداشت، تبدیل، جایزهٔ هفتگی یا طرح Mining فعال این حساب را تعیین‌تکلیف کنید.' });
+    if (outcome.hasFinancialHistory) {
+      return res.status(409).json({ success: false, code: 'FINANCIAL_HISTORY_IMMUTABLE',
+        message: 'این حساب سابقه مالی دارد؛ برای حفظ دفتر کل حذف نمی‌شود. حساب را مسدود کنید.' });
     }
-    return res.json({ success: true, message: 'پروفایل و دسترسی کاربر حذف و داده‌های شخصی غیرمالی پاک شدند؛ سوابق مالی و ممیزی immutable حفظ شده‌اند.' });
+    if (outcome.hasDependents) {
+      return res.status(409).json({
+        success: false,
+        code: 'REFERRAL_DEPENDENCIES_EXIST',
+        message: `حذف انجام نشد؛ این User هنوز Referrer ${outcome.dependentCount} کاربر دیگر است.`
+      });
+    }
+    return res.json({ success: true, message: 'User و داده‌های وابسته‌ی او از محیط TEST حذف شدند.' });
   } catch (error) {
     if (error?.code === 'TRANSACTIONS_UNAVAILABLE') {
       return res.status(503).json({ success: false, code: error.code, message: 'حذف انجام نشد؛ MongoDB Transaction در دسترس نیست.' });
@@ -2589,7 +2336,6 @@ router.get('/settings', async (req, res) => {
     success: true,
     settings: {
       ...settings.toObject(),
-      luckySpinPrizes: normalizeSpinPrizes(settings.luckySpinPrizes),
       referralInitialRewardPoints: DEFAULT_REFERRAL_INITIAL_REWARD_POINTS,
       referralLevelRates: safeAdminReferralRates(settings)
     },
@@ -2691,9 +2437,7 @@ router.put('/settings', async (req, res) => {
     gramUsdPrice: v => v >= 0,
     referralWelcomeRewardPoints: v => Number.isSafeInteger(v) && v >= 0 && v <= 1000000,
     dailyReminderLocalHour: v => Number.isInteger(v) && v >= 0 && v <= 23,
-    dailyReminderLocalMinute: v => Number.isInteger(v) && v >= 0 && v <= 59,
-    luckySpinRequiredStreak: v => Number.isInteger(v) && v >= 7 && v <= 365,
-    luckySpinCooldownHours: v => v === 0
+    dailyReminderLocalMinute: v => Number.isInteger(v) && v >= 0 && v <= 59
   };
 
   const changes = {};
@@ -2718,12 +2462,6 @@ router.put('/settings', async (req, res) => {
       });
     }
     changes.dailyAutoCheckinEnabled = body.dailyAutoCheckinEnabled;
-  }
-  if (Object.prototype.hasOwnProperty.call(body, 'luckySpinEnabled')) changes.luckySpinEnabled = body.luckySpinEnabled === true || body.luckySpinEnabled === 'true';
-  if (Object.prototype.hasOwnProperty.call(body, 'luckySpinPrizes')) {
-    const prizes = coerceSpinPrizePool(body.luckySpinPrizes);
-    if (!prizes || !isValidSpinPrizePool(prizes)) return res.status(400).json({ success: false, code: 'INVALID_LUCKY_SPIN_PRIZES', message: 'Lucky Spin must contain the exact six wheel rewards in order, with only probabilities editable and totaling 100%.' });
-    changes.luckySpinPrizes = prizes;
   }
   // dailyReminderEnabled یک boolean است، نه یک عدد؛ جدا از قاعده‌ی بالا پردازش می‌شود
   if (Object.prototype.hasOwnProperty.call(body, 'dailyReminderEnabled')) {
@@ -3094,8 +2832,7 @@ router.get('/broadcast/:id', async (req, res) => {
       totalRecipients: job.totalRecipients,
       sent: job.sent,
       failed: job.failed,
-      blocked: job.blocked || 0,
-      pending: Math.max(0, job.totalRecipients - job.sent - job.failed - (job.blocked || 0)),
+      pending: Math.max(0, job.totalRecipients - job.sent - job.failed),
       startedAt: job.startedAt,
       finishedAt: job.finishedAt,
       lastError: job.lastError || ''
@@ -3107,35 +2844,23 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
   if (!bot) {
     return res.status(500).json({ success: false, message: 'ربات پیکربندی نشده.' });
   }
-  const rawText = String((req.body && req.body.text) || '').trim();
-  if (!rawText) {
+  const text = String((req.body && req.body.text) || '').trim();
+  if (!text) {
     return res.status(400).json({ success: false, message: 'متن پیام الزامی است.' });
   }
-  const text = sanitizeTelegramHtml(rawText);
 
-  const buttonText = String((req.body && (req.body.button_text || req.body.buttonText)) || '').trim();
-  const buttonUrl = String((req.body && (req.body.button_url || req.body.buttonUrl)) || '').trim();
-  let replyMarkup = null;
-  if (buttonText) {
-    const webAppUrl = String(process.env.MINI_APP_URL || process.env.APP_URL || '').trim();
-    try {
-      replyMarkup = buildBroadcastButtonReplyMarkup(buttonText, buttonUrl, webAppUrl);
-    } catch (error) {
-      return res.status(400).json({ success: false, message: error.message || 'متن یا لینک دکمه معتبر نیست.' });
-    }
-  }
-
-  const candidates = await User.find(activeTelegramUserFilter(), 'telegramId language isBanned telegramBlockedAt');
-  const users = filterActiveTelegramRecipients(candidates);
+  const users = await User.find({ isBanned: false, telegramBlockedAt: null }, 'telegramId');
   const job = await BroadcastJob.create({
     actor: req.adminActor,
     hasImage: Boolean(req.file),
     textPreview: text.slice(0, 120),
-    totalRecipients: users.length,
-    sent: 0,
-    failed: 0,
-    blocked: 0
+    totalRecipients: users.length
   });
+
+  // برای جلوگیری از برخورد با محدودیت نرخ تلگرام (~۳۰ پیام در ثانیه)،
+  // ارسال را به‌صورت دسته‌ای و با تأخیر کوتاه انجام می‌دهیم.
+  const BATCH_SIZE = 20;
+  const DELAY_MS = 1100;
 
   res.json({
     success: true,
@@ -3143,9 +2868,6 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
     broadcastId: String(job._id),
     statusUrl: `/api/admin/broadcast/${job._id}`,
     totalRecipients: users.length,
-    sent: 0,
-    failed: 0,
-    blocked: 0,
     status: job.status
   });
 
@@ -3157,30 +2879,30 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
   });
 
   void (async () => {
+    let sent = 0;
+    let failed = 0;
     try {
-      const summary = await broadcastToActiveUsers(User, text, {
-        recipients: users,
-        replyMarkup,
-        imageBuffer: req.file?.buffer,
-        sendOptions: { parse_mode: 'HTML' },
-        onProgress: progress => BroadcastJob.updateOne({ _id: job._id }, {
-          $set: { sent: progress.sent, failed: progress.failed, blocked: progress.blocked }
-        })
-      });
-      await BroadcastJob.updateOne({ _id: job._id }, {
-        $set: {
-          status: 'completed',
-          sent: summary.sent,
-          failed: summary.failed,
-          blocked: summary.blocked,
-          finishedAt: new Date()
-        }
-      });
-      console.log(`📣 Broadcast finished: job=${job._id} sent=${summary.sent} failed=${summary.failed} blocked=${summary.blocked} total=${summary.total}`);
+      for (let i = 0; i < users.length; i += BATCH_SIZE) {
+        const batch = users.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(batch.map(async user => {
+          try {
+            if (req.file) await bot.sendPhoto(user.telegramId, req.file.buffer, { caption: text });
+            else await bot.sendMessage(user.telegramId, text);
+            return true;
+          } catch (error) {
+            if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
+            return false;
+          }
+        }));
+        sent += results.filter(Boolean).length;
+        failed += results.length - results.filter(Boolean).length;
+        await BroadcastJob.updateOne({ _id: job._id }, { $set: { sent, failed } });
+        if (i + BATCH_SIZE < users.length) await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+      }
+      await BroadcastJob.updateOne({ _id: job._id }, { $set: { status: 'completed', sent, failed, finishedAt: new Date() } });
+      console.log(`📣 Broadcast finished: job=${job._id} sent=${sent} failed=${failed} total=${users.length}`);
     } catch (error) {
-      await BroadcastJob.updateOne({ _id: job._id }, {
-        $set: { status: 'failed', finishedAt: new Date(), lastError: String(error.message || error).slice(0, 500) }
-      }).catch(() => {});
+      await BroadcastJob.updateOne({ _id: job._id }, { $set: { status: 'failed', sent, failed, finishedAt: new Date(), lastError: String(error.message || error).slice(0, 500) } }).catch(() => {});
       console.error(`[broadcast:${job._id}] failed:`, error.message || error);
     }
   })();

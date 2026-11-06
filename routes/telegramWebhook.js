@@ -1,24 +1,15 @@
 'use strict';
 const express = require('express');
-const mongoose = require('mongoose');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
-const {
-  bot,
-  markTelegramBlocked,
-  isTelegramDeliveryBlocked,
-  activeTelegramUserFilter,
-  filterActiveTelegramRecipients
-} = require('../utils/bot');
+const { bot, broadcastCopyToActiveUsers, isTelegramDeliveryBlocked } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { safelySendTelegram } = require('../utils/telegramNotification');
-const { withMongoTransaction } = require('../utils/mongoTransaction');
 const sendMessage = (...args) => safelySendTelegram(() => bot.sendMessage(...args), { context: 'webhook_reply' });
 const User = require('../models/User');
 const Task = require('../models/Task');
 const TaskReactionState = require('../models/TaskReactionState');
 const Withdrawal = require('../models/Withdrawal');
-const TelegramStarsPayment = require('../models/TelegramStarsPayment');
 const { generateReferralCode } = require('../utils/telegramAuth');
 const { isAdminTelegramId, createAdminSessionStore } = require('../utils/telegramAdmin');
 const { claimWebhookUpdate, finishWebhookUpdate } = require('../utils/webhookDedup');
@@ -26,6 +17,7 @@ const { linkReferralByCode } = require('../utils/referralSystem');
 const { extractReactionEmojis, extractAddedReactionEmojis } = require('../utils/latestPostEngagement');
 const { parseTelegramStart, handleTelegramStart } = require('../utils/telegramStart');
 const { verifyMobileChallenge } = require('../utils/mobileAuth');
+const { normalizeTelegramContact, contactRequestKeyboard, isVerifiedAllowedPhone } = require('../utils/telegramPhoneContact');
 const {
   recordWebhookUpdate,
   recordStartWelcomeSent,
@@ -37,76 +29,6 @@ const {
 // وضعیت موقت گفت‌وگوی «/admin» (در حافظه؛ توضیح کامل در utils/telegramAdmin.js)
 const adminSessions = createAdminSessionStore();
 
-const STARS_PRODUCTS = Object.freeze({
-  streak_freeze: { stars: 50 },
-  hash_boost_7d: { stars: 150 },
-  vip_gold: { stars: 250 }
-});
-
-function parseStarsPayload(payload) {
-  const parts = String(payload || '').split(':');
-  if (parts.length !== 5 || parts[0] !== 'gramup-stars' || parts[1] !== 'v1') return null;
-  const product = STARS_PRODUCTS[parts[3]];
-  if (!product || !mongoose.isValidObjectId(parts[2]) || !parts[4]) return null;
-  return { userId: parts[2], productKey: parts[3], nonce: parts[4], product };
-}
-
-async function handlePreCheckoutQuery(query) {
-  const parsed = parseStarsPayload(query?.invoice_payload);
-  const telegramId = query?.from?.id == null ? '' : String(query.from.id);
-  const user = parsed ? await User.findOne({ _id: parsed.userId, telegramId }).select('_id').lean() : null;
-  const valid = Boolean(parsed && user && query.currency === 'XTR' && Number(query.total_amount) === parsed.product.stars);
-  await bot.answerPreCheckoutQuery(query.id, valid, valid ? '' : 'This Gramup Stars invoice is invalid or expired.');
-}
-
-async function handleSuccessfulPayment(message) {
-  const payment = message?.successful_payment;
-  const telegramId = message?.from?.id == null ? '' : String(message.from.id);
-  const parsed = parseStarsPayload(payment?.invoice_payload);
-  const user = parsed ? await User.findOne({ _id: parsed.userId, telegramId }).select('_id').lean() : null;
-  if (!parsed || !user || payment.currency !== 'XTR' || Number(payment.total_amount) !== parsed.product.stars) {
-    console.warn('Rejected invalid Telegram Stars payment payload.');
-    return;
-  }
-  const outcome = await withMongoTransaction(async session => {
-    try {
-      await new TelegramStarsPayment({
-        user: user._id,
-        telegramId,
-        product: parsed.productKey,
-        currency: 'XTR',
-        amount: parsed.product.stars,
-        invoicePayload: payment.invoice_payload,
-        telegramPaymentChargeId: payment.telegram_payment_charge_id,
-        telegramProviderChargeId: payment.provider_payment_charge_id || '',
-        paidAt: new Date()
-      }).save({ session });
-    } catch (error) {
-      if (error?.code === 11000) return { duplicate: true };
-      throw error;
-    }
-    const now = new Date();
-    const current = await User.findById(user._id).session(session);
-    const set = {};
-    const inc = {};
-    if (parsed.productKey === 'streak_freeze') inc.streakFreezeCredits = 1;
-    if (parsed.productKey === 'hash_boost_7d') {
-      const base = current.miningBoostExpiresAt && current.miningBoostExpiresAt > now ? current.miningBoostExpiresAt : now;
-      set.miningBoostExpiresAt = new Date(base.getTime() + 7 * 24 * 60 * 60 * 1000);
-      set.miningBoostUntil = set.miningBoostExpiresAt;
-      set.miningBoostMultiplier = 2;
-    }
-    if (parsed.productKey === 'vip_gold') {
-      const base = current.vipGoldUntil && current.vipGoldUntil > now ? current.vipGoldUntil : now;
-      set.vipGoldUntil = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
-      set.zeroFeeSwapUntil = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
-    }
-    const updated = await User.findByIdAndUpdate(current._id, { $set: set, $inc: inc }, { new: true, session });
-    return { duplicate: false, updated };
-  });
-  if (!outcome.duplicate) await sendMessage(message.chat.id, '✅ Payment confirmed. Your Gramup perk is now active.');
-}
-
 const ADMIN_MENU_KEYBOARD = {
   inline_keyboard: [
     [{ text: '📊 آمار سریع', callback_data: 'admin_stats' }],
@@ -117,6 +39,57 @@ const ADMIN_MENU_KEYBOARD = {
 
 async function sendAdminMenu(chatId) {
   await sendMessage(chatId, '🛠 پنل مدیریت Gramup — یکی را انتخاب کن:', { reply_markup: ADMIN_MENU_KEYBOARD });
+}
+
+async function handlePhoneContactMessage(message) {
+  const senderId = message?.from?.id == null ? '' : String(message.from.id);
+  const chatId = message?.chat?.id;
+  if (!senderId || chatId == null) return;
+  const user = await User.findOne({ telegramId: senderId });
+  if (!user) {
+    await sendMessage(chatId, botText('phoneContactNotRegistered', 'fa'));
+    return;
+  }
+  if (isVerifiedAllowedPhone(user)) {
+    await sendMessage(chatId, botText('phoneContactVerified', user.language || 'fa'));
+    return;
+  }
+
+  const verification = normalizeTelegramContact(message.contact, senderId);
+  if (!verification.ok) {
+    const key = verification.reason === 'unsupported_country' ? 'phoneContactUnsupported' : 'phoneContactNotSelf';
+    const language = user.language || 'fa';
+    await sendMessage(chatId, botText(key, language), {
+      reply_markup: contactRequestKeyboard(botText('phoneShareButton', language))
+    });
+    return;
+  }
+
+  await User.updateOne(
+    { _id: user._id },
+    { $set: { phoneCountryCode: verification.countryCode, phoneVerifiedAt: new Date() } }
+  );
+  if (user.pendingReferralIdentifier) {
+    try {
+      const referralResult = await linkReferralByCode({
+        referredUserId: user._id,
+        identifier: user.pendingReferralIdentifier,
+        source: 'signup'
+      });
+      if (referralResult.linked || referralResult.reason === 'invalid_referral_identifier' || referralResult.reason === 'invalid_referrer') {
+        await User.updateOne(
+          { _id: user._id, pendingReferralIdentifier: user.pendingReferralIdentifier },
+          { $set: { pendingReferralIdentifier: '' } }
+        );
+      }
+    } catch (error) {
+      // Keep the pending identifier for a safe retry if the database/provider fails.
+      console.error('Pending referral completion failed:', error.message || error);
+    }
+  }
+  await sendMessage(chatId, botText('phoneContactVerified', user.language || 'fa'), {
+    reply_markup: { remove_keyboard: true }
+  });
 }
 
 async function handleAdminStats(chatId) {
@@ -157,101 +130,6 @@ async function handleAdminPending(chatId) {
   await sendMessage(chatId, body);
 }
 
-async function broadcastBotMessageToActiveUsers(fromChatId, messageId) {
-  if (!bot) return { sent: 0, total: 0 };
-  const candidates = await User.find(activeTelegramUserFilter()).select('telegramId isBanned telegramBlockedAt').lean();
-  const users = filterActiveTelegramRecipients(candidates);
-  const batchSize = 20;
-  const delayMs = 1100;
-  let sent = 0;
-  let firstError = '';
-  console.log(`📣 Bot broadcast started: recipients=${users.length}, source=${fromChatId}/${messageId}`);
-  for (let index = 0; index < users.length; index += batchSize) {
-    const batch = users.slice(index, index + batchSize);
-    const results = await Promise.all(batch.map(async user => {
-      try {
-        await bot.copyMessage(String(user.telegramId), String(fromChatId), Number(messageId));
-        return true;
-      } catch (error) {
-        if (!firstError) firstError = String(error?.message || error).slice(0, 240);
-        if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
-        return false;
-      }
-    }));
-    sent += results.filter(Boolean).length;
-    if (index + batchSize < users.length) await new Promise(resolve => setTimeout(resolve, delayMs));
-  }
-  console.log(`📣 Bot broadcast finished: sent=${sent} failed=${users.length - sent} total=${users.length}${firstError ? ` firstError=${firstError}` : ''}`);
-  return { sent, total: users.length, firstError };
-}
-
-function broadcastContentFromMessage(message) {
-  const text = String(message?.text || '');
-  if (text) return { contentType: 'text', contentText: text };
-  const media = [
-    ['photo', Array.isArray(message?.photo) && message.photo.length ? message.photo[message.photo.length - 1] : null],
-    ['video', message?.video],
-    ['document', message?.document],
-    ['audio', message?.audio],
-    ['animation', message?.animation]
-  ].find(([, value]) => value?.file_id);
-  if (media) {
-    return { contentType: media[0], contentCaption: String(message.caption || ''), contentFileId: media[1].file_id };
-  }
-  return { contentType: 'copy' };
-}
-
-async function sendBotBroadcastToUser(user, pending) {
-  if (pending.contentType === 'text' && pending.contentText) {
-    await bot.sendMessage(String(user.telegramId), pending.contentText);
-    return;
-  }
-  const mediaMethods = {
-    photo: ['sendPhoto', 'photo'],
-    video: ['sendVideo', 'video'],
-    document: ['sendDocument', 'document'],
-    audio: ['sendAudio', 'audio'],
-    animation: ['sendAnimation', 'animation']
-  };
-  const media = mediaMethods[pending.contentType];
-  if (media && pending.contentFileId) {
-    await bot.call(media[0], {
-      chat_id: String(user.telegramId),
-      [media[1]]: pending.contentFileId,
-      ...(pending.contentCaption ? { caption: pending.contentCaption } : {})
-    });
-    return;
-  }
-  await bot.copyMessage(String(user.telegramId), String(pending.fromChatId), Number(pending.messageId));
-}
-
-async function broadcastPendingTelegramMessage(pending) {
-  const candidates = await User.find(activeTelegramUserFilter()).select('telegramId isBanned telegramBlockedAt').lean();
-  const users = filterActiveTelegramRecipients(candidates);
-  const batchSize = 20;
-  const delayMs = 1100;
-  let sent = 0;
-  let firstError = '';
-  console.log(`📣 Bot broadcast started: recipients=${users.length}, type=${pending.contentType || 'copy'}`);
-  for (let index = 0; index < users.length; index += batchSize) {
-    const batch = users.slice(index, index + batchSize);
-    const results = await Promise.all(batch.map(async user => {
-      try {
-        await sendBotBroadcastToUser(user, pending);
-        return true;
-      } catch (error) {
-        if (!firstError) firstError = String(error?.message || error).slice(0, 240);
-        if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
-        return false;
-      }
-    }));
-    sent += results.filter(Boolean).length;
-    if (index + batchSize < users.length) await new Promise(resolve => setTimeout(resolve, delayMs));
-  }
-  console.log(`📣 Bot broadcast finished: sent=${sent} failed=${users.length - sent} total=${users.length}${firstError ? ` firstError=${firstError}` : ''}`);
-  return { sent, total: users.length, firstError };
-}
-
 async function handleAdminBroadcastPrompt(telegramId, chatId) {
   adminSessions.setAwaitingContent(telegramId);
   await sendMessage(
@@ -261,8 +139,8 @@ async function handleAdminBroadcastPrompt(telegramId, chatId) {
 }
 
 async function handleBroadcastContent(telegramId, chatId, message) {
-  await adminSessions.clearAwaitingContent(telegramId);
-  await adminSessions.setPendingConfirm(telegramId, chatId, message.message_id, broadcastContentFromMessage(message));
+  adminSessions.clearAwaitingContent(telegramId);
+  adminSessions.setPendingConfirm(telegramId, chatId, message.message_id);
   await safelySendTelegram(() => bot.copyMessage(chatId, chatId, message.message_id), { context: 'broadcast_preview' }); // پیش‌نمایش دقیقاً همان چیزی که کاربران می‌بینند
   await sendMessage(chatId, '⬆️ این پیام برای همه‌ی کاربران فعال ارسال شود؟', {
     reply_markup: {
@@ -281,10 +159,8 @@ async function handleBroadcastConfirm(telegramId, chatId) {
     return;
   }
   await sendMessage(chatId, '⏳ در حال ارسال...');
-  const result = pending.contentType === 'copy'
-    ? await broadcastBotMessageToActiveUsers(pending.fromChatId, pending.messageId)
-    : await broadcastPendingTelegramMessage(pending);
-  await sendMessage(chatId, `✅ پیام برای ${result.sent} کاربر ارسال شد (از ${result.total} کاربر فعال).${result.firstError ? ` خطای نمونه: ${result.firstError}` : ''}`);
+  const sent = await broadcastCopyToActiveUsers(User, pending.fromChatId, pending.messageId);
+  await sendMessage(chatId, `✅ پیام برای ${sent} کاربر ارسال شد.`);
 }
 
 async function handleCallbackQuery(callbackQuery) {
@@ -407,13 +283,11 @@ router.post('/webhook', async (req, res) => {
   if (!Number.isSafeInteger(updateId) || updateId < 0) {
     return res.status(400).json({ success: false, code: 'INVALID_UPDATE_ID' });
   }
-  const updateType = update?.pre_checkout_query ? 'pre_checkout_query'
-    : update?.message?.successful_payment ? 'successful_payment'
-      : update?.channel_post ? 'channel_post'
-        : update?.message_reaction ? 'message_reaction'
-          : update?.callback_query ? 'callback_query'
-            : parseTelegramStart(update?.message?.text) ? 'start'
-              : update?.message ? 'message' : 'other';
+  const updateType = update?.channel_post ? 'channel_post'
+    : update?.message_reaction ? 'message_reaction'
+      : update?.callback_query ? 'callback_query'
+        : parseTelegramStart(update?.message?.text) ? 'start'
+          : update?.message ? 'message' : 'other';
 
   let claim;
   try {
@@ -428,8 +302,6 @@ router.post('/webhook', async (req, res) => {
   recordWebhookUpdate(updateType);
 
   try {
-    if (bot && update?.pre_checkout_query) await handlePreCheckoutQuery(update.pre_checkout_query);
-    if (bot && update?.message?.successful_payment) await handleSuccessfulPayment(update.message);
     if (update?.channel_post) await handleLatestChannelPost(update);
     if (update?.message_reaction) await handleMessageReaction(update);
 
@@ -438,8 +310,13 @@ router.post('/webhook', async (req, res) => {
       if (startCommand?.payload && String(startCommand.payload).startsWith('mobile_')) {
         const verified = await verifyMobileChallenge(startCommand.payload, update.message.from?.id);
         if (verified) {
-          await sendMessage(update.message.chat.id, '✅ هویت شما برای اپ Gramup تأیید شد. حالا به اپلیکیشن برگردید.');
-          update.message.text = '/start';
+          const user = await User.findOne({ telegramId: String(update.message.from.id) });
+          if (!isVerifiedAllowedPhone(user)) {
+            update.message.text = '/start phone_contact';
+          } else {
+            await sendMessage(update.message.chat.id, '✅ هویت شما برای اپ Gramup تأیید شد. حالا به اپلیکیشن برگردید.');
+            update.message.text = '/start';
+          }
         } else {
           update.message.text = '/start';
         }
@@ -468,7 +345,9 @@ router.post('/webhook', async (req, res) => {
       const senderId = message.from && String(message.from.id);
       const isPrivateChat = message.chat.type === 'private';
       const text = (message.text || '').trim();
-      if (isPrivateChat && text === '/admin') {
+      if (message.contact) {
+        await handlePhoneContactMessage(message);
+      } else if (isPrivateChat && text === '/admin') {
         if (isAdminTelegramId(senderId)) await sendAdminMenu(chatId);
         else await sendMessage(chatId, `آیدی عددی شما: ${senderId}\n\nبرای دسترسی مدیریتی از تلگرام، این عدد را به متغیر محیطی ADMIN_TELEGRAM_IDS در تنظیمات سرور اضافه کنید.`);
       } else if (isPrivateChat && isAdminTelegramId(senderId) && text === '/cancel' && (await adminSessions.isAwaitingContent(senderId))) {
@@ -511,5 +390,3 @@ router.get('/set-webhook', (req, res) => {
 });
 
 module.exports = router;
-module.exports.parseStarsPayload = parseStarsPayload;
-module.exports.STARS_PRODUCTS = STARS_PRODUCTS;
