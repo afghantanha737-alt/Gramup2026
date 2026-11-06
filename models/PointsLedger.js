@@ -18,6 +18,7 @@ const pointsLedgerSchema = new mongoose.Schema(
         'daily_chest',     // صندوق پاداش روزانه
         'ad_reward',       // legacy historical records; new ad rewards are disabled
         'spin',            // برد پوینت از گردونه شانس
+        'spin_paid',       // ۵۰ UP هزینه‌ی ورود به چرخش
         'mining_claim',    // تسویه‌ی پوینت استخراج‌شده
         'mining_upgrade',  // هزینه‌ی ارتقای ماینر
         'referral_bonus',  // پاداش دعوت دوست (وقتی دعوت‌شده به حد نصاب تسک برسد)

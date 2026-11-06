@@ -23,6 +23,8 @@ assert.match(pointsSource, /spin\.prizes/);
 assert.match(pointsSource, /spinPrizes: spin\.prizes/);
 assert.match(pointsSource, /router\.post\('\/spin\/paid'/);
 assert.match(pointsSource, /spin_paid/);
+assert.match(appSource, /spin_paid: \{ icon: "🎡" \}/);
+assert.match(i18nSource, /history_type_spin_paid:/);
 assert.match(pointsSource, /points: updated\.points, upBalance: updated\.points/);
 assert.match(pointsSource, /points: \{ \$gte: cost \}/);
 assert.match(pointsSource, /tickets: \{ \$gte: 1 \}/);

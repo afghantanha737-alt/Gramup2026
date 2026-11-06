@@ -1322,6 +1322,7 @@ const LEDGER_TYPE_UI = {
   task: { icon: "✅" },
   checkin: { icon: "📅" },
   spin: { icon: "🎡" },
+  spin_paid: { icon: "🎡" },
   referral_bonus: { icon: "👥" },
   referral_initial: { icon: "🎁" },
   referral_commission: { icon: "💸" },
@@ -3818,7 +3819,7 @@ function renderProfileHistory() {
       ? t("deposit_pending_amount")
       : `${isPositive ? "+" : ""}${item.currency === "gram" ? formatNumber(item.amount, 9) : formatPoints(item.amount)} ${unit}`;
     const icon = (LEDGER_TYPE_UI[item.type] || {}).icon || "🔸";
-    const desc = item.description || t(`history_type_${item.type}`);
+    const desc = item.type === "spin_paid" ? t("history_type_spin_paid") : item.description || t(`history_type_${item.type}`);
     const referralMeta = item.type === "referral_commission"
       ? `${t("history_referral_level", { n: item.referralLevel || "—" })} · ${Number(item.commissionRatePercent || 0)}%`
       : item.type === "referral_initial" ? t("history_referral_initial") : "";

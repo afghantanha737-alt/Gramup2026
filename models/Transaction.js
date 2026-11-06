@@ -8,6 +8,7 @@ const TRANSACTION_TYPES = [
   'daily_chest',
   'ad_reward',
   'spin',
+  'spin_paid',
   'mining_claim',
   'mining_upgrade',
   'stars_purchase',
