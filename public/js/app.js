@@ -304,6 +304,9 @@ function formatPoints(value) {
 function tokenIconMarkup() {
   return '<img class="upTokenIcon" src="img/gramup-logo-new.png" alt="" aria-hidden="true">';
 }
+function gramTokenIconMarkup() {
+  return '<img class="gramTokenIcon" src="img/gram-logo.svg" alt="GRAM" aria-hidden="true">';
+}
 function tokenAmount(value, decimals = 2) {
   const amount = Number(value) || 0;
   return `<span class="upTokenAmount"><span>${new Intl.NumberFormat("en-US", { maximumFractionDigits: decimals }).format(Number(amount.toFixed(decimals)))}</span>${tokenIconMarkup()}<span>UP</span></span>`;
@@ -1779,7 +1782,7 @@ function renderHome() {
       <div class="tbBalanceTop">
         <div class="tbBalanceInfo">
           <div class="tbLabel">${t("tb_total_balance")}</div>
-          <div class="tbAmount"><span class="tbAmountNum">${formatFixed(state.gramBalance, 3)}</span><span class="tbAmountUnit">GRAM</span></div>
+          <div class="tbAmount"><span class="tbAmountNum">${formatFixed(state.gramBalance, 3)}</span><span class="tbAmountUnit">${gramTokenIconMarkup()}<span>GRAM</span></span></div>
           <div class="tbPills">
             <span class="tbPill tbPillPurple">${t("tb_UP_chip", { n: formatPoints(state.points) })}</span>
             <span class="tbPill tbPillOrange">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
@@ -3083,7 +3086,7 @@ function renderWallet() {
   content.innerHTML = `
     <section class="walletOverview">
       <div class="walletOverviewTop"><div><span class="walletOverline">${t("wallet_title")}</span><h1>${t("wallet_balance_title")}</h1></div><span class="walletLivePill">● ${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })}</span></div>
-      <div class="walletOverviewValue"><strong>${formatNumber(state.gramBalance, 6)}</strong><span>GRAM</span></div>
+      <div class="walletOverviewValue"><strong>${formatNumber(state.gramBalance, 6)}</strong><span class="gramAmountUnit">${gramTokenIconMarkup()}<span>GRAM</span></span></div>
       <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.gramUsdPrice > 0 ? `≈ $${formatFixed(state.gramBalance * state.gramUsdPrice, 3)}` : "—"}</b></div>
     </section>
     <div id="tonWalletConnection" aria-live="polite"></div>
@@ -3099,7 +3102,7 @@ function renderWallet() {
         <div class="tbWalletValue">${formatPoints(state.points)}</div>
       </div>
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconBlue">${TB_ICONS.gem}</div>
+        <div class="tbWalletIcon tbWalletLogoWrap"><img class="tbWalletLogo gramWalletLogo" src="img/gram-logo.svg" alt="GRAM" /></div>
         <div class="tbStatLabel tbColBlue">${t("wallet_gram_card_title")}</div>
         <div class="tbWalletValue">${formatNumber(state.gramBalance, 6)}</div>
       </div>
@@ -3449,7 +3452,7 @@ function renderProfileMenu() {
           <span class="tbPill tbPillGreen tbPillSm">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
         </div>
       </div>
-      <div class="profileBalanceMini"><span>${t("tb_total_balance")}</span><strong>${formatNumber(state.gramBalance, 3)} <small>GRAM</small></strong></div>
+      <div class="profileBalanceMini"><span>${t("tb_total_balance")}</span><strong>${formatNumber(state.gramBalance, 3)} <small class="gramBalanceUnit">${gramTokenIconMarkup()}<span>GRAM</span></small></strong></div>
     </section>
 
     <section class="profilePulseGrid" aria-label="${escapeHTML(t("tb_your_progress"))}">
