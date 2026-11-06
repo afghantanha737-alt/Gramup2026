@@ -68,8 +68,10 @@ assert.match(css, /\.appContent \.vipRedesign \.phase3VaultBar span \{ backgroun
 for (const asset of ['style.css', 'theme-selector.css']) {
   assert.ok(html.includes(`/css/${asset}?v=up_v28_20261105_2`), `${asset} must use the fresh cache version`);
 }
-for (const asset of ['maintenanceGate.js', 'i18n.js', 'readModelCache.js', 'app.js', 'walletConnect.js']) {
+for (const asset of ['maintenanceGate.js', 'i18n.js', 'readModelCache.js', 'walletConnect.js']) {
   assert.ok(html.includes(`/js/${asset}?v=up_v28_20261105_2`), `${asset} must use the fresh cache version`);
 }
+assert.ok(html.includes('/js/app.js?v=up_v28_20261106_1'), 'app.js must use the Spinner feedback cache version');
+assert.ok(html.includes('/js/gamification.js?v=up_v28_20261106_1'), 'gamification.js must use the current Spinner feedback cache version');
 
 console.log('PASS — unified cyan/teal brand palette covers shared controls, Home stats, Mine plan tiers, and cache-busted assets');

@@ -1510,6 +1510,35 @@ function openLuckySpin() {
   document.body.appendChild(overlay); document.body.classList.add('luckySpinOpen'); state.spinModalOpen = true; updateSpinControls();
 }
 window.openLuckySpin = openLuckySpin; window.closeLuckySpin = closeLuckySpin;
+function prepareSpinAudio() {
+  try { window.GramupGamification?.prepareAudio?.(); } catch { /* optional audio must not block a spin */ }
+}
+function spinTickFeedback() {
+  const feedback = window.GramupGamification;
+  if (!feedback) return;
+  try { feedback.playTickSound?.(); feedback.triggerHaptic?.('tick'); } catch { /* optional feedback */ }
+}
+function spinWinFeedback() {
+  const feedback = window.GramupGamification;
+  if (!feedback) { haptic('success'); return; }
+  try { feedback.playWinSound?.(); feedback.triggerHaptic?.('win'); } catch { haptic('success'); }
+}
+function spinWheelRotationDegrees(wheel) {
+  const transform = getComputedStyle(wheel).transform;
+  if (!transform || transform === 'none') return 0;
+  const values = transform.slice(transform.indexOf('(') + 1, -1).split(',').map(Number);
+  if (values.length < 2 || !Number.isFinite(values[0]) || !Number.isFinite(values[1])) return 0;
+  return Math.atan2(values[1], values[0]) * 180 / Math.PI;
+}
+function requestSpinFrame(callback) {
+  if (typeof window.requestAnimationFrame === 'function') return { animationFrame: true, id: window.requestAnimationFrame(callback) };
+  return { animationFrame: false, id: setTimeout(callback, 16) };
+}
+function cancelSpinFrame(frame) {
+  if (!frame) return;
+  if (frame.animationFrame) window.cancelAnimationFrame?.(frame.id);
+  else clearTimeout(frame.id);
+}
 function runSpinWheelAnimation(wheel) {
   if (!wheel) return Promise.resolve();
   wheel.classList.remove('spinWheelRun');
@@ -1522,10 +1551,31 @@ function runSpinWheelAnimation(wheel) {
   return new Promise(resolve => {
     let settled = false;
     let fallbackTimer;
+    let frame = null;
+    let previousAngle = spinWheelRotationDegrees(wheel);
+    let rotatedDegrees = 0;
+    let nextTickDegrees = 60;
+    const emitCrossedTicks = () => {
+      const angle = spinWheelRotationDegrees(wheel);
+      const delta = ((angle - previousAngle + 540) % 360) - 180;
+      if (delta > 0) rotatedDegrees += delta;
+      previousAngle = angle;
+      while (rotatedDegrees + 0.01 >= nextTickDegrees && nextTickDegrees <= 1440) {
+        spinTickFeedback();
+        nextTickDegrees += 60;
+      }
+    };
+    const pollRotation = () => {
+      if (settled) return;
+      emitCrossedTicks();
+      frame = requestSpinFrame(pollRotation);
+    };
     const finish = () => {
       if (settled) return;
+      emitCrossedTicks();
       settled = true;
       clearTimeout(fallbackTimer);
+      cancelSpinFrame(frame);
       wheel.removeEventListener('transitionend', onTransitionEnd);
       resolve();
     };
@@ -1536,10 +1586,12 @@ function runSpinWheelAnimation(wheel) {
     wheel.classList.add('spinWheelRun');
     fallbackTimer = setTimeout(finish, Math.max(transitionMs + 150, 150));
     if (transitionMs === 0) finish();
+    else frame = requestSpinFrame(pollRotation);
   });
 }
 async function doSpin() {
   if (!readModelActionAllowed() || !state.spinEnabled || Number(state.tickets) < 1 || state.spinBusy) return;
+  prepareSpinAudio();
   state.spinBusy = true;
   updateSpinControls();
   haptic("light");
@@ -1558,7 +1610,7 @@ async function doSpin() {
     if (Number.isFinite(updatedGramBalance)) state.gramBalance = updatedGramBalance;
     state.spinLastClaimAt = new Date().toISOString();
     state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
-    haptic("success");
+    spinWinFeedback();
     const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount);
     if (resultBox) resultBox.textContent = t("spin_result", { label });
     toast(label, "success");
@@ -1574,6 +1626,7 @@ window.doSpin = doSpin;
 async function paySpinAlternative() {
   if (!readModelActionAllowed() || !state.spinEnabled || state.spinBusy) return;
   if (Number(state.points) < 50) { toast(t('spin_insufficient_balance', {}, 'You need at least 50 UP to spin.'), 'error'); return; }
+  prepareSpinAudio();
   state.spinBusy = true; haptic('medium');
   const button = document.querySelector('[data-paid-spin]'); const wheel = document.querySelector('#spinWheel'); const resultBox = document.querySelector('#spinResult');
   if (button) { button.disabled = true; button.textContent = t('spin_paying', {}, 'Processing 50 UP...'); }
@@ -1588,7 +1641,7 @@ async function paySpinAlternative() {
     const updatedGramBalance = Number(result.gramBalance);
     if (Number.isFinite(updatedGramBalance)) state.gramBalance = updatedGramBalance;
     state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
-    const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount); if (resultBox) resultBox.textContent = t('spin_result', { label }); toast(label, 'success'); haptic('success'); updateHeader();
+    const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount); if (resultBox) resultBox.textContent = t('spin_result', { label }); toast(label, 'success'); spinWinFeedback(); updateHeader();
   } catch (error) { clearDefinitiveIdempotencyFailure('spin_paid', error); haptic('error'); if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message); toast(translateServerMessage(error.code, error.message), 'error'); }
   finally {
     state.spinBusy = false;
