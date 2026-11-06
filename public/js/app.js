@@ -4068,17 +4068,58 @@ async function loadMiningStatus() {
   }
 }
 
+let miningTickerTimer = null;
+function stopMiningTicker() { if (miningTickerTimer) clearInterval(miningTickerTimer); miningTickerTimer = null; }
+function miningLiveValues() {
+  const mining = state.mining;
+  if (!mining) return null;
+  const serverAt = Date.parse(mining.serverNow || "") || Date.now();
+  const elapsedSinceStatus = Math.max(0, (Date.now() - serverAt) / 1000);
+  const ratePerSecond = Math.max(0, Number(mining.effectiveRatePerHour) || 0) / 3600;
+  const points = Math.min(Number(mining.maxStoragePoints) || Infinity, Math.max(0, (Number(mining.accumulatedPoints) || 0) + elapsedSinceStatus * ratePerSecond));
+  const max = Math.max(1, Number(mining.maxStoragePoints) || 1);
+  const percent = Math.min(100, Math.max(0, points / max * 100));
+  const remainingSeconds = mining.isStorageFull ? 0 : Math.max(0, (max - points) / Math.max(ratePerSecond, 0.000001));
+  return { points, percent, remainingSeconds, full: points >= max - 0.001 };
+}
+function formatMiningDuration(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(total / 3600); const m = Math.floor((total % 3600) / 60); const sec = total % 60;
+  return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(sec).padStart(2, "0")}s`;
+}
+function updateMiningConsole() {
+  const live = miningLiveValues(); if (!live) return;
+  document.querySelectorAll("[data-mine-earned]").forEach(el => { el.textContent = formatNumber(live.points, 3); });
+  document.querySelectorAll("[data-mine-progress]").forEach(el => { el.style.width = `${live.percent}%`; });
+  document.querySelectorAll("[data-mine-progress-label]").forEach(el => { el.textContent = `${live.percent.toFixed(1)}%`; });
+  document.querySelectorAll("[data-mine-countdown]").forEach(el => { el.textContent = live.full ? t("mining_vault_full") : formatMiningDuration(live.remainingSeconds); });
+  document.querySelectorAll("[data-mine-status]").forEach(el => { el.textContent = live.full ? t("mining_vault_full") : t("mining_vault_running"); });
+  document.querySelectorAll("[data-mine-claim]").forEach(button => { button.disabled = live.points < 1 || live.full && Number(miningLiveValues().points) < 1; });
+}
+function startMiningTicker() { stopMiningTicker(); updateMiningConsole(); miningTickerTimer = setInterval(updateMiningConsole, 1000); }
+function renderMiningHistory(history) {
+  const rows = (Array.isArray(history) ? history : []).filter(item => item.type === "mining_claim").slice(0, 3).map(item => {
+    const amount = Number(item.amount) || 0; const date = item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
+    return `<div class="mineHistoryRow"><span class="mineHistoryIcon">↗</span><span><b>${t("mining_claim")}</b><small>${escapeHTML(date)}</small></span><strong>+${formatNumber(amount, 0)} UP</strong></div>`;
+  }).join("");
+  return rows || `<div class="mineHistoryEmpty">${t("history_empty")}</div>`;
+}
 function renderMiningPanel() {
   const mining = state.mining;
   if (!mining) return '';
-  const boltIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 11-14h-7l1-6z"/></svg>';
-  const diamondIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 12 0 4 6-10 12L2 9l4-6z"/><path d="M2 9h20M6 3l6 18 6-18"/></svg>';
-  const products = [['hash_boost_7d', boltIcon, t('stars_hash_boost'), 150], ['vip_gold', diamondIcon, t('stars_vip_gold'), 250]];
-  return `<section class="phase3MiningCard phase3StarsOnly" aria-label="${t('stars_shop_title')}">
-    <div class="phase3StarsShop"><h4>${t('stars_shop_title')}</h4><div class="phase3StarsGrid">${products.map(([key, icon, label, stars]) => `<button type="button" class="phase3StarsCard" onclick="buyStarsProduct('${key}')"><span aria-hidden="true">${icon}</span><b>${label}</b><small>${stars} XTR</small></button>`).join('')}</div></div>
+  const live = miningLiveValues() || { points: mining.accumulatedPoints || 0, percent: 0, remainingSeconds: 0, full: Boolean(mining.isStorageFull) };
+  const canClaim = live.points >= 1;
+  const statusLabel = live.full ? t('mining_vault_full') : t('mining_vault_running');
+  const boostText = mining.boostActive ? `${formatNumber(mining.boostMultiplier, 1)}× · ${mining.boostUntil ? formatMiningDuration((Date.parse(mining.boostUntil) - Date.now()) / 1000) : ''}` : '—';
+  return `<section class="mineConsole" aria-label="${t('mining_title')}">
+    <div class="mineConsoleHeader"><div class="mineBrand"><span class="mineEmblem" aria-hidden="true">⛏</span><div><span class="mineEyebrow">GRAMUP MINING</span><h2>${t('mining_title')}</h2><small>${escapeHTML(mining.rigName || t('mining_rig_level', { n: mining.level }))}</small></div></div><span class="mineStatus"><i></i><span data-mine-status>${statusLabel}</span></span></div>
+    <div class="mineCounter"><span>${t('mining_session_earned')}</span><strong data-mine-earned>${formatNumber(live.points, 3)}</strong><b>UP</b><small>≈ ${formatNumber(live.points * (Number(state.rate) || 0), 6)} GRAM</small></div>
+    <div class="mineProgressHead"><span>${t('mining_cycle_progress')}</span><strong data-mine-progress-label>${live.percent.toFixed(1)}%</strong></div><div class="mineProgressTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span data-mine-progress style="width:${live.percent}%"></span></div><div class="mineProgressMeta"><span>${live.full ? t('mining_vault_full') : t('mining_vault_running')}</span><b data-mine-countdown>${live.full ? t('mining_vault_full') : formatMiningDuration(live.remainingSeconds)}</b></div>
+    <div class="mineMetrics"><div class="mineMetric"><span>⚡ ${t('mining_speed')}</span><strong>+${formatNumber(mining.effectiveRatePerHour, 0)} UP/hr</strong><small>${mining.boostActive ? `${formatNumber(mining.boostMultiplier, 1)}× ${t('mining_boost_active')}` : t('mining_base_rate')}</small></div><div class="mineMetric"><span>◆ ${t('mining_tier')}</span><strong>${t('mining_rig_level', { n: mining.level })}</strong><small>${escapeHTML(mining.rigName || '')}</small></div></div>
+    <button class="minePrimaryAction" type="button" data-mine-claim onclick="claimMining()" ${canClaim ? '' : 'disabled'}>${canClaim ? t('mining_claim') : t('mining_start')}</button><button class="mineBoostAction" type="button" onclick="buyStarsProduct('hash_boost_7d')">⚡ ${t('mining_boost')} <span>${boostText}</span></button>
+    <div class="mineSessionCard"><div class="mineSessionHeader"><span>${t('mining_session_info')}</span><small>${t('mining_active_boosts')}</small></div><div class="mineBoostLine"><span>⚡ ${t('mining_boost')}</span><b>${boostText}</b></div><div class="mineBoostLine"><span>🔥 ${t('mining_streak_bonus')}</span><b>${formatPoints(state.streak)} days</b></div><div class="mineHistoryTitle">${t('mining_recent_claims')}</div>${renderMiningHistory(mining.history)}</div>
   </section>`;
 }
-
 async function claimMining() {
   if (!readModelActionAllowed()) return;
   haptic('medium');
@@ -4150,6 +4191,7 @@ function stopVipCountdown() {
   if (vipCountdownTimer) clearInterval(vipCountdownTimer);
   vipCountdownTimer = null;
   vipCountdownRefreshPending = false;
+  stopMiningTicker();
 }
 
 function updateVipLiveDashboard() {
@@ -4242,6 +4284,7 @@ async function tickVipCountdowns() {
 
 function startVipCountdown() {
   stopVipCountdown();
+  startMiningTicker();
   if ((state.activeTab !== "profile" && state.activeTab !== "vip") || (state.activeTab === "profile" && profileView !== "vip")) return;
   void tickVipCountdowns();
   vipCountdownTimer = setInterval(tickVipCountdowns, 1000);
@@ -4318,7 +4361,7 @@ function renderProfileVip() {
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
-  const planIconMarkup = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 11-14h-7l1-6z"/></svg>';
+  const iconByPlan = { 1: "⚡", 2: "⚡", 3: "⚡", 4: "⚡", 5: "⚡", 6: "⚡", 7: "⚡", 8: "⚡", 9: "⚡", 10: "⚡" };
 
   const planCards = visiblePlans.map(plan => {
     const available = plan.enabled === true && plan.comingSoon !== true;
@@ -4349,7 +4392,7 @@ function renderProfileVip() {
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
       <article class="vipPlanCard vipPlanCard--${theme}">
-        <div class="vipPlanAccent" aria-hidden="true"><span class="vipPlanMark">${planIconMarkup}</span></div>
+        <div class="vipPlanAccent" aria-hidden="true"><span class="vipPlanMark">${iconByPlan[planNumber] || "⚡"}</span></div>
         <div class="vipPlanBody">
           <div class="vipPlanTopline">
             <div class="vipPlanTitleLine"><span class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</span><span class="vipPlanDuration">${formatPoints(plan.durationDays)}d</span>${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}</div>
@@ -4391,48 +4434,11 @@ function renderProfileVip() {
   const hasLiveMining = liveCount > 0;
 
   return `
-    <style>
-      .vipRedesign{--vip-ink:#f7f7ff;--vip-muted:#a8aec2;--vip-line:rgba(255,255,255,.1);margin:0 -2px;padding:4px 0 26px;background:radial-gradient(circle at 85% 0%,var(--brand-accent-glow),transparent 34%),linear-gradient(180deg,rgba(7,12,24,.28),transparent 70%);color:var(--vip-ink)}
-      .phase3MiningCard{margin:0 0 16px;padding:18px;border:1px solid rgba(56,189,248,.22);border-radius:22px;background:linear-gradient(145deg,rgba(14,34,62,.92),rgba(8,13,27,.92));box-shadow:0 14px 34px rgba(0,0,0,.2)}
-      .phase3MiningTop,.phase3VaultMeta{display:flex;justify-content:space-between;gap:12px;align-items:center}.phase3MiningTop h3{margin:5px 0 0}.phase3MiningTop strong{color:#67e8f9}.phase3Vault{margin:16px 0}.phase3VaultBar{height:10px;background:rgba(255,255,255,.1);border-radius:999px;overflow:hidden}.phase3VaultBar span{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#a78bfa);border-radius:inherit;transition:width .4s}.phase3VaultMeta{margin-top:8px;font-size:12px;color:#a8aec2}.phase3VaultMeta b{color:#f8fafc}.phase3MiningActions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.phase3MiningActions button{font-size:12px;padding:11px 7px}.phase3StarsShop{margin-top:18px}.phase3StarsShop h4{margin:0 0 10px}.phase3StarsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.phase3StarsCard{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.05);color:inherit}.phase3StarsCard span{font-size:22px}.phase3StarsCard b{font-size:11px;text-align:center}.phase3StarsCard small{color:#fbbf24}@media(max-width:500px){.phase3MiningActions,.phase3StarsGrid{grid-template-columns:1fr}.phase3MiningActions button{width:100%}}
-    </style>
-    <div class="vipRedesign">
-      <div class="sectionHeader">
-        <button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button>
-        <h2 class="sectionTitle">${t("vip_title")}</h2><span></span>
-      </div>
-      <section class="vipHero vipMiningHero" aria-label="${t("vip_unclaimed_earnings")}">
-        <div class="vipHeroTop">
-          <img class="vipHeroLogo" src="/img/gramup-logo-new.png" alt="Gramup" width="42" height="42">
-          <span class="vipStatusPill ${hasLiveMining && !storageFull ? "isActive" : "isInactive"}" data-vip-mining-status><i aria-hidden="true"></i><span data-vip-mining-status-label>${t(storageFull ? "vip_storage_full" : hasLiveMining ? "vip_mining_live" : activeSubscriptions.length ? "vip_settlement_ready" : "vip_status_inactive")}</span><b data-vip-active-count>${formatPoints(liveCount)}</b></span>
-        </div>
-        <div class="vipMinerVisual" aria-hidden="true"><span class="vipMinerOrbit"></span><span class="vipMinerCoin">◈</span><span class="vipMinerSpark vipMinerSpark--one">✦</span><span class="vipMinerSpark vipMinerSpark--two">·</span></div>
-        <div class="vipBalanceValue"><strong data-vip-unclaimed-total>${formatNumber(unclaimedVipPoints, 3)}</strong><span>${t("vip_UP_unit")}</span></div>
-        ${Number.isFinite(storageCapAt) ? `<div class="vipStorageCountdown${storageFull ? " isFull" : ""}" data-vip-storage-countdown role="timer" aria-live="off">
-          <svg class="vipStorageCountdownSvg" viewBox="0 0 84 84" aria-hidden="true"><circle class="vipStorageCountdownTrack" cx="42" cy="42" r="36"></circle><circle class="vipStorageCountdownProgress" data-vip-storage-ring cx="42" cy="42" r="36" style="stroke-dasharray:226.1946710584651;stroke-dashoffset:${226.1946710584651 * (1 - Math.max(0, Math.min(1, Math.max(0, storageCapAt - now) / 86400000)))}"></circle></svg>
-          <span data-vip-storage-countdown-text>${t("vip_storage_full_in", { time: formatVipStorageTime(Math.max(0, storageCapAt - now)) })}</span>
-        </div>` : ""}
-        <div class="vipHeroPlanList" aria-label="${t("vip_active_plans_heading")}">${activePlanRows || `<div class="vipHeroPlanEmpty">${t("vip_no_active_plans")}</div>`}</div>
-        <button type="button" class="vipHeroButton vipHeroClaimButton" data-vip-claim-all ${!claimableCount || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" aria-busy="${vipClaimAllBusy ? "true" : "false"}">
-          <span class="vipClaimSpinner" aria-hidden="true"></span>
-          <span data-vip-claim-label>${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_wallet")}</span>
-          <b><span data-vip-claim-total>${formatNumber(unclaimedVipPoints, 3)}</span> ${t("vip_UP_unit")}</b>
-        </button>
-        <div class="vipAccrualHint">${t("vip_live_estimate_note")}</div>
-      </section>
-
-      ${expiredRows ? `<details class="vipPastPlans"><summary>${t("vip_expired_title")} <b>${formatPoints(expiredSubscriptions.length)}</b></summary>${expiredRows}</details>` : ""}
-
-      <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
-        <div class="vipCatalogHeading"><h3>${t("vip_catalog_title")}</h3><p>${t("vip_intro")}</p><small>${t("vip_payout_breakdown_note")}</small></div>
-        <div class="vipPlanTabs" role="tablist" aria-label="${t("vip_tier_tabs_label")}">
-          <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "starter"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('starter')"><span>${t("vip_tier_starter")}</span></button>
-          <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "pro"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('pro')"><span>${t("vip_tier_pro")}</span></button>
-          <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "ultimate"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('ultimate')"><span>${t("vip_tier_ultimate")}</span></button>
-        </div>
-        <div class="vipPlanList" id="vipPlanGrid" role="tabpanel" aria-live="polite">${plans.length ? (planCards || `<div class="vipEmptyTier">${t("vip_category_empty")}</div>`) : `<div class="card"><div class="emptyDesc">${t("vip_empty_plans")}</div></div>`}</div>
-      </section>
+    <div class="minePage">
+      <div class="sectionHeader"><button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button><h2 class="sectionTitle">${t("mining_title")}</h2><span></span></div>
+      ${renderMiningPanel()}
     </div>`;
+
 }
 function retryVipPlans() {
   state.vipDataLoaded = false;

@@ -3428,3 +3428,68 @@ html[data-theme="light"] .auroraDailyCard .auroraInlineBtn {
 .luckySpinPage .spinWheel > span {
   transform: rotate(calc(var(--i) * 60deg)) translateY(-101px) rotate(calc(var(--i) * -60deg));
 }
+
+/* =========================================================
+   GRAMUP MINE CONSOLE — original mining dashboard
+========================================================= */
+.minePage { margin:0 -2px; padding:2px 1px 26px; }
+.mineConsole { position:relative; overflow:hidden; margin:0 0 14px; padding:18px 16px 15px; border:1px solid rgba(103,232,249,.22); border-radius:25px; color:#edfaff; background:radial-gradient(circle at 92% 2%,rgba(34,211,238,.19),transparent 32%),radial-gradient(circle at 8% 28%,rgba(124,58,237,.18),transparent 36%),linear-gradient(150deg,#0b1829,#0d1121 58%,#160d29); box-shadow:0 18px 45px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.05); }
+.mineConsole::before { content:""; position:absolute; width:210px; height:210px; inset-inline-end:-128px; top:105px; border:1px solid rgba(103,232,249,.14); border-radius:50%; box-shadow:0 0 0 22px rgba(103,232,249,.025),0 0 0 44px rgba(103,232,249,.018); pointer-events:none; }
+.mineConsoleHeader { position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.mineBrand { display:flex; align-items:center; gap:10px; min-width:0; }
+.mineEmblem { display:grid; place-items:center; width:45px; height:45px; flex:0 0 45px; border:1px solid rgba(103,232,249,.42); border-radius:15px; color:#08131d; background:linear-gradient(145deg,#b8f6ff,#37d2e8 53%,#7c3aed); box-shadow:0 0 22px rgba(34,211,238,.28); font-size:25px; transform:rotate(-8deg); }
+.mineBrand div { min-width:0; }
+.mineEyebrow { display:block; color:#67e8f9; font-size:9px; font-weight:900; letter-spacing:1.9px; }
+.mineBrand h2 { margin:4px 0 2px; color:#fff; font-size:20px; font-weight:950; letter-spacing:-.35px; }
+.mineBrand small { display:block; overflow:hidden; color:#9eb8c9; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.mineStatus { display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; padding:7px 9px; border:1px solid rgba(74,222,128,.3); border-radius:999px; color:#a7f3d0; background:rgba(34,197,94,.1); font-size:9px; font-weight:850; white-space:nowrap; }
+.mineStatus i { width:6px; height:6px; border-radius:50%; background:#4ade80; box-shadow:0 0 10px rgba(74,222,128,.75); animation:minePulse 1.8s ease-in-out infinite; }
+@keyframes minePulse { 50% { opacity:.45; transform:scale(.75); } }
+.mineCounter { position:relative; z-index:1; margin:24px 0 18px; text-align:center; }
+.mineCounter span { display:block; color:#a5bfcc; font-size:10px; font-weight:750; }
+.mineCounter strong { display:inline-block; margin-top:3px; color:#f6ffff; font-size:clamp(35px,11vw,52px); line-height:1; font-weight:950; letter-spacing:-1.8px; font-variant-numeric:tabular-nums; text-shadow:0 0 26px rgba(103,232,249,.2); }
+.mineCounter b { margin-inline-start:6px; color:#67e8f9; font-size:13px; font-weight:950; }
+.mineCounter small { display:block; margin-top:8px; color:#a78bfa; font-size:11px; font-weight:800; font-variant-numeric:tabular-nums; }
+.mineProgressHead,.mineProgressMeta { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.mineProgressHead { color:#9fb6c2; font-size:10px; font-weight:800; }
+.mineProgressHead strong { color:#fbbf24; font-size:11px; font-variant-numeric:tabular-nums; }
+.mineProgressTrack { height:10px; margin-top:8px; overflow:hidden; border:1px solid rgba(103,232,249,.16); border-radius:999px; background:rgba(255,255,255,.075); }
+.mineProgressTrack span { display:block; height:100%; min-width:0; border-radius:inherit; background:linear-gradient(90deg,#22d3ee,#a78bfa 62%,#fbbf24); box-shadow:0 0 14px rgba(34,211,238,.46); transition:width .8s linear; }
+.mineProgressMeta { margin-top:7px; color:#8fa8b7; font-size:9px; }
+.mineProgressMeta b { color:#dffbff; font-variant-numeric:tabular-nums; }
+.mineMetrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:15px 0 10px; }
+.mineMetric { min-width:0; padding:11px 10px; border:1px solid rgba(255,255,255,.08); border-radius:15px; background:rgba(255,255,255,.045); }
+.mineMetric span { display:block; overflow:hidden; color:#9eb4c2; font-size:9px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+.mineMetric strong { display:block; margin-top:5px; overflow:hidden; color:#e9ffff; font-size:13px; font-weight:900; text-overflow:ellipsis; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.mineMetric small { display:block; margin-top:3px; overflow:hidden; color:#7dd3fc; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.minePrimaryAction { position:relative; z-index:1; width:100%; min-height:48px; border:0; border-radius:15px; color:#06141b; background:linear-gradient(100deg,#7df4d5,#36d8de 58%,#67e8f9); box-shadow:0 10px 24px rgba(34,211,238,.2); font-size:13px; font-weight:950; transition:transform .16s ease,filter .16s ease; }
+.minePrimaryAction:not(:disabled):active { transform:scale(.985); filter:brightness(.95); }
+.minePrimaryAction:disabled { color:#8796a7; background:rgba(255,255,255,.08); box-shadow:none; }
+.mineBoostAction { display:flex; align-items:center; justify-content:space-between; width:100%; min-height:40px; margin-top:8px; padding:0 13px; border:1px solid rgba(167,139,250,.3); border-radius:13px; color:#d9d0ff; background:rgba(124,58,237,.12); font-size:11px; font-weight:850; }
+.mineBoostAction span { color:#c4b5fd; font-size:10px; font-variant-numeric:tabular-nums; }
+.mineSessionCard { position:relative; z-index:1; margin-top:15px; padding:13px; border:1px solid rgba(255,255,255,.08); border-radius:17px; background:rgba(3,9,20,.32); }
+.mineSessionHeader,.mineBoostLine { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.mineSessionHeader { padding-bottom:9px; border-bottom:1px solid rgba(255,255,255,.08); color:#f3ffff; font-size:12px; font-weight:900; }
+.mineSessionHeader small { color:#7dd3fc; font-size:9px; font-weight:750; }
+.mineBoostLine { min-height:31px; color:#99afbd; font-size:10px; }
+.mineBoostLine b { color:#d9faff; font-size:10px; font-variant-numeric:tabular-nums; }
+.mineHistoryTitle { margin:9px 0 5px; color:#6f8898; font-size:9px; font-weight:850; text-transform:uppercase; letter-spacing:.8px; }
+.mineHistoryRow { display:grid; grid-template-columns:25px minmax(0,1fr) auto; align-items:center; gap:7px; min-height:39px; border-top:1px solid rgba(255,255,255,.06); }
+.mineHistoryIcon { display:grid; place-items:center; width:22px; height:22px; border-radius:8px; color:#67e8f9; background:rgba(34,211,238,.1); font-size:13px; }
+.mineHistoryRow span:nth-child(2) { display:flex; min-width:0; flex-direction:column; gap:1px; }
+.mineHistoryRow b { overflow:hidden; color:#d9eff4; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.mineHistoryRow small { color:#708a99; font-size:8px; }
+.mineHistoryRow strong { color:#86efac; font-size:10px; font-variant-numeric:tabular-nums; }
+.mineHistoryEmpty { padding:9px 0 2px; color:#748c99; font-size:10px; text-align:center; }
+html[data-theme="silver"] .mineConsole { color:#182638; border-color:rgba(71,85,105,.25); background:radial-gradient(circle at 92% 0%,rgba(148,163,184,.32),transparent 34%),linear-gradient(150deg,#eef2f7,#cbd5e1 58%,#e2e8f0); box-shadow:0 18px 42px rgba(51,65,85,.15),inset 0 1px 0 rgba(255,255,255,.8); }
+html[data-theme="silver"] .mineConsole::before { border-color:rgba(71,85,105,.16); box-shadow:0 0 0 22px rgba(71,85,105,.04),0 0 0 44px rgba(71,85,105,.025); }
+html[data-theme="silver"] .mineBrand h2,html[data-theme="silver"] .mineCounter strong { color:#172033; text-shadow:none; }
+html[data-theme="silver"] .mineEyebrow,html[data-theme="silver"] .mineCounter b { color:#0369a1; }
+html[data-theme="silver"] .mineBrand small,html[data-theme="silver"] .mineCounter span,html[data-theme="silver"] .mineProgressMeta,html[data-theme="silver"] .mineMetric span,html[data-theme="silver"] .mineBoostLine { color:#475569; }
+html[data-theme="silver"] .mineMetric,html[data-theme="silver"] .mineSessionCard { border-color:rgba(71,85,105,.16); background:rgba(255,255,255,.4); }
+html[data-theme="silver"] .mineMetric strong,html[data-theme="silver"] .mineSessionHeader,html[data-theme="silver"] .mineHistoryRow b { color:#1e293b; }
+html[data-theme="silver"] .mineStatus { color:#166534; background:rgba(134,239,172,.35); border-color:rgba(22,101,52,.2); }
+html[data-theme="silver"] .mineProgressTrack { border-color:rgba(71,85,105,.18); background:rgba(71,85,105,.12); }
+html[data-theme="silver"] .mineBoostAction { color:#4338ca; border-color:rgba(67,56,202,.2); background:rgba(99,102,241,.1); }
+@media(max-width:390px){.mineConsole{padding:15px 12px}.mineStatus{padding-inline:7px;font-size:8px}.mineBrand h2{font-size:18px}.mineCounter strong{font-size:36px}.mineMetrics{gap:6px}.mineMetric{padding-inline:8px}}
+

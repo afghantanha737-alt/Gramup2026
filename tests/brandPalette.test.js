@@ -50,20 +50,15 @@ assert.match(css, /\.vipRedesign \.vipPlanCard--bronze::before,[\s\S]*?\.vipRede
   'Mine plan tiers must share the same accent strip rather than random tier colors');
 assert.match(css, /\.vipRedesign \.vipTierTab\[aria-selected="true"\][\s\S]*?background: var\(--brand-accent-soft\)/,
   'selected Mine category tabs must use the brand accent');
-assert.match(app, /background:radial-gradient\(circle at 85% 0%,var\(--brand-accent-glow\),transparent 34%\)/,
-  'the Mine dashboard surface must use the shared accent instead of purple');
-assert.match(css, /\.appContent \.vipRedesign \.vipHero \{[\s\S]*?border-color: var\(--brand-accent-border\);\s*background: radial-gradient\(circle at 100% 0%, var\(--brand-accent-glow\)/,
-  'the Mine hero must override the higher-specificity legacy purple gradient');
-assert.match(app, /const planIconMarkup = '<svg[\s\S]*?stroke="currentColor"/,
-  'Mine plan-card icons must inherit the unified accent instead of using yellow emoji');
-assert.match(app, /class="vipPlanMark">\$\{planIconMarkup\}/,
-  'Mine plan cards must render the accent-colored SVG icon');
-assert.match(app, /const boltIcon = '<svg[\s\S]*?const diamondIcon = '<svg[\s\S]*?class="phase3StarsCard" onclick=/,
-  'Mine Stars shop icons must be SVGs rather than platform-colored emoji');
-assert.match(css, /\.vipRedesign \.vipPlanMark svg \{[^}]*color: inherit; stroke: currentColor;/,
-  'Mine plan SVG icons must use the plan badge accent color');
-assert.match(css, /\.appContent \.vipRedesign \.phase3VaultBar span \{ background: linear-gradient\(90deg, var\(--brand-accent-strong\), var\(--brand-accent\)\); \}/,
-  'Mine vault progress must not introduce a separate violet accent');
+assert.match(app, /class="mineConsole"/, 'Mine must render the Gramup mining console');
+assert.match(app, /class="mineCounter"/, 'Mine must render a live earnings counter');
+assert.match(app, /class="mineProgressTrack"/, 'Mine must render the cycle progress track');
+assert.match(app, /class="mineMetrics"/, 'Mine must render the speed and tier metrics');
+assert.match(app, /class="mineSessionCard"/, 'Mine must render active boosts and session history');
+assert.match(css, /\.mineConsole \{[^}]*background:radial-gradient\(circle at 92% 2%,rgba\(34,211,238/, 
+  'the Mine dashboard surface must use Gramup cyan/neon branding');
+assert.match(css, /\.mineProgressTrack span \{[^}]*background:linear-gradient\(90deg,#22d3ee/, 
+  'Mine progress must use cyan, violet and gold dashboard accents');
 
 assert.ok(html.includes('/css/style.css?v=up_v28_20261106_3'), 'style.css must use the win modal cache version');
 assert.ok(html.includes('/css/theme-selector.css?v=up_v29_silver_theme'), 'theme-selector.css must use the Silver theme cache version');

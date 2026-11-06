@@ -7,7 +7,7 @@
 const TRANSLATIONS = {
   fa: {
     nav_home: "خانه", nav_tasks: "وظایف", nav_daily: "روزانه", nav_wallet: "کیف پول", nav_profile: "پروفایل",
-    mining_title: "استخراج UP", mining_rig_level: "ماینر سطح {n}", mining_per_hour: "UP در ساعت", mining_vault_running: "استخراج فعال است", mining_vault_full: "خزانه پر است؛ Claim کنید", mining_claim: "دریافت UP", mining_claim_success: "{n} UP دریافت شد", mining_upgrade_rig: "ارتقای ماینر", mining_upgrade_vault: "افزایش ظرفیت", mining_upgrade_success: "ارتقا با موفقیت انجام شد", stars_shop_title: "فروشگاه Telegram Stars", stars_streak_freeze: "فریز استریک", stars_hash_boost: "تقویت ۷ روزه", stars_vip_gold: "VIP Gold",
+    mining_title: "ماینینگ گراماپ", mining_session_earned: "درآمد این جلسه", mining_cycle_progress: "پیشرفت چرخه", mining_speed: "سرعت ماینینگ", mining_tier: "سطح ماینر", mining_base_rate: "نرخ پایه", mining_boost_active: "تقویت فعال", mining_boost: "افزایش سرعت", mining_start: "شروع ماینینگ", mining_session_info: "اطلاعات جلسه", mining_active_boosts: "تقویت‌ها و مزایا", mining_streak_bonus: "پاداش استریک", mining_recent_claims: "آخرین برداشت‌ها", mining_rig_level: "ماینر سطح {n}", mining_per_hour: "UP در ساعت", mining_vault_running: "استخراج فعال است", mining_vault_full: "خزانه پر است؛ Claim کنید", mining_claim: "دریافت UP", mining_claim_success: "{n} UP دریافت شد", mining_upgrade_rig: "ارتقای ماینر", mining_upgrade_vault: "افزایش ظرفیت", mining_upgrade_success: "ارتقا با موفقیت انجام شد", stars_shop_title: "فروشگاه Telegram Stars", stars_streak_freeze: "فریز استریک", stars_hash_boost: "تقویت ۷ روزه", stars_vip_gold: "VIP Gold",
     stars_invoice_sent: "Invoice به ربات تلگرام شما ارسال شد.",
     greet_hello: "سلام {name} 👋",
     UP_unit: "UP",
@@ -472,7 +472,7 @@ const TRANSLATIONS = {
 
   ps: {
     nav_home: "کور", nav_tasks: "دندې", nav_daily: "ورځنی", nav_wallet: "والټ", nav_profile: "پروفایل",
-    mining_title: "د UP ماین کول", mining_rig_level: "د ماینر کچه {n}", mining_per_hour: "UP په ساعت کې", mining_vault_running: "ماین کول روان دي", mining_vault_full: "خزانه ډکه ده؛ Claim وکړئ", mining_claim: "UP ترلاسه کړئ", mining_claim_success: "{n} UP ترلاسه شول", mining_upgrade_rig: "ماینر لوړول", mining_upgrade_vault: "ظرفیت لوړول", mining_upgrade_success: "لوړول بریالي شول", stars_shop_title: "د Telegram Stars پلورنځی", stars_streak_freeze: "سټریک فریز", stars_hash_boost: "۷ ورځنی ځواک", stars_vip_gold: "VIP Gold",
+    mining_title: "د ګراماپ ماین کول", mining_session_earned: "د دې ناستې عاید", mining_cycle_progress: "د دورې پرمختګ", mining_speed: "د ماین سرعت", mining_tier: "د ماینر کچه", mining_base_rate: "اساسي نرخ", mining_boost_active: "تقویه فعاله ده", mining_boost: "سرعت زیاتول", mining_start: "ماین پیل کړئ", mining_session_info: "د ناستې معلومات", mining_active_boosts: "تقویې او ګټې", mining_streak_bonus: "د سټریک بونس", mining_recent_claims: "وروستي ترلاسه کول", mining_rig_level: "د ماینر کچه {n}", mining_per_hour: "UP په ساعت کې", mining_vault_running: "ماین کول روان دي", mining_vault_full: "خزانه ډکه ده؛ Claim وکړئ", mining_claim: "UP ترلاسه کړئ", mining_claim_success: "{n} UP ترلاسه شول", mining_upgrade_rig: "ماینر لوړول", mining_upgrade_vault: "ظرفیت لوړول", mining_upgrade_success: "لوړول بریالي شول", stars_shop_title: "د Telegram Stars پلورنځی", stars_streak_freeze: "سټریک فریز", stars_hash_boost: "۷ ورځنی ځواک", stars_vip_gold: "VIP Gold",
     stars_invoice_sent: "Invoice ستاسو Telegram بوټ ته واستول شو.",
     greet_hello: "سلام {name} 👋",
     UP_unit: "UP",
@@ -937,7 +937,7 @@ const TRANSLATIONS = {
 
   en: {
     nav_home: "Home", nav_tasks: "Tasks", nav_daily: "Daily", nav_wallet: "Wallet", nav_profile: "Profile",
-    mining_title: "UP Mining", mining_rig_level: "Mining Rig Level {n}", mining_per_hour: "UP per hour", mining_vault_running: "Mining is active", mining_vault_full: "Vault full — claim now", mining_claim: "Claim UP", mining_claim_success: "{n} UP claimed", mining_upgrade_rig: "Upgrade rig", mining_upgrade_vault: "Expand vault", mining_upgrade_success: "Upgrade completed", stars_shop_title: "Telegram Stars Shop", stars_streak_freeze: "Streak Freeze", stars_hash_boost: "7-Day Boost", stars_vip_gold: "VIP Gold",
+    mining_title: "Gramup Mining", mining_session_earned: "Session earnings", mining_cycle_progress: "Cycle progress", mining_speed: "Mining speed", mining_tier: "Miner tier", mining_base_rate: "Base rate", mining_boost_active: "Boost active", mining_boost: "Boost speed", mining_start: "Start mining", mining_session_info: "Session info", mining_active_boosts: "Active boosts & perks", mining_streak_bonus: "Streak bonus", mining_recent_claims: "Recent claims", mining_rig_level: "Mining Rig Level {n}", mining_per_hour: "UP per hour", mining_vault_running: "Mining is active", mining_vault_full: "Vault full — claim now", mining_claim: "Claim UP", mining_claim_success: "{n} UP claimed", mining_upgrade_rig: "Upgrade rig", mining_upgrade_vault: "Expand vault", mining_upgrade_success: "Upgrade completed", stars_shop_title: "Telegram Stars Shop", stars_streak_freeze: "Streak Freeze", stars_hash_boost: "7-Day Boost", stars_vip_gold: "VIP Gold",
     stars_invoice_sent: "Invoice sent to your Telegram bot chat.",
     greet_hello: "Hi {name} 👋",
     UP_unit: "UP",
