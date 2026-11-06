@@ -8,7 +8,7 @@
       return '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 23c13-13 35-13 48 0L44 35c-7-7-17-7-24 0L8 23Z"/><path d="m25 39 26 24M17 47l-8 8"/></svg>';
     }
     if (prizeId === 'gram_005') {
-      return '<svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="25" stroke="currentColor" stroke-width="4"/><path d="M24 20h19v8H31v8h12v8H31v8h-8V24a4 4 0 0 1 4-4Z" fill="currentColor"/></svg>';
+      return '<img src="/img/gram-logo.svg" alt="GRAM" aria-hidden="true">';
     }
     if (prizeId === 'try_again' || Number(amount) <= 0) {
       return '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M52 22V9L41 20M12 31a21 21 0 0 1 36-13l4 4M12 42v13l11-11m29-1a21 21 0 0 1-36 13l-4-4"/></svg>';

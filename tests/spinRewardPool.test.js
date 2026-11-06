@@ -71,6 +71,7 @@ assert.match(adminPage, /data-spin-field="probability"/);
 assert.match(adminPage, /if \(luckySpinRewardsDirty\) payload\.luckySpinPrizes = readLuckySpinRewards\(\)/);
 assert.doesNotMatch(adminPage, /onclick="addLuckySpinRewardRow\(\)"/);
 assert.match(appSource, /gram_005: \["\+0\.05", "GRAM"\]/);
+assert.match(appSource, /spinRewardIcon--gram.*gram-logo\.svg/);
 assert.match(appSource, /up_0: \["0", "UP"\]/);
 assert.match(appSource, /spinPrizeTargetRotation\(prizeId\)/);
 assert.match(appSource, /runSpinWheelAnimation\(wheel, result\.prizeId \?\? result\.prize\?\.id\)/);

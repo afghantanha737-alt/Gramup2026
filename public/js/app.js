@@ -1494,6 +1494,7 @@ function renderLuckySpin() {
   const rewardIcon = (_prize, index) => {
     if (_prize?.kind === 'spins') return `<svg class="spinRewardIcon spinRewardIcon--extra" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M4.9 9a8 8 0 0 1 13.2-2L20 12M4 17v-5h5"/><path d="M19.1 15a8 8 0 0 1-13.2 2L4 12"/></svg>`;
     if (_prize?.kind === 'boost') return `<svg class="spinRewardIcon spinRewardIcon--boost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8.2c5.1-5.1 12.9-5.1 18 0l-3.7 3.7c-3-3-7.6-3-10.6 0L3.2 8.2Z"/><path d="m8.5 13.5 10 10M5.5 16.5l-3 3"/></svg>`;
+    if (_prize?.id === 'gram_005' || _prize?.kind === 'gram') return '<img class="spinRewardIcon spinRewardIcon--gram" src="/img/gram-logo.svg" alt="GRAM" aria-hidden="true">';
     return `<img class="spinRewardIcon spinRewardIcon--up" src="/img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">`;
   };
   return `<section class="spinCard ${enabled ? '' : 'is-locked'}" aria-label="${t("spin_aria")}">
