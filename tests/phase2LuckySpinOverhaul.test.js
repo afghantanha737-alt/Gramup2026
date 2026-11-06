@@ -66,7 +66,7 @@ const paidRouteSource = pointsSource.slice(pointsSource.indexOf("router.post('/s
 assert.doesNotMatch(paidRouteSource, /SPIN_STREAK_REQUIRED|spin\.requiredStreak/);
 assert.doesNotMatch(paidRouteSource, /SPIN_TICKET_REQUIRED|tickets:\s*\{\s*\$gte|tickets:\s*-1|SPIN_COOLDOWN|spinLastClaimAt/);
 assert.match(paidRouteSource, /prize\.kind === 'spins'\) update\.\$inc\.tickets = prize\.amount/);
-assert.match(paidRouteSource, /const rewardAmount = \['points', 'gram'\]\.includes\(prize\.kind\) \? prize\.amount : 0/);
+assert.match(paidRouteSource, /const rewardAmount = \['points', 'gram'\]\.includes\(prize\.kind\) \? Number\(prize\.amount\) : 0/);
 assert.match(paidRouteSource, /execute: async session =>/);
 assert.match(paidRouteSource, /recordLedgerRequired\(\{ user: updated\._id, type: 'spin_paid'.*amount: -cost.*session \}\)/);
 assert.match(paidRouteSource, /recordLedgerRequired\(\{ user: updated\._id, type: 'spin'.*session \}\)/);

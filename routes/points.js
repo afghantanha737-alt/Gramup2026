@@ -541,6 +541,7 @@ router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) =>
       userId: req.dbUser._id, scope: 'spin_paid', key: operationKey, body: { cost },
       execute: async session => {
         const prize = pickWeightedPrize(spin.prizes, crypto.randomInt(0, 1000000) / 10000);
+        const rewardAmount = ['points', 'gram'].includes(prize.kind) ? Number(prize.amount) : 0;
         const update = { $inc: { points: -cost } };
         if (prize.kind === 'points' && prize.amount > 0) update.$inc.points += prize.amount;
         if (prize.kind === 'gram') update.$inc.gramBalance = prize.amount;
@@ -552,9 +553,8 @@ router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) =>
         const updated = await User.findOneAndUpdate({ _id: req.dbUser._id, isBanned: { $ne: true }, points: { $gte: cost } }, update, { new: true, session });
         if (!updated) { const error = new Error('You need 50 UP to use the paid spin.'); error.code = 'SPIN_PAYMENT_REQUIRED'; error.statusCode = 400; throw error; }
         const debitSourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin_paid', key: operationKey, leg: 'debit' });
-        await recordLedgerRequired({ user: updated._id, type: 'spin_paid', currency: 'points', amount: -cost, description: 'Lucky Spin paid entry — 50 UP', balanceAfter: updated.points - (prize.kind === 'points' ? prize.amount : 0), sourceId: debitSourceId, session });
+        await recordLedgerRequired({ user: updated._id, type: 'spin_paid', currency: 'points', amount: -cost, description: 'Lucky Spin paid entry — 50 UP', balanceAfter: updated.points - rewardAmount, sourceId: debitSourceId, session });
         const rewardCurrency = prize.kind === 'gram' ? 'gram' : 'points';
-        const rewardAmount = ['points', 'gram'].includes(prize.kind) ? prize.amount : 0;
         const rewardSourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin_paid', key: operationKey, leg: 'reward' });
         await recordLedgerRequired({ user: updated._id, type: 'spin', currency: rewardCurrency, amount: rewardAmount, description: `Lucky Spin paid reward: ${prize.id}`, balanceAfter: rewardCurrency === 'gram' ? updated.gramBalance : updated.points, sourceId: rewardSourceId, session });
         return {
@@ -580,7 +580,18 @@ router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) =>
     return res.status(outcome.status).json(outcome.body);
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
-    throw error;
+    // Never expose database/journal details to the client, but make a failed
+    // paid spin distinguishable from a generic app error. Mongo rollback means
+    // neither the 50-UP debit nor the reward is committed on this path.
+    console.error('[Lucky Spin] Paid spin transaction failed', {
+      code: error?.code || null,
+      message: error?.message || String(error)
+    });
+    return res.status(503).json({
+      success: false,
+      code: 'SPIN_PAYMENT_UNAVAILABLE',
+      message: 'Paid Spin is temporarily unavailable. Your UP balance was not changed. Please try again.'
+    });
   }
 });
 

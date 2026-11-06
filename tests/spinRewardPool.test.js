@@ -56,7 +56,7 @@ for (const [roll, prizeId] of expectedPicks) {
 assert.match(source, /prize\.kind === 'spins'\) update\.\$inc\.tickets \+= prize\.amount/);
 assert.match(source, /prize\.kind === 'spins'\) update\.\$inc\.tickets = prize\.amount/);
 assert.match(source, /const ledgerAmount = \['points', 'gram'\]\.includes\(prize\.kind\) \? prize\.amount : 0/);
-assert.match(source, /const rewardAmount = \['points', 'gram'\]\.includes\(prize\.kind\) \? prize\.amount : 0/);
+assert.match(source, /const rewardAmount = \['points', 'gram'\]\.includes\(prize\.kind\) \? Number\(prize\.amount\) : 0/);
 assert.match(adminSource, /isValidSpinPrizePool\(prizes\)/);
 assert.match(adminSource, /luckySpinPrizes: normalizeSpinPrizes\(settings\.luckySpinPrizes\)/);
 assert.match(adminPage, /data-spin-field="kind" disabled/);
