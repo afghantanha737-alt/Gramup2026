@@ -5,6 +5,7 @@ const idempotencyOperationSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   scope: { type: String, required: true, enum: [
     'spin',
+    'spin_paid',
     'exchange_points_to_gram',
     'exchange_gram_to_points',
     'withdraw',

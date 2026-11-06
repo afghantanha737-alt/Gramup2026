@@ -418,6 +418,7 @@ async function api(url, options = {}) {
     err.code = data?.code || (response.status === 401 ? 'AUTH_REQUIRED' : response.status === 403 ? 'AUTH_FORBIDDEN' : null);
     err.status = response.status;
     err.authFailure = authFailure;
+    err.response = { data, status: response.status };
     throw err;
   }
   return data;
@@ -1703,7 +1704,18 @@ async function paySpinAlternative() {
     presentSpinResult(result, resultBox);
     updateHeader();
     loadSpinWinners();
-  } catch (error) { clearDefinitiveIdempotencyFailure('spin_paid', error); haptic('error'); if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message); toast(translateServerMessage(error.code, error.message), 'error'); }
+  } catch (error) {
+    console.error('[Lucky Spin] Paid spin request failed', {
+      status: error?.response?.status ?? error?.status ?? 0,
+      response: error?.response?.data ?? null,
+      code: error?.code ?? null,
+      message: error?.message || String(error)
+    });
+    clearDefinitiveIdempotencyFailure('spin_paid', error);
+    haptic('error');
+    if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message);
+    toast(translateServerMessage(error.code, error.message), 'error');
+  }
   finally {
     state.spinBusy = false;
     if (button) button.textContent = t('spin_pay_50', {}, 'Pay 50 UP to Spin');

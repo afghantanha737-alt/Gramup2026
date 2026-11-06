@@ -11,6 +11,7 @@ const adminPageSource = fs.readFileSync(require.resolve('../public/admin.html'),
 const settingsSource = fs.readFileSync(require.resolve('../models/Settings'), 'utf8');
 const cssSource = fs.readFileSync(require.resolve('../public/css/style.css'), 'utf8');
 const celebrationSource = fs.readFileSync(require.resolve('../public/js/spinCelebration.js'), 'utf8');
+const SettingsModel = require('../models/Settings');
 const winnersRouteStart = pointsSource.indexOf("router.get('/spin/recent-winners'");
 const winnersRouteEnd = pointsSource.indexOf("// POST /api/points/spin — eligible users", winnersRouteStart);
 const winnersRouteSource = pointsSource.slice(winnersRouteStart, winnersRouteEnd);
@@ -66,6 +67,9 @@ assert.match(paidRouteSource, /recordLedgerRequired\(\{ user: updated\._id, type
 assert.match(paidRouteSource, /recordLedgerRequired\(\{ user: updated\._id, type: 'spin'.*session \}\)/);
 assert.match(paidRouteSource, /newBalance: updated\.points/);
 assert.match(paidRouteSource, /prize: \{ id: prize\.id, kind: prize\.kind, label: prize\.label, amount: prize\.amount \}/);
+assert.match(appSource, /err\.response = \{ data, status: response\.status \}/);
+assert.match(appSource, /console\.error\('\[Lucky Spin\] Paid spin request failed'/);
+assert.match(appSource, /response: error\?\.response\?\.data \?\? null/);
 assert.match(appSource, /renderLuckySpinBanner/);
 assert.match(appSource, /openLuckySpin/);
 assert.match(appSource, /spin_spin_button/);
@@ -130,7 +134,8 @@ assert.doesNotMatch(homeSource, /renderLuckySpin\(\)/);
 assert.match(settingsSource, /luckySpinRequiredStreak/);
 assert.match(adminSource, /INVALID_LUCKY_SPIN_PRIZES/);
 assert.match(adminSource, /probabilities total exactly 100/);
-assert.match(settingsSource, /luckySpinCooldownHours: \{ type: Number, default: 0, min: 0, max: 0 \}/);
+assert.match(settingsSource, /luckySpinCooldownHours: \{ type: Number, default: 0, min: 0, max: 24 \}/);
+assert.strictEqual(new SettingsModel({ luckySpinCooldownHours: 24 }).validateSync(), undefined, 'legacy 24-hour settings must remain saveable');
 assert.match(fs.readFileSync(require.resolve('../models/User'), 'utf8'), /tickets: \{ type: Number, default: 0, min: 0 \}/);
 assert.match(fs.readFileSync(require.resolve('../utils/dailyAutoCheckin'), 'utf8'), /if \(ticketAwarded\) increments\.tickets = 1/);
 assert.match(adminSource, /luckySpinCooldownHours: v => v === 0/);
