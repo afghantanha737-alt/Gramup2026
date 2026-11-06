@@ -70,7 +70,7 @@ assert.ok(html.includes('/css/theme-selector.css?v=up_v28_20261105_2'), 'theme-s
 for (const asset of ['maintenanceGate.js', 'readModelCache.js', 'walletConnect.js']) {
   assert.ok(html.includes(`/js/${asset}?v=up_v28_20261105_2`), `${asset} must use the fresh cache version`);
 }
-assert.ok(html.includes('/js/i18n.js?v=up_v28_20261106_3'), 'i18n.js must use the win modal cache version');
+assert.ok(html.includes('/js/i18n.js?v=up_v28_20261106_4'), 'i18n.js must use the paid-spin error cache version');
 assert.ok(html.includes('/js/app.js?v=up_v28_20261106_3'), 'app.js must use the win modal cache version');
 assert.ok(html.includes('/js/gamification.js?v=up_v28_20261106_1'), 'gamification.js must use the current Spinner feedback cache version');
 assert.ok(html.includes('/js/spinCelebration.js?v=up_v28_20261106_3'), 'spinCelebration.js must use the current cache version');

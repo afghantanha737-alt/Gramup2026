@@ -517,7 +517,10 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
             points: updated.points, upBalance: updated.points, gramBalance: updated.gramBalance, tickets: Number(updated.tickets) || 0,
             boostUntil: updated.miningBoostUntil || null
           },
-          resourceId: sourceId
+          // sourceId is an immutable Ledger/Transaction identifier (IO-...),
+          // not a Mongo ObjectId. IdempotencyOperation.resourceId is reserved
+          // for Mongo resource ObjectIds; keeping this null avoids CastError.
+          resourceId: null
         };
       }
     });
@@ -573,7 +576,8 @@ router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) =>
             tickets: Number(updated.tickets) || 0,
             boostUntil: updated.miningBoostUntil || null
           },
-          resourceId: rewardSourceId
+          // rewardSourceId is a journal idempotency string, not an ObjectId.
+          resourceId: null
         };
       }
     });

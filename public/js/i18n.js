@@ -1405,6 +1405,7 @@ const TRANSLATIONS = {
 const ERROR_CODE_MAP = {
   ALREADY_CHECKED_IN: { fa: "امروز قبلاً ورود روزانه ثبت شده است.", ps: "نن دی مخکې ثبت شوی.", en: "You've already checked in today." },
   SPIN_PAYMENT_REQUIRED: { fa: "موجودی UP کافی نیست", ps: "د UP بیلانس کافي نه دی", en: "Insufficient UP balance" },
+  SPIN_PAYMENT_UNAVAILABLE: { fa: "پرداخت گردونه موقتاً در دسترس نیست؛ موجودی UP شما تغییر نکرده است. چند لحظه بعد دوباره تلاش کنید.", ps: "د سپین تادیه لنډمهاله شتون نه لري؛ ستاسو د UP بیلانس بدل شوی نه دی. لږ وروسته بیا هڅه وکړئ.", en: "Paid Spin is temporarily unavailable; your UP balance was not changed. Please try again shortly." },
   SPIN_TICKET_REQUIRED: { fa: "برای گرفتن شانس رایگان، استریک روزانه خود را کامل کنید.", ps: "د وړیا چانس ترلاسه کولو لپاره خپل ورځنی سټریک بشپړ کړئ.", en: "Complete your daily streak to earn a free spin ticket." },
   INVALID_AMOUNT: { fa: "مقدار UP نامعتبر است.", ps: "د UP اندازه سمه نه ده.", en: "Invalid UP amount." },
   INVALID_ADDRESS: { fa: "آدرس کیف پول نامعتبر است.", ps: "د والټ آدرس سم نه دی.", en: "Invalid wallet address." },
