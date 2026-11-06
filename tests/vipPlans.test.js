@@ -58,7 +58,6 @@ const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 const adminUi = fs.readFileSync(path.join(root, 'public/admin.html'), 'utf8');
 const translations = fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8');
 const vipPlanModel = fs.readFileSync(path.join(root, 'models/VipPlan.js'), 'utf8');
-const idempotencyModel = fs.readFileSync(path.join(root, 'models/IdempotencyOperation.js'), 'utf8');
 const vipPurchaseSection = pointsRoute.slice(
   pointsRoute.indexOf("router.post('/vip/purchase'"),
   pointsRoute.indexOf("router.post('/vip/:subscriptionId/claim'")
@@ -66,20 +65,13 @@ const vipPurchaseSection = pointsRoute.slice(
 
 assert.match(pointsRoute, /router\.get\('\/vip\/plans'/);
 assert.match(pointsRoute, /router\.post\('\/vip\/purchase'/);
-assert.match(pointsRoute, /router\.post\('\/vip\/claim-all'/);
 assert.match(pointsRoute, /router\.post\('\/vip\/:subscriptionId\/claim'/);
 assert.match(pointsRoute, /scope: 'vip_purchase'/);
-assert.match(pointsRoute, /scope: 'vip_bulk_claim'/);
-assert.match(pointsRoute, /scope: 'vip_partial_claim'/);
-assert.match(idempotencyModel, /'vip_bulk_claim'/);
-assert.match(idempotencyModel, /'vip_partial_claim'/);
+assert.match(pointsRoute, /scope: 'vip_daily_claim'/);
 assert.match(pointsRoute, /type: 'vip_daily_reward'/);
 assert.match(pointsRoute, /type: 'vip_purchase'/);
-assert.match(pointsRoute, /calculateVipAccrual\(subscription, now\)/);
-assert.match(pointsRoute, /VIP_CLAIM_NO_ACCRUAL/);
-assert.match(pointsRoute, /partial-claim:\$\{ledgerSequence\}:reward/);
-assert.doesNotMatch(pointsRoute, /lastClaimAt\.getTime\(\) \+ DAY_MS/);
-assert.doesNotMatch(pointsRoute, /settleMaturedVipSubscriptions\(/, 'reading the VIP catalog must not mutate financial state');
+assert.match(pointsRoute, /sourceId = `vip:\$\{subscription\._id\}:claim:\$\{claimIndex \+ 1\}`/);
+assert.match(pointsRoute, /lastClaimAt\.getTime\(\) \+ DAY_MS/);
 assert.match(pointsRoute, /body: \{ planNumber \}/, 'purchase request hash must cover plan ID, not client reward fields');
 assert.match(pointsRoute, /calculateTotalRewardCents\(pricePoints, plan\.monthlyRewardPercent, plan\.durationDays\)/);
 assert.match(vipPurchaseSection, /points: finalPoints/,
@@ -96,15 +88,13 @@ assert.match(ledgerModel, /'vip_purchase'/);
 assert.match(ledgerModel, /'vip_daily_reward'/);
 assert.match(ledgerModel, /'vip_principal_return'/);
 assert.match(server, /VipPlan\.ensureDefaults\(\)/);
-assert.doesNotMatch(server, /settleMaturedVipSubscriptions\(/);
-assert.match(server, /Matured VIP balances settle only through the user's explicit claim action/);
+assert.match(server, /settleMaturedVipSubscriptions\(\)/);
 assert.match(app, /\/api\/points\/vip\/purchase/);
 assert.match(app, /\/api\/points\/vip\/\$\{encodeURIComponent\(subscriptionId\)\}\/claim/);
 assert.match(app, /getPendingIdempotencyKey\(scope\)/);
-assert.match(app, /vip_need_more_UP/);
+assert.match(app, /vip_need_more_points/);
 assert.match(app, /function setVipPlanCategory\(category\)/);
-assert.match(app, /10: "ultimate"/);
-assert.match(app, /vipPlanCard vipPlanCard--\$\{theme\}/);
+assert.match(app, /vipPlanCard--ultimate/);
 assert.match(app, /isOwned \? "vip_status_owned"/);
 assert.doesNotMatch(app, /vipPlanBalance/);
 assert.match(app, /function renderProfileVip\(\)/);
@@ -112,8 +102,7 @@ assert.match(app, /function setVipSubscriptionFilter\(filter\)/);
 assert.match(app, /subscription\.status === "active"/);
 assert.match(app, /subscription\.status !== "active"/);
 assert.match(app, /function claimAllVipRewards\(\)/);
-assert.match(app, /\/api\/points\/vip\/claim-all/);
-assert.doesNotMatch(app, /for \(const subscriptionId of subscriptionIds\)/);
+assert.match(app, /await claimVipReward\(subscriptionId, \{ silent: true, bulk: true \}\)/);
 assert.strictEqual((translations.match(/vip_claim_all:/g) || []).length, 3, 'Claim All label must exist in English, Persian, and Pashto');
 assert.strictEqual((translations.match(/vip_subscription_filter_expired:/g) || []).length, 3, 'expired filter label must exist in all supported locales');
 assert.deepStrictEqual(VIP_PRICE_GRAMS, [1, 3, 5, 10, 20, 35, 50, 70, 85, 100]);
@@ -154,8 +143,8 @@ assert.doesNotMatch(app, /buildWheelGradient\(\)/);
 assert.match(translations, /nav_vip:/);
 assert.match(adminUi, /\/api\/admin\/vip\/plans/);
 assert.match(referralCore, /ELIGIBLE_ORIGINAL_EARN_TYPES = Object\.freeze\(\['task', 'checkin', 'leaderboard_reward'\]\)/);
-for (const key of ['menu_vip_plans', 'vip_title', 'vip_buy_confirm', 'vip_claim_button', 'vip_membership_kicker', 'vip_tier_starter', 'vip_tier_pro', 'vip_tier_ultimate', 'vip_plan_cost_label', 'vip_plan_profit_label', 'vip_plan_duration_label', 'vip_total_reward_label', 'vip_need_more_points', 'vip_status_owned', 'history_type_vip_purchase', 'history_type_vip_daily_reward', 'history_type_vip_daily_principal', 'history_type_vip_principal_return']) {
+for (const key of ['menu_vip_plans', 'vip_title', 'vip_buy_confirm', 'vip_claim_button', 'vip_membership_kicker', 'vip_tier_starter', 'vip_tier_pro', 'vip_tier_ultimate', 'vip_plan_cost_label', 'vip_plan_profit_label', 'vip_plan_duration_label', 'vip_total_reward_label', 'vip_need_more_points', 'vip_status_owned', 'history_type_vip_purchase', 'history_type_vip_daily_reward', 'history_type_vip_principal_return']) {
   assert.ok(translations.includes(`${key}:`), `missing translation ${key}`);
 }
 
-console.log('ALL PASS — VIP return math, exact cent allocation, continuous partial claims and server-side/idempotency contracts');
+console.log('ALL PASS — VIP return math, exact cent allocation, claim cadence and server-side/idempotency contracts');

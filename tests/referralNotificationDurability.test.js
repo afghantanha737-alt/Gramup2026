@@ -80,6 +80,8 @@ const eligibleUser = {
   _id: 'referrer-1',
   telegramId: '200',
   isBanned: false,
+  phoneCountryCode: '+93',
+  phoneVerifiedAt: new Date('2026-10-01T00:00:00.000Z'),
   referralMessageConsent: 'granted'
 };
 const users = new Map([[eligibleUser._id, eligibleUser]]);

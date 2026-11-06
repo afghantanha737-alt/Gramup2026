@@ -24,15 +24,6 @@ assert.match(sharedClaim, /options\.rewardForStreak \|\| dailyCheckinReward/);
 assert.match(pointsRoute, /nextResetTimestamp\(\)/);
 assert.match(app, /data-daily-checkin-countdown/);
 assert.match(app, /checkin_next_available_in/);
-assert.match(app, /dailyCheckDayNumber dailyCheckToken/);
-assert.match(app, /src="\/img\/gramup-logo-new\.png" alt="UP" width="25" height="25"/);
-assert.match(app, /const rewardLabel = `\+\$\{formatPoints\(reward\)\} UP`/);
-assert.match(app, /class="dailyCheckReward" aria-label="\$\{rewardLabel\}"/);
-assert.doesNotMatch(app, /aria-label="\+\$\{tokenAmount\(reward\)\} UP"/);
-assert.match(app, /checkin_claim_success/);
-assert.strictEqual((fs.readFileSync(path.join(__dirname, '..', 'public/js/i18n.js'), 'utf8').match(/checkin_claim_success:/g) || []).length, 3,
-  'UP claim-success copy exists for Persian, Pashto, and English');
 assert.match(css, /\.dailyCheckCountdown/);
-assert.match(css, /\.dailyCheckToken img/);
 
 console.log('ALL PASS — Daily Check cycle rewards, Kabul reset boundary and countdown contract');

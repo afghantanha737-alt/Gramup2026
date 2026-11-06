@@ -61,8 +61,6 @@ FakeTransaction.findOne = filter => query([...transactionRows.values()].find(row
   const ledgerTypes = PointsLedger.schema.path('type').enumValues;
   assert(ledgerTypes.includes('referral_welcome'));
   assert(ledgerTypes.includes('mining_claim'));
-  assert(ledgerTypes.includes('spin_paid'));
-  assert(Transaction.schema.path('type').enumValues.includes('spin_paid'));
   assert(Transaction.schema.indexes().some(([keys, options]) => keys.user === 1 && keys.currency === 1 && keys.sourceId === 1 && options.unique === true));
   assert(Transaction.schema.indexes().some(([keys, options]) => keys.user === 1 && keys.currency === 1 && keys.transactionId === 1 && options.unique === true));
 

@@ -21,7 +21,7 @@ const paths = {
   Messages: require.resolve('../utils/botMessages')
 };
 
-const referrer = { _id: 'referrer', telegramId: '200', referredBy: null, isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0, language: 'en', referralMessageConsent: 'granted' };
+const referrer = { _id: 'referrer', telegramId: '200', referredBy: null, isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0, language: 'en', phoneCountryCode: '+93', phoneVerifiedAt: new Date(), referralMessageConsent: 'granted' };
 const invitee = { _id: 'invitee', telegramId: '100', referredBy: null, referralInitialRewardEligible: false, isBanned: false, accountReviewStatus: 'normal', referralRiskScore: 0, referralRiskBlocked: false, points: 0, firstName: 'New User' };
 const users = new Map([[referrer._id, referrer], [invitee._id, invitee]]);
 const ledgerRows = [];

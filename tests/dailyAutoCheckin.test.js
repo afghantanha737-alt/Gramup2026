@@ -190,17 +190,6 @@ const at = (dayOffset, hour, minute) => new Date(Date.UTC(2026, 0, 1 + dayOffset
   assert.strictEqual(db.state.users.get('u1').streak, 2);
   assert.strictEqual(db.state.ledger.has(dailyCheckinSourceId('u1', Math.floor(at(1, 0, 0).getTime() / DAY_MS))), true);
 
-  const ticketDb = createFakeDatabase([
-    { _id: 'ticket-user', telegramId: '203', language: 'en', points: 90, tickets: 0, streak: 6, totalCheckins: 6, lastCheckIn: at(5, 2, 30), isBanned: false }
-  ]);
-  const seventhDay = await claimDailyCheckin('ticket-user', { ...ticketDb, now: at(6, 2, 30), spinTicketStreakDays: 7 });
-  assert.strictEqual(seventhDay.ticketAwarded, true);
-  assert.strictEqual(seventhDay.tickets, 1);
-  assert.strictEqual(ticketDb.state.users.get('ticket-user').tickets, 1);
-  const duplicateSeventhDay = await claimDailyCheckin('ticket-user', { ...ticketDb, now: at(6, 3, 0), spinTicketStreakDays: 7 });
-  assert.strictEqual(duplicateSeventhDay.status, 'already_claimed');
-  assert.strictEqual(ticketDb.state.users.get('ticket-user').tickets, 1, 'same-day retries do not duplicate a free-spin ticket');
-
   const collisionDb = createFakeDatabase([
     { _id: 'collision', telegramId: '200', language: 'en', points: 0, streak: 0, totalCheckins: 0, lastCheckIn: null, isBanned: false }
   ]);

@@ -5,7 +5,7 @@ function stub(moduleName, exports) {
   const p = require.resolve(moduleName);
   require.cache[p] = { id: p, filename: p, loaded: true, exports };
 }
-const user = { _id: 'test-user', telegramId: '123', language: 'en',
+const user = { _id: 'test-user', telegramId: '123', language: 'en', phoneCountryCode: '+93', phoneVerifiedAt: new Date(),
   points: 10, createdAt: new Date('2020-01-01'), referralCode: 'ref', referredBy: null };
 stub('../models/User', {});
 stub('../utils/unifiedAuth', {

@@ -48,8 +48,7 @@ const { sendNotificationOnce, enqueuePendingNotification } = require('../utils/n
   assert.strictEqual(attempts.length, 3, 'one failed daily message cannot abort the batch');
   attempts.length = 0;
   const subscriptions = users.map(u => ({ _id: `sub-${u._id}`, user: u._id, status: 'active', planNumber: 1,
-    startAt: new Date('2026-10-29'), endAt: new Date('2027-02-06'), durationDays: 100, claimsCompleted: 0,
-    pricePoints: 100, totalRewardCents: 10000, claimedRewardPoints: 0, principalPaidPoints: 0 }));
+    startAt: new Date('2026-10-29'), endAt: new Date('2027-02-06'), durationDays: 100, claimsCompleted: 0, totalRewardCents: 10000 }));
   const locks = new Set();
   const DistributedJobLock = { create: async ({ _id }) => { if (locks.has(_id)) throw Object.assign(Error('duplicate'), { code: 11000 }); locks.add(_id); } };
   const deps = { User, notifyUser, DistributedJobLock, VipSubscription: { find: () => ({ lean: async () => subscriptions }) } };

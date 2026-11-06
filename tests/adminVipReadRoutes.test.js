@@ -99,7 +99,7 @@ async function invoke(path, req) {
             claimedRewardPoints: 0,
             claimsCompleted: 0,
             startAt: '2026-10-04T00:00:00.000Z',
-            endAt: '2026-12-03T00:00:00.000Z',
+            endAt: '2026-11-03T00:00:00.000Z',
             createdAt: '2026-10-04T00:00:00.000Z',
             status: 'active'
           };
