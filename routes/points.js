@@ -47,26 +47,9 @@ const { comment } = require('@ton/ton');
 // احراز هویت تلگرام + بررسی عضویت فعلی در کانال‌های اجباری (روی هر درخواست محافظت‌شده)
 const { withMembership } = require('../utils/membership');
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
+const { SPIN_PRIZES, normalizeSpinPrizes } = require('../utils/spinRewards');
 
 const DEFAULT_SPIN_REQUIRED_STREAK = 7;
-const SPIN_PRIZES = Object.freeze([
-  { id: 'hashrate_boost_10_1h', kind: 'boost', amount: 10, label: '10% Mining Hashrate Boost · 1h', probability: 35 },
-  { id: 'up_50', kind: 'points', amount: 50, label: '+50 UP', probability: 25 },
-  { id: 'up_100', kind: 'points', amount: 100, label: '+100 UP', probability: 15 },
-  { id: 'up_250', kind: 'points', amount: 250, label: '+250 UP', probability: 10 },
-  { id: 'gram_005', kind: 'gram', amount: 0.05, label: '+0.05 GRAM', probability: 5 },
-  { id: 'try_again', kind: 'none', amount: 0, label: 'Try Again', probability: 10 }
-]);
-function normalizeSpinPrizes(rawPrizes) {
-  if (!Array.isArray(rawPrizes) || rawPrizes.length < 2) return SPIN_PRIZES;
-  const prizes = rawPrizes.map(item => ({
-    id: String(item.id), kind: item.kind, amount: Number(item.amount) || 0,
-    label: String(item.label || ''), probability: Number(item.probability)
-  }));
-  const total = prizes.reduce((sum, item) => sum + (Number.isFinite(item.probability) ? item.probability : 0), 0);
-  if (prizes.some(item => !Number.isFinite(item.probability) || item.probability < 0) || Math.abs(total - 100) > 0.0001) return SPIN_PRIZES;
-  return prizes;
-}
 function pickWeightedPrize(prizes, roll = Math.random() * 100) {
   let cursor = 0;
   for (const prize of prizes) {
@@ -499,8 +482,9 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
       execute: async session => {
         const prize = pickWeightedPrize(spin.prizes, crypto.randomInt(0, 1000000) / 10000);
         const update = { $set: { spinLastClaimAt: now }, $inc: { tickets: -1 } };
-        if (prize.kind === 'points') update.$inc.points = prize.amount;
+        if (prize.kind === 'points' && prize.amount > 0) update.$inc.points = prize.amount;
         if (prize.kind === 'gram') update.$inc.gramBalance = prize.amount;
+        if (prize.kind === 'spins') update.$inc.tickets += prize.amount;
         if (prize.kind === 'boost') {
           const currentBoostUntil = req.dbUser.miningBoostUntil && new Date(req.dbUser.miningBoostUntil) > now
             ? new Date(req.dbUser.miningBoostUntil) : now;
@@ -519,10 +503,11 @@ router.post('/spin', auth, sensitiveRateLimit('claim'), async (req, res) => {
           throw error;
         }
         const currency = prize.kind === 'gram' ? 'gram' : 'points';
+        const ledgerAmount = ['points', 'gram'].includes(prize.kind) ? prize.amount : 0;
         const balanceAfter = currency === 'gram' ? updated.gramBalance : updated.points;
         const sourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin', key: operationKey, leg: 'reward' });
         await recordLedgerRequired({
-          user: updated._id, type: 'spin', currency, amount: prize.amount,
+          user: updated._id, type: 'spin', currency, amount: ledgerAmount,
           description: `Lucky Spin: ${prize.id}`, balanceAfter, sourceId, session
         });
         return {
@@ -557,8 +542,9 @@ router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) =>
       execute: async session => {
         const prize = pickWeightedPrize(spin.prizes, crypto.randomInt(0, 1000000) / 10000);
         const update = { $inc: { points: -cost } };
-        if (prize.kind === 'points') update.$inc.points += prize.amount;
+        if (prize.kind === 'points' && prize.amount > 0) update.$inc.points += prize.amount;
         if (prize.kind === 'gram') update.$inc.gramBalance = prize.amount;
+        if (prize.kind === 'spins') update.$inc.tickets = prize.amount;
         if (prize.kind === 'boost') {
           const currentBoostUntil = req.dbUser.miningBoostUntil && new Date(req.dbUser.miningBoostUntil) > now ? new Date(req.dbUser.miningBoostUntil) : now;
           update.$set = { miningBoostUntil: new Date(currentBoostUntil.getTime() + 60 * 60 * 1000), miningBoostMultiplier: Math.max(1.1, Number(req.dbUser.miningBoostMultiplier) || 1) };
@@ -568,8 +554,9 @@ router.post('/spin/paid', auth, sensitiveRateLimit('claim'), async (req, res) =>
         const debitSourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin_paid', key: operationKey, leg: 'debit' });
         await recordLedgerRequired({ user: updated._id, type: 'spin_paid', currency: 'points', amount: -cost, description: 'Lucky Spin paid entry — 50 UP', balanceAfter: updated.points - (prize.kind === 'points' ? prize.amount : 0), sourceId: debitSourceId, session });
         const rewardCurrency = prize.kind === 'gram' ? 'gram' : 'points';
+        const rewardAmount = ['points', 'gram'].includes(prize.kind) ? prize.amount : 0;
         const rewardSourceId = idempotencyTransactionId({ userId: updated._id, scope: 'spin_paid', key: operationKey, leg: 'reward' });
-        await recordLedgerRequired({ user: updated._id, type: 'spin', currency: rewardCurrency, amount: prize.amount, description: `Lucky Spin paid reward: ${prize.id}`, balanceAfter: rewardCurrency === 'gram' ? updated.gramBalance : updated.points, sourceId: rewardSourceId, session });
+        await recordLedgerRequired({ user: updated._id, type: 'spin', currency: rewardCurrency, amount: rewardAmount, description: `Lucky Spin paid reward: ${prize.id}`, balanceAfter: rewardCurrency === 'gram' ? updated.gramBalance : updated.points, sourceId: rewardSourceId, session });
         return {
           status: 200,
           body: {

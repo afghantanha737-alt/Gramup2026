@@ -578,10 +578,10 @@
           <label style="flex:1;min-width:180px">Required streak days<input id="luckySpinRequiredStreak" type="number" min="7" max="365"></label>
           <label style="flex:1;min-width:180px">Cooldown hours (disabled)<input id="luckySpinCooldownHours" type="number" min="0" max="0" value="0" readonly></label>
         </div>
+        <p class="small">The seven reward IDs, labels, kinds, and amounts are fixed to the wheel. Only probabilities can be changed, and they must total 100%.</p>
         <div id="luckySpinProbabilityTotal" class="small" style="margin:8px 0"></div>
-        <div style="overflow:auto"><table dir="ltr" style="min-width:760px"><thead><tr><th>ID</th><th>Label</th><th>Kind</th><th>Amount</th><th>Probability %</th><th></th></tr></thead><tbody id="luckySpinRewardsRows"></tbody></table></div>
-        <div class="row" style="margin-top:12px"><button type="button" class="secondary" onclick="addLuckySpinRewardRow()">Add reward</button><button type="button" onclick="saveLuckySpinSettings()">Save Lucky Spin</button></div>
-        <p class="small">Boost amount is the hashrate percentage and lasts one hour. Use kinds: points, gram, boost, none.</p>
+        <div style="overflow:auto"><table dir="ltr" style="min-width:680px"><thead><tr><th>ID</th><th>Label</th><th>Kind</th><th>Amount</th><th>Probability %</th></tr></thead><tbody id="luckySpinRewardsRows"></tbody></table></div>
+        <div class="row" style="margin-top:12px"><button type="button" onclick="saveLuckySpinSettings()">Save Lucky Spin</button></div>
       </div>
     </div>
 
@@ -2691,7 +2691,7 @@ async function removeMaintenanceAllowedUser(id) {
 
 function luckySpinRewardRow(item = {}) {
   const values = { id: item.id || `reward_${Date.now()}`, label: item.label || '', kind: item.kind || 'points', amount: Number(item.amount) || 0, probability: Number(item.probability) || 0 };
-  return `<tr class="luckySpinRewardRow"><td><input data-spin-field="id" value="${escapeHtml(values.id)}"></td><td><input data-spin-field="label" value="${escapeHtml(values.label)}"></td><td><select data-spin-field="kind"><option value="points" ${values.kind === 'points' ? 'selected' : ''}>points</option><option value="gram" ${values.kind === 'gram' ? 'selected' : ''}>gram</option><option value="boost" ${values.kind === 'boost' ? 'selected' : ''}>boost</option><option value="none" ${values.kind === 'none' ? 'selected' : ''}>none</option></select></td><td><input data-spin-field="amount" type="number" min="0" step="0.01" value="${values.amount}"></td><td><input data-spin-field="probability" type="number" min="0" max="100" step="0.01" value="${values.probability}" oninput="updateLuckySpinProbabilityTotal()"></td><td><button type="button" class="danger" onclick="this.closest('tr').remove();updateLuckySpinProbabilityTotal()">×</button></td></tr>`;
+  return `<tr class="luckySpinRewardRow"><td><input data-spin-field="id" value="${escapeHtml(values.id)}" readonly></td><td><input data-spin-field="label" value="${escapeHtml(values.label)}" readonly></td><td><select data-spin-field="kind" disabled><option value="points" ${values.kind === 'points' ? 'selected' : ''}>points</option><option value="boost" ${values.kind === 'boost' ? 'selected' : ''}>boost</option><option value="spins" ${values.kind === 'spins' ? 'selected' : ''}>spins</option><option value="none" ${values.kind === 'none' ? 'selected' : ''}>none</option></select></td><td><input data-spin-field="amount" type="number" min="0" step="0.01" value="${values.amount}" readonly></td><td><input data-spin-field="probability" type="number" min="0" max="100" step="0.01" value="${values.probability}" oninput="updateLuckySpinProbabilityTotal()"></td></tr>`;
 }
 function renderLuckySpinRewards(prizes) {
   const rows = document.querySelector('#luckySpinRewardsRows');
@@ -2701,9 +2701,8 @@ function renderLuckySpinRewards(prizes) {
 function updateLuckySpinProbabilityTotal() {
   const total = Array.from(document.querySelectorAll('[data-spin-field="probability"]')).reduce((sum, input) => sum + (Number(input.value) || 0), 0);
   const el = document.querySelector('#luckySpinProbabilityTotal');
-  if (el) { el.textContent = `Probability total: ${total.toFixed(2)}% ${Math.abs(total - 100) < 0.001 ? '✓' : '(must equal 100%)'}`; el.style.color = Math.abs(total - 100) < 0.001 ? 'var(--success)' : 'var(--warning)'; }
+  if (el) { el.textContent = `Probability total: ${total.toFixed(2)}% ${Math.abs(total - 100) < 0.000001 ? '✓' : '(must equal 100%)'}`; el.style.color = Math.abs(total - 100) < 0.000001 ? 'var(--success)' : 'var(--warning)'; }
 }
-function addLuckySpinRewardRow() { const rows = document.querySelector('#luckySpinRewardsRows'); if (rows) { rows.insertAdjacentHTML('beforeend', luckySpinRewardRow()); updateLuckySpinProbabilityTotal(); } }
 function readLuckySpinRewards() { return Array.from(document.querySelectorAll('.luckySpinRewardRow')).map(row => { const get = key => row.querySelector(`[data-spin-field="${key}"]`); return { id: get('id').value.trim(), label: get('label').value.trim(), kind: get('kind').value, amount: Number(get('amount').value), probability: Number(get('probability').value) }; }); }
 async function loadLuckySpinSettings() { try { const data = await api('/api/admin/settings'); const s = data.settings || {}; document.getElementById('luckySpinEnabled').value = String(s.luckySpinEnabled !== false); document.getElementById('luckySpinRequiredStreak').value = Math.max(7, s.luckySpinRequiredStreak || 7); document.getElementById('luckySpinCooldownHours').value = 0; renderLuckySpinRewards(s.luckySpinPrizes || []); } catch (error) { showMsg(error.message, 'error'); } }
 async function saveLuckySpinSettings() { try { const data = await api('/api/admin/settings', { method: 'PUT', body: JSON.stringify({ luckySpinEnabled: document.getElementById('luckySpinEnabled').value === 'true', luckySpinRequiredStreak: Number(document.getElementById('luckySpinRequiredStreak').value), luckySpinCooldownHours: Number(document.getElementById('luckySpinCooldownHours').value), luckySpinPrizes: readLuckySpinRewards() }) }); renderLuckySpinRewards(data.settings?.luckySpinPrizes || []); showMsg('Lucky Spin settings saved.', 'success'); } catch (error) { showMsg(error.message, 'error'); } }

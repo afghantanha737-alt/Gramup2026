@@ -1,5 +1,6 @@
 'use strict';
 const mongoose = require('mongoose');
+const { defaultSpinPrizes } = require('../utils/spinRewards');
 const { DEFAULT_REFERRAL_LEVEL_RATES, DEFAULT_REFERRAL_INITIAL_REWARD_POINTS } = require('../utils/referralCore');
 
 const settingsSchema = new mongoose.Schema(
@@ -56,15 +57,8 @@ const settingsSchema = new mongoose.Schema(
     // Legacy settings may still contain 24; spinPolicy ignores cooldown and admin writes accept only 0.
     luckySpinCooldownHours: { type: Number, default: 0, min: 0, max: 24 },
     luckySpinPrizes: {
-      type: [{ _id: false, id: String, kind: { type: String, enum: ['points', 'gram', 'boost', 'none'] }, amount: { type: Number, min: 0 }, label: { type: String, default: '' }, probability: { type: Number, min: 0, max: 100 } }],
-      default: () => [
-        { id: 'hashrate_boost_10_1h', kind: 'boost', amount: 10, label: '10% Mining Hashrate Boost · 1h', probability: 35 },
-        { id: 'up_50', kind: 'points', amount: 50, label: '+50 UP', probability: 25 },
-        { id: 'up_100', kind: 'points', amount: 100, label: '+100 UP', probability: 15 },
-        { id: 'up_250', kind: 'points', amount: 250, label: '+250 UP', probability: 10 },
-        { id: 'gram_005', kind: 'gram', amount: 0.05, label: '+0.05 GRAM', probability: 5 },
-        { id: 'try_again', kind: 'none', amount: 0, label: 'Try Again', probability: 10 }
-      ]
+      type: [{ _id: false, id: String, kind: { type: String, enum: ['points', 'gram', 'boost', 'spins', 'none'] }, amount: { type: Number, min: 0 }, label: { type: String, default: '' }, probability: { type: Number, min: 0, max: 100 } }],
+      default: defaultSpinPrizes
     }
   },
   { timestamps: true }

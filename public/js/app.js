@@ -1429,14 +1429,32 @@ function updateSpinHeaderStats() {
   }
   if (status) { status.textContent = enabled ? t('spin_ready', {}, 'READY') : t('spin_disabled', {}, 'OFF'); status.className = `spinHeaderStatValue ${enabled ? 'is-ready' : ''}`; }
 }
+const DEFAULT_SPIN_WHEEL_SLICES = Object.freeze([
+  Object.freeze({ id: 'hashrate_boost_10_1h', kind: 'boost', amount: 10, label: '10% Mining Hashrate Boost' }),
+  Object.freeze({ id: 'extra_spins_2', kind: 'spins', amount: 2, label: '2 Extra Spins' }),
+  Object.freeze({ id: 'up_0', kind: 'points', amount: 0, label: '0 UP' }),
+  Object.freeze({ id: 'up_50', kind: 'points', amount: 50, label: '+50 UP' }),
+  Object.freeze({ id: 'up_100', kind: 'points', amount: 100, label: '+100 UP' }),
+  Object.freeze({ id: 'up_250', kind: 'points', amount: 250, label: '+250 UP' }),
+  Object.freeze({ id: 'try_again', kind: 'none', amount: 0, label: 'Try Again' })
+]);
 function spinPrizeLabel(prizeId, amount) {
-  if (["up_50", "up_100", "up_250"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
+  if (prizeId === 'extra_spins_2') return t('spin_prize_extra_spins', {}, '2 Extra Spins');
+  if (prizeId === 'up_0') return t('spin_prize_zero_up', {}, '0 UP');
+  if (["up_50", "up_100", "up_250", "up_20"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
   if (prizeId === "hashrate_boost_10_1h") return t("spin_prize_boost_10");
   if (prizeId === "gram_005") return t("spin_prize_gram", { n: formatNumber(amount, 2) });
-  return t("spin_prize_try_again");
+  const configuredPrize = state.spinPrizes.find(prize => String(prize?.id || '') === String(prizeId));
+  return configuredPrize?.label || t("spin_prize_try_again");
 }
 function spinSliceText(prize, index) {
-  const fallback = [["10%", "Mining"], ["+50", "UP"], ["+100", "UP"], ["+250", "UP"], ["0", "UP"], ["2 Extra", "Spins"]][index] || ["", ""];
+  const fixedText = {
+    hashrate_boost_10_1h: ["10%", "Mining"], extra_spins_2: ["2 Extra", "Spins"],
+    up_0: ["0", "UP"], up_50: ["+50", "UP"], up_100: ["+100", "UP"],
+    up_250: ["+250", "UP"], try_again: ["Try", "Again"]
+  };
+  if (fixedText[prize?.id]) return fixedText[prize.id];
+  const fallback = ["", ""];
   const label = String(prize?.label || '').trim();
   if (!label) return fallback;
   const match = label.match(/^(\S+)\s+(.+)$/);
@@ -1465,15 +1483,13 @@ function updateSpinControls() {
 function renderLuckySpin() {
   const enabled = state.spinEnabled;
   const tickets = Number(state.tickets) || 0;
-  const prizes = [
-    { label: "10% Mining", kind: "boost" }, { label: "2 Extra Spins", kind: "none" }, { label: "0 UP", kind: "points", amount: 0 },
-    { label: "+50 UP", kind: "points", amount: 50 }, { label: "+100 UP", kind: "points", amount: 100 }, { label: "+250 UP", kind: "points", amount: 250 }
-  ];
+  const prizes = Array.isArray(state.spinPrizes) && state.spinPrizes.length === DEFAULT_SPIN_WHEEL_SLICES.length
+    ? state.spinPrizes : DEFAULT_SPIN_WHEEL_SLICES;
   const buttonLocked = !enabled || tickets < 1;
   const buttonLabel = t('spin_spin_now', {}, 'SPIN NOW');
   const rewardIcon = (_prize, index) => {
-    if (index === 1) return `<svg class="spinRewardIcon spinRewardIcon--extra" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M4.9 9a8 8 0 0 1 13.2-2L20 12M4 17v-5h5"/><path d="M19.1 15a8 8 0 0 1-13.2 2L4 12"/></svg>`;
-    if (index === 0) return `<svg class="spinRewardIcon spinRewardIcon--boost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8.2c5.1-5.1 12.9-5.1 18 0l-3.7 3.7c-3-3-7.6-3-10.6 0L3.2 8.2Z"/><path d="m8.5 13.5 10 10M5.5 16.5l-3 3"/></svg>`;
+    if (_prize?.kind === 'spins') return `<svg class="spinRewardIcon spinRewardIcon--extra" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M4.9 9a8 8 0 0 1 13.2-2L20 12M4 17v-5h5"/><path d="M19.1 15a8 8 0 0 1-13.2 2L4 12"/></svg>`;
+    if (_prize?.kind === 'boost') return `<svg class="spinRewardIcon spinRewardIcon--boost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8.2c5.1-5.1 12.9-5.1 18 0l-3.7 3.7c-3-3-7.6-3-10.6 0L3.2 8.2Z"/><path d="m8.5 13.5 10 10M5.5 16.5l-3 3"/></svg>`;
     return `<img class="spinRewardIcon spinRewardIcon--up" src="/img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">`;
   };
   return `<section class="spinCard ${enabled ? '' : 'is-locked'}" aria-label="${t("spin_aria")}">
@@ -1573,10 +1589,24 @@ function cancelSpinFrame(frame) {
   if (frame.animationFrame) window.cancelAnimationFrame?.(frame.id);
   else clearTimeout(frame.id);
 }
-function runSpinWheelAnimation(wheel) {
+function spinPrizeTargetRotation(prizeId) {
+  const prizes = Array.isArray(state.spinPrizes) && state.spinPrizes.length === DEFAULT_SPIN_WHEEL_SLICES.length
+    ? state.spinPrizes : DEFAULT_SPIN_WHEEL_SLICES;
+  const index = prizes.findIndex(prize => String(prize?.id || '') === String(prizeId || ''));
+  if (index < 0 || prizes.length < 2) return 1440;
+  const sliceStep = 360 / prizes.length;
+  const landingOffset = (360 - (index * sliceStep)) % 360;
+  return 1440 + landingOffset;
+}
+function runSpinWheelAnimation(wheel, prizeId) {
   if (!wheel) return Promise.resolve();
+  const targetRotation = spinPrizeTargetRotation(prizeId);
+  const wheelPrizes = Array.isArray(state.spinPrizes) && state.spinPrizes.length === DEFAULT_SPIN_WHEEL_SLICES.length
+    ? state.spinPrizes : DEFAULT_SPIN_WHEEL_SLICES;
+  const tickStep = 360 / wheelPrizes.length;
   wheel.classList.remove('spinWheelRun');
   void wheel.offsetWidth;
+  wheel.style.setProperty('--spin-target-rotation', `${targetRotation}deg`);
   const transitionMs = getComputedStyle(wheel).transitionDuration.split(',').reduce((max, duration) => {
     const value = duration.trim();
     const ms = Number.parseFloat(value) * (value.endsWith('ms') ? 1 : 1000);
@@ -1588,15 +1618,15 @@ function runSpinWheelAnimation(wheel) {
     let frame = null;
     let previousAngle = spinWheelRotationDegrees(wheel);
     let rotatedDegrees = 0;
-    let nextTickDegrees = 60;
+    let nextTickDegrees = tickStep;
     const emitCrossedTicks = () => {
       const angle = spinWheelRotationDegrees(wheel);
       const delta = ((angle - previousAngle + 540) % 360) - 180;
       if (delta > 0) rotatedDegrees += delta;
       previousAngle = angle;
-      while (rotatedDegrees + 0.01 >= nextTickDegrees && nextTickDegrees <= 1440) {
+      while (rotatedDegrees + 0.01 >= nextTickDegrees && nextTickDegrees <= targetRotation) {
         spinTickFeedback();
-        nextTickDegrees += 60;
+        nextTickDegrees += tickStep;
       }
     };
     const pollRotation = () => {
@@ -1627,7 +1657,8 @@ function presentSpinResult(result, resultBox) {
   const prize = result.prize && typeof result.prize === 'object' ? result.prize : {};
   const amount = Number(result.amount ?? prize.amount) || 0;
   const prizeId = String(result.prizeId ?? prize.id ?? '');
-  const prizeLabel = String(result.prizeLabel || prize.label || spinPrizeLabel(prizeId, amount));
+  const prizeKind = String(result.prizeKind ?? prize.kind ?? '');
+  const prizeLabel = String(spinPrizeLabel(prizeId, amount) || result.prizeLabel || prize.label || '');
   const celebration = window.GramupSpinCelebration;
   if (!celebration?.show) {
     if (resultBox) resultBox.textContent = t('spin_result', { label: prizeLabel });
@@ -1637,9 +1668,13 @@ function presentSpinResult(result, resultBox) {
   if (resultBox) resultBox.textContent = '';
   celebration.show({
     title: amount > 0 ? t('spin_win_title', {}, 'You won!') : t('spin_win_empty_title', {}, 'Spin result'),
-    subtitle: amount > 0
-      ? t('spin_win_subtitle', {}, 'Your reward has been added to your balance.')
-      : t('spin_win_try_again', {}, 'No reward this time. Spin again!'),
+    subtitle: prizeKind === 'spins'
+      ? t('spin_extra_spins_added', {}, 'Two extra spin tickets were added to your account.')
+      : prizeKind === 'boost'
+        ? prizeLabel
+        : amount > 0
+          ? t('spin_win_subtitle', {}, 'Your reward has been added to your balance.')
+          : t('spin_win_try_again', {}, 'No reward this time. Spin again!'),
     prizeId,
     amount,
     prizeLabel,
@@ -1661,7 +1696,7 @@ async function doSpin() {
   if (button) { button.disabled = true; button.textContent = t("spin_spinning"); }
   try {
     const result = await api("/api/points/spin", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey("spin") } });
-    await runSpinWheelAnimation(wheel);
+    await runSpinWheelAnimation(wheel, result.prizeId ?? result.prize?.id);
     clearPendingIdempotencyKey("spin");
     const updatedBalance = Number(result.newBalance ?? result.upBalance ?? result.points);
     if (Number.isFinite(updatedBalance)) state.points = updatedBalance;
@@ -1692,7 +1727,7 @@ async function paySpinAlternative() {
   updateSpinControls();
   try {
     const result = await api('/api/points/spin/paid', { method: 'POST', headers: { 'Idempotency-Key': getPendingIdempotencyKey('spin_paid') } });
-    await runSpinWheelAnimation(wheel);
+    await runSpinWheelAnimation(wheel, result.prizeId ?? result.prize?.id);
     clearPendingIdempotencyKey('spin_paid');
     const updatedBalance = Number(result.newBalance ?? result.upBalance ?? result.points);
     if (Number.isFinite(updatedBalance)) state.points = updatedBalance;
