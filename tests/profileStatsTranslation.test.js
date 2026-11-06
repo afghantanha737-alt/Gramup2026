@@ -121,10 +121,11 @@ async function main() {
   for (const asset of ['maintenanceGate.js', 'readModelCache.js', 'walletConnect.js']) {
     assert.ok(indexHtml.includes(`/js/${asset}?v=up_v28_20261105_2`), `${asset} must use the latest cache-busting version`);
   }
-  assert.ok(indexHtml.includes('/js/i18n.js?v=up_v28_20261106_2'), 'i18n.js must use the winners ticker cache-busting version');
-  assert.ok(indexHtml.includes('/js/app.js?v=up_v28_20261106_2'), 'app.js must use the winners ticker cache-busting version');
+  assert.ok(indexHtml.includes('/js/i18n.js?v=up_v28_20261106_3'), 'i18n.js must use the win modal cache-busting version');
+  assert.ok(indexHtml.includes('/js/app.js?v=up_v28_20261106_3'), 'app.js must use the win modal cache-busting version');
   assert.ok(indexHtml.includes('/js/gamification.js?v=up_v28_20261106_1'), 'gamification.js must use the spinner feedback cache-busting version');
-  assert.ok(indexHtml.includes('/css/style.css?v=up_v28_20261106_2'), 'main CSS must use the winners ticker asset version');
+  assert.ok(indexHtml.includes('/js/spinCelebration.js?v=up_v28_20261106_3'), 'spinCelebration.js must use the current cache-busting version');
+  assert.ok(indexHtml.includes('/css/style.css?v=up_v28_20261106_3'), 'main CSS must use the win modal asset version');
   assert.ok(indexHtml.includes('/css/theme-selector.css?v=up_v28_20261105_2'), 'theme CSS must use the latest asset version');
 
   const referralRoute = fs.readFileSync(path.join(root, 'routes/referral.js'), 'utf8');

@@ -1622,6 +1622,30 @@ function runSpinWheelAnimation(wheel) {
     else frame = requestSpinFrame(pollRotation);
   });
 }
+function presentSpinResult(result, resultBox) {
+  const prizeLabel = result.prizeLabel || spinPrizeLabel(result.prizeId, Number(result.amount) || 0);
+  const amount = Number(result.amount) || 0;
+  const celebration = window.GramupSpinCelebration;
+  if (!celebration?.show) {
+    if (resultBox) resultBox.textContent = t('spin_result', { label: prizeLabel });
+    toast(prizeLabel, 'success');
+    return;
+  }
+  if (resultBox) resultBox.textContent = '';
+  celebration.show({
+    title: amount > 0 ? t('spin_win_title', {}, 'You won!') : t('spin_win_empty_title', {}, 'Spin result'),
+    subtitle: amount > 0
+      ? t('spin_win_subtitle', {}, 'Your reward has been added to your balance.')
+      : t('spin_win_try_again', {}, 'No reward this time. Spin again!'),
+    prizeId: String(result.prizeId || ''),
+    amount,
+    prizeLabel,
+    claimLabel: t('spin_win_claim', {}, 'Claim prize'),
+    shareLabel: t('spin_win_share', {}, 'Share result'),
+    shareText: t('spin_win_share_text', { prize: prizeLabel }, `I won ${prizeLabel} on Gramup Spinner!`),
+    appUrl: `${window.location.origin}${window.location.pathname}`
+  });
+}
 async function doSpin() {
   if (!readModelActionAllowed() || !state.spinEnabled || Number(state.tickets) < 1 || state.spinBusy) return;
   prepareSpinAudio();
@@ -1644,9 +1668,7 @@ async function doSpin() {
     state.spinLastClaimAt = new Date().toISOString();
     state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
     spinWinFeedback();
-    const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount);
-    if (resultBox) resultBox.textContent = t("spin_result", { label });
-    toast(label, "success");
+    presentSpinResult(result, resultBox);
     updateHeader();
     loadSpinWinners();
   } catch (error) {
@@ -1675,7 +1697,10 @@ async function paySpinAlternative() {
     const updatedGramBalance = Number(result.gramBalance);
     if (Number.isFinite(updatedGramBalance)) state.gramBalance = updatedGramBalance;
     state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
-    const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount); if (resultBox) resultBox.textContent = t('spin_result', { label }); toast(label, 'success'); spinWinFeedback(); updateHeader(); loadSpinWinners();
+    spinWinFeedback();
+    presentSpinResult(result, resultBox);
+    updateHeader();
+    loadSpinWinners();
   } catch (error) { clearDefinitiveIdempotencyFailure('spin_paid', error); haptic('error'); if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message); toast(translateServerMessage(error.code, error.message), 'error'); }
   finally {
     state.spinBusy = false;
