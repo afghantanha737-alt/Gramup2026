@@ -1623,8 +1623,10 @@ function runSpinWheelAnimation(wheel) {
   });
 }
 function presentSpinResult(result, resultBox) {
-  const prizeLabel = result.prizeLabel || spinPrizeLabel(result.prizeId, Number(result.amount) || 0);
-  const amount = Number(result.amount) || 0;
+  const prize = result.prize && typeof result.prize === 'object' ? result.prize : {};
+  const amount = Number(result.amount ?? prize.amount) || 0;
+  const prizeId = String(result.prizeId ?? prize.id ?? '');
+  const prizeLabel = String(result.prizeLabel || prize.label || spinPrizeLabel(prizeId, amount));
   const celebration = window.GramupSpinCelebration;
   if (!celebration?.show) {
     if (resultBox) resultBox.textContent = t('spin_result', { label: prizeLabel });
@@ -1637,7 +1639,7 @@ function presentSpinResult(result, resultBox) {
     subtitle: amount > 0
       ? t('spin_win_subtitle', {}, 'Your reward has been added to your balance.')
       : t('spin_win_try_again', {}, 'No reward this time. Spin again!'),
-    prizeId: String(result.prizeId || ''),
+    prizeId,
     amount,
     prizeLabel,
     claimLabel: t('spin_win_claim', {}, 'Claim prize'),
@@ -1660,7 +1662,7 @@ async function doSpin() {
     const result = await api("/api/points/spin", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey("spin") } });
     await runSpinWheelAnimation(wheel);
     clearPendingIdempotencyKey("spin");
-    const updatedBalance = Number(result.upBalance ?? result.points);
+    const updatedBalance = Number(result.newBalance ?? result.upBalance ?? result.points);
     if (Number.isFinite(updatedBalance)) state.points = updatedBalance;
     state.tickets = Number(result.tickets) || 0;
     const updatedGramBalance = Number(result.gramBalance);
@@ -1691,7 +1693,7 @@ async function paySpinAlternative() {
     const result = await api('/api/points/spin/paid', { method: 'POST', headers: { 'Idempotency-Key': getPendingIdempotencyKey('spin_paid') } });
     await runSpinWheelAnimation(wheel);
     clearPendingIdempotencyKey('spin_paid');
-    const updatedBalance = Number(result.upBalance ?? result.points);
+    const updatedBalance = Number(result.newBalance ?? result.upBalance ?? result.points);
     if (Number.isFinite(updatedBalance)) state.points = updatedBalance;
     state.tickets = Number(result.tickets) || 0;
     const updatedGramBalance = Number(result.gramBalance);
