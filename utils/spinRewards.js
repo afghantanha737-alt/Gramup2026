@@ -41,9 +41,34 @@ function isValidSpinPrizePool(rawPrizes) {
   });
 }
 
+function coerceSpinPrizePool(rawPrizes) {
+  if (!Array.isArray(rawPrizes)) return null;
+  const prizes = rawPrizes.map(normalizedSpinPrize);
+  if (isValidSpinPrizePool(prizes)) return prizes;
+  if (prizes.length !== SPIN_PRIZES.length) return null;
+
+  const totalProbability = prizes.reduce((sum, prize) => sum + prize.probability, 0);
+  if (!Number.isFinite(totalProbability) || Math.abs(totalProbability - 100) > 0.000001) return null;
+  const isKnownLegacyPool = prizes.every((prize, index) => {
+    const expected = index === 1
+      ? { id: 'extra_spins_2', kind: 'spins', amount: 2, label: '2 Extra Spins' }
+      : SPIN_PRIZES[index];
+    return prize.id === expected.id
+      && prize.kind === expected.kind
+      && prize.amount === expected.amount
+      && prize.label === expected.label
+      && Number.isFinite(prize.probability)
+      && prize.probability >= 0
+      && prize.probability <= 100;
+  });
+  if (!isKnownLegacyPool) return null;
+
+  return defaultSpinPrizes().map((prize, index) => ({ ...prize, probability: prizes[index].probability }));
+}
+
 function normalizeSpinPrizes(rawPrizes) {
   if (!isValidSpinPrizePool(rawPrizes)) return defaultSpinPrizes();
   return rawPrizes.map(normalizedSpinPrize);
 }
 
-module.exports = { SPIN_PRIZES, defaultSpinPrizes, isValidSpinPrizePool, normalizeSpinPrizes };
+module.exports = { SPIN_PRIZES, defaultSpinPrizes, isValidSpinPrizePool, normalizeSpinPrizes, coerceSpinPrizePool };

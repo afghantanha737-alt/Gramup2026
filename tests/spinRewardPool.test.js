@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 const fs = require('fs');
-const { SPIN_PRIZES, defaultSpinPrizes, isValidSpinPrizePool, normalizeSpinPrizes } = require('../utils/spinRewards');
+const { SPIN_PRIZES, defaultSpinPrizes, isValidSpinPrizePool, normalizeSpinPrizes, coerceSpinPrizePool } = require('../utils/spinRewards');
 const pointsRoute = require('../routes/points');
 const Settings = require('../models/Settings');
 
@@ -33,6 +33,11 @@ const stalePool = [
 assert.strictEqual(isValidSpinPrizePool(stalePool), false);
 assert.deepStrictEqual(normalizeSpinPrizes(stalePool), defaultSpinPrizes());
 assert.deepStrictEqual(pointsRoute.spinPolicy({ luckySpinPrizes: stalePool }).prizes, defaultSpinPrizes());
+const oldAdminBrowserPool = defaultSpinPrizes().map(prize => ({ ...prize }));
+oldAdminBrowserPool[1] = { id: 'extra_spins_2', kind: 'spins', amount: 2, label: '2 Extra Spins', probability: 2.5 };
+assert.strictEqual(isValidSpinPrizePool(oldAdminBrowserPool), false);
+assert.deepStrictEqual(coerceSpinPrizePool(oldAdminBrowserPool), defaultSpinPrizes(), 'the known old browser pool maps to the current GRAM reward');
+assert.strictEqual(coerceSpinPrizePool(stalePool), null, 'unknown malformed pools remain rejected');
 
 const settings = new Settings();
 assert.deepStrictEqual(settings.luckySpinPrizes.map(prize => String(prize.id)), expectedIds);
@@ -58,9 +63,12 @@ assert.match(source, /prize\.kind === 'spins'\) update\.\$inc\.tickets = prize\.
 assert.match(source, /const ledgerAmount = \['points', 'gram'\]\.includes\(prize\.kind\) \? prize\.amount : 0/);
 assert.match(source, /const rewardAmount = \['points', 'gram'\]\.includes\(prize\.kind\) \? Number\(prize\.amount\) : 0/);
 assert.match(adminSource, /isValidSpinPrizePool\(prizes\)/);
+assert.match(adminSource, /coerceSpinPrizePool\(body\.luckySpinPrizes\)/);
 assert.match(adminSource, /luckySpinPrizes: normalizeSpinPrizes\(settings\.luckySpinPrizes\)/);
 assert.match(adminPage, /data-spin-field="kind" disabled/);
+assert.match(adminPage, /option value="gram"/);
 assert.match(adminPage, /data-spin-field="probability"/);
+assert.match(adminPage, /if \(luckySpinRewardsDirty\) payload\.luckySpinPrizes = readLuckySpinRewards\(\)/);
 assert.doesNotMatch(adminPage, /onclick="addLuckySpinRewardRow\(\)"/);
 assert.match(appSource, /gram_005: \["\+0\.05", "GRAM"\]/);
 assert.match(appSource, /up_0: \["0", "UP"\]/);

@@ -9,7 +9,7 @@ const Task = require('../models/Task');
 const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
-const { normalizeSpinPrizes, isValidSpinPrizePool } = require('../utils/spinRewards');
+const { normalizeSpinPrizes, isValidSpinPrizePool, coerceSpinPrizePool } = require('../utils/spinRewards');
 const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
 const { bot, notifyUser, buildBroadcastButtonReplyMarkup, sanitizeTelegramHtml, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
@@ -2721,8 +2721,8 @@ router.put('/settings', async (req, res) => {
   }
   if (Object.prototype.hasOwnProperty.call(body, 'luckySpinEnabled')) changes.luckySpinEnabled = body.luckySpinEnabled === true || body.luckySpinEnabled === 'true';
   if (Object.prototype.hasOwnProperty.call(body, 'luckySpinPrizes')) {
-    const prizes = Array.isArray(body.luckySpinPrizes) ? body.luckySpinPrizes.map(item => ({ id: String(item.id || '').trim(), kind: String(item.kind || ''), amount: Number(item.amount), label: String(item.label || '').trim(), probability: Number(item.probability) })) : null;
-    if (!isValidSpinPrizePool(prizes)) return res.status(400).json({ success: false, code: 'INVALID_LUCKY_SPIN_PRIZES', message: 'Lucky Spin must contain the exact six wheel rewards in order, with only probabilities editable and totaling 100%.' });
+    const prizes = coerceSpinPrizePool(body.luckySpinPrizes);
+    if (!prizes || !isValidSpinPrizePool(prizes)) return res.status(400).json({ success: false, code: 'INVALID_LUCKY_SPIN_PRIZES', message: 'Lucky Spin must contain the exact six wheel rewards in order, with only probabilities editable and totaling 100%.' });
     changes.luckySpinPrizes = prizes;
   }
   // dailyReminderEnabled یک boolean است، نه یک عدد؛ جدا از قاعده‌ی بالا پردازش می‌شود
