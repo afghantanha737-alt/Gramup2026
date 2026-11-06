@@ -1476,6 +1476,7 @@ function renderLuckySpin() {
     return `<img class="spinRewardIcon spinRewardIcon--up" src="/img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">`;
   };
   return `<section class="spinCard ${enabled ? '' : 'is-locked'}" aria-label="${t("spin_aria")}">
+    <div class="spinWinnersMarquee" data-spin-winners hidden role="region" aria-label="${escapeHTML(t('spin_winners_latest', {}, 'Recent winners:'))}"><strong class="spinWinnersLabel">${escapeHTML(t('spin_winners_latest', {}, 'Recent winners:'))}</strong><div class="spinWinnersViewport"><div class="spinWinnersTrack" data-spin-winners-track></div></div></div>
     <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRimGeometry" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${prizes.map((prize, index) => { const [top, bottom] = spinSliceText(prize, index); return `<span class="spinSliceLabel" style="--i:${index}">${rewardIcon(prize, index)}<b>${escapeHTML(top)}</b><small>${escapeHTML(bottom)}</small></span>`; }).join("")}<div class="spinWheelHub" aria-hidden="true"><img class="spinHubLogo" src="/img/gramup-logo-cube-transparent.png" alt=""></div></div></div>
     <div class="spinFooter"><span class="spinAvailability" data-spin-availability>${tickets > 0 ? t('spin_ticket_ready', { count: tickets }, `${tickets} free spin ticket${tickets === 1 ? '' : 's'} ready`) : t('spin_ticket_after_streak', { days: state.spinRequiredStreak }, `Complete a ${state.spinRequiredStreak}-day streak to get 1 free spin`)}</span><button id="spinButton" class="primaryBtn spinButton ${buttonLocked ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button><button type="button" class="spinPaidButton" data-paid-spin onclick="paySpinAlternative()" ${!enabled || state.spinBusy || state.points < 50 ? "disabled" : ""}>${t('spin_pay_50', {}, 'Pay 50 UP to Spin')}</button><small class="spinBalanceNotice" data-spin-payment-notice role="alert" hidden></small></div>
     <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
@@ -1507,11 +1508,43 @@ function openLuckySpin() {
   closeLuckySpin();
   const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'luckySpinScreen';
   overlay.innerHTML = `<main class="luckySpinPage" aria-label="Lucky Spin"><header class="luckySpinPageHeader"><div class="spinBrand"><img src="/img/gramup-logo-cube-transparent.png" alt="Gramup"><div class="spinBrandCopy"><strong>Gramup Spinner</strong><small>Collect tickets, spin the wheel!</small></div></div><button class="luckySpinClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></header><div class="spinHeaderStats" aria-label="Lucky Spin status"><div class="spinHeaderStat"><span>STATUS</span><strong data-spin-status>READY</strong></div><div class="spinHeaderStat"><span>${t('spin_balance_label', {}, 'UP BALANCE')}</span><strong class="spinHeaderBalance" data-spin-balance></strong></div><div class="spinHeaderStat"><span>TICKETS</span><strong data-spin-tickets>0</strong></div></div><div class="luckySpinPageBody">${renderLuckySpin()}</div></main>`;
-  document.body.appendChild(overlay); document.body.classList.add('luckySpinOpen'); state.spinModalOpen = true; updateSpinControls();
+  document.body.appendChild(overlay); document.body.classList.add('luckySpinOpen'); state.spinModalOpen = true; updateSpinControls(); loadSpinWinners();
 }
 window.openLuckySpin = openLuckySpin; window.closeLuckySpin = closeLuckySpin;
 function prepareSpinAudio() {
   try { window.GramupGamification?.prepareAudio?.(); } catch { /* optional audio must not block a spin */ }
+}
+function populateSpinWinners(winners) {
+  const marquee = document.querySelector('[data-spin-winners]');
+  const track = marquee?.querySelector('[data-spin-winners-track]');
+  if (!marquee || !track) return;
+  track.replaceChildren();
+  if (!Array.isArray(winners) || winners.length === 0) { marquee.hidden = true; return; }
+  const group = document.createElement('div');
+  group.className = 'spinWinnersGroup';
+  for (const winner of winners) {
+    const item = document.createElement('span');
+    item.className = 'spinWinnerItem';
+    const name = document.createElement('strong');
+    name.textContent = String(winner?.name || 'User ***');
+    const won = document.createElement('span');
+    won.textContent = t('spin_winner_won', {}, 'won:');
+    const prize = document.createElement('b');
+    prize.textContent = spinPrizeLabel(String(winner?.prizeId || ''), Number(winner?.amount) || 0);
+    item.append(name, won, prize);
+    group.appendChild(item);
+  }
+  track.append(group, group.cloneNode(true));
+  track.lastElementChild?.setAttribute('aria-hidden', 'true');
+  marquee.hidden = group.childElementCount === 0;
+}
+async function loadSpinWinners() {
+  try {
+    const result = await api('/api/points/spin/recent-winners');
+    populateSpinWinners(result?.winners);
+  } catch {
+    populateSpinWinners([]);
+  }
 }
 function spinTickFeedback() {
   const feedback = window.GramupGamification;
@@ -1615,6 +1648,7 @@ async function doSpin() {
     if (resultBox) resultBox.textContent = t("spin_result", { label });
     toast(label, "success");
     updateHeader();
+    loadSpinWinners();
   } catch (error) {
     clearDefinitiveIdempotencyFailure("spin", error);
     haptic("error");
@@ -1641,7 +1675,7 @@ async function paySpinAlternative() {
     const updatedGramBalance = Number(result.gramBalance);
     if (Number.isFinite(updatedGramBalance)) state.gramBalance = updatedGramBalance;
     state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
-    const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount); if (resultBox) resultBox.textContent = t('spin_result', { label }); toast(label, 'success'); spinWinFeedback(); updateHeader();
+    const label = result.prizeLabel || spinPrizeLabel(result.prizeId, result.amount); if (resultBox) resultBox.textContent = t('spin_result', { label }); toast(label, 'success'); spinWinFeedback(); updateHeader(); loadSpinWinners();
   } catch (error) { clearDefinitiveIdempotencyFailure('spin_paid', error); haptic('error'); if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message); toast(translateServerMessage(error.code, error.message), 'error'); }
   finally {
     state.spinBusy = false;

@@ -11,6 +11,7 @@ const Settings = require('../models/Settings');
 const User = require('../models/User');
 const Withdrawal = require('../models/Withdrawal');
 const PointsLedger = require('../models/PointsLedger');
+const { toRecentSpinWinner } = require('../utils/spinWinners');
 const Deposit = require('../models/Deposit');
 const GramSwapIntent = require('../models/GramSwapIntent');
 const VipPlan = require('../models/VipPlan');
@@ -470,6 +471,19 @@ router.post('/checkin/restart', auth, sensitiveRateLimit('claim'), async (req, r
   );
   if (!updated) return res.status(409).json({ success: false, code: 'STREAK_RESTART_CONFLICT', message: 'Your streak changed. Please refresh and try again.' });
   res.json({ success: true, points: updated.points, streak: 0, canCheckIn: true });
+});
+
+router.get('/spin/recent-winners', auth, sensitiveRateLimit('general'), async (req, res) => {
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const entries = await PointsLedger.find({ type: 'spin', amount: { $gt: 0 }, createdAt: { $gte: since } })
+    .sort({ createdAt: -1 })
+    .limit(24)
+    .select('user description amount')
+    .populate({ path: 'user', select: 'firstName', match: { isBanned: { $ne: true } } })
+    .lean();
+  const winners = entries.map(toRecentSpinWinner).filter(Boolean).slice(0, 8);
+  res.set('Cache-Control', 'private, max-age=60');
+  return res.json({ success: true, winners });
 });
 
 // POST /api/points/spin — eligible users may claim free spins consecutively.

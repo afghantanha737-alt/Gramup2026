@@ -3240,3 +3240,66 @@ html[data-theme="light"] .auroraDailyCard .auroraInlineBtn {
   text-align: center;
 }
 .luckySpinPage .spinBalanceNotice[hidden] { display: none; }
+
+
+/* Recent, privacy-masked Lucky Spin winners */
+.luckySpinPage .spinWinnersMarquee {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .035);
+  color: #b8c8d9;
+  font-size: 11px;
+}
+.luckySpinPage .spinWinnersMarquee[hidden] { display: none !important; }
+.luckySpinPage .spinWinnersLabel {
+  flex: 0 0 auto;
+  color: #fbbf24;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.luckySpinPage .spinWinnersViewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  direction: ltr;
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.luckySpinPage .spinWinnersTrack {
+  display: flex;
+  width: max-content;
+  animation: spinWinnersMarquee 28s linear infinite;
+  will-change: transform;
+}
+.luckySpinPage .spinWinnersGroup {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 24px;
+  padding-inline-end: 24px;
+  white-space: nowrap;
+}
+.luckySpinPage .spinWinnerItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  direction: rtl;
+}
+.luckySpinPage .spinWinnerItem strong { color: #d6e4f3; font-weight: 800; }
+.luckySpinPage .spinWinnerItem b { color: #38bdf8; font-weight: 900; }
+.luckySpinPage .spinWinnersMarquee:hover .spinWinnersTrack { animation-play-state: paused; }
+@keyframes spinWinnersMarquee {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .luckySpinPage .spinWinnersTrack { animation: none; }
+  .luckySpinPage .spinWinnersGroup[aria-hidden="true"] { display: none; }
+}
