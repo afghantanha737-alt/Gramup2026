@@ -14,7 +14,7 @@ assert.match(app, /class="gramAmountUnit"/);
 assert.match(app, /class="gramBalanceUnit"/);
 assert.doesNotMatch(app, /gramTokenIconMarkup\(\).*gramup-logo-new\.png/);
 assert.match(css, /\.gramTokenIcon/);
-assert.match(index, /style\.css\?v=up_v28_20261106_3/);
+assert.match(index, /style\.css\?v=up_v28_20261106_4/);
 assert.match(logo, /<title[^>]*>GRAM<\/title>/);
 
 console.log('PASS — native GRAM logo is used for GRAM balances and remains distinct from the Gramup UP logo');

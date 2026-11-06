@@ -121,11 +121,11 @@ async function main() {
   for (const asset of ['maintenanceGate.js', 'readModelCache.js', 'walletConnect.js']) {
     assert.ok(indexHtml.includes(`/js/${asset}?v=up_v28_20261105_2`), `${asset} must use the latest cache-busting version`);
   }
-  assert.ok(indexHtml.includes('/js/i18n.js?v=up_v30_silver_theme'), 'i18n.js must use the Silver theme cache-busting version');
-  assert.ok(indexHtml.includes('/js/app.js?v=up_v30_silver_theme'), 'app.js must use the Silver theme cache-busting version');
+  assert.ok(indexHtml.includes('/js/i18n.js?v=up_v31_mine_status_fix'), 'i18n.js must use the Mine status cache-busting version');
+  assert.ok(indexHtml.includes('/js/app.js?v=up_v31_mine_status_fix'), 'app.js must use the Mine status cache-busting version');
   assert.ok(indexHtml.includes('/js/gamification.js?v=up_v28_20261106_1'), 'gamification.js must use the spinner feedback cache-busting version');
   assert.ok(indexHtml.includes('/js/spinCelebration.js?v=up_v28_20261106_3'), 'spinCelebration.js must use the current cache-busting version');
-  assert.ok(indexHtml.includes('/css/style.css?v=up_v28_20261106_3'), 'main CSS must use the win modal asset version');
+  assert.ok(indexHtml.includes('/css/style.css?v=up_v28_20261106_4'), 'main CSS must use the Mine loading-state asset version');
   assert.ok(indexHtml.includes('/css/theme-selector.css?v=up_v29_silver_theme'), 'theme CSS must use the Silver theme cache-busting version');
 
   const referralRoute = fs.readFileSync(path.join(root, 'routes/referral.js'), 'utf8');

@@ -1126,9 +1126,7 @@ function rerenderActiveUserDataView() {
   else if (state.activeTab === "wallet") renderWallet();
   else if (state.activeTab === "vip") {
     const content = $("#content");
-    if (content) content.innerHTML = state.vipError
-      ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondaryBtn" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
-      : renderProfileVip();
+    if (content) content.innerHTML = renderProfileVip();
     startVipCountdown();
   } else if (state.activeTab === "profile") {
     void renderProfile();
@@ -4053,19 +4051,26 @@ async function loadVipPlans() {
   }
 }
 
-async function loadMiningStatus() {
-  if (state.miningLoading) return false;
+let miningStatusPromise = null;
+function loadMiningStatus() {
+  if (miningStatusPromise) return miningStatusPromise;
   state.miningLoading = true;
-  try {
-    const data = await api('/api/mining/status');
-    state.mining = data?.mining || null;
-    return true;
-  } catch (error) {
-    console.warn('Mining status failed:', error);
-    return false;
-  } finally {
-    state.miningLoading = false;
-  }
+  miningStatusPromise = (async () => {
+    try {
+      const data = await api('/api/mining/status');
+      state.mining = data?.mining && typeof data.mining === 'object'
+        ? { ...data.mining, history: Array.isArray(data.history) ? data.history : [] }
+        : null;
+      return Boolean(state.mining);
+    } catch (error) {
+      console.warn('Mining status failed:', error);
+      return false;
+    } finally {
+      state.miningLoading = false;
+      miningStatusPromise = null;
+    }
+  })();
+  return miningStatusPromise;
 }
 
 let miningTickerTimer = null;
@@ -4106,7 +4111,16 @@ function renderMiningHistory(history) {
 }
 function renderMiningPanel() {
   const mining = state.mining;
-  if (!mining) return '';
+  if (!mining) {
+    const loading = Boolean(state.miningLoading);
+    const indicator = loading
+      ? '<span class="mineEmptySpinner" aria-hidden="true"></span>'
+      : '<span class="mineEmptyIcon" aria-hidden="true">!</span>';
+    const retry = loading ? '' : `<button class="minePrimaryAction" type="button" onclick="retryMiningStatus()">${t("retry_button")}</button>`;
+    return `<section class="mineConsole mineConsole--empty" aria-label="${t("mining_title")}" role="status" aria-live="polite">
+      <div class="mineEmptyState">${indicator}<p>${escapeHTML(t(loading ? "mining_loading" : "mining_load_error"))}</p>${retry}</div>
+    </section>`;
+  }
   const live = miningLiveValues() || { points: mining.accumulatedPoints || 0, percent: 0, remainingSeconds: 0, full: Boolean(mining.isStorageFull) };
   const canClaim = live.points >= 1;
   const statusLabel = live.full ? t('mining_vault_full') : t('mining_vault_running');
@@ -4606,9 +4620,11 @@ async function renderProfile() {
     await loadHistory(true);
     if (!isCurrentProfileRender()) return;
   }
-  if (profileView === "vip" && !state.vipDataLoaded && !state.vipLoading) {
-    content.innerHTML = `<div class="loading" style="height:300px"></div>`;
-    await loadVipPlans();
+  if (profileView === "vip") {
+    const miningRequest = loadMiningStatus();
+    content.innerHTML = renderProfileVip();
+    startVipCountdown();
+    await miningRequest;
     if (!isCurrentProfileRender()) return;
   }
   if (profileView === "referral") {
@@ -4627,9 +4643,7 @@ async function renderProfile() {
   } else if (profileView === "history") {
     content.innerHTML = renderProfileHistory();
   } else if (profileView === "vip") {
-    content.innerHTML = state.vipError
-      ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondary" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
-      : renderProfileVip();
+    content.innerHTML = renderProfileVip();
     startVipCountdown();
   } else {
     content.innerHTML = renderProfileMenu();
@@ -4639,16 +4653,32 @@ async function renderProfile() {
 async function renderVipTab() {
   const renderRequestId = navigationSequence;
   profileView = "vip";
-  if (!state.vipDataLoaded && !state.vipLoading) {
-    $("#content").innerHTML = `<div class="loading" style="height:300px"></div>`;
-    await loadVipPlans();
-  }
+  const miningRequest = loadMiningStatus();
+  const content = $("#content");
+  if (content) content.innerHTML = renderProfileVip();
+  startVipCountdown();
+  await miningRequest;
   if (renderRequestId !== navigationSequence || state.activeTab !== "vip") return;
-  $("#content").innerHTML = state.vipError
-    ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondary" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
-    : renderProfileVip();
+  const currentContent = $("#content");
+  if (currentContent) currentContent.innerHTML = renderProfileVip();
   startVipCountdown();
 }
+
+async function retryMiningStatus() {
+  const renderRequestId = navigationSequence;
+  const isMineView = () => state.activeTab === "vip" || (state.activeTab === "profile" && profileView === "vip");
+  if (!isMineView()) return;
+  const miningRequest = loadMiningStatus();
+  const content = $("#content");
+  if (content) content.innerHTML = renderProfileVip();
+  startVipCountdown();
+  await miningRequest;
+  if (renderRequestId !== navigationSequence || !isMineView()) return;
+  const currentContent = $("#content");
+  if (currentContent) currentContent.innerHTML = renderProfileVip();
+  startVipCountdown();
+}
+window.retryMiningStatus = retryMiningStatus;
 
 /* ================= TAB DISPATCH ================= */
 async function renderCurrentTab(requestId = navigationSequence) {
@@ -4679,10 +4709,8 @@ async function renderCurrentTab(requestId = navigationSequence) {
       void loadReferralData();
     } else if (tab === "vip") {
       if (cachedReadModelAvailable) {
-        const content = $("#content");
-        if (content) content.innerHTML = renderProfileVip();
-        startVipCountdown();
         void refreshReadModelInBackground();
+        await renderVipTab();
       } else {
         await loadUserData();
         if (!isCurrentRender()) return;

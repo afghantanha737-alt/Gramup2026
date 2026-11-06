@@ -60,13 +60,13 @@ assert.match(css, /\.mineConsole \{[^}]*background:radial-gradient\(circle at 92
 assert.match(css, /\.mineProgressTrack span \{[^}]*background:linear-gradient\(90deg,#22d3ee/, 
   'Mine progress must use cyan, violet and gold dashboard accents');
 
-assert.ok(html.includes('/css/style.css?v=up_v28_20261106_3'), 'style.css must use the win modal cache version');
+assert.ok(html.includes('/css/style.css?v=up_v28_20261106_4'), 'style.css must use the Mine loading-state cache version');
 assert.ok(html.includes('/css/theme-selector.css?v=up_v29_silver_theme'), 'theme-selector.css must use the Silver theme cache version');
 for (const asset of ['maintenanceGate.js', 'readModelCache.js', 'walletConnect.js']) {
   assert.ok(html.includes(`/js/${asset}?v=up_v28_20261105_2`), `${asset} must use the fresh cache version`);
 }
-assert.ok(html.includes('/js/i18n.js?v=up_v30_silver_theme'), 'i18n.js must use the Silver theme cache version');
-assert.ok(html.includes('/js/app.js?v=up_v30_silver_theme'), 'app.js must use the Silver theme cache version');
+assert.ok(html.includes('/js/i18n.js?v=up_v31_mine_status_fix'), 'i18n.js must use the Mine status cache version');
+assert.ok(html.includes('/js/app.js?v=up_v31_mine_status_fix'), 'app.js must use the Mine status cache version');
 assert.ok(html.includes('/js/gamification.js?v=up_v28_20261106_1'), 'gamification.js must use the current Spinner feedback cache version');
 assert.ok(html.includes('/js/spinCelebration.js?v=up_v28_20261106_3'), 'spinCelebration.js must use the current cache version');
 

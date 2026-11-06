@@ -3435,6 +3435,14 @@ html[data-theme="light"] .auroraDailyCard .auroraInlineBtn {
 .minePage { margin:0 -2px; padding:2px 1px 26px; }
 .mineConsole { position:relative; overflow:hidden; margin:0 0 14px; padding:18px 16px 15px; border:1px solid rgba(103,232,249,.22); border-radius:25px; color:#edfaff; background:radial-gradient(circle at 92% 2%,rgba(34,211,238,.19),transparent 32%),radial-gradient(circle at 8% 28%,rgba(124,58,237,.18),transparent 36%),linear-gradient(150deg,#0b1829,#0d1121 58%,#160d29); box-shadow:0 18px 45px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.05); }
 .mineConsole::before { content:""; position:absolute; width:210px; height:210px; inset-inline-end:-128px; top:105px; border:1px solid rgba(103,232,249,.14); border-radius:50%; box-shadow:0 0 0 22px rgba(103,232,249,.025),0 0 0 44px rgba(103,232,249,.018); pointer-events:none; }
+.mineConsole--empty { display:grid; min-height:210px; place-items:center; }
+.mineEmptyState { position:relative; z-index:1; display:grid; justify-items:center; gap:12px; width:min(100%,320px); text-align:center; }
+.mineEmptyState p { margin:0; color:#d8e7ed; font-size:13px; font-weight:750; line-height:1.5; }
+.mineEmptySpinner { width:28px; height:28px; border:3px solid rgba(103,232,249,.22); border-top-color:#67e8f9; border-radius:50%; animation:mineLoadingSpin .8s linear infinite; }
+.mineEmptyIcon { display:grid; place-items:center; width:32px; height:32px; border:1px solid rgba(103,232,249,.35); border-radius:50%; color:#67e8f9; font-size:18px; font-weight:900; }
+.mineConsole--empty .minePrimaryAction { max-width:240px; }
+@keyframes mineLoadingSpin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .mineEmptySpinner { animation:none; } }
 .mineConsoleHeader { position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .mineBrand { display:flex; align-items:center; gap:10px; min-width:0; }
 .mineEmblem { display:grid; place-items:center; width:45px; height:45px; flex:0 0 45px; border:1px solid rgba(103,232,249,.42); border-radius:15px; color:#08131d; background:linear-gradient(145deg,#b8f6ff,#37d2e8 53%,#7c3aed); box-shadow:0 0 22px rgba(34,211,238,.28); font-size:25px; transform:rotate(-8deg); }
@@ -3483,6 +3491,9 @@ html[data-theme="light"] .auroraDailyCard .auroraInlineBtn {
 .mineHistoryEmpty { padding:9px 0 2px; color:#748c99; font-size:10px; text-align:center; }
 html[data-theme="silver"] .mineConsole { color:#182638; border-color:rgba(71,85,105,.25); background:radial-gradient(circle at 92% 0%,rgba(148,163,184,.32),transparent 34%),linear-gradient(150deg,#eef2f7,#cbd5e1 58%,#e2e8f0); box-shadow:0 18px 42px rgba(51,65,85,.15),inset 0 1px 0 rgba(255,255,255,.8); }
 html[data-theme="silver"] .mineConsole::before { border-color:rgba(71,85,105,.16); box-shadow:0 0 0 22px rgba(71,85,105,.04),0 0 0 44px rgba(71,85,105,.025); }
+html[data-theme="silver"] .mineEmptyState p { color:#334155; }
+html[data-theme="silver"] .mineEmptyIcon { color:#0369a1; border-color:rgba(3,105,161,.3); }
+html[data-theme="silver"] .mineEmptySpinner { border-color:rgba(3,105,161,.2); border-top-color:#0369a1; }
 html[data-theme="silver"] .mineBrand h2,html[data-theme="silver"] .mineCounter strong { color:#172033; text-shadow:none; }
 html[data-theme="silver"] .mineEyebrow,html[data-theme="silver"] .mineCounter b { color:#0369a1; }
 html[data-theme="silver"] .mineBrand small,html[data-theme="silver"] .mineCounter span,html[data-theme="silver"] .mineProgressMeta,html[data-theme="silver"] .mineMetric span,html[data-theme="silver"] .mineBoostLine { color:#475569; }
@@ -3492,4 +3503,3 @@ html[data-theme="silver"] .mineStatus { color:#166534; background:rgba(134,239,1
 html[data-theme="silver"] .mineProgressTrack { border-color:rgba(71,85,105,.18); background:rgba(71,85,105,.12); }
 html[data-theme="silver"] .mineBoostAction { color:#4338ca; border-color:rgba(67,56,202,.2); background:rgba(99,102,241,.1); }
 @media(max-width:390px){.mineConsole{padding:15px 12px}.mineStatus{padding-inline:7px;font-size:8px}.mineBrand h2{font-size:18px}.mineCounter strong{font-size:36px}.mineMetrics{gap:6px}.mineMetric{padding-inline:8px}}
-
