@@ -26,39 +26,24 @@ const state = {
   activeTab: "home",
   language: "fa",
   user: null,
+  phoneVerificationRequired: false,
+  phoneCountryCode: "",
+  phoneContactRequestSent: false,
   referralMessageConsent: "unset",
   points: 0,
   gramBalance: 0,
-  chainGramBalance: null,
   rate: 0,
   streak: 0,
   canCheckIn: false,
   totalCheckins: 0,
   minWithdrawGram: 0,
   nextResetAt: 0,
-  spinLastClaimAt: null,
-  tickets: 0,
-  spinBusy: false,
-  spinEnabled: true,
-  spinRequiredStreak: 7,
-  spinPrizes: [],
-  streakMissed: false,
-  streakMissedDays: 0,
-  streakFreezeCost: 20,
-  missedStreakPrompted: false,
-  spinModalOpen: false,
-  miningBoostUntil: null,
   referralCode: "",
   shareLink: "",
   referralTelegramId: "",
   referralMiniAppConfigured: false,
   referralLevelRates: [],
   referralStats: null,
-  squadsLoaded: false,
-  squadsLoading: false,
-  squads: [],
-  mySquad: null,
-  squadsError: "",
   referralTeam: [],
   referralLoading: false,
   referralDataLoaded: false,
@@ -95,9 +80,6 @@ const state = {
   vipLoading: false,
   vipError: "",
   vipServerOffsetMs: 0,
-  vipServerNowMs: 0,
-  mining: null,
-  miningLoading: false,
   captchaA: 0,
   captchaB: 0,
   initialized: false,
@@ -135,7 +117,7 @@ function updateReadModelFreshness() {
   const protectedSelectors = [
     "#checkinBtn", "#submitWithdraw", "#submitExchange", "#depositVerifyButton",
     "[data-verify]", "[data-latest-post-open]", "[data-latest-post-check]",
-    "[data-upload-screenshot]", "[data-referral-claim]", "[data-vip-claim]", "[data-vip-claim-all]", ".vipClaimAll"
+    "[data-upload-screenshot]", "[data-referral-claim]", "[data-vip-claim]", ".vipClaimAll"
   ].join(",");
   document.querySelectorAll(protectedSelectors).forEach(element => {
     if (state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed) {
@@ -171,7 +153,7 @@ function readModelActionAllowed() {
 function guardReadModelAction(event) {
   if (!state.readModelStale && state.financialDataConfirmed && state.membershipDataConfirmed) return;
   const target = event.target?.closest?.(
-    "#checkinBtn,#submitWithdraw,#submitExchange,#depositVerifyButton,[data-verify],[data-latest-post-open],[data-latest-post-check],[data-upload-screenshot],[data-referral-claim],[data-vip-claim],[data-vip-claim-all],.vipClaimAll"
+    "#checkinBtn,#submitWithdraw,#submitExchange,#depositVerifyButton,[data-verify],[data-latest-post-open],[data-latest-post-check],[data-upload-screenshot],[data-referral-claim],[data-vip-claim],.vipClaimAll"
   );
   if (!target) return;
   event.preventDefault();
@@ -198,7 +180,6 @@ function getTelegramUser() {
 
 /* ================= LOCAL STORAGE / THEME ================= */
 const THEME_KEY = "miniAppTheme";
-const THEME_PERSIST_KEY = "gramup_theme";
 
 /*
  * Theme registry: add future themes here first. The renderer, persistence,
@@ -208,12 +189,11 @@ const THEME_PERSIST_KEY = "gramup_theme";
 const THEME_REGISTRY = Object.freeze({
   midnight: Object.freeze({ labelKey: "theme_midnight", icon: "🌙", chrome: "#050609", cssTheme: "midnight" }),
   aurora: Object.freeze({ labelKey: "theme_aurora", icon: "🌌", chrome: "#06151b", cssTheme: "aurora" }),
-  pearl: Object.freeze({ labelKey: "theme_pearl", icon: "☀️", chrome: "#f8fafc", cssTheme: "light" }),
-  silver: Object.freeze({ labelKey: "theme_silver", icon: "🩶", chrome: "#dfe4e9", cssTheme: "silver" })
+  pearl: Object.freeze({ labelKey: "theme_pearl", icon: "☀️", chrome: "#f8fafc", cssTheme: "light" })
 });
 const VALID_THEMES = Object.freeze(Object.keys(THEME_REGISTRY));
 function getTheme() {
-  const saved = localStorage.getItem(THEME_PERSIST_KEY) || localStorage.getItem(THEME_KEY);
+  const saved = localStorage.getItem(THEME_KEY);
   return VALID_THEMES.includes(saved) ? saved : "midnight";
 }
 function applyTheme(theme) {
@@ -223,7 +203,6 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = definition.cssTheme;
   document.documentElement.dataset.themeName = selected;
   localStorage.setItem(THEME_KEY, selected);
-  localStorage.setItem(THEME_PERSIST_KEY, selected);
   try {
     if (tg && tg.setHeaderColor) tg.setHeaderColor(definition.chrome);
     if (tg && tg.setBackgroundColor) tg.setBackgroundColor(definition.chrome);
@@ -300,16 +279,6 @@ function escapeHTML(value) {
 function formatPoints(value) {
   const amount = Number(value) || 0;
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Number(amount.toFixed(2)));
-}
-function tokenIconMarkup() {
-  return '<img class="upTokenIcon" src="img/gramup-logo-new.png" alt="" aria-hidden="true">';
-}
-function gramTokenIconMarkup() {
-  return '<img class="gramTokenIcon" src="img/gram-logo.svg" alt="GRAM" aria-hidden="true">';
-}
-function tokenAmount(value, decimals = 2) {
-  const amount = Number(value) || 0;
-  return `<span class="upTokenAmount"><span>${new Intl.NumberFormat("en-US", { maximumFractionDigits: decimals }).format(Number(amount.toFixed(decimals)))}</span>${tokenIconMarkup()}<span>UP</span></span>`;
 }
 function formatNumber(value, decimals = 4) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: decimals }).format(Number(value) || 0);
@@ -424,7 +393,6 @@ async function api(url, options = {}) {
     err.code = data?.code || (response.status === 401 ? 'AUTH_REQUIRED' : response.status === 403 ? 'AUTH_FORBIDDEN' : null);
     err.status = response.status;
     err.authFailure = authFailure;
-    err.response = { data, status: response.status };
     throw err;
   }
   return data;
@@ -482,7 +450,6 @@ function updateHeader() {
   }
   const uid = user.id || user.telegramId || "";
   if (idLine) idLine.textContent = uid ? `ID ${uid}` : "";
-  updateSpinControls();
 }
 
 function applyDirection() {
@@ -520,7 +487,7 @@ function setupNavigation() {
     button.addEventListener("click", () => {
       const tab = button.dataset.tab;
       if (!tab) return;
-      haptic("light");
+      haptic("selection");
       navigate(tab);
     });
   });
@@ -534,6 +501,10 @@ function updateNavigation() {
 }
 let navigationSequence = 0;
 async function navigate(tab) {
+  if (state.phoneVerificationRequired) {
+    renderPhoneVerificationGate();
+    return;
+  }
   const requestId = ++navigationSequence;
   if (tab !== "profile") profileRenderSequence += 1;
   const validTabs = ["home", "tasks", "vip", "wallet", "profile"];
@@ -748,7 +719,6 @@ function termsAccepted() {
 }
 function showTerms() {
   const overlay = $("#termsOverlay");
-  haptic("light");
   if (overlay) overlay.style.display = "flex";
 }
 function hideTerms() {
@@ -763,7 +733,6 @@ window.showTerms = showTerms;
 /* ================= PRIVACY POLICY ================= */
 function showPrivacy() {
   const overlay = $("#privacyOverlay");
-  haptic("light");
   if (overlay) overlay.style.display = "flex";
 }
 function hidePrivacy() {
@@ -787,7 +756,6 @@ function maybeShowOnboarding() {
   if (onboardingSeen()) return;
   onboardingStep = 0;
   const overlay = $("#onboardingOverlay");
-  haptic("light");
   if (overlay) overlay.style.display = "flex";
   renderOnboardingStep();
 }
@@ -828,7 +796,6 @@ window.skipOnboarding = skipOnboarding;
 window.showOnboarding = () => {
   onboardingStep = 0;
   const overlay = $("#onboardingOverlay");
-  haptic("light");
   if (overlay) overlay.style.display = "flex";
   renderOnboardingStep();
 };
@@ -851,7 +818,6 @@ function showCaptcha() {
   const overlay = $("#captchaOverlay");
   if (!overlay) return;
   createCaptcha();
-  haptic("light");
   overlay.style.display = "flex";
 }
 function hideCaptcha() {
@@ -881,7 +847,6 @@ window.submitCaptcha = submitCaptcha;
 /* ================= LANGUAGE ================= */
 function showLanguageOverlay() {
   const overlay = $("#languageOverlay");
-  haptic("light");
   if (overlay) overlay.style.display = "flex";
 }
 window.showLanguageOverlay = showLanguageOverlay;
@@ -930,7 +895,6 @@ function showReferralMessageConsent(required = false) {
   if (status) status.textContent = t("referral_message_consent_status", { status: t(stateKey) });
   const feedback = $("#referralMessageConsentFeedback");
   if (feedback) feedback.textContent = "";
-  haptic("light");
   overlay.style.display = "flex";
 }
 window.showReferralMessageConsent = showReferralMessageConsent;
@@ -975,15 +939,6 @@ function applyCachedReadModel(entry) {
   state.totalCheckins = Number(profile.totalCheckins) || 0;
   state.minWithdrawGram = Number(profile.minWithdrawGram) || 0;
   state.nextResetAt = Number(profile.nextResetAt) || 0;
-  state.spinLastClaimAt = profile.spinLastClaimAt || null;
-  state.tickets = Number(profile.tickets) || 0;
-  state.spinEnabled = profile.spinEnabled !== false;
-  state.spinRequiredStreak = Number(profile.spinRequiredStreak) || 7;
-  state.spinPrizes = Array.isArray(profile.spinPrizes) ? profile.spinPrizes : [];
-  state.streakMissed = Boolean(profile.streakMissed);
-  state.streakMissedDays = Number(profile.streakMissedDays) || 0;
-  state.streakFreezeCost = Number(profile.streakFreezeCost) || 20;
-  state.miningBoostUntil = profile.miningBoostUntil || null;
   state.totalEarnedPoints = Number(profile.totalEarnedPoints) || 0;
   state.level = profile.level || null;
   state.withdrawalProgress = Number(profile.withdrawalProgress) || 0;
@@ -1021,7 +976,6 @@ function persistReadModelCache() {
       points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
       canCheckIn: state.canCheckIn, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
-      spinLastClaimAt: state.spinLastClaimAt, tickets: state.tickets, spinEnabled: state.spinEnabled, spinRequiredStreak: state.spinRequiredStreak, miningBoostUntil: state.miningBoostUntil,
       withdrawalProgress: state.withdrawalProgress, withdrawalRemainingGram: state.withdrawalRemainingGram,
       gramUsdPrice: state.gramUsdPrice, firstName: state.user?.first_name || ""
     },
@@ -1069,6 +1023,8 @@ async function bootstrapAuth() {
   try {
     const data = await api(url);
     state.language = localStorage.getItem("appLanguage") || data.language || "fa";
+    state.phoneVerificationRequired = Boolean(data.phoneVerificationRequired);
+    state.phoneCountryCode = data.phoneCountryCode || "";
     state.referralMessageConsent = ["granted", "denied", "unset"].includes(data.referralMessageConsent)
       ? data.referralMessageConsent : "unset";
     state.user = { ...(state.user || {}), id: data.telegramId, telegramId: data.telegramId };
@@ -1081,6 +1037,70 @@ async function bootstrapAuth() {
     state.language = localStorage.getItem("appLanguage") || "fa";
   }
 }
+
+function renderPhoneVerificationGate(messageKey = "") {
+  if (!state.phoneVerificationRequired) return;
+  document.body.classList.add("phone-verification-required");
+  const content = $("#content");
+  if (!content) return;
+  content.innerHTML = `
+    <section class="phoneGate card" role="region" aria-labelledby="phoneGateTitle">
+      <div class="phoneGateIcon" aria-hidden="true">☎</div>
+      <span class="modalEyebrow">${t("phone_gate_eyebrow")}</span>
+      <h1 id="phoneGateTitle" class="phoneGateTitle">${t("phone_gate_title")}</h1>
+      <p class="phoneGateText">${t("phone_gate_desc")}</p>
+      <div class="phoneGateCodes" dir="ltr">+93 <span>·</span> +98</div>
+      <p class="phoneGatePrivacy">${t("phone_gate_privacy")}</p>
+      <div id="phoneGateMessage" class="phoneGateMessage" role="status" aria-live="polite">${messageKey ? t(messageKey) : (state.phoneContactRequestSent ? t("phone_gate_sent") : "")}</div>
+      <div class="phoneGateActions">
+        <button type="button" class="primaryBtn" onclick="requestPhoneContact()">${t("phone_gate_share")}</button>
+        <button type="button" class="secondaryBtn" onclick="refreshPhoneVerification()">${t("phone_gate_check")}</button>
+        <button type="button" class="textBtn" onclick="showLanguageOverlay()">${t("menu_language")}</button>
+      </div>
+    </section>`;
+}
+
+async function requestPhoneContact() {
+  try {
+    const data = await api("/api/auth/request-phone-contact", { method: "POST" });
+    if (data.alreadyVerified) return refreshPhoneVerification();
+    state.phoneContactRequestSent = true;
+    renderPhoneVerificationGate("phone_gate_sent");
+    if (data.botUrl) {
+      if (tg && typeof tg.openTelegramLink === "function") tg.openTelegramLink(data.botUrl);
+      else window.open(data.botUrl, "_blank", "noopener");
+    }
+  } catch (error) {
+    const node = $("#phoneGateMessage");
+    if (node) node.textContent = t("phone_gate_error");
+  }
+}
+window.requestPhoneContact = requestPhoneContact;
+
+async function refreshPhoneVerification() {
+  const button = $(".phoneGateActions .secondaryBtn");
+  if (button) button.disabled = true;
+  try {
+    const data = await api("/api/auth/me");
+    if (!data.phoneVerificationRequired) {
+      state.phoneVerificationRequired = false;
+      state.phoneCountryCode = data.phoneCountryCode || "";
+      state.referralMessageConsent = data.referralMessageConsent || "unset";
+      document.body.classList.remove("phone-verification-required");
+      state.initialized = false;
+      await boot();
+      return;
+    }
+    const node = $("#phoneGateMessage");
+    if (node) node.textContent = t("phone_gate_pending");
+  } catch (error) {
+    const node = $("#phoneGateMessage");
+    if (node) node.textContent = t("phone_gate_error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+window.refreshPhoneVerification = refreshPhoneVerification;
 
 const CLIENT_DATA_TTL_MS = 15000;
 let userDataRequestSequence = 0;
@@ -1097,15 +1117,6 @@ async function loadUserData({ force = false } = {}) {
   state.totalCheckins = Number(data?.totalCheckins) || 0;
   state.minWithdrawGram = Number(data?.minWithdrawGram) || 0;
   state.nextResetAt = Number(data?.nextResetAt) || 0;
-  state.spinLastClaimAt = data?.spinLastClaimAt || null;
-  state.tickets = Number(data?.tickets) || 0;
-  state.spinEnabled = data?.spinEnabled !== false;
-  state.spinRequiredStreak = Number(data?.spinRequiredStreak) || 7;
-  state.spinPrizes = Array.isArray(data?.spinPrizes) ? data.spinPrizes : [];
-  state.streakMissed = Boolean(data?.streakMissed);
-  state.streakMissedDays = Number(data?.streakMissedDays) || 0;
-  state.streakFreezeCost = Number(data?.streakFreezeCost) || 20;
-  state.miningBoostUntil = data?.miningBoostUntil || null;
   state.totalEarnedPoints = Number(data?.totalEarnedPoints) || 0;
   state.level = data?.level || null;
   state.withdrawalProgress = Number(data?.withdrawalProgress) || 0;
@@ -1126,7 +1137,9 @@ function rerenderActiveUserDataView() {
   else if (state.activeTab === "wallet") renderWallet();
   else if (state.activeTab === "vip") {
     const content = $("#content");
-    if (content) content.innerHTML = renderProfileVip();
+    if (content) content.innerHTML = state.vipError
+      ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondaryBtn" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
+      : renderProfileVip();
     startVipCountdown();
   } else if (state.activeTab === "profile") {
     void renderProfile();
@@ -1176,8 +1189,7 @@ async function loadReferralData({ force = false } = {}) {
     state.referralHistory = Array.isArray(data?.referralHistory) ? data.referralHistory : [];
     state.referralNetworkLevels = Array.isArray(data?.networkLevels) ? data.networkLevels : [];
     state.referralTeam = Array.isArray(data?.team) ? data.team : [];
-    const directInviteCount = Number(data?.referralStats?.totalReferrals ?? data?.invitedCount);
-    state.invitedCount = Number.isFinite(directInviteCount) && directInviteCount >= 0 ? directInviteCount : 0;
+    state.invitedCount = Number(data?.invitedCount) || 0;
     state.activeInvitedCount = Number(data?.activeInvitedCount) || 0;
     state.invited = Array.isArray(data?.invited) ? data.invited : [];
     state.referralMinTasks = Number(data?.referralMinTasks) || 2;
@@ -1191,7 +1203,7 @@ async function loadReferralData({ force = false } = {}) {
   } finally {
     if (requestId !== referralDataRequestSequence) return;
     state.referralLoading = false;
-    if (state.activeTab === "profile" && (profileView === "referral" || profileView === "menu")) renderProfile();
+    if (state.activeTab === "profile" && profileView === "referral") renderProfile();
     else if (state.activeTab === "home") renderHome();
     else if (state.activeTab === "tasks") renderTasks();
   }
@@ -1237,54 +1249,8 @@ function setTaskSection(section) {
   renderTasks();
 }
 window.setTaskSection = setTaskSection;
-async function loadSquads({ force = false } = {}) {
-  if (state.squadsLoading || (!force && state.squadsLoaded)) return;
-  state.squadsLoading = true;
-  state.squadsError = "";
-  try {
-    const data = await api("/api/squads");
-    state.squads = Array.isArray(data?.leaderboard) ? data.leaderboard : [];
-    state.mySquad = data?.squad || null;
-    state.squadsLoaded = true;
-  } catch (error) {
-    state.squadsError = error?.message || t("squad_load_error");
-  } finally {
-    state.squadsLoading = false;
-    if (state.activeTab === "tasks" && state.taskSection === "invite") renderTasks();
-    if (state.activeTab === "profile" && profileView === "groups") renderProfile();
-  }
-}
-function renderSquadsCard() {
-  const leaderboard = state.squads.map(row => `<li class="squadRankRow"><span>#${formatPoints(row.rank)}</span><strong>${escapeHTML(row.title)}</strong><a href="${escapeHTML(row.url)}" target="_blank" rel="noopener">@${escapeHTML(row.username)}</a><b>${tokenAmount(Number(row.score) || 0)} UP</b><small>${formatPoints(row.membersCount)} ${t("squad_members")}</small></li>`).join("");
-  const mySquad = state.mySquad ? `<div class="squadCurrent"><strong>${escapeHTML(state.mySquad.title)}</strong><a href="${escapeHTML(state.mySquad.url)}" target="_blank" rel="noopener">@${escapeHTML(state.mySquad.username)}</a><button type="button" class="secondaryBtn" onclick="leaveSquad()">${t("squad_leave")}</button></div>` : "";
-  return `<section class="card squadPanel"><div class="cardHeader"><div class="cardTitle">${t("squad_title")}</div><button type="button" class="secondaryBtn" onclick="loadSquads({force:true})">${t("squad_refresh")}</button></div><p class="cardSubtitle">${t("squad_desc")}</p>${state.squadsError ? `<p class="errorText">${escapeHTML(state.squadsError)}</p>` : ""}${mySquad}<div class="squadForm"><input id="squadTelegramLink" type="text" maxlength="200" placeholder="${escapeHTML(t("squad_link_placeholder"))}" autocomplete="off"><input id="squadTitleInput" type="text" maxlength="64" placeholder="${escapeHTML(t("squad_name_placeholder"))}" autocomplete="off"><div class="squadActions"><button type="button" class="primaryBtn" onclick="createSquad()" ${state.mySquad ? "disabled" : ""}>${t("squad_create")}</button><button type="button" class="secondaryBtn" onclick="joinSquad()" ${state.mySquad ? "disabled" : ""}>${t("squad_join")}</button></div></div><h3>${t("squad_top20")}</h3>${leaderboard ? `<ol class="squadLeaderboard">${leaderboard}</ol>` : `<p class="emptyDesc">${state.squadsLoading ? t("history_loading") : t("squad_empty")}</p>`}</section>`;
-}
-function renderReferralTierSummary() {
-  const stats = state.referralStats || {};
-  const numberOrDash = value => state.referralDataLoaded ? formatNumber(Number(value) || 0) : "—";
-  const amountOrDash = value => state.referralDataLoaded ? tokenAmount(Number(value) || 0) : "—";
-  return `<section class="card referralTierSummary"><div class="cardHeader"><div class="cardTitle">${t("referral_team_commission_title")}</div></div><div class="squadCurrent"><span><strong>${t("referral_tier1_members")}</strong><small> · 10% · ${numberOrDash(stats.tier1Members)} ${t("referral_members_label")}</small></span><b>${amountOrDash(stats.miningCommissionByTier?.["1"])} UP</b></div><div class="squadCurrent" style="margin-top:8px"><span><strong>${t("referral_tier2_members")}</strong><small> · 2.5% · ${numberOrDash(stats.tier2Members)} ${t("referral_members_label")}</small></span><b>${amountOrDash(stats.miningCommissionByTier?.["2"])} UP</b></div></section>`;
-}
-async function createSquad() {
-  const telegramLink = document.getElementById("squadTelegramLink")?.value.trim();
-  const title = document.getElementById("squadTitleInput")?.value.trim();
-  try { await api("/api/squads", { method: "POST", body: JSON.stringify({ telegramLink, title }) }); toast(t("squad_created"), "success"); await loadSquads({ force: true }); }
-  catch (error) { toast(error.message || t("error_generic"), "error"); }
-}
-async function joinSquad() {
-  const telegramLink = document.getElementById("squadTelegramLink")?.value.trim();
-  try { await api("/api/squads/join", { method: "POST", body: JSON.stringify({ telegramLink }) }); toast(t("squad_joined"), "success"); await loadSquads({ force: true }); }
-  catch (error) { toast(error.message || t("error_generic"), "error"); }
-}
-async function leaveSquad() {
-  if (!confirm(t("squad_leave_confirm"))) return;
-  try { await api("/api/squads/me", { method: "DELETE" }); toast(t("squad_left"), "success"); await loadSquads({ force: true }); }
-  catch (error) { toast(error.message || t("error_generic"), "error"); }
-}
-window.loadSquads = loadSquads;
-window.createSquad = createSquad;
-window.joinSquad = joinSquad;
-window.leaveSquad = leaveSquad;
+
+
 let tasksRequestSequence = 0;
 let tasksLoadError = null;
 async function loadTasks({ force = false } = {}) {
@@ -1327,7 +1293,6 @@ const LEDGER_TYPE_UI = {
   task: { icon: "✅" },
   checkin: { icon: "📅" },
   spin: { icon: "🎡" },
-  spin_paid: { icon: "🎡" },
   referral_bonus: { icon: "👥" },
   referral_initial: { icon: "🎁" },
   referral_commission: { icon: "💸" },
@@ -1417,351 +1382,6 @@ async function loadWeeklyLeaderboard() {
 }
 
 /* ================= HOME ================= */
-function updateSpinHeaderStats() {
-  const enabled = state.spinEnabled;
-  const tickets = document.querySelector('[data-spin-tickets]');
-  const balance = document.querySelector('[data-spin-balance]');
-  const status = document.querySelector('[data-spin-status]');
-  const paidButton = document.querySelector('[data-paid-spin]');
-  const paymentNotice = document.querySelector('[data-spin-payment-notice]');
-  if (tickets) tickets.textContent = formatNumber(Number(state.tickets) || 0);
-  if (balance) balance.innerHTML = `<span class="spinBalanceAmount">${escapeHTML(formatPoints(state.points))}</span>${tokenIconMarkup()}<span class="spinBalanceUnit">UP</span>`;
-  if (paidButton) paidButton.disabled = !enabled || state.spinBusy || Number(state.points) < 50;
-  if (paymentNotice) {
-    paymentNotice.hidden = Number(state.points) >= 50;
-    paymentNotice.textContent = paymentNotice.hidden ? '' : t('spin_insufficient_balance', {}, 'You need at least 50 UP to spin.');
-  }
-  if (status) { status.textContent = enabled ? t('spin_ready', {}, 'READY') : t('spin_disabled', {}, 'OFF'); status.className = `spinHeaderStatValue ${enabled ? 'is-ready' : ''}`; }
-}
-const DEFAULT_SPIN_WHEEL_SLICES = Object.freeze([
-  Object.freeze({ id: 'hashrate_boost_10_1h', kind: 'boost', amount: 10, label: '10% Mining Hashrate Boost' }),
-  Object.freeze({ id: 'gram_005', kind: 'gram', amount: 0.05, label: '+0.05 GRAM' }),
-  Object.freeze({ id: 'up_0', kind: 'points', amount: 0, label: '0 UP' }),
-  Object.freeze({ id: 'up_50', kind: 'points', amount: 50, label: '+50 UP' }),
-  Object.freeze({ id: 'up_100', kind: 'points', amount: 100, label: '+100 UP' }),
-  Object.freeze({ id: 'up_250', kind: 'points', amount: 250, label: '+250 UP' })
-]);
-function spinPrizeLabel(prizeId, amount) {
-  if (prizeId === 'up_0') return t('spin_prize_zero_up', {}, '0 UP');
-  if (["up_50", "up_100", "up_250", "up_20"].includes(prizeId)) return t("spin_prize_up", { n: formatPoints(amount) });
-  if (prizeId === "hashrate_boost_10_1h") return t("spin_prize_boost_10");
-  if (prizeId === "gram_005") return t("spin_prize_gram", { n: formatNumber(amount, 2) });
-  const configuredPrize = state.spinPrizes.find(prize => String(prize?.id || '') === String(prizeId));
-  return configuredPrize?.label || t("spin_prize_try_again");
-}
-function spinSliceText(prize, index) {
-  const fixedText = {
-    hashrate_boost_10_1h: ["10%", "Mining"], gram_005: ["+0.05", "GRAM"],
-    up_0: ["0", "UP"], up_50: ["+50", "UP"], up_100: ["+100", "UP"],
-    up_250: ["+250", "UP"]
-  };
-  if (fixedText[prize?.id]) return fixedText[prize.id];
-  const fallback = ["", ""];
-  const label = String(prize?.label || '').trim();
-  if (!label) return fallback;
-  const match = label.match(/^(\S+)\s+(.+)$/);
-  return match ? [match[1], match[2]] : [label, ''];
-}
-function updateSpinControls() {
-  updateSpinHeaderStats();
-  const label = document.querySelector("[data-spin-availability]");
-  const button = document.querySelector("#spinButton");
-  if (!label || !button) return;
-  const tickets = Number(state.tickets) || 0;
-  if (!state.spinEnabled) {
-    label.textContent = t('spin_disabled', {}, 'Lucky Spin is currently unavailable');
-    button.disabled = true;
-    button.classList.add('is-locked');
-    button.textContent = t('spin_spin_now', {}, 'SPIN NOW');
-    return;
-  }
-  label.textContent = tickets > 0
-    ? t('spin_ticket_ready', { count: tickets }, `${tickets} free spin ticket${tickets === 1 ? '' : 's'} ready`)
-    : t('spin_ticket_after_streak', { days: state.spinRequiredStreak }, `Complete a ${state.spinRequiredStreak}-day streak to get 1 free spin`);
-  button.classList.toggle('is-locked', tickets < 1);
-  button.disabled = state.spinBusy || tickets < 1;
-  button.textContent = state.spinBusy ? t("spin_spinning") : t('spin_spin_now', {}, 'SPIN NOW');
-}
-function renderLuckySpin() {
-  const enabled = state.spinEnabled;
-  const tickets = Number(state.tickets) || 0;
-  const prizes = Array.isArray(state.spinPrizes) && state.spinPrizes.length === DEFAULT_SPIN_WHEEL_SLICES.length
-    ? state.spinPrizes : DEFAULT_SPIN_WHEEL_SLICES;
-  const buttonLocked = !enabled || tickets < 1;
-  const buttonLabel = t('spin_spin_now', {}, 'SPIN NOW');
-  const rewardIcon = (_prize, index) => {
-    if (_prize?.kind === 'spins') return `<svg class="spinRewardIcon spinRewardIcon--extra" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M4.9 9a8 8 0 0 1 13.2-2L20 12M4 17v-5h5"/><path d="M19.1 15a8 8 0 0 1-13.2 2L4 12"/></svg>`;
-    if (_prize?.kind === 'boost') return `<svg class="spinRewardIcon spinRewardIcon--boost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8.2c5.1-5.1 12.9-5.1 18 0l-3.7 3.7c-3-3-7.6-3-10.6 0L3.2 8.2Z"/><path d="m8.5 13.5 10 10M5.5 16.5l-3 3"/></svg>`;
-    if (_prize?.id === 'gram_005' || _prize?.kind === 'gram') return '<img class="spinRewardIcon spinRewardIcon--gram" src="/img/gram-logo.svg" alt="GRAM" aria-hidden="true">';
-    return `<img class="spinRewardIcon spinRewardIcon--up" src="/img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">`;
-  };
-  return `<section class="spinCard ${enabled ? '' : 'is-locked'}" aria-label="${t("spin_aria")}">
-    <div class="spinWinnersMarquee" data-spin-winners hidden role="region" aria-label="${escapeHTML(t('spin_winners_latest', {}, 'Recent winners:'))}"><strong class="spinWinnersLabel">${escapeHTML(t('spin_winners_latest', {}, 'Recent winners:'))}</strong><div class="spinWinnersViewport"><div class="spinWinnersTrack" data-spin-winners-track></div></div></div>
-    <div class="spinStage"><div class="spinPointer" aria-hidden="true"><i></i><b></b></div><div id="spinWheel" class="spinWheel" role="img" aria-label="${t("spin_aria")}"><div class="spinRimGeometry" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div><div class="spinRivets" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i style="--r:${i * 30}deg"></i>`).join("")}</div>${prizes.map((prize, index) => { const [top, bottom] = spinSliceText(prize, index); return `<span class="spinSliceLabel" style="--i:${index}">${rewardIcon(prize, index)}<b>${escapeHTML(top)}</b><small>${escapeHTML(bottom)}</small></span>`; }).join("")}<div class="spinWheelHub" aria-hidden="true"><img class="spinHubLogo" src="/img/gramup-logo-cube-transparent.png" alt=""></div></div></div>
-    <div class="spinFooter"><span class="spinAvailability" data-spin-availability>${tickets > 0 ? t('spin_ticket_ready', { count: tickets }, `${tickets} free spin ticket${tickets === 1 ? '' : 's'} ready`) : t('spin_ticket_after_streak', { days: state.spinRequiredStreak }, `Complete a ${state.spinRequiredStreak}-day streak to get 1 free spin`)}</span><button id="spinButton" class="primaryBtn spinButton ${buttonLocked ? 'is-locked' : ''}" type="button" onclick="doSpin()" ${buttonLocked ? "disabled" : ""}>${buttonLabel}</button><button type="button" class="spinPaidButton" data-paid-spin onclick="paySpinAlternative()" ${!enabled || state.spinBusy || state.points < 50 ? "disabled" : ""}>${t('spin_pay_50', {}, 'Pay 50 UP to Spin')}</button><small class="spinBalanceNotice" data-spin-payment-notice role="alert" hidden></small></div>
-    <div id="spinResult" class="spinResult" role="status" aria-live="polite"></div>
-  </section>`;
-}
-function renderLuckySpinBanner() {
-  const enabled = state.spinEnabled;
-  const tickets = Number(state.tickets) || 0;
-  const subtitle = !enabled
-    ? t('spin_disabled', {}, 'Lucky Spin is currently unavailable')
-    : tickets > 0
-      ? t('spin_ticket_ready', { count: tickets }, `${tickets} free spin ticket${tickets === 1 ? '' : 's'} ready`)
-      : t('spin_ticket_after_streak', { days: state.spinRequiredStreak }, `Complete a ${state.spinRequiredStreak}-day streak to get 1 free spin`);
-  const status = enabled
-    ? `<span class="spinLaunchStatus is-ready">${t('spin_ready', {}, 'Ready')}</span>`
-    : `<span class="spinLaunchStatus">${t('spin_disabled', {}, 'Unavailable')}</span>`;
-  const lock = '';
-  const canOpen = state.spinEnabled;
-  return `<section class="spinLaunchCard ${enabled ? 'is-ready' : 'is-locked'}" aria-labelledby="spinLaunchTitle">
-    <div class="spinLaunchIcon" aria-hidden="true"><span class="spinLaunchWheel"><i></i><i></i><i></i><i></i><i></i><i></i><b>✦</b></span></div>
-    <div class="spinLaunchCopy"><strong id="spinLaunchTitle">${t('spin_title')}</strong><small>${subtitle}</small></div>
-    <div class="spinLaunchAction">${status}<button class="spinLaunchButton" type="button" onclick="${canOpen ? 'openLuckySpin()' : ''}" ${canOpen ? '' : 'disabled'}>${lock}${t('spin_spin_button', {}, 'Open')}</button></div>
-  </section>`;
-}
-function closeLuckySpin() { const overlay = document.querySelector('#luckySpinOverlay'); if (overlay) overlay.remove(); document.body.classList.remove('luckySpinOpen'); state.spinModalOpen = false; }
-function openLuckySpin() {
-  if (!state.spinEnabled) return;
-  haptic("light");
-  closeLuckySpin();
-  const overlay = document.createElement('div'); overlay.id = 'luckySpinOverlay'; overlay.className = 'luckySpinScreen';
-  overlay.innerHTML = `<main class="luckySpinPage" aria-label="Lucky Spin"><header class="luckySpinPageHeader"><div class="spinBrand"><img src="/img/gramup-logo-cube-transparent.png" alt="Gramup"><div class="spinBrandCopy"><strong>Gramup Spinner</strong><small>Collect tickets, spin the wheel!</small></div></div><button class="luckySpinClose" type="button" onclick="closeLuckySpin()" aria-label="Close">×</button></header><div class="spinHeaderStats" aria-label="Lucky Spin status"><div class="spinHeaderStat"><span>STATUS</span><strong data-spin-status>READY</strong></div><div class="spinHeaderStat"><span>${t('spin_balance_label', {}, 'UP BALANCE')}</span><strong class="spinHeaderBalance" data-spin-balance></strong></div><div class="spinHeaderStat"><span>TICKETS</span><strong data-spin-tickets>0</strong></div></div><div class="luckySpinPageBody">${renderLuckySpin()}</div></main>`;
-  document.body.appendChild(overlay); document.body.classList.add('luckySpinOpen'); state.spinModalOpen = true; updateSpinControls(); loadSpinWinners();
-}
-window.openLuckySpin = openLuckySpin; window.closeLuckySpin = closeLuckySpin;
-function prepareSpinAudio() {
-  try { window.GramupGamification?.prepareAudio?.(); } catch { /* optional audio must not block a spin */ }
-}
-function populateSpinWinners(winners) {
-  const marquee = document.querySelector('[data-spin-winners]');
-  const track = marquee?.querySelector('[data-spin-winners-track]');
-  if (!marquee || !track) return;
-  track.replaceChildren();
-  if (!Array.isArray(winners) || winners.length === 0) { marquee.hidden = true; return; }
-  const group = document.createElement('div');
-  group.className = 'spinWinnersGroup';
-  for (const winner of winners) {
-    const item = document.createElement('span');
-    item.className = 'spinWinnerItem';
-    const name = document.createElement('strong');
-    name.textContent = String(winner?.name || 'User ***');
-    const won = document.createElement('span');
-    won.textContent = t('spin_winner_won', {}, 'won:');
-    const prize = document.createElement('b');
-    prize.textContent = spinPrizeLabel(String(winner?.prizeId || ''), Number(winner?.amount) || 0);
-    item.append(name, won, prize);
-    group.appendChild(item);
-  }
-  track.append(group, group.cloneNode(true));
-  track.lastElementChild?.setAttribute('aria-hidden', 'true');
-  marquee.hidden = group.childElementCount === 0;
-}
-async function loadSpinWinners() {
-  try {
-    const result = await api('/api/points/spin/recent-winners');
-    populateSpinWinners(result?.winners);
-  } catch {
-    populateSpinWinners([]);
-  }
-}
-function spinTickFeedback() {
-  const feedback = window.GramupGamification;
-  if (!feedback) return;
-  try { feedback.playTickSound?.(); feedback.triggerHaptic?.('tick'); } catch { /* optional feedback */ }
-}
-function spinWinFeedback() {
-  const feedback = window.GramupGamification;
-  if (!feedback) { haptic('success'); return; }
-  try { feedback.playWinSound?.(); feedback.triggerHaptic?.('win'); } catch { haptic('success'); }
-}
-function spinWheelRotationDegrees(wheel) {
-  const transform = getComputedStyle(wheel).transform;
-  if (!transform || transform === 'none') return 0;
-  const values = transform.slice(transform.indexOf('(') + 1, -1).split(',').map(Number);
-  if (values.length < 2 || !Number.isFinite(values[0]) || !Number.isFinite(values[1])) return 0;
-  return Math.atan2(values[1], values[0]) * 180 / Math.PI;
-}
-function requestSpinFrame(callback) {
-  if (typeof window.requestAnimationFrame === 'function') return { animationFrame: true, id: window.requestAnimationFrame(callback) };
-  return { animationFrame: false, id: setTimeout(callback, 16) };
-}
-function cancelSpinFrame(frame) {
-  if (!frame) return;
-  if (frame.animationFrame) window.cancelAnimationFrame?.(frame.id);
-  else clearTimeout(frame.id);
-}
-function spinPrizeTargetRotation(prizeId) {
-  const prizes = Array.isArray(state.spinPrizes) && state.spinPrizes.length === DEFAULT_SPIN_WHEEL_SLICES.length
-    ? state.spinPrizes : DEFAULT_SPIN_WHEEL_SLICES;
-  const index = prizes.findIndex(prize => String(prize?.id || '') === String(prizeId || ''));
-  if (index < 0 || prizes.length < 2) return 1440;
-  const sliceStep = 360 / prizes.length;
-  const landingOffset = (360 - (index * sliceStep)) % 360;
-  return 1440 + landingOffset;
-}
-function runSpinWheelAnimation(wheel, prizeId) {
-  if (!wheel) return Promise.resolve();
-  const targetRotation = spinPrizeTargetRotation(prizeId);
-  const wheelPrizes = Array.isArray(state.spinPrizes) && state.spinPrizes.length === DEFAULT_SPIN_WHEEL_SLICES.length
-    ? state.spinPrizes : DEFAULT_SPIN_WHEEL_SLICES;
-  const tickStep = 360 / wheelPrizes.length;
-  wheel.classList.remove('spinWheelRun');
-  void wheel.offsetWidth;
-  wheel.style.setProperty('--spin-target-rotation', `${targetRotation}deg`);
-  const transitionMs = getComputedStyle(wheel).transitionDuration.split(',').reduce((max, duration) => {
-    const value = duration.trim();
-    const ms = Number.parseFloat(value) * (value.endsWith('ms') ? 1 : 1000);
-    return Number.isFinite(ms) ? Math.max(max, ms) : max;
-  }, 0);
-  return new Promise(resolve => {
-    let settled = false;
-    let fallbackTimer;
-    let frame = null;
-    let previousAngle = spinWheelRotationDegrees(wheel);
-    let rotatedDegrees = 0;
-    let nextTickDegrees = tickStep;
-    const emitCrossedTicks = () => {
-      const angle = spinWheelRotationDegrees(wheel);
-      const delta = ((angle - previousAngle + 540) % 360) - 180;
-      if (delta > 0) rotatedDegrees += delta;
-      previousAngle = angle;
-      while (rotatedDegrees + 0.01 >= nextTickDegrees && nextTickDegrees <= targetRotation) {
-        spinTickFeedback();
-        nextTickDegrees += tickStep;
-      }
-    };
-    const pollRotation = () => {
-      if (settled) return;
-      emitCrossedTicks();
-      frame = requestSpinFrame(pollRotation);
-    };
-    const finish = () => {
-      if (settled) return;
-      emitCrossedTicks();
-      settled = true;
-      clearTimeout(fallbackTimer);
-      cancelSpinFrame(frame);
-      wheel.removeEventListener('transitionend', onTransitionEnd);
-      resolve();
-    };
-    const onTransitionEnd = event => {
-      if (event.target === wheel && event.propertyName === 'transform') finish();
-    };
-    wheel.addEventListener('transitionend', onTransitionEnd);
-    wheel.classList.add('spinWheelRun');
-    fallbackTimer = setTimeout(finish, Math.max(transitionMs + 150, 150));
-    if (transitionMs === 0) finish();
-    else frame = requestSpinFrame(pollRotation);
-  });
-}
-function presentSpinResult(result, resultBox) {
-  const prize = result.prize && typeof result.prize === 'object' ? result.prize : {};
-  const amount = Number(result.amount ?? prize.amount) || 0;
-  const prizeId = String(result.prizeId ?? prize.id ?? '');
-  const prizeKind = String(result.prizeKind ?? prize.kind ?? '');
-  const prizeLabel = String(spinPrizeLabel(prizeId, amount) || result.prizeLabel || prize.label || '');
-  const celebration = window.GramupSpinCelebration;
-  if (!celebration?.show) {
-    if (resultBox) resultBox.textContent = t('spin_result', { label: prizeLabel });
-    toast(prizeLabel, 'success');
-    return;
-  }
-  if (resultBox) resultBox.textContent = '';
-  celebration.show({
-    title: amount > 0 ? t('spin_win_title', {}, 'You won!') : t('spin_win_empty_title', {}, 'Spin result'),
-    subtitle: prizeKind === 'spins'
-      ? t('spin_extra_spins_added', {}, 'Two extra spin tickets were added to your account.')
-      : prizeKind === 'boost'
-        ? prizeLabel
-        : amount > 0
-          ? t('spin_win_subtitle', {}, 'Your reward has been added to your balance.')
-          : t('spin_win_try_again', {}, 'No reward this time. Spin again!'),
-    prizeId,
-    amount,
-    prizeLabel,
-    claimLabel: t('spin_win_claim', {}, 'Claim prize'),
-    shareLabel: t('spin_win_share', {}, 'Share result'),
-    shareText: t('spin_win_share_text', { prize: prizeLabel }, `I won ${prizeLabel} on Gramup Spinner!`),
-    appUrl: `${window.location.origin}${window.location.pathname}`
-  });
-}
-async function doSpin() {
-  if (!readModelActionAllowed() || !state.spinEnabled || Number(state.tickets) < 1 || state.spinBusy) return;
-  prepareSpinAudio();
-  state.spinBusy = true;
-  updateSpinControls();
-  haptic("light");
-  const button = document.querySelector("#spinButton");
-  const wheel = document.querySelector("#spinWheel");
-  const resultBox = document.querySelector("#spinResult");
-  if (button) { button.disabled = true; button.textContent = t("spin_spinning"); }
-  try {
-    const result = await api("/api/points/spin", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey("spin") } });
-    await runSpinWheelAnimation(wheel, result.prizeId ?? result.prize?.id);
-    clearPendingIdempotencyKey("spin");
-    const updatedBalance = Number(result.newBalance ?? result.upBalance ?? result.points);
-    if (Number.isFinite(updatedBalance)) state.points = updatedBalance;
-    state.tickets = Number(result.tickets) || 0;
-    const updatedGramBalance = Number(result.gramBalance);
-    if (Number.isFinite(updatedGramBalance)) state.gramBalance = updatedGramBalance;
-    state.spinLastClaimAt = new Date().toISOString();
-    state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
-    spinWinFeedback();
-    presentSpinResult(result, resultBox);
-    updateHeader();
-    loadSpinWinners();
-  } catch (error) {
-    clearDefinitiveIdempotencyFailure("spin", error);
-    haptic("error");
-    if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message);
-    toast(translateServerMessage(error.code, error.message), "error");
-  } finally { state.spinBusy = false; updateSpinControls(); }
-}
-window.doSpin = doSpin;
-async function paySpinAlternative() {
-  if (!readModelActionAllowed() || !state.spinEnabled || state.spinBusy) return;
-  if (Number(state.points) < 50) { toast(t('spin_insufficient_balance', {}, 'You need at least 50 UP to spin.'), 'error'); return; }
-  prepareSpinAudio();
-  state.spinBusy = true; haptic('medium');
-  const button = document.querySelector('[data-paid-spin]'); const wheel = document.querySelector('#spinWheel'); const resultBox = document.querySelector('#spinResult');
-  if (button) { button.disabled = true; button.textContent = t('spin_paying', {}, 'Processing 50 UP...'); }
-  updateSpinControls();
-  try {
-    const result = await api('/api/points/spin/paid', { method: 'POST', headers: { 'Idempotency-Key': getPendingIdempotencyKey('spin_paid') } });
-    await runSpinWheelAnimation(wheel, result.prizeId ?? result.prize?.id);
-    clearPendingIdempotencyKey('spin_paid');
-    const updatedBalance = Number(result.newBalance ?? result.upBalance ?? result.points);
-    if (Number.isFinite(updatedBalance)) state.points = updatedBalance;
-    state.tickets = Number(result.tickets) || 0;
-    const updatedGramBalance = Number(result.gramBalance);
-    if (Number.isFinite(updatedGramBalance)) state.gramBalance = updatedGramBalance;
-    state.miningBoostUntil = result.boostUntil || state.miningBoostUntil;
-    spinWinFeedback();
-    presentSpinResult(result, resultBox);
-    updateHeader();
-    loadSpinWinners();
-  } catch (error) {
-    console.error('[Lucky Spin] Paid spin request failed', {
-      status: error?.response?.status ?? error?.status ?? 0,
-      response: error?.response?.data ?? null,
-      code: error?.code ?? null,
-      message: error?.message || String(error)
-    });
-    clearDefinitiveIdempotencyFailure('spin_paid', error);
-    haptic('error');
-    if (resultBox) resultBox.textContent = translateServerMessage(error.code, error.message);
-    toast(translateServerMessage(error.code, error.message), 'error');
-  }
-  finally {
-    state.spinBusy = false;
-    if (button) button.textContent = t('spin_pay_50', {}, 'Pay 50 UP to Spin');
-    updateSpinControls();
-  }
-}
-window.paySpinAlternative = paySpinAlternative;
-
 function completionStatus(taskId) {
   const found = state.completions.find(c => String(c.task) === String(taskId));
   return found ? found.status : null;
@@ -1781,9 +1401,9 @@ function renderHome() {
       <div class="tbBalanceTop">
         <div class="tbBalanceInfo">
           <div class="tbLabel">${t("tb_total_balance")}</div>
-          <div class="tbAmount"><span class="tbAmountNum">${formatFixed(state.gramBalance, 3)}</span><span class="tbAmountUnit">${gramTokenIconMarkup()}<span>GRAM</span></span></div>
+          <div class="tbAmount"><span class="tbAmountNum">${formatFixed(state.gramBalance, 3)}</span><span class="tbAmountUnit">GRAM</span></div>
           <div class="tbPills">
-            <span class="tbPill tbPillPurple">${t("tb_UP_chip", { n: formatPoints(state.points) })}</span>
+            <span class="tbPill tbPillPurple">${t("tb_points_chip", { n: formatPoints(state.points) })}</span>
             <span class="tbPill tbPillOrange">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
           </div>
         </div>
@@ -1809,20 +1429,14 @@ function renderHome() {
         <span class="auroraQuickIcon">↗</span><span>${t("menu_referral")}</span>
       </button>
     </section>
-    <section class="auroraDailyCard ${state.canCheckIn ? '' : 'is-claimed'}">
+    <section class="auroraDailyCard">
       <div class="auroraDailyIcon">🔥</div>
       <div class="auroraDailyCopy">
         <strong>${t("earn_daily_title")}</strong>
         <span>${state.canCheckIn ? t("earn_daily_sub_available") : t("earn_daily_sub_done")}</span>
       </div>
-      <div class="auroraDailyActions">
-        ${state.canCheckIn
-          ? `<button class="auroraInlineBtn" type="button" onclick="doCheckIn()">${t("checkin_button")}</button>`
-          : `<span class="auroraClaimedBadge"><span aria-hidden="true">✓</span>${t("checkin_claimed", {}, "Claimed")}</span><button class="auroraTasksLink" type="button" onclick="navigate('tasks')">${t("tasks_title")}</button>`}
-      </div>
+      <button class="auroraInlineBtn" type="button" onclick="${state.canCheckIn ? "doCheckIn()" : "navigate('tasks')"}">${state.canCheckIn ? t("checkin_button") : t("tasks_title")}</button>
     </section>
-
-    ${renderLuckySpinBanner()}
 
     <div class="card" style="padding:14px 16px">
       <div class="cardHeader" style="margin-bottom:8px">
@@ -1836,24 +1450,24 @@ function renderHome() {
     </div>
 
     <div class="tbSectionHead">
-      <h2 class="tbSectionTitle">${t("tb_your_progress")} <span class="tbSpark" aria-hidden="true">●</span></h2>
+      <h2 class="tbSectionTitle">${t("tb_your_progress")} <span class="tbSpark">✨</span></h2>
       <button class="tbLink" type="button" onclick="navigate('profile')">${t("tb_view_all")} <span class="tbLinkArrow">→</span></button>
     </div>
 
     <div class="tbStats">
       <div class="tbStat">
-        <div class="tbStatIcon">${tokenIconMarkup()}</div>
-        <div class="tbStatLabel">${t("tb_earned")}</div>
-        <div class="tbStatValue">${tokenAmount(state.totalEarnedPoints)}</div>
+        <div class="tbStatIcon tbIconMint"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#2f9bf0"/><path d="M20 24h24l6 8-18 20L14 32z" fill="#fff"/><path d="M32 30v10M27 35h10" stroke="#2f9bf0" stroke-width="3" stroke-linecap="round"/></svg></div>
+        <div class="tbStatLabel tbColGreen">${t("tb_earned")}</div>
+        <div class="tbStatValue">${formatPoints(state.totalEarnedPoints)}</div>
       </div>
       <div class="tbStat">
-        <div class="tbStatIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2A6.5 6.5 0 0 1 21.5 20"/></svg></div>
-        <div class="tbStatLabel">${t("tb_referrals")}</div>
+        <div class="tbStatIcon tbIconOrange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2A6.5 6.5 0 0 1 21.5 20"/></svg></div>
+        <div class="tbStatLabel tbColOrange">${t("tb_referrals")}</div>
         <div class="tbStatValue">${formatPoints(state.invitedCount)}</div>
       </div>
       <div class="tbStat">
-        <div class="tbStatIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17.5" rx="2.5"/><path d="M9 3.5h6v3H9z"/><path d="m9 13.5 2 2 4-4"/></svg></div>
-        <div class="tbStatLabel">${t("tb_tasks")}</div>
+        <div class="tbStatIcon tbIconPurple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17.5" rx="2.5"/><path d="M9 3.5h6v3H9z"/><path d="m9 13.5 2 2 4-4"/></svg></div>
+        <div class="tbStatLabel tbColPurple">${t("tb_tasks")}</div>
         <div class="tbStatValue">${formatPoints(approvedTasks)}</div>
       </div>
     </div>
@@ -1872,7 +1486,7 @@ function renderHome() {
           const icon = taskIconMarkup(task);
           return `<button type="button" class="auroraPreviewTask" onclick="navigate('tasks')">
             <span class="auroraPreviewTaskIcon">${icon}</span>
-            <span class="auroraPreviewTaskCopy"><strong>${escapeHTML(task.title)}</strong><small>+${tokenAmount(task.reward)}</small></span>
+            <span class="auroraPreviewTaskCopy"><strong>${escapeHTML(task.title)}</strong><small>+${formatPoints(task.reward)} ${t("points_unit")}</small></span>
             <span class="auroraPreviewStatus ${status === "approved" ? "done" : ""}">${status === "approved" ? "✓" : "→"}</span>
           </button>`;
         }).join("") || `<div class="auroraPreviewEmpty">${t("tasks_empty_desc")}</div>`}
@@ -1880,7 +1494,6 @@ function renderHome() {
     </section>
 
   `;
-  updateSpinControls();
 }
 
 /* ================= TASKS ================= */
@@ -2236,13 +1849,10 @@ function renderDailyCheckinCard() {
     const day = index + 1;
     const completed = day <= completedDays;
     const current = state.canCheckIn && day === nextDay;
-    const rewardLabel = `+${formatPoints(reward)} UP`;
     return `<div class="dailyCheckDay ${completed ? "is-complete" : ""} ${current ? "is-current" : ""}">
-      ${completed
-        ? `<span class="dailyCheckDayNumber isClaimed" aria-label="${t("checkin_done_button")}">✓</span>`
-        : `<span class="dailyCheckDayNumber dailyCheckToken"><img src="/img/gramup-logo-new.png" alt="UP" width="25" height="25"></span>`}
+      <span class="dailyCheckDayNumber">${completed ? "✓" : day}</span>
       <strong>${t("day_label", { n: day })}</strong>
-      <small class="dailyCheckReward" aria-label="${rewardLabel}"><span>${rewardLabel}</span><img src="/img/gramup-logo-new.png" alt="" aria-hidden="true" width="10" height="10"></small>
+      <small>+${formatPoints(reward)} ${t("points_unit")}</small>
     </div>`;
   }).join("");
   return `<section class="card dailyCheckCard" aria-labelledby="dailyCheckTitle">
@@ -2257,18 +1867,16 @@ async function doCheckIn() {
   if (!readModelActionAllowed()) return;
   const button = document.querySelector("#checkinBtn");
   if (button) { button.disabled = true; button.textContent = t("checkin_processing"); }
-  haptic("light");
   try {
     const result = await api("/api/points/checkin", { method: "POST" });
     state.points = Number(result.points) || state.points;
     state.streak = Number(result.streak) || state.streak;
-    state.tickets = Number(result.tickets) || 0;
     state.canCheckIn = false;
     state.totalCheckins += 1;
     state.nextResetAt = Number(result.nextResetAt) || state.nextResetAt;
     updateHeader();
     haptic("success");
-    toast(t("checkin_claim_success", { n: tokenAmount(result.earned) }), "success");
+    toast(`+${formatPoints(result.earned)} ${t("points_unit")} 🎉`, "success");
     rerenderActiveUserDataView();
     try {
       await loadUserData({ force: true });
@@ -2300,46 +1908,8 @@ async function doCheckIn() {
   }
 }
 window.doCheckIn = doCheckIn;
-function closeMissedStreakModal() {
-  document.querySelector('#missedStreakOverlay')?.remove();
-  if (state.streakMissed) state.missedStreakPrompted = false;
-}
-function openMissedStreakModal() {
-  if (state.activeTab !== 'tasks' || !state.streakMissed || document.querySelector('#missedStreakOverlay')) return;
-  const overlay = document.createElement('div');
-  overlay.id = 'missedStreakOverlay';
-  overlay.className = 'overlay missedStreakOverlay';
-  overlay.innerHTML = `<div class="modalBox missedStreakModal" role="dialog" aria-modal="true" aria-labelledby="missedStreakTitle">
-    <div class="missedStreakIcon">🔥</div><div class="modalEyebrow">${t('streak_missed_eyebrow', {}, 'Streak check')}</div>
-    <h3 id="missedStreakTitle">${t('streak_missed_title', {}, 'You missed a day')}</h3>
-    <p class="missedStreakLead">${t('streak_missed_desc', { n: formatPoints(state.streak) }, 'Your current streak is at risk. Choose how to continue.')}</p>
-    <div class="missedStreakChoices"><button type="button" class="missedStreakKeep" onclick="freezeMissedStreak()"><strong>${t('streak_freeze_action', { n: formatPoints(state.streakFreezeCost) }, 'Pay 20 UP to Freeze Streak')}</strong><small>${t('streak_freeze_help', {}, 'Keep your streak and claim today’s reward')}</small></button><button type="button" class="missedStreakRestart" onclick="restartMissedStreak()"><strong>${t('streak_restart_action', {}, 'Restart Streak')}</strong><small>${t('streak_restart_help', {}, 'Reset to Day 1 without a charge')}</small></button></div>
-    <button type="button" class="missedStreakLater" onclick="closeMissedStreakModal()">${t('streak_decide_later', {}, 'Decide later')}</button>
-  </div>`;
-  overlay.addEventListener('click', event => { if (event.target === overlay) closeMissedStreakModal(); });
-  document.body.appendChild(overlay);
-}
-async function freezeMissedStreak() {
-  if (!readModelActionAllowed()) return;
-  const button = document.querySelector('.missedStreakKeep');
-  if (button) button.disabled = true;
-  try { const result = await api('/api/points/checkin/freeze', { method: 'POST', body: {} }); state.points = Number(result.points) || state.points; closeMissedStreakModal(); await loadUserData({ force: true }); renderTasks(); toast(t('streak_freeze_success', {}, 'Your streak was frozen. Claim today’s reward.'), 'success'); haptic('success'); }
-  catch (error) { if (button) button.disabled = false; toast(translateServerMessage(error.code, error.message), 'error'); haptic('error'); }
-}
-async function restartMissedStreak() {
-  if (!readModelActionAllowed()) return;
-  const button = document.querySelector('.missedStreakRestart');
-  if (button) button.disabled = true;
-  try { const result = await api('/api/points/checkin/restart', { method: 'POST', body: {} }); state.points = Number(result.points) || state.points; closeMissedStreakModal(); await loadUserData({ force: true }); renderTasks(); toast(t('streak_restart_success', {}, 'Your streak was restarted at Day 1.'), 'success'); haptic('light'); }
-  catch (error) { if (button) button.disabled = false; toast(translateServerMessage(error.code, error.message), 'error'); haptic('error'); }
-}
-window.closeMissedStreakModal = closeMissedStreakModal; window.openMissedStreakModal = openMissedStreakModal; window.freezeMissedStreak = freezeMissedStreak; window.restartMissedStreak = restartMissedStreak;
 function renderTasks() {
   stopDailyCheckinCountdown();
-  if (state.streakMissed && !state.missedStreakPrompted) {
-    state.missedStreakPrompted = true;
-    setTimeout(openMissedStreakModal, 0);
-  }
   const content = $("#content");
   const taskSection = ["daily", "vip", "invite"].includes(state.taskSection) ? state.taskSection : "daily";
   const isInviteSection = taskSection === "invite";
@@ -2347,7 +1917,6 @@ function renderTasks() {
     ? []
     : state.tasks.filter(task => taskSection === "vip" ? task.taskKind === "vip_activation" : task.taskKind !== "vip_activation");
   const referralHtml = isInviteSection ? renderReferralRewardTasks() : "";
-  const referralTierHtml = isInviteSection ? renderReferralTierSummary() : "";
   const dailyCheckinHtml = taskSection === "daily" ? renderDailyCheckinCard() : "";
   const taskErrorHtml = tasksLoadError ? `<div class="card" role="status"><div class="emptyDesc">${t("tasks_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryTasks()">${t("retry_button")}</button></div>` : "";
   const sectionTabs = `
@@ -2357,16 +1926,12 @@ function renderTasks() {
       <button type="button" role="tab" aria-selected="${taskSection === "invite"}" class="taskCategoryTab ${taskSection === "invite" ? "active" : ""}" onclick="setTaskSection('invite')">👥 ${t("menu_referral")}</button>
     </div>`;
 
-  if (!state.readModelTasksConfirmed && !tasksLoadError && !isInviteSection) {
-    content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}<div class="taskSkeletonGrid"><div class="loading" style="height:118px"></div><div class="loading" style="height:118px"></div><div class="loading" style="height:118px"></div></div>`;
-    return;
-  }
-
   if (!state.tasks.length && tasksLoadError && !isInviteSection) {
     content.innerHTML = `<div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>${sectionTabs}${taskErrorHtml}`;
     return;
   }
-  if (!isInviteSection && visibleTasks.length === 0) {
+  const inviteHasContent = isInviteSection && state.referralTasks.length > 0;
+  if ((!isInviteSection && visibleTasks.length === 0) || (isInviteSection && !inviteHasContent)) {
     clearInterval(latestPostCooldownTimer);
     latestPostCooldownTimer = null;
     content.innerHTML = `
@@ -2375,7 +1940,6 @@ function renderTasks() {
       ${dailyCheckinHtml}
       ${taskErrorHtml}
       ${referralHtml}
-      ${referralTierHtml}
       <div class="card emptyState">
         <div class="emptyIcon">🗂️</div>
         <div class="emptyTitle">${t("tasks_empty_title")}</div>
@@ -2392,7 +1956,6 @@ function renderTasks() {
       <div class="sectionHeader"><h2 class="sectionTitle">${t("tasks_title")}</h2></div>
       ${sectionTabs}
       ${referralHtml}
-      ${referralTierHtml}
     `;
     return;
   }
@@ -2404,7 +1967,7 @@ function renderTasks() {
     <section class="tasksOverview">
       <div class="tasksOverviewTop"><div><h1>${t("tasks_title")}</h1></div><strong>${taskProgress}%</strong></div>
       <div class="tasksProgressTrack"><i style="width:${taskProgress}%"></i></div>
-      <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(visibleTasks.length)} ${t("task_btn_done")}</span><span>${t("tb_UP_chip", { n: formatPoints(state.points) })}</span></div>
+      <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(visibleTasks.length)} ${t("task_btn_done")}</span><span>${t("tb_points_chip", { n: formatPoints(state.points) })}</span></div>
     </section>
     ${sectionTabs}
     ${dailyCheckinHtml}
@@ -2422,7 +1985,7 @@ function renderTasks() {
         if (task.taskKind === "vip_activation") {
           actionHtml = status === "approved"
             ? `<button class="taskAction done" disabled>${t("task_btn_done")}</button>`
-            : `<button class="taskAction pending" disabled>🔒 Miner ${formatPoints(task.vipPlanNumber)}</button>`;
+            : `<button class="taskAction pending" disabled>🔒 VIP ${formatPoints(task.vipPlanNumber)}</button>`;
         } else if (task.taskKind === "bio_link") {
           const completion = completionRecord(task._id);
           const nextAvailableAt = completion?.nextAvailableAt ? new Date(completion.nextAvailableAt) : null;
@@ -2490,7 +2053,7 @@ function renderTasks() {
             ${taskDescription ? `<div class="taskDesc">${escapeHTML(taskDescription)}</div>` : ""}
             ${task.verifyType === "latest_post" ? `<div class="taskDesc">${t("task_latest_post_open_hint")}</div>` : ""}
             ${task.isSpecialOfDay && task.expiresAt ? `<div class="taskDesc" style="color:var(--warning)">⏳ ${t("special_task_deadline", { date: new Date(task.expiresAt).toLocaleString(state.language === "en" ? "en-US" : "fa-IR") })}</div>` : ""}
-            <div class="taskReward">+${tokenAmount(task.reward)}</div>
+            <div class="taskReward">+${formatPoints(task.reward)} ${t("points_unit")}</div>
           </div>
           ${actionHtml}
           ${hint ? `<div class="taskHint ${hint.type}" style="flex-basis:100%">${escapeHTML(hint.message)}</div>` : ""}
@@ -2518,7 +2081,6 @@ function showWithdraw() {
     return;
   }
   const overlay = $("#withdrawOverlay");
-  haptic("light");
   const pointsInput = $("#withdrawPoints");
   const addressInput = $("#withdrawAddress");
   const error = $("#withdrawError");
@@ -2579,20 +2141,17 @@ let exchangeDirection = "points_to_gram"; // "points_to_gram" | "gram_to_points"
 
 function showExchange() {
   if (!readModelActionAllowed()) return;
-  const verifiedWalletAvailable = Boolean(window.gramupWallet?.isConnected?.() && window.gramupWallet?.isProofVerified?.());
-  if (getExchangeAvailableBalance("points_to_gram") <= 0 && getExchangeAvailableBalance("gram_to_points") <= 0 && !verifiedWalletAvailable) {
+  if (state.points <= 0 && state.gramBalance <= 0) {
     toast(t("error_generic"), "warning");
     return;
   }
   const overlay = $("#exchangeOverlay");
-  haptic("light");
   const input = $("#exchangePoints");
   const error = $("#exchangeError");
   if (input) input.value = "";
   if (error) error.textContent = "";
   setExchangeDirection("points_to_gram");
   if (overlay) overlay.style.display = "flex";
-  if (state.activeTab === "wallet" && state.chainGramBalance == null) void loadWalletChainBalance(walletRenderSequence);
 }
 window.showExchange = showExchange;
 
@@ -2614,8 +2173,8 @@ function setExchangeDirection(direction) {
   const input = $("#exchangePoints");
   const title = $("#exchangeTitle");
   if (exchangeDirection === "points_to_gram") {
-    if (label) { label.dataset.i18n = "exchange_UP_label"; label.textContent = t("exchange_UP_label"); }
-    if (input) { input.dataset.i18nPh = "exchange_UP_ph"; input.setAttribute("placeholder", t("exchange_UP_ph")); }
+    if (label) { label.dataset.i18n = "exchange_points_label"; label.textContent = t("exchange_points_label"); }
+    if (input) { input.dataset.i18nPh = "exchange_points_ph"; input.setAttribute("placeholder", t("exchange_points_ph")); }
     if (title) { title.dataset.i18n = "exchange_modal_title"; title.textContent = t("exchange_modal_title"); }
   } else {
     if (label) { label.dataset.i18n = "exchange_gram_label"; label.textContent = t("exchange_gram_label"); }
@@ -2627,70 +2186,14 @@ function setExchangeDirection(direction) {
   const error = $("#exchangeError");
   if (error) error.textContent = "";
   updateExchangePreview();
-  updateExchangeQuickSelectState();
 }
 window.setExchangeDirection = setExchangeDirection;
-
-function getExchangeAvailableBalance(direction = exchangeDirection) {
-  if (direction === "points_to_gram") {
-    const points = Number(state.points);
-    return Number.isFinite(points) ? Math.max(0, points) : 0;
-  }
-
-  const internalGram = Number(state.gramBalance);
-  const internalAvailable = Number.isFinite(internalGram) ? Math.max(0, internalGram) : 0;
-  const walletVerified = Boolean(window.gramupWallet?.isConnected?.() && window.gramupWallet?.isProofVerified?.());
-  const chainGram = Number(state.chainGramBalance);
-  const chainAvailable = walletVerified && Number.isFinite(chainGram) ? Math.max(0, chainGram) : 0;
-  // The current submit path uses either the internal balance or the connected wallet balance,
-  // rather than combining them into one transaction.
-  return Math.max(internalAvailable, chainAvailable);
-}
-
-function isExchangeAmountValid(amount) {
-  const value = Number(amount);
-  return Number.isFinite(value) && value > 0 && value <= getExchangeAvailableBalance();
-}
-
-function updateExchangeQuickSelectState() {
-  const availableBalance = getExchangeAvailableBalance();
-  document.querySelectorAll("#exchangeQuickAmounts .exchangeQuickBtn").forEach(button => {
-    button.disabled = !(Number.isFinite(availableBalance) && availableBalance > 0);
-  });
-}
-
-function setExchangeAmountPercent(percent) {
-  const input = $("#exchangePoints");
-  const percentage = Number(percent);
-  if (!input || ![25, 50, 75, 100].includes(percentage)) return;
-
-  const availableBalance = getExchangeAvailableBalance();
-  if (!Number.isFinite(availableBalance) || availableBalance <= 0) {
-    input.value = "";
-    updateExchangePreview();
-    return;
-  }
-
-  const precision = exchangeDirection === "points_to_gram" ? 3 : 9;
-  const scale = 10 ** precision;
-  const maxUnits = Math.floor(availableBalance * scale);
-  const selectedUnits = Math.floor(maxUnits * percentage / 100);
-  let amount = (selectedUnits / scale).toFixed(precision);
-  if (amount.includes(".")) amount = amount.replace(/0+$/, "").replace(/\.$/, "");
-  input.value = amount;
-  updateExchangePreview();
-}
-window.setExchangeAmountPercent = setExchangeAmountPercent;
 
 function updateExchangePreview() {
   const input = $("#exchangePoints");
   const preview = $("#exchangePreview");
   if (!input || !preview) return;
-  const rawValue = String(input.value || "").trim();
-  const parsedAmount = Number(rawValue);
-  const amount = Number.isFinite(parsedAmount) && parsedAmount >= 0 ? parsedAmount : 0;
-  const error = $("#exchangeError");
-  if (error) error.textContent = rawValue && !isExchangeAmountValid(parsedAmount) ? t("error_generic") : "";
+  const amount = Number(input.value) || 0;
 
   if (exchangeDirection === "points_to_gram") {
     const gram = amount * state.rate;
@@ -2709,8 +2212,11 @@ async function submitExchange() {
   const button = $("#submitExchange");
 
   const amount = Number(input?.value);
-  if (!isExchangeAmountValid(amount)) {
-    haptic("error");
+  if (!amount || amount <= 0) {
+    if (error) error.textContent = t("error_generic");
+    return;
+  }
+  if (exchangeDirection === "points_to_gram" && amount > state.points) {
     if (error) error.textContent = t("error_generic");
     return;
   }
@@ -2730,7 +2236,6 @@ async function submitExchange() {
     if (exchangeDirection === "points_to_gram" || useInternalGramBalance) clearPendingIdempotencyKey(idempotencyScope);
     state.points = Number(result.points) ?? state.points;
     if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
-    if (exchangeDirection === "gram_to_points" && !useInternalGramBalance) state.chainGramBalance = null;
     haptic("success");
     toast(result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) }), "success");
     hideExchange();
@@ -2865,7 +2370,6 @@ window.retryDepositHistory = retryDepositHistory;
 function showDeposit() {
   if (!readModelActionAllowed()) return;
   const overlay = $("#depositOverlay");
-  haptic("light");
   const panel = $("#depositPanel");
   const disabled = $("#depositDisabledMessage");
   const message = $("#depositMessage");
@@ -3053,23 +2557,15 @@ async function loadWalletChainBalance(renderRequestId = walletRenderSequence) {
   const value = document.getElementById('walletChainBalanceValue');
   const meta = document.getElementById('walletChainBalanceMeta');
   if (!value || !meta) return;
-  state.chainGramBalance = null;
-  updateExchangeQuickSelectState();
   value.textContent = t('wallet_chain_balance_loading');
   meta.textContent = t('deposit_network_ton_mainnet');
   try {
     const result = await api('/api/points/wallet/chain-balance');
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
-    const balance = Number(result?.balance);
-    if (!Number.isFinite(balance) || balance < 0) throw new Error('Invalid wallet chain balance');
-    state.chainGramBalance = balance;
-    updateExchangeQuickSelectState();
     value.textContent = `${formatNumber(result.balance, 6)} GRAM`;
     meta.textContent = t('wallet_chain_balance_title');
   } catch (error) {
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
-    state.chainGramBalance = null;
-    updateExchangeQuickSelectState();
     value.textContent = t('wallet_chain_balance_unavailable');
     meta.textContent = error?.code === 'WALLET_NOT_CONNECTED' ? t('wallet_connected_withdraw_hint') : t('deposit_network_ton_mainnet');
   }
@@ -3085,7 +2581,7 @@ function renderWallet() {
   content.innerHTML = `
     <section class="walletOverview">
       <div class="walletOverviewTop"><div><span class="walletOverline">${t("wallet_title")}</span><h1>${t("wallet_balance_title")}</h1></div><span class="walletLivePill">● ${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })}</span></div>
-      <div class="walletOverviewValue"><strong>${formatNumber(state.gramBalance, 6)}</strong><span class="gramAmountUnit">${gramTokenIconMarkup()}<span>GRAM</span></span></div>
+      <div class="walletOverviewValue"><strong>${formatNumber(state.gramBalance, 6)}</strong><span>GRAM</span></div>
       <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.gramUsdPrice > 0 ? `≈ $${formatFixed(state.gramBalance * state.gramUsdPrice, 3)}` : "—"}</b></div>
     </section>
     <div id="tonWalletConnection" aria-live="polite"></div>
@@ -3096,12 +2592,12 @@ function renderWallet() {
 
     <div class="tbWalletGrid">
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbWalletLogoWrap"><img class="tbWalletLogo" src="img/gramup-logo-new.png" alt="Gramup" /></div>
-        <div class="tbStatLabel tbColBlue">UP</div>
+        <div class="tbWalletIcon tbIconOrange">${TB_ICONS.coin}</div>
+        <div class="tbStatLabel tbColOrange">${t("wallet_points_card_title")}</div>
         <div class="tbWalletValue">${formatPoints(state.points)}</div>
       </div>
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbWalletLogoWrap"><img class="tbWalletLogo gramWalletLogo" src="img/gram-logo.svg" alt="GRAM" /></div>
+        <div class="tbWalletIcon tbIconBlue">${TB_ICONS.gem}</div>
         <div class="tbStatLabel tbColBlue">${t("wallet_gram_card_title")}</div>
         <div class="tbWalletValue">${formatNumber(state.gramBalance, 6)}</div>
       </div>
@@ -3123,7 +2619,7 @@ function renderWallet() {
     </div>
 
     <div class="card">
-      <p style="font-size:11px;margin-bottom:0">${t("wallet_exchange_rate_note", { rate: formatNumber(state.rate, 6) })} • ${t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawGram, 6) })}</p>
+      <p style="font-size:11px;margin-bottom:0">${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })} • ${t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawGram, 6) })}</p>
     </div>
 
     <div class="card" id="withdrawHistoryCard">
@@ -3322,25 +2818,8 @@ function shareReferralLink() {
   }
 }
 window.shareReferralLink = shareReferralLink;
-async function shareToTelegramStory(context = "referral") {
-  const link = String(state.shareLink || "").trim();
-  if (!link) return toast(t("referral_link_unavailable"), "error");
-  const text = context === "milestone" ? t("story_milestone_text", { link }) : t("story_referral_text", { link });
-  const telegram = window.Telegram?.WebApp;
-  if (telegram && typeof telegram.shareToStory === "function") {
-    try {
-      const mediaUrl = new URL("/img/gramup-logo-new.png", window.location.origin).toString();
-      telegram.shareToStory(mediaUrl, { text, widget_link: { url: link, name: "Gramup" } });
-      return;
-    } catch (error) { console.warn("Story sharing unavailable; using Telegram share fallback", error); }
-  }
-  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
-  if (telegram?.openTelegramLink) telegram.openTelegramLink(shareUrl);
-  else window.open(shareUrl, "_blank", "noopener,noreferrer");
-}
-window.shareToTelegramStory = shareToTelegramStory;
 
-let profileView = "menu"; // menu | referral | groups | leaderboard | about | history
+let profileView = "menu"; // menu | referral | leaderboard | about | history
 let pendingProfileView = null;
 let referralPreviousProfileView = "menu";
 let referralBackButtonHandlerBound = false;
@@ -3414,7 +2893,6 @@ function setProfileView(view) {
     state.referralFilter = "all";
     void loadReferralData();
   }
-  if (view === "groups" && !state.squadsLoaded && !state.squadsLoading) void loadSquads();
   renderProfile();
   syncReferralTelegramBackButton();
 }
@@ -3429,9 +2907,6 @@ function openWeeklyCompetition() {
 window.openWeeklyCompetition = openWeeklyCompetition;
 
 function renderProfileMenu() {
-  const directInvitesValue = state.referralDataLoaded
-    ? formatNumber(state.invitedCount)
-    : state.referralError ? "—" : "…";
   const telegramUser = getTelegramUser();
   const user = state.user || telegramUser || {};
   const firstName = user.first_name || user.firstName || "";
@@ -3446,18 +2921,18 @@ function renderProfileMenu() {
       <div class="profileHeadInfo">
         <div class="profileNameLg">${escapeHTML(firstName)}</div>
         <div class="tbPills">
-          <span class="tbPill tbPillPurple tbPillSm">${t("tb_UP_chip", { n: formatPoints(state.points) })}</span>
-          <span class="tbPill tbPillOrange tbPillSm">${directInvitesValue} ${t("tb_referrals")}</span>
+          <span class="tbPill tbPillPurple tbPillSm">${t("tb_points_chip", { n: formatPoints(state.points) })}</span>
+          <span class="tbPill tbPillOrange tbPillSm">${formatPoints(state.invitedCount)} ${t("tb_referrals")}</span>
           <span class="tbPill tbPillGreen tbPillSm">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
         </div>
       </div>
-      <div class="profileBalanceMini"><span>${t("tb_total_balance")}</span><strong>${formatNumber(state.gramBalance, 3)} <small class="gramBalanceUnit">${gramTokenIconMarkup()}<span>GRAM</span></small></strong></div>
+      <div class="profileBalanceMini"><span>${t("tb_total_balance")}</span><strong>${formatNumber(state.gramBalance, 3)} <small>GRAM</small></strong></div>
     </section>
 
     <section class="profilePulseGrid" aria-label="${escapeHTML(t("tb_your_progress"))}">
-      <div><strong>${formatPoints(state.points)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("wallet_points_card_title", null, "Available Balance")}</span></div>
-      <div><strong>${directInvitesValue}</strong><span class="profilePulseLabel">${t("referral_kpi_direct")}</span></div>
-      <div><strong>${formatPoints(state.totalEarnedPoints)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("tb_earned")}</span></div>
+      <div><strong>${formatPoints(state.points)}</strong><span>${t("wallet_points_card_title")}</span></div>
+      <div><strong>${formatNumber(state.invitedCount)}</strong><span>${t("referral_kpi_direct")}</span></div>
+      <div><strong>${formatPoints(state.totalEarnedPoints)}</strong><span>${t("tb_earned")}</span></div>
     </section>
     <div class="card profileMenuPanel">
       <div class="profileMenuLabel">${t("menu_referral")}</div>
@@ -3476,11 +2951,6 @@ function renderProfileMenu() {
         <div class="profileItem" onclick="openWeeklyCompetition()">
           <div class="profileIcon">🏆</div>
           <div class="profileText">${t("menu_weekly_competition")}</div>
-          <div class="profileChevron">‹</div>
-        </div>
-        <div class="profileItem" onclick="setProfileView('groups')">
-          <div class="profileIcon">👥</div>
-          <div class="profileText">${t("squad_title")}</div>
           <div class="profileChevron">‹</div>
         </div>
         <div class="profileItem" onclick="setProfileView('history')">
@@ -3535,10 +3005,6 @@ function renderProfileMenu() {
   `;
 }
 
-function renderProfileGroups() {
-  return `<div class="profileGroupsView"><div class="sectionHeader"><button class="sectionMore" type="button" onclick="setProfileView('menu')">${t("referral_back")}</button><h2 class="sectionTitle">${t("squad_title")}</h2><span></span></div>${renderSquadsCard()}</div>`;
-}
-
 function renderProfileAbout() {
   return `
     <div class="profileAboutView">
@@ -3587,7 +3053,7 @@ function renderReferralRewardTasks() {
     }
 
     return `
-      <div class="taskItem referralTaskItem ${action ? "has-action" : "no-action"}" style="margin-bottom:12px">
+      <div class="taskItem referralTaskItem" style="margin-bottom:12px">
         <div class="taskIcon">👥</div>
         <div class="taskBody">
           <div class="taskTitle">${t("referral_task_invite", { n: formatPoints(task.requiredInvites) })}</div>
@@ -3596,13 +3062,12 @@ function renderReferralRewardTasks() {
             <span style="display:inline-block;width:18px;height:1px;background:var(--text-muted);opacity:.7"></span>
             <span>${formatPoints(task.invitedCount)} ${t("referral_active_label")}</span>
           </div>
-          <div class="taskReward">+${tokenAmount(task.rewardPoints)}</div>
+          <div class="taskReward">+${formatPoints(task.rewardPoints)} ${t("points_unit")}</div>
           <div style="height:6px;background:var(--surface-3);border-radius:999px;overflow:hidden;margin-top:8px">
             <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,var(--primary),var(--primary-2));border-radius:999px;transition:width .3s ease"></div>
           </div>
         </div>
         ${action}
-        <button class="secondaryBtn" type="button" onclick="shareToTelegramStory('milestone')">${t("story_share_button")}</button>
       </div>`;
   }).join("");
 
@@ -3647,12 +3112,8 @@ function renderReferralStatsCard() {
         <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_count")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.totalReferrals) || 0)}</div></div>
         <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_active_count")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.activeReferrals) || 0)}</div></div>
         ${levelRows}
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_invite_rewards")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.totalInviteRewardsPoints) || 0)}</div></div>
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_team_commission")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.totalTeamCommissionPoints) || 0)}</div></div>
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_tier1_members")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.tier1Members) || 0)}</div><small>${t("referral_tier1_rate")}</small></div>
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_tier2_members")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.tier2Members) || 0)}</div><small>${t("referral_tier2_rate")}</small></div>
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_mining_commission_t1")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.miningCommissionByTier?.["1"]) || 0)}</div></div>
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_mining_commission_t2")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${tokenAmount(Number(stats.miningCommissionByTier?.["2"]) || 0)}</div></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_invite_rewards")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${formatPoints(Number(stats.totalInviteRewardsPoints) || 0)} ${t("points_unit")}</div></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_team_commission")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${formatPoints(Number(stats.totalTeamCommissionPoints) || 0)} ${t("points_unit")}</div></div>
       </div>
     </div>`;
 }
@@ -3761,7 +3222,7 @@ function renderProfileReferral() {
       <li class="rf-history-row" key="${escapeHTML(item.id || "")}">
         <span class="rf-history-icon" aria-hidden="true">${item.kind === "commission" ? "↗" : item.kind === "milestone" ? "✦" : "＋"}</span>
         <span class="rf-history-main"><strong>${escapeHTML(title)}</strong><small>${escapeHTML(meta.join(" · "))}</small></span>
-        <b class="rf-history-points">+${tokenAmount(Number(item.points) || 0)}</b>
+        <b class="rf-history-points">+${formatPoints(Number(item.points) || 0)}<small>${t("points_unit")}</small></b>
       </li>`;
   }).join("");
   const currentLevelLabel = currentLevel > 0 ? t("referral_level_label", { n: formatPoints(currentLevel) }) : "—";
@@ -3778,8 +3239,8 @@ function renderProfileReferral() {
         <div class="rf-hero-orbit" aria-hidden="true"></div>
         <div class="rf-hero-top"><span class="rf-overline">${t("referral_hero_eyebrow")}</span><span class="rf-hero-badge">${t("referral_reward_direct_badge", { n: rewardDisplay })}</span></div>
         <h2 class="rf-hero-title" id="rfHeroTitle">${t("referral_total_earnings_title")}</h2>
-        <div class="rf-hero-total"><span class="rf-hero-coin" aria-hidden="true">◇</span><strong>${tokenAmount(totalEarnings)}</div>
-        <div class="rf-hero-bottom"><span>${t("referral_this_month")}</span><strong>+${tokenAmount(monthlyEarnings)}</strong></div>
+        <div class="rf-hero-total"><span class="rf-hero-coin" aria-hidden="true">◇</span><strong>${formatPoints(totalEarnings)}</strong><span>${t("points_unit")}</span></div>
+        <div class="rf-hero-bottom"><span>${t("referral_this_month")}</span><strong>+${formatPoints(monthlyEarnings)} ${t("points_unit")}</strong></div>
       </section>
 
       <section class="rf-kpi-grid" aria-label="${escapeHTML(t("referral_stats_title"))}">
@@ -3789,21 +3250,12 @@ function renderProfileReferral() {
         <article class="rf-kpi rf-kpi-level"><span class="rf-kpi-icon">✧</span><strong>${escapeHTML(currentLevelLabel)}</strong><small>${t("referral_kpi_level")}</small></article>
       </section>
 
-      <section class="rf-panel" aria-label="${escapeHTML(t("referral_mining_commission_t1"))}">
-        <div class="rf-section-heading"><div><span class="rf-overline">${t("referral_team_commission_title")}</span><h2>${t("referral_tier1_members")} / ${t("referral_tier2_members")}</h2></div></div>
-        <div class="rf-network-list">
-          <div class="rf-network-row"><span class="rf-network-level">${t("referral_tier1_members")} · 10%</span><span class="rf-network-count">${formatNumber(Number(stats.tier1Members) || 0)} <small>${t("referral_members_label")}</small></span><span class="rf-network-active">${tokenAmount(Number(stats.miningCommissionByTier?.["1"]) || 0)} UP</span></div>
-          <div class="rf-network-row"><span class="rf-network-level">${t("referral_tier2_members")} · 2.5%</span><span class="rf-network-count">${formatNumber(Number(stats.tier2Members) || 0)} <small>${t("referral_members_label")}</small></span><span class="rf-network-active">${tokenAmount(Number(stats.miningCommissionByTier?.["2"]) || 0)} UP</span></div>
-        </div>
-      </section>
-
       <section class="rf-panel rf-link-panel" aria-labelledby="rfLinkTitle">
         <div class="rf-panel-heading"><span class="rf-panel-symbol">↗</span><div><span class="rf-overline">${t("referral_link_eyebrow")}</span><h2 id="rfLinkTitle">${t("referral_link_title_new")}</h2></div></div>
         <div class="rf-link-box" dir="ltr"><span aria-hidden="true">⌁</span><b title="${escapeHTML(state.shareLink || "")}">${escapeHTML(state.shareLink || "—")}</b></div>
         <div class="referralLinkActions rf-link-actions">
           <button type="button" class="referralCopyBtn" onclick="copyReferralLink()" ${state.shareLink ? "" : "disabled"}>▢ ${t("referral_copy_button")}</button>
           <button type="button" class="referralShareBtn" onclick="shareReferralLink()" ${state.shareLink ? "" : "disabled"}>↗ ${t("referral_share_button")}</button>
-          <button type="button" class="referralShareBtn" onclick="shareToTelegramStory()" ${state.shareLink ? "" : "disabled"}>${t("story_share_button")}</button>
         </div>
         <p class="rf-panel-note">${state.referralMiniAppConfigured ? t("referral_link_note") : t("referral_link_config_missing")}</p>
       </section>
@@ -3963,7 +3415,7 @@ function renderProfileLeaderboard() {
       <div class="card" style="text-align:center">
         <div class="cardSubtitle">${t("leaderboard_rank_label")}</div>
         <div style="font-size:24px;font-weight:900;margin-top:4px">#${formatPoints(myRank)}</div>
-        ${weekly ? `<div class="cardSubtitle">${tokenAmount(state.weeklyMyPoints)}</div>` : ""}
+        ${weekly ? `<div class="cardSubtitle">${formatPoints(state.weeklyMyPoints)} ${t("points_unit")}</div>` : ""}
       </div>` : ""
     }
 
@@ -3978,12 +3430,12 @@ function renderProfileHistory() {
   const rows = historyList.map(item => {
     const isPendingDeposit = item.type === "deposit" && item.status === "pending";
     const isPositive = item.type === "deposit" ? item.status === "confirmed" : Number(item.amount) >= 0;
-    const unit = item.currency === "gram" ? "GRAM" : t("UP_unit");
+    const unit = item.currency === "gram" ? "GRAM" : t("points_unit");
     const amountText = isPendingDeposit
       ? t("deposit_pending_amount")
       : `${isPositive ? "+" : ""}${item.currency === "gram" ? formatNumber(item.amount, 9) : formatPoints(item.amount)} ${unit}`;
     const icon = (LEDGER_TYPE_UI[item.type] || {}).icon || "🔸";
-    const desc = item.type === "spin_paid" ? t("history_type_spin_paid") : item.description || t(`history_type_${item.type}`);
+    const desc = item.description || t(`history_type_${item.type}`);
     const referralMeta = item.type === "referral_commission"
       ? `${t("history_referral_level", { n: item.referralLevel || "—" })} · ${Number(item.commissionRatePercent || 0)}%`
       : item.type === "referral_initial" ? t("history_referral_initial") : "";
@@ -4038,11 +3490,10 @@ async function loadVipPlans() {
     if (data?.points != null) state.points = Number(data.points) || 0;
     const serverNow = Date.parse(data?.serverNow || "");
     state.vipServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
-    state.vipServerNowMs = Number.isFinite(serverNow) ? serverNow : Date.now();
     state.vipDataLoaded = true;
     return true;
   } catch (error) {
-    console.warn("Mining plans failed:", error);
+    console.warn("VIP plans failed:", error);
     state.vipError = translateServerMessage(error.code, error.message) || t("vip_error");
     state.vipDataLoaded = false;
     return false;
@@ -4050,114 +3501,6 @@ async function loadVipPlans() {
     state.vipLoading = false;
   }
 }
-
-let miningStatusPromise = null;
-function loadMiningStatus() {
-  if (miningStatusPromise) return miningStatusPromise;
-  state.miningLoading = true;
-  miningStatusPromise = (async () => {
-    try {
-      const data = await api('/api/mining/status');
-      state.mining = data?.mining && typeof data.mining === 'object'
-        ? { ...data.mining, history: Array.isArray(data.history) ? data.history : [] }
-        : null;
-      return Boolean(state.mining);
-    } catch (error) {
-      console.warn('Mining status failed:', error);
-      return false;
-    } finally {
-      state.miningLoading = false;
-      miningStatusPromise = null;
-    }
-  })();
-  return miningStatusPromise;
-}
-
-let miningTickerTimer = null;
-function stopMiningTicker() { if (miningTickerTimer) clearInterval(miningTickerTimer); miningTickerTimer = null; }
-function miningLiveValues() {
-  const mining = state.mining;
-  if (!mining) return null;
-  const serverAt = Date.parse(mining.serverNow || "") || Date.now();
-  const elapsedSinceStatus = Math.max(0, (Date.now() - serverAt) / 1000);
-  const ratePerSecond = Math.max(0, Number(mining.effectiveRatePerHour) || 0) / 3600;
-  const points = Math.min(Number(mining.maxStoragePoints) || Infinity, Math.max(0, (Number(mining.accumulatedPoints) || 0) + elapsedSinceStatus * ratePerSecond));
-  const max = Math.max(1, Number(mining.maxStoragePoints) || 1);
-  const percent = Math.min(100, Math.max(0, points / max * 100));
-  const remainingSeconds = mining.isStorageFull ? 0 : Math.max(0, (max - points) / Math.max(ratePerSecond, 0.000001));
-  return { points, percent, remainingSeconds, full: points >= max - 0.001 };
-}
-function formatMiningDuration(seconds) {
-  const total = Math.max(0, Math.floor(Number(seconds) || 0));
-  const h = Math.floor(total / 3600); const m = Math.floor((total % 3600) / 60); const sec = total % 60;
-  return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(sec).padStart(2, "0")}s`;
-}
-function updateMiningConsole() {
-  const live = miningLiveValues(); if (!live) return;
-  document.querySelectorAll("[data-mine-earned]").forEach(el => { el.textContent = formatNumber(live.points, 3); });
-  document.querySelectorAll("[data-mine-progress]").forEach(el => { el.style.width = `${live.percent}%`; });
-  document.querySelectorAll("[data-mine-progress-label]").forEach(el => { el.textContent = `${live.percent.toFixed(1)}%`; });
-  document.querySelectorAll("[data-mine-countdown]").forEach(el => { el.textContent = live.full ? t("mining_vault_full") : formatMiningDuration(live.remainingSeconds); });
-  document.querySelectorAll("[data-mine-status]").forEach(el => { el.textContent = live.full ? t("mining_vault_full") : t("mining_vault_running"); });
-  document.querySelectorAll("[data-mine-claim]").forEach(button => { button.disabled = live.points < 1 || live.full && Number(miningLiveValues().points) < 1; });
-}
-function startMiningTicker() { stopMiningTicker(); updateMiningConsole(); miningTickerTimer = setInterval(updateMiningConsole, 1000); }
-function renderMiningHistory(history) {
-  const rows = (Array.isArray(history) ? history : []).filter(item => item.type === "mining_claim").slice(0, 3).map(item => {
-    const amount = Number(item.amount) || 0; const date = item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
-    return `<div class="mineHistoryRow"><span class="mineHistoryIcon">↗</span><span><b>${t("mining_claim")}</b><small>${escapeHTML(date)}</small></span><strong>+${formatNumber(amount, 0)} UP</strong></div>`;
-  }).join("");
-  return rows || `<div class="mineHistoryEmpty">${t("history_empty")}</div>`;
-}
-function renderMiningPanel() {
-  const mining = state.mining;
-  if (!mining) {
-    const loading = Boolean(state.miningLoading);
-    const indicator = loading
-      ? '<span class="mineEmptySpinner" aria-hidden="true"></span>'
-      : '<span class="mineEmptyIcon" aria-hidden="true">!</span>';
-    const retry = loading ? '' : `<button class="minePrimaryAction" type="button" onclick="retryMiningStatus()">${t("retry_button")}</button>`;
-    return `<section class="mineConsole mineConsole--empty" aria-label="${t("mining_title")}" role="status" aria-live="polite">
-      <div class="mineEmptyState">${indicator}<p>${escapeHTML(t(loading ? "mining_loading" : "mining_load_error"))}</p>${retry}</div>
-    </section>`;
-  }
-  const live = miningLiveValues() || { points: mining.accumulatedPoints || 0, percent: 0, remainingSeconds: 0, full: Boolean(mining.isStorageFull) };
-  const canClaim = live.points >= 1;
-  const statusLabel = live.full ? t('mining_vault_full') : t('mining_vault_running');
-  const boostText = mining.boostActive ? `${formatNumber(mining.boostMultiplier, 1)}× · ${mining.boostUntil ? formatMiningDuration((Date.parse(mining.boostUntil) - Date.now()) / 1000) : ''}` : '—';
-  return `<section class="mineConsole" aria-label="${t('mining_title')}">
-    <div class="mineConsoleHeader"><div class="mineBrand"><span class="mineEmblem" aria-hidden="true">⛏</span><div><span class="mineEyebrow">GRAMUP MINING</span><h2>${t('mining_title')}</h2><small>${escapeHTML(mining.rigName || t('mining_rig_level', { n: mining.level }))}</small></div></div><span class="mineStatus"><i></i><span data-mine-status>${statusLabel}</span></span></div>
-    <div class="mineCounter"><span>${t('mining_session_earned')}</span><strong data-mine-earned>${formatNumber(live.points, 3)}</strong><b>UP</b><small>≈ ${formatNumber(live.points * (Number(state.rate) || 0), 6)} GRAM</small></div>
-    <div class="mineProgressHead"><span>${t('mining_cycle_progress')}</span><strong data-mine-progress-label>${live.percent.toFixed(1)}%</strong></div><div class="mineProgressTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span data-mine-progress style="width:${live.percent}%"></span></div><div class="mineProgressMeta"><span>${live.full ? t('mining_vault_full') : t('mining_vault_running')}</span><b data-mine-countdown>${live.full ? t('mining_vault_full') : formatMiningDuration(live.remainingSeconds)}</b></div>
-    <div class="mineMetrics"><div class="mineMetric"><span>⚡ ${t('mining_speed')}</span><strong>+${formatNumber(mining.effectiveRatePerHour, 0)} UP/hr</strong><small>${mining.boostActive ? `${formatNumber(mining.boostMultiplier, 1)}× ${t('mining_boost_active')}` : t('mining_base_rate')}</small></div><div class="mineMetric"><span>◆ ${t('mining_tier')}</span><strong>${t('mining_rig_level', { n: mining.level })}</strong><small>${escapeHTML(mining.rigName || '')}</small></div></div>
-    <button class="minePrimaryAction" type="button" data-mine-claim onclick="claimMining()" ${canClaim ? '' : 'disabled'}>${canClaim ? t('mining_claim') : t('mining_start')}</button><button class="mineBoostAction" type="button" onclick="buyStarsProduct('hash_boost_7d')">⚡ ${t('mining_boost')} <span>${boostText}</span></button>
-    <div class="mineSessionCard"><div class="mineSessionHeader"><span>${t('mining_session_info')}</span><small>${t('mining_active_boosts')}</small></div><div class="mineBoostLine"><span>⚡ ${t('mining_boost')}</span><b>${boostText}</b></div><div class="mineBoostLine"><span>🔥 ${t('mining_streak_bonus')}</span><b>${formatPoints(state.streak)} days</b></div><div class="mineHistoryTitle">${t('mining_recent_claims')}</div>${renderMiningHistory(mining.history)}</div>
-  </section>`;
-}
-async function claimMining() {
-  if (!readModelActionAllowed()) return;
-  haptic('medium');
-  const scope = 'mining_claim';
-  try { const result = await api('/api/mining/claim', { method: 'POST', body: {}, headers: { 'Idempotency-Key': getPendingIdempotencyKey(scope) } }); clearPendingIdempotencyKey(scope); state.mining = result.mining; state.points = Number(result.newBalance) || state.points; haptic('success'); toast(t('mining_claim_success', { n: formatPoints(result.claimedPoints) }), 'success'); rerenderActiveUserDataView(); }
-  catch (error) { haptic('error'); toast(error.message, 'error'); }
-}
-window.claimMining = claimMining;
-
-async function upgradeMining(type) {
-  if (!readModelActionAllowed()) return;
-  haptic('selection');
-  const scope = `mining_upgrade_${type}`;
-  try { const result = await api('/api/mining/upgrade', { method: 'POST', body: { type }, headers: { 'Idempotency-Key': getPendingIdempotencyKey(scope) } }); clearPendingIdempotencyKey(scope); state.mining = result.mining; state.points = Number(result.newBalance) || state.points; haptic('success'); toast(t('mining_upgrade_success'), 'success'); rerenderActiveUserDataView(); }
-  catch (error) { haptic('error'); toast(error.message, 'error'); }
-}
-window.upgradeMining = upgradeMining;
-
-async function buyStarsProduct(product) {
-  haptic('selection');
-  try { await api('/api/mining/stars/invoice', { method: 'POST', body: { product } }); toast(t('stars_invoice_sent'), 'success'); }
-  catch (error) { haptic('error'); toast(error.message, 'error'); }
-}
-window.buyStarsProduct = buyStarsProduct;
 
 function formatVipCountdown(milliseconds) {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -4205,155 +3548,38 @@ function stopVipCountdown() {
   if (vipCountdownTimer) clearInterval(vipCountdownTimer);
   vipCountdownTimer = null;
   vipCountdownRefreshPending = false;
-  stopMiningTicker();
-}
-
-function updateVipLiveDashboard() {
-  const now = Date.now() + Number(state.vipServerOffsetMs || 0);
-  const activeSubscriptions = (state.vipSubscriptions || []).filter(subscription => subscription.status === "active");
-  const liveSubscriptions = activeSubscriptions.filter(subscription => {
-    const endAt = Date.parse(subscription.endAt || "");
-    return Number.isFinite(endAt) && now < endAt;
-  });
-  const storageFull = liveSubscriptions.some(subscription => vipStorageFull(subscription, now));
-  const storageCapAt = liveSubscriptions
-    .map(subscription => vipStorageCapAt(subscription))
-    .filter(Number.isFinite)
-    .reduce((soonest, value) => Math.min(soonest, value), Infinity);
-  const total = activeSubscriptions.reduce((sum, subscription) => sum + vipLiveUnclaimed(subscription, now), 0);
-  const dailyTotal = activeSubscriptions.reduce((sum, subscription) => {
-    const endAt = Date.parse(subscription.endAt || "");
-    return sum + (Number.isFinite(endAt) && now >= endAt ? 0 : Number(subscription.dailyMiningRatePoints || 0));
-  }, 0);
-  const liveCount = activeSubscriptions.filter(subscription => {
-    const endAt = Date.parse(subscription.endAt || "");
-    return Number.isFinite(endAt) && now < endAt;
-  }).length;
-  const claimable = activeSubscriptions.some(subscription => vipLiveUnclaimed(subscription, now) >= 0.01);
-
-  document.querySelectorAll("[data-vip-unclaimed-total], [data-vip-claim-total]").forEach(element => {
-    element.textContent = formatNumber(total, 3);
-  });
-  document.querySelectorAll("[data-vip-daily-total]").forEach(element => {
-    element.textContent = formatNumber(dailyTotal, 2);
-  });
-  document.querySelectorAll("[data-vip-active-count]").forEach(element => {
-    element.textContent = formatPoints(liveCount);
-  });
-  document.querySelectorAll("[data-vip-mining-status-label]").forEach(element => {
-    element.textContent = t(storageFull ? "vip_storage_full" : liveCount ? "vip_mining_live" : activeSubscriptions.length ? "vip_settlement_ready" : "vip_status_inactive");
-  });
-  const storageRemainingMs = Number.isFinite(storageCapAt) ? Math.max(0, storageCapAt - now) : null;
-  document.querySelectorAll("[data-vip-storage-countdown]").forEach(element => {
-    element.hidden = storageRemainingMs === null;
-    element.classList.toggle("isFull", storageFull);
-    if (storageRemainingMs === null) return;
-    const text = element.querySelector("[data-vip-storage-countdown-text]");
-    if (text) text.textContent = t("vip_storage_full_in", { time: formatVipStorageTime(storageRemainingMs) });
-    const ring = element.querySelector("[data-vip-storage-ring]");
-    if (ring) {
-      const remainingRatio = Math.max(0, Math.min(1, storageRemainingMs / 86400000));
-      ring.style.strokeDashoffset = String(226.1946710584651 * (1 - remainingRatio));
-    }
-  });
-  document.querySelectorAll("[data-vip-mining-status]").forEach(element => {
-    element.classList.toggle("isActive", liveCount > 0 && !storageFull);
-    element.classList.toggle("isInactive", liveCount === 0 || storageFull);
-  });
-    for (const subscription of activeSubscriptions) {
-      const id = String(subscription.id || "");
-      const ended = Number.isFinite(Date.parse(subscription.endAt || "")) && now >= Date.parse(subscription.endAt);
-    document.querySelectorAll("[data-vip-live-rate]").forEach(element => {
-      if (element.dataset.vipLiveRate === id) {
-        const rate = Number(subscription.dailyMiningRatePoints || 0);
-        element.textContent = `${formatNumber(ended ? 0 : rate, Number.isInteger(rate) ? 0 : 2)} UP/day`;
-      }
-    });
-      document.querySelectorAll("[data-vip-live-days]").forEach(element => {
-        if (element.dataset.vipLiveDays !== id) return;
-        const endAt = Date.parse(subscription.endAt || "");
-        const days = Number.isFinite(endAt) ? Math.max(0, Math.ceil((endAt - now) / 86400000)) : 0;
-        element.textContent = `${formatPoints(days)}d`;
-      });
-      document.querySelectorAll("[data-vip-progress]").forEach(element => {
-        if (element.dataset.vipProgress !== id) return;
-        const progress = vipPlanProgressPercent(subscription, now);
-        element.style.width = `${progress}%`;
-        element.setAttribute("aria-valuenow", String(progress));
-      });
-    }
-  document.querySelectorAll("[data-vip-claim-all]").forEach(button => {
-    const readModelReady = !state.readModelStale && state.financialDataConfirmed && state.membershipDataConfirmed;
-    button.disabled = !claimable || vipClaimAllBusy || vipClaimingIds.size > 0 || !readModelReady;
-  });
-  document.querySelectorAll("[data-vip-claim-label]").forEach(element => {
-    element.textContent = vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_wallet");
-  });
 }
 
 async function tickVipCountdowns() {
   if ((state.activeTab !== "profile" && state.activeTab !== "vip") || (state.activeTab === "profile" && profileView !== "vip")) return;
-  updateVipLiveDashboard();
+  let shouldRefresh = false;
+  document.querySelectorAll("[data-vip-countdown]").forEach(element => {
+    const target = Date.parse(element.dataset.vipCountdown || "");
+    if (!Number.isFinite(target)) return;
+    const remaining = target - (Date.now() + Number(state.vipServerOffsetMs || 0));
+    if (remaining <= 0) {
+      element.textContent = "00:00:00";
+      shouldRefresh = true;
+    } else {
+      element.textContent = formatVipCountdown(remaining);
+    }
+  });
+  if (!shouldRefresh || vipCountdownRefreshPending) return;
+  vipCountdownRefreshPending = true;
+  const loaded = await loadVipPlans();
+  vipCountdownRefreshPending = false;
+  if (loaded && ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip")) {
+    const content = $("#content");
+    if (content) content.innerHTML = renderProfileVip();
+    startVipCountdown();
+  }
 }
 
 function startVipCountdown() {
   stopVipCountdown();
-  startMiningTicker();
   if ((state.activeTab !== "profile" && state.activeTab !== "vip") || (state.activeTab === "profile" && profileView !== "vip")) return;
   void tickVipCountdowns();
   vipCountdownTimer = setInterval(tickVipCountdowns, 1000);
-}
-
-function vipLiveUnclaimed(subscription, now = Date.now() + Number(state.vipServerOffsetMs || 0)) {
-  const base = Math.max(0, Number(subscription?.estimatedUnclaimedPoints ?? subscription?.unclaimedPoints) || 0);
-  const sampleAt = Date.parse(subscription?.accrualAsOf || "") || Number(state.vipServerNowMs) || now;
-  const endAt = Date.parse(subscription?.endAt || "");
-  const rate = Math.max(0, Number(subscription?.dailyMiningRatePoints) || 0);
-  const storageCapAt = vipStorageCapAt(subscription);
-  const accrualUntil = Number.isFinite(endAt)
-    ? Math.min(now, endAt, Number.isFinite(storageCapAt) ? storageCapAt : now)
-    : Number.isFinite(storageCapAt) ? Math.min(now, storageCapAt) : now;
-  const elapsedMs = Math.max(0, accrualUntil - sampleAt);
-  let estimated = base + (rate * elapsedMs / 86400000);
-  const isNewPolicy = subscription?.policyVersion === "v2_100d";
-  if (!isNewPolicy && Number(subscription?.principalAtMaturityPoints) > 0
-    && Number.isFinite(endAt) && now >= endAt && sampleAt < endAt) {
-    estimated += Number(subscription.principalAtMaturityPoints);
-  }
-  const cap = Number(subscription?.unclaimedEstimateCapPoints);
-  if (Number.isFinite(cap) && cap >= 0) estimated = Math.min(estimated, cap);
-  return Math.max(0, estimated);
-}
-
-function vipStorageCapAt(subscription) {
-  const explicitCap = Date.parse(subscription?.storageCapAt || "");
-  if (Number.isFinite(explicitCap)) return explicitCap;
-  const anchor = Date.parse(subscription?.lastClaimAt || subscription?.startAt || "");
-  return Number.isFinite(anchor) ? anchor + 86400000 : NaN;
-}
-
-function vipStorageFull(subscription, now = Date.now() + Number(state.vipServerOffsetMs || 0)) {
-  const endAt = Date.parse(subscription?.endAt || "");
-  const capAt = vipStorageCapAt(subscription);
-  return Boolean(subscription?.storageFull || Number.isFinite(capAt) && now >= capAt && (!Number.isFinite(endAt) || now < endAt));
-}
-
-function formatVipStorageTime(milliseconds) {
-  const totalSeconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-function vipPlanProgressPercent(subscription, now = Date.now() + Number(state.vipServerOffsetMs || 0)) {
-  const endAt = Date.parse(subscription?.endAt || "");
-  if (!Number.isFinite(endAt)) return 0;
-  const durationDays = Math.max(1, Number(subscription?.durationDays) || 0);
-  const explicitStartAt = Date.parse(subscription?.startAt || "");
-  const startAt = Number.isFinite(explicitStartAt) ? explicitStartAt : endAt - (durationDays * 86400000);
-  const totalMs = Math.max(1, endAt - startAt);
-  return Math.min(100, Math.max(0, Number((((now - startAt) / totalMs) * 100).toFixed(2))));
 }
 
 function renderProfileVip() {
@@ -4361,22 +3587,12 @@ function renderProfileVip() {
   const subscriptions = state.vipSubscriptions || [];
   const activeSubscriptions = subscriptions.filter(subscription => subscription.status === "active");
   const expiredSubscriptions = subscriptions.filter(subscription => subscription.status !== "active");
-  const now = Date.now() + Number(state.vipServerOffsetMs || 0);
-  const liveSubscriptions = activeSubscriptions.filter(subscription => {
-    const endAt = Date.parse(subscription.endAt || "");
-    return Number.isFinite(endAt) && now < endAt;
-  });
-  const storageFull = liveSubscriptions.some(subscription => vipStorageFull(subscription, now));
-  const storageCapAt = liveSubscriptions
-    .map(subscription => vipStorageCapAt(subscription))
-    .filter(Number.isFinite)
-    .reduce((soonest, value) => Math.min(soonest, value), Infinity);
-  const unclaimedVipPoints = activeSubscriptions.reduce((sum, subscription) => sum + vipLiveUnclaimed(subscription, now), 0);
+  const filteredSubscriptions = vipSubscriptionFilter === "active" ? activeSubscriptions : expiredSubscriptions;
+  const claimableSubscriptions = activeSubscriptions.filter(subscription => subscription.canClaim === true);
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
-  const iconByPlan = { 1: "⚡", 2: "⚡", 3: "⚡", 4: "⚡", 5: "⚡", 6: "⚡", 7: "⚡", 8: "⚡", 9: "⚡", 10: "⚡" };
-
+  const iconByPlan = { 1: "◈", 2: "✦", 3: "♛", 4: "✦", 5: "⬡", 6: "✧", 7: "◆", 8: "♦", 9: "⬦", 10: "♛" };
   const planCards = visiblePlans.map(plan => {
     const available = plan.enabled === true && plan.comingSoon !== true;
     const canAfford = Number(state.points) >= Number(plan.pricePoints);
@@ -4395,65 +3611,101 @@ function renderProfileVip() {
         : planNumber === 6 ? "vipPlanBadge--recommended"
           : planNumber === 10 ? "vipPlanBadge--best-value" : "vipPlanBadge--status";
     const buttonLabel = plan.comingSoon ? t("vip_status_coming_soon")
-      : available ? (canAfford ? t("vip_activate") : t("vip_need_more_UP", { n: formatPoints(neededPoints) }))
+      : available ? (canAfford ? t("vip_buy") : t("vip_need_more_points", { n: formatPoints(neededPoints) }))
         : t("vip_status_inactive");
     const totalRewardPoints = plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100);
     const dailyAveragePoints = plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays));
     const isNewVipPolicy = plan.policyVersion === "v2_100d";
     const dailyTotalPayoutPoints = Number(plan.dailyTotalPayoutPoints || 0);
     const totalReceivedPoints = Number(plan.totalReceivedPoints || 0);
-    const planDailyMiningPoints = Number(plan.dailyMiningRatePoints ?? (isNewVipPolicy ? dailyTotalPayoutPoints : dailyAveragePoints));
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
       <article class="vipPlanCard vipPlanCard--${theme}">
-        <div class="vipPlanAccent" aria-hidden="true"><span class="vipPlanMark">${iconByPlan[planNumber] || "⚡"}</span></div>
-        <div class="vipPlanBody">
-          <div class="vipPlanTopline">
-            <div class="vipPlanTitleLine"><span class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</span><span class="vipPlanDuration">${formatPoints(plan.durationDays)}d</span>${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}</div>
-          </div>
-          <div class="vipPlanInlineMeta"><span>${formatPoints(plan.pricePoints)} ${t("vip_UP_unit")}</span><i aria-hidden="true">·</i><span>${t("vip_daily_total_label")}: ${formatNumber(planDailyMiningPoints, 2)} ${t("vip_UP_per_day")}</span><i aria-hidden="true">·</i><span>${t("vip_total_received_label")}: ${formatNumber(isNewVipPolicy ? totalReceivedPoints : totalRewardPoints, 2)} ${t("vip_UP_unit")}</span></div>
+        <div class="vipPlanGlow" aria-hidden="true"></div>
+        <div class="vipPlanTopline">
+          <div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">${iconByPlan[planNumber] || "✦"}</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</div></div>
+          ${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}
         </div>
-        <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})"><span>${isPurchasing ? t("vip_buying") : buttonLabel}</span><i aria-hidden="true">↗</i></button>
+        <div class="vipPlanStats">
+          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${formatPoints(plan.pricePoints)}</b></div>
+          <div class="vipPlanStat"><span>${t(isNewVipPolicy ? "vip_daily_total_label" : "vip_plan_profit_label")}</span><b>${isNewVipPolicy ? `${formatPoints(dailyTotalPayoutPoints)} ${t("vip_points_unit")}` : `${formatNumber(plan.monthlyRewardPercent, 2)}%`}</b></div>
+          <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(plan.durationDays) })}</b></div>
+        </div>
+        <div class="vipPlanReward"><span>${t(isNewVipPolicy ? "vip_total_received_label" : "vip_total_reward_label")}</span><b>${formatPoints(isNewVipPolicy ? totalReceivedPoints : totalRewardPoints)} ${t("vip_points_unit")}</b></div>
+        ${isNewVipPolicy ? "" : `<div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>`}
+        <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})">${isPurchasing ? t("vip_buying") : buttonLabel}</button>
       </article>`;
   }).join("");
 
-  const activePlanRows = activeSubscriptions.map(subscription => {
-    const id = escapeHTML(subscription.id);
-    const ended = Number.isFinite(Date.parse(subscription.endAt || "")) && now >= Date.parse(subscription.endAt);
-    const rate = ended ? 0 : Number(subscription.dailyMiningRatePoints || 0);
-    const remainingDays = Math.max(0, Math.ceil((Date.parse(subscription.endAt) - now) / 86400000));
-    const progress = vipPlanProgressPercent(subscription, now);
+  const subscriptionCards = filteredSubscriptions.map(subscription => {
+    const isActive = subscription.status === "active";
+    const isCancelled = subscription.status === "cancelled";
+    const statusText = isActive ? t("vip_status_active") : isCancelled ? t("vip_status_cancelled") : t("vip_status_completed");
+    const nextReward = formatPoints(subscription.nextRewardPoints || 0);
+    let claimMarkup = "";
+    if (isActive && subscription.canClaim) {
+      const claiming = vipClaimingIds.has(subscription.id) || vipClaimAllBusy;
+      claimMarkup = `<button type="button" class="primary" data-vip-claim="${escapeHTML(subscription.id)}" ${claiming ? "disabled" : ""}>${claiming ? t("vip_loading") : t("vip_claim_button", { n: nextReward })}</button>`;
+    } else if (isActive && subscription.nextClaimAt) {
+      const claimTime = Date.parse(subscription.nextClaimAt);
+      const serverNow = Date.now() + Number(state.vipServerOffsetMs || 0);
+      const hasClaimed = Number(subscription.claimsCompleted) > 0;
+      const label = hasClaimed ? `<div class="cardSubtitle">${t("vip_claimed_today")}</div>` : "";
+      claimMarkup = `${label}${claimTime > serverNow ? `<div class="cardSubtitle">${t("vip_claim_next", { time: `<span data-vip-countdown="${escapeHTML(subscription.nextClaimAt)}">${formatVipCountdown(claimTime - serverNow)}</span>` })}</div>` : ""}`;
+    }
     return `
-      <div class="vipHeroPlanItem">
-        <div class="vipHeroPlanRow">
-          <span class="vipHeroPlanName">${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</span>
-          <span class="vipHeroPlanMeta"><span data-vip-live-rate="${id}">${formatNumber(rate, Number.isInteger(rate) ? 0 : 2)} ${t("vip_points_per_day")}</span> · <span data-vip-live-days="${id}">${formatPoints(remainingDays)}d</span></span>
+      <article class="vipSubscriptionCard">
+        <div class="vipPlanTopline"><div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">◌</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</div></div><span class="badge ${isActive ? "success" : "info"}">${statusText}</span></div>
+        <div class="vipSubscriptionGrid">
+          <div>${t("vip_days_progress", { done: formatPoints(subscription.daysCompleted), total: formatPoints(subscription.durationDays) })}</div>
+          <div>${t("vip_days_remaining", { n: formatPoints(subscription.daysRemaining) })}</div>
+          <div>${t("vip_claim_progress", { claimed: formatPoints(subscription.claimsCompleted), total: formatPoints(subscription.totalClaims) })}</div>
+          ${isActive ? `<div>${t("vip_todays_reward", { n: nextReward })}</div>` : ""}
+          <div>${t("vip_total_earned", { n: formatPoints(subscription.claimedRewardPoints) })}</div>
+          <div>${t("vip_total_reward", { n: formatPoints(subscription.totalRewardPoints) })}</div>
+          ${isActive ? `<div>${t("vip_principal_note", { n: formatPoints(subscription.pricePoints) })}</div>` : isCancelled ? "" : `<div>${t("vip_status_completed")}</div>`}
         </div>
-        <div class="vipHeroPlanProgress" role="progressbar" aria-label="${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span data-vip-progress="${id}" style="width:${progress}%"></span></div>
-      </div>`;
+        ${claimMarkup}
+      </article>`;
   }).join("");
 
-  const expiredRows = expiredSubscriptions.map(subscription => `
-    <div class="vipPastPlanRow">
-      <span>${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</span>
-      <small>${t(subscription.status === "cancelled" ? "vip_status_cancelled" : "vip_status_completed")}</small>
-      <b>${formatPoints(subscription.claimedRewardPoints || 0)} ${t("vip_UP_unit")}</b>
-    </div>`).join("");
-
-  const liveCount = activeSubscriptions.filter(subscription => {
-    const endAt = Date.parse(subscription.endAt || "");
-    return Number.isFinite(endAt) && now < endAt;
-  }).length;
-  const claimableCount = activeSubscriptions.filter(subscription => vipLiveUnclaimed(subscription, now) >= 0.01).length;
-  const hasLiveMining = liveCount > 0;
-
   return `
-    <div class="minePage">
-      <div class="sectionHeader"><button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button><h2 class="sectionTitle">${t("mining_title")}</h2><span></span></div>
-      ${renderMiningPanel()}
-    </div>`;
-
+    <style>
+      .vipRedesign{--vip-ink:#f7f7ff;--vip-muted:#a8aec2;--vip-line:rgba(255,255,255,.1);margin:0 -2px;padding:4px 0 26px;background:radial-gradient(circle at 85% 0%,rgba(34,211,238,.12),transparent 31%),radial-gradient(circle at 5% 28%,rgba(124,58,237,.13),transparent 28%),linear-gradient(180deg,rgba(7,12,24,.28),transparent 70%);color:var(--vip-ink)}
+      .vipRedesign .sectionHeader{margin-bottom:14px}.vipRedesign .sectionTitle{letter-spacing:-.2px}.vipRedesign .sectionMore{color:#c4d8ff}
+      .vipHero{position:relative;isolation:isolate;overflow:hidden;padding:19px;margin:0 0 20px;border:1px solid rgba(112,218,255,.24);border-radius:24px;background:radial-gradient(circle at 92% 15%,rgba(34,211,238,.2),transparent 34%),linear-gradient(140deg,rgba(18,66,99,.72),rgba(13,19,37,.96) 65%);box-shadow:0 18px 42px rgba(3,16,35,.3)}.vipHero:after{position:absolute;z-index:-1;content:"";width:170px;height:170px;right:-96px;bottom:-120px;border:1px solid rgba(103,232,249,.22);border-radius:50%;box-shadow:0 0 0 20px rgba(103,232,249,.035),0 0 0 42px rgba(103,232,249,.025)}.vipHeroTop{display:flex;align-items:center;justify-content:space-between;gap:12px}.vipHeroKicker{display:block;color:#91a5bd;font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase}.vipBalanceLabel{margin-top:7px;color:#d4e3f3;font-size:14px;font-weight:700}.vipHeroIcon{display:grid;place-items:center;width:42px;height:42px;border:1px solid rgba(103,232,249,.2);border-radius:15px;background:rgba(34,211,238,.1);color:#67e8f9;font-size:23px}.vipBalanceValue{display:flex;align-items:baseline;gap:8px;margin:9px 0 16px;direction:ltr}.vipBalanceValue strong{font-size:clamp(30px,8vw,43px);font-weight:950;letter-spacing:-1.3px;line-height:1.1;font-variant-numeric:tabular-nums}.vipBalanceValue span{color:#67e8f9;font-size:14px;font-weight:800}.vipHeroBottom{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:13px;border-top:1px solid rgba(255,255,255,.1)}.vipDailySummary span{display:block;color:var(--vip-muted);font-size:10px}.vipDailySummary b{display:block;margin-top:4px;color:#a5f3fc;font-size:14px}.vipHeroButton{flex:0 0 auto;min-height:39px;padding:9px 14px;border:1px solid rgba(103,232,249,.22);border-radius:13px;background:rgba(34,211,238,.12);color:#cffafe;font-size:12px;font-weight:850}
+      .vipCatalog{margin-top:18px}.vipCatalogHeading{margin:0 4px 12px}.vipCatalogHeading h3{margin:0;color:var(--vip-ink);font-size:17px;font-weight:900}.vipCatalogHeading p{margin:5px 0 0;color:var(--vip-muted);font-size:11px;line-height:1.6}
+      .vipPlanTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 12px;padding:5px;border:1px solid rgba(255,255,255,.08);border-radius:17px;background:rgba(4,10,22,.58)}.vipTierTab{min-width:0;padding:9px 5px;border:1px solid transparent;border-radius:12px;background:transparent;color:#9da8bc;text-align:center;transition:background .18s ease,border-color .18s ease,color .18s ease}.vipTierTab span{display:block;font-size:11px;font-weight:850}.vipTierTab small{display:block;margin-top:3px;color:inherit;font-size:9px;opacity:.8}.vipTierTab[aria-selected="true"]{border-color:rgba(103,232,249,.27);background:linear-gradient(135deg,rgba(34,211,238,.18),rgba(59,130,246,.12));color:#dffaff;box-shadow:0 5px 16px rgba(34,211,238,.09)}
+      .vipPlanCard,.vipSubscriptionCard{position:relative;isolation:isolate;overflow:hidden;margin:11px 0;padding:17px;border:1px solid var(--vip-line);border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(12,17,30,.94) 60%);box-shadow:0 14px 32px rgba(0,0,0,.22)}.vipPlanGlow{position:absolute;z-index:-1;width:170px;height:170px;right:-88px;top:-104px;border-radius:50%;filter:blur(4px);opacity:.75}.vipPlanCard--bronze{border-color:rgba(205,127,50,.4)}.vipPlanCard--bronze .vipPlanGlow{background:rgba(180,83,9,.35)}.vipPlanCard--silver{border-color:rgba(203,213,225,.35)}.vipPlanCard--silver .vipPlanGlow{background:rgba(148,163,184,.27)}.vipPlanCard--gold{border-color:rgba(250,204,21,.46);background:linear-gradient(145deg,rgba(120,72,12,.25),rgba(20,19,27,.94) 62%)}.vipPlanCard--gold .vipPlanGlow{background:rgba(234,179,8,.4)}.vipPlanCard--neon{border-color:rgba(59,130,246,.52);background:linear-gradient(145deg,rgba(30,64,175,.2),rgba(12,17,30,.95) 63%)}.vipPlanCard--neon .vipPlanGlow{background:rgba(37,99,235,.43)}.vipPlanCard--cyan{border-color:rgba(34,211,238,.48);background:linear-gradient(145deg,rgba(8,145,178,.2),rgba(12,17,30,.95) 63%)}.vipPlanCard--cyan .vipPlanGlow{background:rgba(6,182,212,.4)}.vipPlanCard--sapphire{border-color:rgba(96,165,250,.48);background:linear-gradient(145deg,rgba(29,78,216,.23),rgba(12,17,30,.95) 63%)}.vipPlanCard--sapphire .vipPlanGlow{background:rgba(59,130,246,.43)}.vipPlanCard--emerald{border-color:rgba(52,211,153,.42);background:linear-gradient(145deg,rgba(5,150,105,.2),rgba(12,17,30,.95) 63%)}.vipPlanCard--emerald .vipPlanGlow{background:rgba(16,185,129,.4)}.vipPlanCard--ruby{border-color:rgba(251,113,133,.45);background:linear-gradient(145deg,rgba(190,24,93,.18),rgba(12,17,30,.95) 63%)}.vipPlanCard--ruby .vipPlanGlow{background:rgba(244,63,94,.38)}.vipPlanCard--ultimate{border:1px solid transparent;background:linear-gradient(145deg,rgba(53,29,75,.97),rgba(12,17,30,.98) 65%) padding-box,linear-gradient(130deg,#facc15,#a855f7,#f9a8d4,#facc15) border-box;box-shadow:0 0 28px rgba(168,85,247,.2),0 14px 32px rgba(0,0,0,.25)}.vipPlanCard--ultimate .vipPlanGlow{background:rgba(168,85,247,.52)}
+      .vipPlanTopline{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:15px}.vipPlanTitleWrap{display:flex;align-items:center;gap:9px;min-width:0}.vipPlanMark{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border:1px solid rgba(255,255,255,.09);border-radius:13px;background:rgba(255,255,255,.055);color:#dbeafe;font-size:19px}.vipPlanCard--bronze .vipPlanMark{color:#fdba74;background:rgba(180,83,9,.2)}.vipPlanCard--silver .vipPlanMark{color:#e2e8f0;background:rgba(148,163,184,.2)}.vipPlanCard--gold .vipPlanMark{color:#fde68a;background:rgba(234,179,8,.2)}.vipPlanCard--neon .vipPlanMark,.vipPlanCard--sapphire .vipPlanMark{color:#93c5fd;background:rgba(37,99,235,.16)}.vipPlanCard--cyan .vipPlanMark{color:#67e8f9;background:rgba(6,182,212,.15)}.vipPlanCard--emerald .vipPlanMark{color:#6ee7b7;background:rgba(16,185,129,.14)}.vipPlanCard--ruby .vipPlanMark{color:#fda4af;background:rgba(244,63,94,.14)}.vipPlanCard--ultimate .vipPlanMark{color:#f5d0fe;background:linear-gradient(135deg,rgba(250,204,21,.2),rgba(168,85,247,.25))}.vipPlanTitle{font-size:15px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vipPlanBadge{flex:0 0 auto;padding:6px 9px;border:1px solid rgba(255,255,255,.09);border-radius:999px;background:rgba(255,255,255,.055);color:#c5cfdd;font-size:9px;font-weight:850;line-height:1.2}.vipPlanBadge--owned{border-color:rgba(74,222,128,.25);background:rgba(34,197,94,.11);color:#86efac}.vipPlanBadge--popular{border-color:rgba(250,204,21,.24);background:rgba(234,179,8,.1);color:#fde68a}.vipPlanBadge--recommended{border-color:rgba(103,232,249,.24);background:rgba(34,211,238,.1);color:#a5f3fc}.vipPlanBadge--best-value{border-color:rgba(216,180,254,.27);background:rgba(168,85,247,.13);color:#e9d5ff}.vipPlanBadge--status{color:#b4bfd0}
+      .vipPlanStats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:10px}.vipPlanStat{min-width:0;padding:10px 7px;border:1px solid rgba(255,255,255,.075);border-radius:14px;background:rgba(0,0,0,.18);text-align:center}.vipPlanStat span{display:block;min-height:27px;color:var(--vip-muted);font-size:9px;line-height:1.45}.vipPlanStat b{display:block;margin-top:4px;color:#fff;font-size:13px;font-variant-numeric:tabular-nums;direction:ltr}.vipPlanReward{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;border:1px solid rgba(255,255,255,.055);border-radius:14px;background:rgba(139,92,246,.09);color:#c2c7d4;font-size:11px}.vipPlanReward b{color:#e9d5ff;font-size:14px;font-variant-numeric:tabular-nums;direction:ltr}.vipPlanDaily{margin-top:9px;color:var(--vip-muted);font-size:10px}.vipPlanButton{width:100%;min-height:45px;margin-top:14px;padding:11px 13px;border:1px solid transparent;border-radius:14px;font-size:12px;font-weight:900;transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease}.vipPlanButton:not(:disabled):active{transform:scale(.985)}.vipPlanButton--primary{color:#fff;background:linear-gradient(135deg,#4f8cff,#7c3aed);box-shadow:0 9px 22px rgba(59,130,246,.2)}.vipPlanButton--insufficient{border-color:rgba(148,163,184,.17);background:rgba(71,85,105,.18);color:#b5c1d2;opacity:1!important}.vipPlanButton--secondary{border-color:rgba(167,139,250,.18);background:rgba(139,92,246,.08);color:#c4b5fd}.vipPlanButton:disabled{cursor:not-allowed;box-shadow:none}.vipPlanList>.vipEmptyTier{padding:18px 12px;border:1px dashed rgba(255,255,255,.13);border-radius:16px;color:var(--vip-muted);font-size:12px;text-align:center}.vipSubscriptionGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.vipSubscriptionGrid>div{padding:9px;border-radius:12px;background:rgba(0,0,0,.14);color:var(--vip-muted);font-size:10px;line-height:1.6}.vipSubscriptionCard button{width:100%;margin-top:12px}.vipPlanCard .badge,.vipSubscriptionCard .badge{flex:0 0 auto}
+      .vipTierTab:focus-visible,.vipHeroButton:focus-visible,.vipPlanButton:focus-visible{outline:2px solid #67e8f9;outline-offset:2px}
+      @media (max-width:420px){.vipPlanCard,.vipSubscriptionCard{padding:14px;border-radius:20px}.vipPlanStats{gap:5px}.vipPlanStat{padding:8px 4px}.vipPlanStat span{font-size:8px}.vipPlanStat b{font-size:11px}.vipPlanTitle{font-size:14px}.vipPlanTopline{gap:6px}.vipPlanBadge{padding:5px 7px;font-size:8px}.vipSubscriptionGrid{gap:6px}.vipHero{padding:16px}.vipBalanceValue strong{font-size:34px}}
+    </style>
+    <div class="vipRedesign">
+    <div class="sectionHeader">
+      <button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button>
+      <h2 class="sectionTitle">${t("vip_title")}</h2><span></span>
+    </div>
+    <div class="vipHero" aria-label="${t("vip_current_balance")}">
+      <div class="vipHeroTop"><div><span class="vipHeroKicker">${t("vip_membership_kicker")}</span><div class="vipBalanceLabel">${t("vip_current_balance")}</div></div><span class="vipHeroIcon" aria-hidden="true">✦</span></div>
+      <div class="vipBalanceValue"><strong>${formatPoints(state.points)}</strong><span>${t("vip_points_unit")}</span></div>
+      <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_daily_reward_summary")}</span><b>${formatPoints(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0))} ${t("vip_points_unit")}</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
+    </div>
+    ${subscriptions.length ? `<div class="vipSubscriptionTools" style="display:grid;gap:9px;margin:12px 0"><div class="vipStatusTabs" role="tablist" aria-label="${t("vip_subscription_filters_label")}" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:rgba(4,10,22,.58)"><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "active"}" onclick="setVipSubscriptionFilter('active')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "active" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "active" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "active" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_active")} <b>${formatPoints(activeSubscriptions.length)}</b></button><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "expired"}" onclick="setVipSubscriptionFilter('expired')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "expired" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "expired" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "expired" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_expired")} <b>${formatPoints(expiredSubscriptions.length)}</b></button></div><button type="button" class="vipClaimAll" ${!claimableSubscriptions.length || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" style="width:100%;min-height:43px;padding:10px 14px;border:1px solid rgba(74,222,128,.25);border-radius:13px;background:${claimableSubscriptions.length && !vipClaimAllBusy ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(34,211,238,.12))" : "rgba(71,85,105,.15)"};color:${claimableSubscriptions.length && !vipClaimAllBusy ? "#a7f3d0" : "#8792a5"};font-size:12px;font-weight:900">${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_all", { n: formatPoints(claimableSubscriptions.length) })}</button></div>${filteredSubscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t(vipSubscriptionFilter === "active" ? "vip_active_title" : "vip_expired_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t(vipSubscriptionFilter === "active" ? "vip_active_empty" : "vip_expired_empty")}</div></div>`}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
+    <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
+      <div class="vipCatalogHeading"><h3>${t("vip_catalog_title")}</h3><p>${t("vip_intro")}</p></div>
+      <div class="vipPlanTabs" role="tablist" aria-label="${t("vip_tier_tabs_label")}">
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "starter"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('starter')"><span>${t("vip_tier_starter")}</span><small>1–3</small></button>
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "pro"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('pro')"><span>${t("vip_tier_pro")}</span><small>4–7</small></button>
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "ultimate"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('ultimate')"><span>${t("vip_tier_ultimate")}</span><small>8–10</small></button>
+      </div>
+      <div class="vipPlanList" id="vipPlanGrid" role="tabpanel" aria-live="polite">${plans.length ? (planCards || `<div class="vipEmptyTier">${t("vip_category_empty")}</div>`) : `<div class="card"><div class="emptyDesc">${t("vip_empty_plans")}</div></div>`}</div>
+    </section>
+    </div>
+  `;
 }
+
 function retryVipPlans() {
   state.vipDataLoaded = false;
   state.vipError = "";
@@ -4525,7 +3777,7 @@ async function claimVipReward(subscriptionId, options = {}) {
     state.vipDataLoaded = false;
     await loadVipPlans();
     if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") await renderProfile();
-    if (!options.silent) toast(t("vip_claim_success", { n: formatNumber(result.totalPayoutPoints ?? result.rewardPoints, 2) }), "success");
+    if (!options.silent) toast(t("vip_claim_success", { n: formatPoints(result.rewardPoints) }), "success");
     return true;
   } catch (error) {
     clearDefinitiveIdempotencyFailure(scope, error);
@@ -4542,45 +3794,34 @@ async function claimVipReward(subscriptionId, options = {}) {
 window.claimVipReward = claimVipReward;
 
 async function claimAllVipRewards() {
-  if (!readModelActionAllowed()) return;
   if (vipClaimAllBusy || vipClaimingIds.size) return;
-  const hasClaimableRewards = (state.vipSubscriptions || [])
-    .some(subscription => subscription.status === "active" && vipLiveUnclaimed(subscription) >= 0.01);
-  if (!hasClaimableRewards) return;
+  const subscriptionIds = (state.vipSubscriptions || [])
+    .filter(subscription => subscription.status === "active" && subscription.canClaim === true)
+    .map(subscription => subscription.id)
+    .filter(Boolean);
+  if (!subscriptionIds.length) return;
 
   vipClaimAllBusy = true;
-  vipClaimAllProgress = { done: 0, total: 1 };
-  // Disable every rendered copy immediately, before the async request starts.
-  // The backend remains idempotent, while this prevents rapid taps from
-  // creating a second in-flight bulk request in the first place.
-  document.querySelectorAll("[data-vip-claim-all]").forEach(button => {
-    button.disabled = true;
-    button.setAttribute("aria-busy", "true");
-  });
+  vipClaimAllProgress = { done: 0, total: subscriptionIds.length };
   const isVipView = () => (state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip";
   if (isVipView()) {
     const content = $("#content");
     if (content) content.innerHTML = renderProfileVip();
   }
 
-  const scope = "vip_claim_all";
+  let succeeded = 0;
   try {
-    const result = await api("/api/points/vip/claim-all", {
-      method: "POST",
-      headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) },
-      body: {}
-    });
-    clearPendingIdempotencyKey(scope);
-    vipClaimAllProgress.done = 1;
-    if (Array.isArray(result.subscriptions)) state.vipSubscriptions = result.subscriptions;
-    const returnedPoints = Number(result.points);
-    if (Number.isFinite(returnedPoints)) state.points = returnedPoints;
-    updateHeader();
-    updateVipLiveDashboard();
-    toast(t("vip_claim_success", { n: formatNumber(result.totalPayoutPoints || 0, 2) }), "success");
-  } catch (error) {
-    clearDefinitiveIdempotencyFailure(scope, error);
-    toast(translateServerMessage(error.code, error.message), "error");
+    for (const subscriptionId of subscriptionIds) {
+      const claimed = await claimVipReward(subscriptionId, { silent: true, bulk: true });
+      if (claimed) succeeded += 1;
+      vipClaimAllProgress.done += 1;
+      if (isVipView()) {
+        const content = $("#content");
+        if (content) content.innerHTML = renderProfileVip();
+      }
+    }
+    const failed = subscriptionIds.length - succeeded;
+    toast(t("vip_claim_all_result", { success: succeeded, failed, total: subscriptionIds.length }), failed ? "warning" : "success");
   } finally {
     vipClaimAllBusy = false;
     vipClaimAllProgress = { done: 0, total: 0 };
@@ -4600,9 +3841,6 @@ async function renderProfile() {
   const isCurrentProfileRender = () => renderRequestId === profileRenderSequence
     && (state.activeTab === "profile" || (state.activeTab === "vip" && profileView === "vip"));
   const content = $("#content");
-  if (profileView === "menu" && !state.referralDataLoaded && !state.referralLoading && !state.referralError) {
-    void loadReferralData();
-  }
   if (profileView !== "leaderboard" || leaderboardMode !== "weekly") stopWeeklyCompetitionCountdown();
   if (profileView !== "vip") stopVipCountdown();
   if (profileView === "leaderboard" && state.leaderboard.length === 0) {
@@ -4620,11 +3858,9 @@ async function renderProfile() {
     await loadHistory(true);
     if (!isCurrentProfileRender()) return;
   }
-  if (profileView === "vip") {
-    const miningRequest = loadMiningStatus();
-    content.innerHTML = renderProfileVip();
-    startVipCountdown();
-    await miningRequest;
+  if (profileView === "vip" && !state.vipDataLoaded && !state.vipLoading) {
+    content.innerHTML = `<div class="loading" style="height:300px"></div>`;
+    await loadVipPlans();
     if (!isCurrentProfileRender()) return;
   }
   if (profileView === "referral") {
@@ -4638,12 +3874,12 @@ async function renderProfile() {
     if (leaderboardMode === "weekly") startWeeklyCompetitionCountdown();
   } else if (profileView === "about") {
     content.innerHTML = renderProfileAbout();
-  } else if (profileView === "groups") {
-    content.innerHTML = renderProfileGroups();
   } else if (profileView === "history") {
     content.innerHTML = renderProfileHistory();
   } else if (profileView === "vip") {
-    content.innerHTML = renderProfileVip();
+    content.innerHTML = state.vipError
+      ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondary" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
+      : renderProfileVip();
     startVipCountdown();
   } else {
     content.innerHTML = renderProfileMenu();
@@ -4653,35 +3889,23 @@ async function renderProfile() {
 async function renderVipTab() {
   const renderRequestId = navigationSequence;
   profileView = "vip";
-  const miningRequest = loadMiningStatus();
-  const content = $("#content");
-  if (content) content.innerHTML = renderProfileVip();
-  startVipCountdown();
-  await miningRequest;
+  if (!state.vipDataLoaded && !state.vipLoading) {
+    $("#content").innerHTML = `<div class="loading" style="height:300px"></div>`;
+    await loadVipPlans();
+  }
   if (renderRequestId !== navigationSequence || state.activeTab !== "vip") return;
-  const currentContent = $("#content");
-  if (currentContent) currentContent.innerHTML = renderProfileVip();
+  $("#content").innerHTML = state.vipError
+    ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondary" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
+    : renderProfileVip();
   startVipCountdown();
 }
-
-async function retryMiningStatus() {
-  const renderRequestId = navigationSequence;
-  const isMineView = () => state.activeTab === "vip" || (state.activeTab === "profile" && profileView === "vip");
-  if (!isMineView()) return;
-  const miningRequest = loadMiningStatus();
-  const content = $("#content");
-  if (content) content.innerHTML = renderProfileVip();
-  startVipCountdown();
-  await miningRequest;
-  if (renderRequestId !== navigationSequence || !isMineView()) return;
-  const currentContent = $("#content");
-  if (currentContent) currentContent.innerHTML = renderProfileVip();
-  startVipCountdown();
-}
-window.retryMiningStatus = retryMiningStatus;
 
 /* ================= TAB DISPATCH ================= */
 async function renderCurrentTab(requestId = navigationSequence) {
+  if (state.phoneVerificationRequired) {
+    renderPhoneVerificationGate();
+    return;
+  }
   const tab = state.activeTab;
   const isCurrentRender = () => requestId === navigationSequence && state.activeTab === tab;
   showLoading();
@@ -4709,8 +3933,10 @@ async function renderCurrentTab(requestId = navigationSequence) {
       void loadReferralData();
     } else if (tab === "vip") {
       if (cachedReadModelAvailable) {
+        const content = $("#content");
+        if (content) content.innerHTML = renderProfileVip();
+        startVipCountdown();
         void refreshReadModelInBackground();
-        await renderVipTab();
       } else {
         await loadUserData();
         if (!isCurrentRender()) return;
@@ -4775,6 +4001,11 @@ async function boot() {
 
   await bootstrapAuth();
   applyStaticTranslations();
+  if (state.phoneVerificationRequired) {
+    renderPhoneVerificationGate();
+    return;
+  }
+  document.body.classList.remove("phone-verification-required");
   if (typeof window.initGramupWalletConnect === "function") await window.initGramupWalletConnect();
 
   if (!termsAccepted()) {

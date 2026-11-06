@@ -14,8 +14,7 @@
   const PROFILE_KEYS = Object.freeze([
     "points", "gramBalance", "rate", "streak", "canCheckIn", "totalCheckins",
     "minWithdrawGram", "nextResetAt", "totalEarnedPoints", "level",
-    "withdrawalProgress", "withdrawalRemainingGram", "gramUsdPrice", "firstName",
-    "streakMissed", "streakMissedDays", "streakFreezeCost"
+    "withdrawalProgress", "withdrawalRemainingGram", "gramUsdPrice", "firstName"
   ]);
   const TASK_KEYS = Object.freeze([
     "_id", "title", "description", "reward", "url", "verifyType", "type", "taskKind",
