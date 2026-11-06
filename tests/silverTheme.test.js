@@ -20,17 +20,20 @@ for (const selector of [
   'html[data-theme="silver"] body',
   'html[data-theme="silver"] #appHeader',
   'html[data-theme="silver"] .bottomNav',
-  'html[data-theme="silver"] .luckySpinPage .spinWheel',
+  'html[data-theme="silver"] #content .mineConsole',
+  'html[data-theme="silver"] #content .dailyCheckDay',
   'html[data-theme="silver"] .vipRedesign .vipMiningHero',
   'html[data-theme="silver"] .referralDashboard .rf-hero',
   'html[data-theme="silver"] :is(.profileHeaderCard',
   'html[data-theme="silver"] :is(input, textarea, select'
 ]) assert.ok(css.includes(selector), `Silver CSS must cover ${selector}`);
+assert.doesNotMatch(`${app}\n${html}`, /luckySpinPage|spinWheel|data-tab=["']spin/i,
+  'Lucky Spin UI must remain out of scope until its separate module is built');
 assert.match(css, /--bg: #d9dfe5/);
 assert.match(css, /--text: #0f172a/);
 assert.match(css, /background: linear-gradient\(145deg, rgba\(250,251,252/);
 assert.match(html, /theme-selector\.css\?v=up_v29_silver_theme/);
 assert.match(html, /i18n\.js\?v=up_v31_mine_status_fix/);
-assert.match(html, /app\.js\?v=up_v31_mine_status_fix/);
+assert.match(html, /app\.js\?v=up_v32_up_mine_20261106/);
 
 console.log('PASS — Silver Metallic theme is selectable, persisted across reloads, localized, and styled across key app sections');

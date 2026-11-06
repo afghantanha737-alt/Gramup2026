@@ -21,9 +21,18 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'public/css/style.css'), 
 const sharedClaim = fs.readFileSync(path.join(__dirname, '..', 'utils/dailyAutoCheckin.js'), 'utf8');
 assert.match(pointsRoute, /claimDailyCheckin\(req\.dbUser\._id/);
 assert.match(sharedClaim, /options\.rewardForStreak \|\| dailyCheckinReward/);
+assert.match(pointsRoute, /const nextStreak = canCheckIn[\s\S]*utcDayKey\(u\.lastCheckIn\) === todayKey - 1 \? streakValue \+ 1 : 1/,
+  'a missed day resets the next reward cycle rather than leaving the old streak reward active');
+assert.match(pointsRoute, /dailyCheckinCycleDay,\s*dailyCheckinReward: dailyCheckinRewardAmount/,
+  'the status API must return the authoritative cycle day and upcoming reward');
 assert.match(pointsRoute, /nextResetTimestamp\(\)/);
 assert.match(app, /data-daily-checkin-countdown/);
 assert.match(app, /checkin_next_available_in/);
+assert.match(app, /const todayReward = Number\(state\.dailyCheckinReward\)/);
+assert.match(app, /dailyCheckinCycleDay = Math\.min\(7/);
+assert.match(app, /dailyCheckDay \$\{claimed \? "is-complete is-claimed"/);
+assert.match(app, /dailyCheckReward[\s\S]*gramup-logo-cube-transparent\.png/);
+assert.match(css, /\.dailyCheckGrid\{display:grid;grid-template-columns:repeat\(7,/);
 assert.match(css, /\.dailyCheckCountdown/);
 
-console.log('ALL PASS — Daily Check cycle rewards, Kabul reset boundary and countdown contract');
+console.log('ALL PASS — seven-day UP calendar, missed-streak reward reset, Kabul countdown boundary, and server-authoritative cycle status');

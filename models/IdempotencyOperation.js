@@ -12,7 +12,9 @@ const idempotencyOperationSchema = new mongoose.Schema({
     'vip_purchase',
     'vip_daily_claim',
     'vip_partial_claim',
-    'vip_bulk_claim'
+    'vip_bulk_claim',
+    'mining_claim',
+    'mining_upgrade'
   ] },
   key: { type: String, required: true, minlength: 8, maxlength: 120 },
   requestHash: { type: String, required: true, match: /^[a-f0-9]{64}$/ },

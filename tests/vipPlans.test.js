@@ -133,9 +133,9 @@ for (const [planNumber, pricePoints] of [[1, 10000], [2, 30000], [3, 50000]]) {
   assert.strictEqual((dailyCents * 100) / 100, pricePoints + pricePoints / 10, `VIP ${planNumber} total 100-day payout`);
 }
 assert.match(indexHtml, /data-tab="vip"/);
-assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|vip|wallet|profile)"/g) || []).length, 5);
-assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'vip', 'wallet', 'profile']);
-assert.match(app, /validTabs = \["home", "tasks", "vip", "wallet", "profile"\]/);
+assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|mine|vip|wallet|profile)"/g) || []).length, 6);
+assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'mine', 'vip', 'wallet', 'profile']);
+assert.match(app, /validTabs = \["home", "mine", "tasks", "vip", "wallet", "profile"\]/);
 assert.match(app, /function renderDailyCheckinCard\(\)/);
 assert.match(app, /DAILY_CHECKIN_REWARDS = Object\.freeze\(\[5, 7, 9, 11, 13, 14, 15\]\)/);
 assert.doesNotMatch(app, /function renderDaily\(\)/);

@@ -298,6 +298,12 @@ router.get('/me', auth, async (req, res) => {
 
   const todayKey = utcDayKey(new Date());
   const canCheckIn = !u.lastCheckIn || utcDayKey(u.lastCheckIn) < todayKey;
+  const streakValue = Math.max(0, Math.floor(Number(u.streak) || 0));
+  const nextStreak = canCheckIn
+    ? (u.lastCheckIn && utcDayKey(u.lastCheckIn) === todayKey - 1 ? streakValue + 1 : 1)
+    : Math.max(1, streakValue);
+  const dailyCheckinCycleDay = cycleDayForStreak(nextStreak);
+  const dailyCheckinRewardAmount = dailyCheckinReward(nextStreak);
   const minWithdrawGram = Number((settings.minWithdrawPoints * settings.rate).toFixed(6));
 
   // مجموع UP که کاربر تا امروز «کسب» کرده (بدون احتساب تبدیل GRAM→UP و اصلاح دستی ادمین)
@@ -326,6 +332,9 @@ router.get('/me', auth, async (req, res) => {
     rate: settings.rate,
     streak: u.streak,
     canCheckIn,
+    dailyCheckinCycleDay,
+    dailyCheckinReward: dailyCheckinRewardAmount,
+    lastCheckIn: u.lastCheckIn || null,
     totalCheckins: u.totalCheckins,
     firstName: u.firstName,
     minWithdrawGram,
@@ -354,6 +363,8 @@ router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
     upBalance: Number(result.user.points) || 0,
     streak: result.streak,
     cycleDay: result.cycleDay,
+    dailyCheckinCycleDay: result.cycleDay,
+    dailyCheckinReward: result.amount,
     nextResetAt: nextResetTimestamp()
   });
 });

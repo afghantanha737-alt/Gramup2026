@@ -99,3 +99,128 @@ html[data-theme="light"] button:disabled { color: #64748b; }
   .profileThemeChoices { gap: 5px; }
   .themeChoice { font-size: 8px; }
 }
+
+
+/* Metallic Silver — full-app palette, shared by Home, Mine, Tasks, Wallet, Referral and overlays. */
+html[data-theme="silver"] {
+  color-scheme: light;
+  --bg: #d9dfe5;
+  --bg-soft: #e8edf1;
+  --surface: rgba(250,251,252,.96);
+  --surface-2: #f8fafb;
+  --surface-3: #eef2f5;
+  --text: #0f172a;
+  --text-soft: #334155;
+  --text-muted: #64748b;
+  --line: rgba(15,23,42,.12);
+  --line-strong: rgba(15,23,42,.20);
+  --primary: #0f766e;
+  --primary-2: #14b8a6;
+  --primary-soft: rgba(20,184,166,.12);
+  --info: #0f766e;
+  --info-soft: rgba(53,215,200,.14);
+  --brand-accent: #35d7c8;
+  --shadow: 0 18px 48px rgba(15,23,42,.12);
+  --shadow-soft: 0 8px 24px rgba(15,23,42,.08);
+}
+html[data-theme="silver"] body {
+  color: var(--text);
+  background:
+    radial-gradient(circle at 88% -8%, rgba(255,255,255,.82), transparent 36%),
+    radial-gradient(circle at 0% 28%, rgba(53,215,200,.11), transparent 32%),
+    linear-gradient(160deg, #e8edf1 0%, #d9dfe5 55%, #cbd3db 100%);
+}
+html[data-theme="silver"] #appHeader {
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(245,248,250,.98), rgba(231,236,240,.96));
+  border-bottom: 1px solid rgba(15,23,42,.11);
+  box-shadow: 0 6px 24px rgba(15,23,42,.06);
+}
+html[data-theme="silver"] .bottomNav {
+  color: var(--text);
+  background: rgba(246,248,250,.96) !important;
+  border-top-color: rgba(15,23,42,.13);
+  box-shadow: 0 -8px 24px rgba(15,23,42,.08);
+}
+html[data-theme="silver"] .bottomNav button { color: #64748b; }
+html[data-theme="silver"] .bottomNav button.active {
+  color: #0f172a;
+  background: linear-gradient(180deg, rgba(53,215,200,.19), rgba(53,215,200,.07));
+  box-shadow: inset 0 0 0 1px rgba(15,118,110,.14), 0 4px 14px rgba(15,118,110,.09);
+}
+html[data-theme="silver"] .bottomNav button.active::before { background: #0f766e; box-shadow: none; }
+html[data-theme="silver"] .brandName { color: #0f172a; }
+html[data-theme="silver"] .brandId { color: #64748b; }
+html[data-theme="silver"] .headerUpBalance { color: #0f172a; background: rgba(255,255,255,.75); border-color: rgba(15,118,110,.2); }
+html[data-theme="silver"] .headerIconBtn { color: #334155; background: rgba(255,255,255,.65); border-color: rgba(15,23,42,.12); }
+html[data-theme="silver"] #content .card,
+html[data-theme="silver"] #content .tbCard,
+html[data-theme="silver"] #content .taskItem,
+html[data-theme="silver"] #content .referralCard,
+html[data-theme="silver"] #content .referralDashboard,
+html[data-theme="silver"] #content .walletOverview,
+html[data-theme="silver"] #content .profileHeaderCard,
+html[data-theme="silver"] #content .profileOverviewCard,
+html[data-theme="silver"] #content .mineConsole,
+html[data-theme="silver"] #content .mineMetricCard,
+html[data-theme="silver"] #content .mineSessionCard,
+html[data-theme="silver"] #content .minerTrainCard,
+html[data-theme="silver"] #content .dailyCheckDay {
+  color: var(--text);
+  border-color: rgba(15,23,42,.12);
+  background: linear-gradient(145deg, rgba(250,251,252,.96), rgba(232,237,241,.96));
+  box-shadow: 0 8px 24px rgba(15,23,42,.06);
+}
+html[data-theme="silver"] #content :is(.cardTitle,.sectionTitle,.tbLabel,.tbAmountNum,.walletOverviewValue strong,.taskTitle,.referralFriendName,.profileText,.ledgerDesc,.mineTitle,.minerTrainTitle) { color: #0f172a; }
+html[data-theme="silver"] #content :is(.cardSubtitle,.tbSub,.taskDesc,.historyMeta,.profilePulseLabel,.dailyCheckSubtitle,.mineSubtitle,.minerTrainMeta) { color: #475569; }
+html[data-theme="silver"] .primaryBtn,
+html[data-theme="silver"] .heroRingBtn,
+html[data-theme="silver"] .minePrimaryBtn {
+  color: #062b29;
+  border-color: rgba(15,118,110,.22);
+  background: linear-gradient(135deg, #67e8d9, #35d7c8 55%, #14b8a6);
+  box-shadow: 0 8px 18px rgba(15,118,110,.16);
+}
+html[data-theme="silver"] :is(.secondaryBtn,.taskAction,.mineBoostBtn,.themeChoice) {
+  color: #0f172a;
+  border-color: rgba(15,23,42,.16);
+  background: rgba(255,255,255,.82);
+}
+html[data-theme="silver"] :is(button:disabled,.disabled) { color: #94a3b8; }
+html[data-theme="silver"] :is(input, textarea, select, .referralLinkField, .walletAddressInput) {
+  color: #0f172a;
+  border-color: rgba(15,23,42,.18);
+  background: rgba(255,255,255,.84);
+}
+html[data-theme="silver"] :is(input, textarea, select)::placeholder { color: #64748b; }
+html[data-theme="silver"] .dailyCheckCard {
+  border-color: rgba(15,118,110,.18);
+  background: linear-gradient(145deg, rgba(250,251,252,.98), rgba(222,230,235,.98));
+}
+html[data-theme="silver"] .dailyCheckDay.is-current { border-color: rgba(15,118,110,.58); box-shadow: 0 0 0 2px rgba(53,215,200,.14); }
+html[data-theme="silver"] .dailyCheckDay.is-complete { background: linear-gradient(145deg, #ecfdf5, #d7f5ea); }
+html[data-theme="silver"] .dailyCheckDay.is-locked { opacity: .74; }
+html[data-theme="silver"] .dailyCheckCountdown { color: #0f766e; border-color: rgba(15,118,110,.18); background: rgba(255,255,255,.74); }
+html[data-theme="silver"] .mineProgressTrack { background: rgba(15,23,42,.11); }
+html[data-theme="silver"] .mineProgressFill { background: linear-gradient(90deg, #14b8a6, #35d7c8); }
+html[data-theme="silver"] .mineConsole--empty { background: linear-gradient(145deg, rgba(250,251,252,.98), rgba(226,232,237,.98)); }
+html[data-theme="silver"] .mineActiveBadge { color: #0f766e; background: rgba(53,215,200,.15); border-color: rgba(15,118,110,.2); }
+html[data-theme="silver"] .ledgerAmount.positive { color: #047857; }
+html[data-theme="silver"] .ledgerAmount.negative { color: #b91c1c; }
+html[data-theme="silver"] .referralDashboard .rf-hero { color: #0f172a; background: linear-gradient(145deg, rgba(250,251,252,.98), rgba(220,228,234,.98)); border-color: rgba(15,23,42,.13); }
+html[data-theme="silver"] .vipRedesign .vipMiningHero { color: #0f172a; background: linear-gradient(145deg, rgba(250,251,252,.98), rgba(220,228,234,.98)); }
+html[data-theme="silver"] :is(.profileHeaderCard,.profileOverviewCard,.profileAboutView,.profileHistoryView,.profileThemePicker) { color: var(--text); }
+html[data-theme="silver"] :is(.profileItem,.historyItem,.referralFriendRow,.ledgerRow) { border-color: rgba(15,23,42,.10); }
+html[data-theme="silver"] .overlay,
+html[data-theme="silver"] .modalBox { color: var(--text); }
+html[data-theme="silver"] .modalBox { border-color: rgba(15,23,42,.14); background: linear-gradient(145deg, #fbfcfd, #e9eef2); box-shadow: 0 24px 70px rgba(15,23,42,.22); }
+html[data-theme="silver"] .themeChoice[data-theme-choice="silver"] { color: #0f172a; background: linear-gradient(145deg, #fafbfc, #cbd3db); }
+html[data-theme="silver"] .upTokenMark,
+html[data-theme="silver"] .upTokenIcon { background: rgba(255,255,255,.8); border-color: rgba(15,118,110,.2); }
+
+/* Four options remain usable on narrow phones. */
+.profileThemeChoices { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.themeChoice[data-theme-choice="silver"] { background: linear-gradient(145deg, #fafbfc, #cbd3db); color: #0f172a; }
+@media (max-width: 370px) {
+  .themeChoice { font-size: 8px; }
+}

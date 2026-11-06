@@ -32,7 +32,7 @@ async function main() {
       mining_title: 'Gramup Mining',
       mining_loading: 'Loading mining data...',
       mining_load_error: 'Mining data is unavailable. Please try again.',
-      retry_button: 'Try again'
+      mining_retry: 'Try again'
     })[key] || key,
     escapeHTML: value => String(value)
   };
@@ -108,13 +108,13 @@ async function main() {
   assert.equal(loaderContext.state.mining.history[0].amount, 4);
   assert.equal(loaderContext.state.miningLoading, false);
 
-  const renderMineTab = extract('async function renderVipTab()', '\nasync function retryMiningStatus()');
+  const renderMineTab = extract('async function renderMiningTab()', '\nasync function retryMiningStatus()');
   const content = { innerHTML: '' };
   let resolveMiningStatus;
+  let tickerStarted = false;
   const tabContext = {
     navigationSequence: 1,
-    profileView: '',
-    state: { activeTab: 'vip', mining: null, miningLoading: false },
+    state: { activeTab: 'mine', mining: null, miningLoading: false },
     $: () => content,
     loadMiningStatus: () => {
       tabContext.state.miningLoading = true;
@@ -126,12 +126,12 @@ async function main() {
         };
       });
     },
-    renderProfileVip: () => tabContext.state.mining
+    renderMiningPanel: () => tabContext.state.mining
       ? '<div class="mineConsole">Loaded mining console</div>'
       : `<div class="mineConsole mineConsole--empty">${tabContext.state.miningLoading ? 'Loading mining data...' : 'Mining data is unavailable'}</div>`,
-    startVipCountdown: () => {}
+    startMiningTicker: () => { tickerStarted = true; }
   };
-  vm.runInNewContext(`${renderMineTab}; globalThis.renderMineTab = renderVipTab;`, tabContext);
+  vm.runInNewContext(`${renderMineTab}; globalThis.renderMineTab = renderMiningTab;`, tabContext);
   const pendingRender = tabContext.renderMineTab();
   assert.match(content.innerHTML, /mineConsole--empty/,
     'Mine navigation should show a visible loading panel while its status request is pending');
@@ -140,13 +140,14 @@ async function main() {
   assert.match(content.innerHTML, /Loaded mining console/,
     'Mine navigation should render the console after mining status resolves');
   assert.doesNotMatch(content.innerHTML, /mineConsole--empty/);
+  assert.equal(tickerStarted, true, 'the live mining ticker must start after status is rendered');
 
   const dispatcher = extract('async function renderCurrentTab(', '\n/* ================= BOOT');
-  const vipDispatchStart = dispatcher.indexOf('} else if (tab === "vip") {');
-  const vipDispatchEnd = dispatcher.indexOf('} else if (tab === "wallet") {', vipDispatchStart);
-  assert.ok(vipDispatchStart >= 0 && vipDispatchEnd > vipDispatchStart);
-  assert.match(dispatcher.slice(vipDispatchStart, vipDispatchEnd), /await renderVipTab\(\)/,
-    'both cached and uncached Mine routes must enter the status-loading renderer');
+  const mineDispatchStart = dispatcher.indexOf('} else if (tab === "mine") {');
+  const mineDispatchEnd = dispatcher.indexOf('} else if (tab === "vip") {', mineDispatchStart);
+  assert.ok(mineDispatchStart >= 0 && mineDispatchEnd > mineDispatchStart);
+  assert.match(dispatcher.slice(mineDispatchStart, mineDispatchEnd), /await renderMiningTab\(\)/,
+    'the Mine route must enter its own status-loading renderer');
 
   assert.match(css, /\.mineConsole--empty\s*\{/);
   assert.match(css, /\.mineEmptySpinner\s*\{/);
@@ -154,9 +155,9 @@ async function main() {
     'the loading message must be translated in Dari, Pashto, and English');
   assert.equal((i18n.match(/mining_load_error:/g) || []).length, 3,
     'the retry message must be translated in Dari, Pashto, and English');
-  assert.match(html, /style\.css\?v=up_v28_20261106_4/);
+  assert.match(html, /style\.css\?v=up_v32_up_mine_20261106/);
   assert.match(html, /i18n\.js\?v=up_v31_mine_status_fix/);
-  assert.match(html, /app\.js\?v=up_v31_mine_status_fix/);
+  assert.match(html, /app\.js\?v=up_v32_up_mine_20261106/);
 
   console.log('PASS — Mine status loads on navigation, missing data stays visible/retryable, locales and cache versions are complete');
 }

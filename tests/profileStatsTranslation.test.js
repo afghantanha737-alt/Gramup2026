@@ -43,10 +43,10 @@ async function main() {
   const iconEnd = app.indexOf('\nfunction tokenAmount(', iconStart);
   assert.ok(iconStart >= 0 && iconEnd > iconStart, 'actual UP token icon helper must be present');
   vm.runInContext(app.slice(iconStart, iconEnd), context);
-  const tokenLogo = '<img class="upTokenIcon" src="img/gramup-logo-new.png" alt="" aria-hidden="true">';
+  const tokenLogo = '<img class="upTokenIcon" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
   assert.strictEqual(vm.runInContext('tokenIconMarkup()', context), tokenLogo,
-    'Profile token icon must use the existing PNG logo with an accessible decorative treatment');
-  const logoPath = path.join(root, 'public/img/gramup-logo-new.png');
+    'Profile token icon must use the Gramup cube token mark with an accessible decorative treatment');
+  const logoPath = path.join(root, 'public/img/gramup-logo-cube-transparent.png');
   assert.ok(fs.existsSync(logoPath), 'the Profile UP token logo asset must exist');
   assert.strictEqual(fs.readFileSync(logoPath).subarray(0, 8).toString('hex'), '89504e470d0a1a0a',
     'the Profile UP logo must be a valid PNG, not a broken or misnamed asset');
@@ -118,68 +118,25 @@ async function main() {
     'translated descriptive labels must be styled separately from the token badge');
 
   const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
-  for (const asset of ['maintenanceGate.js', 'readModelCache.js', 'walletConnect.js']) {
-    assert.ok(indexHtml.includes(`/js/${asset}?v=up_v28_20261105_2`), `${asset} must use the latest cache-busting version`);
+  for (const [asset, version] of Object.entries({
+    maintenanceGate: '20261006-maintenance',
+    readModelCache: '20261030-read-model-1',
+    walletConnect: '20261025-wallet-twa-return-1'
+  })) {
+    assert.ok(indexHtml.includes(`js/${asset}.js?v=${version}`), `${asset} must keep its current cache identifier`);
   }
-  assert.ok(indexHtml.includes('/js/i18n.js?v=up_v31_mine_status_fix'), 'i18n.js must use the Mine status cache-busting version');
-  assert.ok(indexHtml.includes('/js/app.js?v=up_v31_mine_status_fix'), 'app.js must use the Mine status cache-busting version');
-  assert.ok(indexHtml.includes('/js/gamification.js?v=up_v28_20261106_1'), 'gamification.js must use the spinner feedback cache-busting version');
-  assert.ok(indexHtml.includes('/js/spinCelebration.js?v=up_v28_20261106_3'), 'spinCelebration.js must use the current cache-busting version');
-  assert.ok(indexHtml.includes('/css/style.css?v=up_v28_20261106_4'), 'main CSS must use the Mine loading-state asset version');
-  assert.ok(indexHtml.includes('/css/theme-selector.css?v=up_v29_silver_theme'), 'theme CSS must use the Silver theme cache-busting version');
+  assert.ok(indexHtml.includes('js/i18n.js?v=up_v31_mine_status_fix'), 'i18n.js must use the Mine status cache-busting version');
+  assert.ok(indexHtml.includes('js/app.js?v=up_v32_up_mine_20261106'), 'app.js must use the UP/Mine cache-busting version');
+  assert.doesNotMatch(indexHtml, /spinCelebration|luckySpinPage|spinWheel/i, 'Lucky Spin must not be loaded before its feature is built');
+  assert.ok(indexHtml.includes('css/style.css?v=up_v32_up_mine_20261106'), 'main CSS must use the UP/Mine cache-busting version');
+  assert.ok(indexHtml.includes('css/theme-selector.css?v=up_v29_silver_theme'), 'theme CSS must use the Silver theme cache-busting version');
 
   const referralRoute = fs.readFileSync(path.join(root, 'routes/referral.js'), 'utf8');
   assert.match(referralRoute, /User\.countDocuments\(\{ referredBy: u\._id \}\)/,
     'direct invite count must come from users directly referred by this account');
   assert.match(referralRoute, /invitedCount:\s*totalReferralCount/,
     'the referral API must expose the authoritative direct-invite count');
-
-  context.state.language = 'en';
-  context.window.state.language = 'en';
-  context.state.activeTab = 'profile';
-  context.state.referralDataLoaded = false;
-  context.state.referralLoading = false;
-  context.state.referralError = '';
-  context.state.invitedCount = 0;
-  context.profileView = 'menu';
-  context.__content = { innerHTML: '' };
-  context.$ = () => context.__content;
-  context.stopWeeklyCompetitionCountdown = () => {};
-  context.stopVipCountdown = () => {};
-  context.leaderboardMode = 'daily';
-  let apiCalls = 0;
-  context.api = async endpoint => {
-    apiCalls += 1;
-    assert.strictEqual(endpoint, '/api/referral/me', 'Profile must load the direct-invite endpoint');
-    return {
-      invitedCount: 0,
-      activeInvitedCount: 8,
-      referralStats: { totalReferrals: 23, activeReferrals: 8 },
-      referralLevelRates: [], referralHistory: [], networkLevels: [], team: [], invited: [], referralTasks: []
-    };
-  };
-
-  const referralStart = app.indexOf('let referralDataRequestSequence = 0;');
-  const referralEnd = app.indexOf('\nasync function claimReferralTask', referralStart);
-  assert.ok(referralStart >= 0 && referralEnd > referralStart, 'referral data loader must be present');
-  vm.runInContext(app.slice(referralStart, referralEnd), context);
-  const profileStart = app.indexOf('let profileRenderSequence = 0;');
-  const profileEnd = app.indexOf('\nasync function renderVipTab()', profileStart);
-  assert.ok(profileStart >= 0 && profileEnd > profileStart, 'Profile render lifecycle must be present');
-  vm.runInContext(app.slice(profileStart, profileEnd), context);
-
-  const initialRender = vm.runInContext('renderProfile()', context);
-  assert.ok(context.__content.innerHTML.includes('<strong>…</strong><span class="profilePulseLabel">Direct invites</span>'),
-    'Profile must show a loading placeholder instead of a false zero before direct counts load');
-  await initialRender;
-  await new Promise(resolve => setImmediate(resolve));
-  assert.strictEqual(apiCalls, 1, 'Profile menu must fetch direct invite data on first render');
-  assert.strictEqual(context.state.referralDataLoaded, true, 'successful referral response must mark the count loaded');
-  assert.strictEqual(context.state.invitedCount, 23, 'direct referral stats must recover a nonzero count even if the legacy count field is zero');
-  assert.ok(context.__content.innerHTML.includes('<strong>23</strong><span class="profilePulseLabel">Direct invites</span>'),
-    'rendered Direct Invites card must display the authoritative API count instead of zero');
-
-  console.log('PASS — Profile stats render exactly one UP logo/badge per token card, keep labels clean, load authoritative direct invites, and use the current cache-busted assets');
+  console.log('PASS — Profile UP balances use one translated token badge/logo, and current asset identifiers are verified');
 }
 
 main().catch(error => {

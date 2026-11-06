@@ -18,8 +18,8 @@ assert.match(tasksBranch, /renderTasks\(\)/);
 assert.match(app, /function setupNavigation\(\)/);
 assert.match(app, /\$\$\("#tabbar \[data-tab\]"\)\.forEach/);
 assert.match(app, /button\.addEventListener\("click"/);
-assert.match(app, /const validTabs = \["home", "tasks", "vip", "wallet", "profile"\]/);
-for (const tab of ['home', 'tasks', 'vip', 'wallet', 'profile']) {
+assert.match(app, /const validTabs = \["home", "mine", "tasks", "vip", "wallet", "profile"\]/);
+for (const tab of ['home', 'tasks', 'mine', 'vip', 'wallet', 'profile']) {
   assert.match(html, new RegExp(`data-tab="${tab}"`), `missing bottom-nav tab ${tab}`);
 }
 assert.match(app, /if \(!state\.tasks\.length && tasksLoadError && !isInviteSection\)/);

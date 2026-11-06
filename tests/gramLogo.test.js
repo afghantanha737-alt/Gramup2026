@@ -8,13 +8,16 @@ const css = fs.readFileSync('public/css/style.css', 'utf8');
 const index = fs.readFileSync('public/index.html', 'utf8');
 const logo = fs.readFileSync('public/img/gram-logo.svg', 'utf8');
 
+assert.match(app, /function tokenIconMarkup\(\)/);
+assert.match(app, /src="img\/gramup-logo-cube-transparent\.png"/);
 assert.match(app, /function gramTokenIconMarkup\(\)/);
 assert.match(app, /src="img\/gram-logo\.svg"/);
-assert.match(app, /class="gramAmountUnit"/);
+assert.match(app, /gramAmountUnit/);
 assert.match(app, /class="gramBalanceUnit"/);
 assert.doesNotMatch(app, /gramTokenIconMarkup\(\).*gramup-logo-new\.png/);
 assert.match(css, /\.gramTokenIcon/);
-assert.match(index, /style\.css\?v=up_v28_20261106_4/);
+assert.match(css, /\.upTokenIcon/);
+assert.match(index, /style\.css\?v=up_v32_up_mine_20261106/);
 assert.match(logo, /<title[^>]*>GRAM<\/title>/);
 
 console.log('PASS — native GRAM logo is used for GRAM balances and remains distinct from the Gramup UP logo');

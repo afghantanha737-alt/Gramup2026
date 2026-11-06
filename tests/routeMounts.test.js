@@ -13,6 +13,7 @@ for (const [name, prefix] of [
   ['points', '/api/points'],
   ['referral', '/api/referral'],
   ['leaderboard', '/api/leaderboard'],
+  ['mining', '/api/mining'],
   ['mobile auth', '/api/mobile-auth'],
   ['admin', '/api/admin'],
   ['maintenance', '/api/maintenance'],

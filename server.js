@@ -146,6 +146,7 @@ app.use('/api/ton-proof', require('./routes/tonProof'));
 app.use('/api/points', require('./routes/points'));
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
+app.use('/api/mining', require('./routes/mining'));
 app.use('/api/mobile-auth', require('./routes/mobileAuth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/maintenance', require('./routes/maintenance'));

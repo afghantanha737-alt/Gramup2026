@@ -14,8 +14,8 @@ const userSchema = new mongoose.Schema(
     // Keeping `points` as the stored path preserves every existing user record.
     points: { type: Number, default: 0, min: 0, alias: 'upBalance' },
     // Mining state is server-authoritative; a missing claim anchor means mining has not started.
-    miningLevel: { type: Number, default: 1, min: 1, max: 5 },
-    miningStorageLevel: { type: Number, default: 1, min: 1, max: 3 },
+    miningLevel: { type: Number, default: 1, min: 1, max: 10 },
+    miningStorageLevel: { type: Number, default: 1, min: 1, max: 6 },
     miningSavedPoints: { type: Number, default: 0, min: 0 },
     miningLastClaimAt: { type: Date, default: null },
     miningBoostExpiresAt: { type: Date, default: null },

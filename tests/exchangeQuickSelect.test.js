@@ -19,7 +19,7 @@ const input = {
 };
 const preview = { textContent: '' };
 const error = { textContent: '' };
-const quickButtons = Array.from({ length: 4 }, () => ({ disabled: false }));
+const quickButtons = Array.from({ length: 4 }, () => ({ disabled: false, setAttribute() {} }));
 const elements = {
   '#exchangePoints': input,
   '#exchangePreview': preview,

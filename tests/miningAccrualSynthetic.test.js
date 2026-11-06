@@ -35,6 +35,19 @@ const legacyNoStart = getMiningState({
   createdAt: at('2020-01-01T00:00:00.000Z')
 }, now);
 assert.equal(legacyNoStart.accumulatedPoints, 0, 'legacy users do not receive retroactive mining');
+assert.equal(legacyNoStart.elapsedSeconds, 0, 'missing start anchor has zero mining elapsed time');
+assert.equal(legacyNoStart.isStarted, false);
+
+const alreadyStarted = getMiningState({
+  miningLevel: 1,
+  miningStorageLevel: 1,
+  miningSavedPoints: 0,
+  miningLastClaimAt: at('2026-10-31T23:00:00.000Z'),
+  points: 73
+}, now);
+assert.equal(alreadyStarted.isStarted, true);
+assert.equal(alreadyStarted.miningLastClaimAt, '2026-10-31T23:00:00.000Z');
+assert.equal(alreadyStarted.userPoints, 73, 'mining state exposes the persisted UP balance without changing it');
 
 const savedAndCapacity = getMiningState({
   miningLevel: 2,

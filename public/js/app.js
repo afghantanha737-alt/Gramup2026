@@ -29,9 +29,12 @@ const state = {
   referralMessageConsent: "unset",
   points: 0,
   gramBalance: 0,
+  chainGramBalance: 0,
   rate: 0,
   streak: 0,
   canCheckIn: false,
+  dailyCheckinCycleDay: 1,
+  dailyCheckinReward: 5,
   totalCheckins: 0,
   minWithdrawGram: 0,
   nextResetAt: 0,
@@ -77,6 +80,9 @@ const state = {
   vipLoading: false,
   vipError: "",
   vipServerOffsetMs: 0,
+  mining: null,
+  miningLoading: false,
+  miningError: "",
   captchaA: 0,
   captchaB: 0,
   initialized: false,
@@ -112,7 +118,7 @@ function updateReadModelFreshness() {
     content.setAttribute("aria-busy", state.readModelStale ? "true" : "false");
   }
   const protectedSelectors = [
-    "#checkinBtn", "#submitWithdraw", "#submitExchange", "#depositVerifyButton",
+    "#checkinBtn", "#submitWithdraw", "#submitExchange", "#depositVerifyButton", "#startMiningBtn", "#claimMiningBtn", "[data-mining-upgrade]",
     "[data-verify]", "[data-latest-post-open]", "[data-latest-post-check]",
     "[data-upload-screenshot]", "[data-referral-claim]", "[data-vip-claim]", ".vipClaimAll"
   ].join(",");
@@ -137,6 +143,11 @@ function invalidateReadModelCache() {
   state.financialDataConfirmed = false;
   state.membershipDataConfirmed = false;
   state.verifiedSessionUserId = "";
+  state.mining = null;
+  state.miningLoading = false;
+  state.miningError = "";
+  miningStatusPromise = null;
+  stopMiningTicker();
   updateReadModelFreshness();
 }
 window.clearReadModelCacheOnLogout = invalidateReadModelCache;
@@ -150,7 +161,7 @@ function readModelActionAllowed() {
 function guardReadModelAction(event) {
   if (!state.readModelStale && state.financialDataConfirmed && state.membershipDataConfirmed) return;
   const target = event.target?.closest?.(
-    "#checkinBtn,#submitWithdraw,#submitExchange,#depositVerifyButton,[data-verify],[data-latest-post-open],[data-latest-post-check],[data-upload-screenshot],[data-referral-claim],[data-vip-claim],.vipClaimAll"
+    "#checkinBtn,#submitWithdraw,#submitExchange,#depositVerifyButton,#startMiningBtn,#claimMiningBtn,[data-mining-upgrade],[data-verify],[data-latest-post-open],[data-latest-post-check],[data-upload-screenshot],[data-referral-claim],[data-vip-claim],.vipClaimAll"
   );
   if (!target) return;
   event.preventDefault();
@@ -177,6 +188,7 @@ function getTelegramUser() {
 
 /* ================= LOCAL STORAGE / THEME ================= */
 const THEME_KEY = "miniAppTheme";
+const THEME_PERSIST_KEY = "gramup_theme";
 
 /*
  * Theme registry: add future themes here first. The renderer, persistence,
@@ -186,11 +198,14 @@ const THEME_KEY = "miniAppTheme";
 const THEME_REGISTRY = Object.freeze({
   midnight: Object.freeze({ labelKey: "theme_midnight", icon: "🌙", chrome: "#050609", cssTheme: "midnight" }),
   aurora: Object.freeze({ labelKey: "theme_aurora", icon: "🌌", chrome: "#06151b", cssTheme: "aurora" }),
-  pearl: Object.freeze({ labelKey: "theme_pearl", icon: "☀️", chrome: "#f8fafc", cssTheme: "light" })
+  pearl: Object.freeze({ labelKey: "theme_pearl", icon: "☀️", chrome: "#f8fafc", cssTheme: "light" }),
+  silver: Object.freeze({ labelKey: "theme_silver", icon: "◈", chrome: "#d9dfe5", cssTheme: "silver" })
 });
 const VALID_THEMES = Object.freeze(Object.keys(THEME_REGISTRY));
 function getTheme() {
-  const saved = localStorage.getItem(THEME_KEY);
+  let saved = "";
+  try { saved = localStorage.getItem(THEME_PERSIST_KEY) || localStorage.getItem(THEME_KEY) || ""; }
+  catch { return "midnight"; }
   return VALID_THEMES.includes(saved) ? saved : "midnight";
 }
 function applyTheme(theme) {
@@ -199,7 +214,10 @@ function applyTheme(theme) {
   // Keep the existing light selectors compatible with Pearl Light.
   document.documentElement.dataset.theme = definition.cssTheme;
   document.documentElement.dataset.themeName = selected;
-  localStorage.setItem(THEME_KEY, selected);
+  try {
+    localStorage.setItem(THEME_PERSIST_KEY, selected);
+    localStorage.setItem(THEME_KEY, selected);
+  } catch { /* theme selection remains usable when storage is unavailable */ }
   try {
     if (tg && tg.setHeaderColor) tg.setHeaderColor(definition.chrome);
     if (tg && tg.setBackgroundColor) tg.setBackgroundColor(definition.chrome);
@@ -226,7 +244,7 @@ function updateThemeUI() {
   const definition = THEME_REGISTRY[theme];
   if (icon) icon.textContent = definition.icon;
   if (label) label.textContent = t(definition.labelKey);
-  if (toggle) toggle.setAttribute("aria-checked", theme === "pearl" ? "true" : "false");
+  if (toggle) toggle.setAttribute("aria-checked", theme === "pearl" || theme === "silver" ? "true" : "false");
   $$("[data-theme-choice]").forEach(button => {
     const active = button.dataset.themeChoice === theme;
     button.classList.toggle("is-active", active);
@@ -510,9 +528,10 @@ let navigationSequence = 0;
 async function navigate(tab) {
   const requestId = ++navigationSequence;
   if (tab !== "profile") profileRenderSequence += 1;
-  const validTabs = ["home", "tasks", "vip", "wallet", "profile"];
+  const validTabs = ["home", "mine", "tasks", "vip", "wallet", "profile"];
   if (!validTabs.includes(tab)) tab = "home";
   clearInterval(countdownInterval);
+  if (tab !== "mine") stopMiningTicker();
   state.activeTab = tab;
   syncReferralTelegramBackButton();
   updateNavigation();
@@ -939,6 +958,8 @@ function applyCachedReadModel(entry) {
   state.rate = Number(profile.rate) || 0;
   state.streak = Number(profile.streak) || 0;
   state.canCheckIn = Boolean(profile.canCheckIn);
+  state.dailyCheckinCycleDay = Math.min(7, Math.max(1, Number(profile.dailyCheckinCycleDay) || 1));
+  state.dailyCheckinReward = Number(profile.dailyCheckinReward) || DAILY_CHECKIN_REWARDS[state.dailyCheckinCycleDay - 1];
   state.totalCheckins = Number(profile.totalCheckins) || 0;
   state.minWithdrawGram = Number(profile.minWithdrawGram) || 0;
   state.nextResetAt = Number(profile.nextResetAt) || 0;
@@ -977,7 +998,8 @@ function persistReadModelCache() {
   readModelCache.write(state.verifiedSessionUserId, {
     profile: {
       upBalance: state.points, points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
-      canCheckIn: state.canCheckIn, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
+      canCheckIn: state.canCheckIn, dailyCheckinCycleDay: state.dailyCheckinCycleDay,
+      dailyCheckinReward: state.dailyCheckinReward, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
       withdrawalProgress: state.withdrawalProgress, withdrawalRemainingGram: state.withdrawalRemainingGram,
       gramUsdPrice: state.gramUsdPrice, firstName: state.user?.first_name || ""
@@ -1054,6 +1076,8 @@ async function loadUserData({ force = false } = {}) {
   state.rate = Number(data?.rate) || 0;
   state.streak = Number(data?.streak) || 0;
   state.canCheckIn = Boolean(data?.canCheckIn);
+  state.dailyCheckinCycleDay = Math.min(7, Math.max(1, Number(data?.dailyCheckinCycleDay) || 1));
+  state.dailyCheckinReward = Number(data?.dailyCheckinReward) || DAILY_CHECKIN_REWARDS[state.dailyCheckinCycleDay - 1];
   state.totalCheckins = Number(data?.totalCheckins) || 0;
   state.minWithdrawGram = Number(data?.minWithdrawGram) || 0;
   state.nextResetAt = Number(data?.nextResetAt) || 0;
@@ -1342,13 +1366,13 @@ function renderHome() {
       <div class="tbBalanceTop">
         <div class="tbBalanceInfo">
           <div class="tbLabel">${t("wallet_points_card_title")}</div>
-          <div class="tbAmount"><span class="upTokenMark" aria-hidden="true">UP</span><span class="tbAmountNum">${formatPoints(state.points)}</span><span class="tbAmountUnit">UP</span></div>
+          <div class="tbAmount"><img class="upTokenMark" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><span class="tbAmountNum">${formatPoints(state.points)}</span><span class="tbAmountUnit">UP</span></div>
           <div class="tbPills">
             <span class="tbPill tbPillPurple">${formatNumber(state.gramBalance, 6)} GRAM</span>
             <span class="tbPill tbPillOrange">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
           </div>
         </div>
-        <div class="tbGemRing upTokenEmblem" aria-label="UP">UP</div>
+        <div class="tbGemRing upTokenEmblem" aria-label="UP"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div>
       </div>
       <div class="tbActions">
         <button class="tbBtnPrimary" type="button" onclick="showWithdraw()"><span class="tbBtnIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></span>${t("tb_withdraw")}</button>
@@ -1427,7 +1451,7 @@ function renderHome() {
           const icon = taskIconMarkup(task);
           return `<button type="button" class="auroraPreviewTask" onclick="navigate('tasks')">
             <span class="auroraPreviewTaskIcon">${icon}</span>
-            <span class="auroraPreviewTaskCopy"><strong>${escapeHTML(task.title)}</strong><small>+${formatPoints(task.reward)} ${t("points_unit")}</small></span>
+            <span class="auroraPreviewTaskCopy"><strong>${escapeHTML(task.title)}</strong><small>${upRewardMarkup(task.reward)}</small></span>
             <span class="auroraPreviewStatus ${status === "approved" ? "done" : ""}">${status === "approved" ? "✓" : "→"}</span>
           </button>`;
         }).join("") || `<div class="auroraPreviewEmpty">${t("tasks_empty_desc")}</div>`}
@@ -1784,23 +1808,29 @@ async function startDailyCheckinCountdown() {
   if (document.querySelector("[data-daily-checkin-countdown]")) dailyCheckinTimer = setInterval(tick, 1000);
 }
 function renderDailyCheckinCard() {
-  const completedDays = dailyCycleDay();
-  const nextDay = state.canCheckIn ? (completedDays >= 7 ? 1 : completedDays + 1) : (completedDays || 1);
+  const currentDay = Math.min(7, Math.max(1, Number(state.dailyCheckinCycleDay) || (state.canCheckIn ? (dailyCycleDay() % 7) + 1 : dailyCycleDay() || 1)));
+  const claimedDays = state.canCheckIn ? currentDay - 1 : currentDay;
+  const todayReward = Number(state.dailyCheckinReward) || DAILY_CHECKIN_REWARDS[currentDay - 1];
   const dayCells = DAILY_CHECKIN_REWARDS.map((reward, index) => {
     const day = index + 1;
-    const completed = day <= completedDays;
-    const current = state.canCheckIn && day === nextDay;
-    return `<div class="dailyCheckDay ${completed ? "is-complete" : ""} ${current ? "is-current" : ""}">
-      <span class="dailyCheckDayNumber">${completed ? "✓" : day}</span>
-      <strong>${t("day_label", { n: day })}</strong>
-      <small>+${formatPoints(reward)} ${t("points_unit")}</small>
+    const claimed = day < currentDay || (day === currentDay && !state.canCheckIn);
+    const today = day === currentDay && state.canCheckIn;
+    const locked = day > currentDay;
+    const stateLabel = claimed ? t("daily_state_claimed") : today ? t("daily_state_today") : t("daily_state_locked");
+    const dayLabel = day === 7 ? t("daily_day_seven_plus") : t("day_label", { n: day });
+    const rewardLabel = `+${formatPoints(reward)} UP`;
+    return `<div class="dailyCheckDay ${claimed ? "is-complete is-claimed" : ""} ${today ? "is-current is-today" : ""} ${locked ? "is-locked" : ""}" aria-label="${escapeHTML(`${dayLabel}: ${stateLabel}, ${rewardLabel}`)}">
+      <span class="dailyCheckDayNumber">${claimed ? "✓" : day === 7 ? "7+" : day}</span>
+      <strong>${escapeHTML(dayLabel)}</strong>
+      <span class="dailyCheckReward" aria-label="${rewardLabel}"><span>${rewardLabel}</span><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span>
+      <small class="dailyCheckState">${escapeHTML(stateLabel)}</small>
     </div>`;
   }).join("");
   return `<section class="card dailyCheckCard" aria-labelledby="dailyCheckTitle">
-    <div class="dailyCheckHeader"><div><span class="tasksOverline">${t("daily_title")}</span><h2 id="dailyCheckTitle">${t("daily_check_title")}</h2></div><span class="tbPill tbPillOrange tbPillSm">${formatPoints(completedDays)} / 7</span></div>
+    <div class="dailyCheckHeader"><div><span class="tasksOverline">${t("daily_title")}</span><h2 id="dailyCheckTitle">${t("daily_check_title")}</h2></div><span class="tbPill tbPillOrange tbPillSm">${formatPoints(claimedDays)} / 7</span></div>
     <p class="dailyCheckSubtitle">${state.canCheckIn ? t("daily_check_available") : t("daily_check_completed")}</p>
     <div class="dailyCheckGrid">${dayCells}</div>
-    <div class="dailyCheckFooter"><span>${t("daily_check_today_reward", { n: formatPoints(DAILY_CHECKIN_REWARDS[nextDay - 1]) })}</span><button id="checkinBtn" class="primaryBtn" type="button" ${state.canCheckIn ? "" : "disabled"} onclick="doCheckIn()">${state.canCheckIn ? t("checkin_button") : t("checkin_done_button")}</button></div>
+    <div class="dailyCheckFooter"><span>${t("daily_check_today_reward", { n: formatPoints(todayReward) })}</span><button id="checkinBtn" class="primaryBtn" type="button" ${state.canCheckIn ? "" : "disabled"} onclick="doCheckIn()">${state.canCheckIn ? t("checkin_button") : t("checkin_done_button")}</button></div>
     <div class="dailyCheckCountdown" data-daily-checkin-countdown>${state.canCheckIn ? "" : t("checkin_next_available_in", { time: formatCountdown(Math.max(0, Number(state.nextResetAt) - Date.now())) })}</div>
   </section>`;
 }
@@ -1812,6 +1842,8 @@ async function doCheckIn() {
     const result = await api("/api/points/checkin", { method: "POST" });
     state.points = upBalanceFromResponse(result);
     state.streak = Number(result.streak) || state.streak;
+    state.dailyCheckinCycleDay = Math.min(7, Math.max(1, Number(result.dailyCheckinCycleDay ?? result.cycleDay) || state.dailyCheckinCycleDay));
+    state.dailyCheckinReward = Number(result.dailyCheckinReward ?? result.earned) || state.dailyCheckinReward;
     state.canCheckIn = false;
     state.totalCheckins += 1;
     state.nextResetAt = Number(result.nextResetAt) || state.nextResetAt;
@@ -1994,7 +2026,7 @@ function renderTasks() {
             ${taskDescription ? `<div class="taskDesc">${escapeHTML(taskDescription)}</div>` : ""}
             ${task.verifyType === "latest_post" ? `<div class="taskDesc">${t("task_latest_post_open_hint")}</div>` : ""}
             ${task.isSpecialOfDay && task.expiresAt ? `<div class="taskDesc" style="color:var(--warning)">⏳ ${t("special_task_deadline", { date: new Date(task.expiresAt).toLocaleString(state.language === "en" ? "en-US" : "fa-IR") })}</div>` : ""}
-            <div class="taskReward">+${formatPoints(task.reward)} ${t("points_unit")}</div>
+            <div class="taskReward">${upRewardMarkup(task.reward)}</div>
           </div>
           ${actionHtml}
           ${hint ? `<div class="taskHint ${hint.type}" style="flex-basis:100%">${escapeHTML(hint.message)}</div>` : ""}
@@ -2126,22 +2158,69 @@ function setExchangeDirection(direction) {
   if (input) input.value = "";
   const error = $("#exchangeError");
   if (error) error.textContent = "";
+  updateExchangeQuickButtons();
   updateExchangePreview();
 }
 window.setExchangeDirection = setExchangeDirection;
+
+function getExchangeAvailableBalance() {
+  if (exchangeDirection === "points_to_gram") return Math.max(0, Number(state.points) || 0);
+  const internalBalance = Math.max(0, Number(state.gramBalance) || 0);
+  const wallet = window.gramupWallet;
+  let verifiedWallet = false;
+  try { verifiedWallet = Boolean(wallet?.isConnected?.() && wallet?.isProofVerified?.()); } catch { verifiedWallet = false; }
+  return verifiedWallet ? Math.max(internalBalance, Number(state.chainGramBalance) || 0) : internalBalance;
+}
+
+function isExchangeAmountValid(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 && amount <= getExchangeAvailableBalance();
+}
+
+function updateExchangeQuickButtons() {
+  const available = getExchangeAvailableBalance();
+  document.querySelectorAll("#exchangeQuickAmounts .exchangeQuickBtn").forEach(button => {
+    button.disabled = available <= 0;
+    button.setAttribute("aria-disabled", available <= 0 ? "true" : "false");
+  });
+}
+
+function setExchangeAmountPercent(percent) {
+  const input = $("#exchangePoints");
+  if (!input) return;
+  const ratio = Math.min(100, Math.max(0, Number(percent) || 0)) / 100;
+  const precision = exchangeDirection === "points_to_gram" ? 3 : 9;
+  const factor = 10 ** precision;
+  const amount = Math.floor(getExchangeAvailableBalance() * ratio * factor) / factor;
+  input.value = amount.toFixed(precision);
+  const error = $("#exchangeError");
+  if (error) error.textContent = "";
+  updateExchangePreview();
+}
+window.setExchangeAmountPercent = setExchangeAmountPercent;
 
 function updateExchangePreview() {
   const input = $("#exchangePoints");
   const preview = $("#exchangePreview");
   if (!input || !preview) return;
-  const amount = Number(input.value) || 0;
+  const rawAmount = String(input.value ?? "").trim();
+  const amount = Number(rawAmount) || 0;
+  const error = $("#exchangeError");
+
+  if (!rawAmount || amount === 0) {
+    if (error) error.textContent = "";
+  } else if (!isExchangeAmountValid(amount)) {
+    if (error) error.textContent = t("error_generic");
+  } else if (error) {
+    error.textContent = "";
+  }
 
   if (exchangeDirection === "points_to_gram") {
     const gram = amount * state.rate;
     preview.textContent = `${t("exchange_result_label")}: ${formatNumber(gram, 6)} GRAM`;
   } else {
     const points = state.rate > 0 ? Math.floor(amount / state.rate) : 0;
-    preview.textContent = `${t("exchange_result_label_points")}: ${formatPoints(points)}`;
+    preview.textContent = `${t("exchange_result_label_points")}: ${formatPoints(points)} UP`;
   }
 }
 window.updateExchangePreview = updateExchangePreview;
@@ -2157,7 +2236,7 @@ async function submitExchange() {
     if (error) error.textContent = t("error_generic");
     return;
   }
-  if (exchangeDirection === "points_to_gram" && amount > state.points) {
+  if (!isExchangeAmountValid(amount)) {
     if (error) error.textContent = t("error_generic");
     return;
   }
@@ -2503,7 +2582,8 @@ async function loadWalletChainBalance(renderRequestId = walletRenderSequence) {
   try {
     const result = await api('/api/points/wallet/chain-balance');
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
-    value.textContent = `${formatNumber(result.balance, 6)} GRAM`;
+    state.chainGramBalance = Math.max(0, Number(result.balance) || 0);
+    value.innerHTML = `<span class="gramBalanceUnit">${gramTokenIconMarkup()}${formatNumber(result.balance, 6)} GRAM</span>`;
     meta.textContent = t('wallet_chain_balance_title');
   } catch (error) {
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
@@ -2522,7 +2602,7 @@ function renderWallet() {
   content.innerHTML = `
     <section class="walletOverview">
       <div class="walletOverviewTop"><div><span class="walletOverline">${t("wallet_title")}</span><h1>${t("wallet_balance_title")}</h1></div><span class="walletLivePill">● ${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })}</span></div>
-      <div class="walletOverviewValue"><span class="upTokenMark upTokenMarkWallet" aria-hidden="true">UP</span><strong>${formatPoints(state.points)}</strong><span>UP</span></div>
+      <div class="walletOverviewValue"><img class="upTokenMark upTokenMarkWallet" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><strong>${formatPoints(state.points)}</strong><span>UP</span></div>
       <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.gramUsdPrice > 0 ? `≈ $${formatFixed(state.points * state.rate * state.gramUsdPrice, 3)}` : "—"}</b></div>
     </section>
     <div id="tonWalletConnection" aria-live="polite"></div>
@@ -2533,14 +2613,14 @@ function renderWallet() {
 
     <div class="tbWalletGrid">
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconOrange"><span class="upTokenMark upTokenMarkWallet" aria-hidden="true">UP</span></div>
+        <div class="tbWalletIcon tbIconOrange"><img class="upTokenMark upTokenMarkWallet" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div>
         <div class="tbStatLabel tbColOrange">${t("wallet_points_card_title")}</div>
         <div class="tbWalletValue">${formatPoints(state.points)}</div>
       </div>
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconBlue">${TB_ICONS.gem}</div>
+        <div class="tbWalletIcon tbIconBlue">${gramTokenIconMarkup()}</div>
         <div class="tbStatLabel tbColBlue">${t("wallet_gram_card_title")}</div>
-        <div class="tbWalletValue">${formatNumber(state.gramBalance, 6)}</div>
+        <div class="tbWalletValue gramBalanceUnit">${formatNumber(state.gramBalance, 6)} GRAM</div>
       </div>
     </div>
 
@@ -2848,7 +2928,14 @@ function openWeeklyCompetition() {
 window.openWeeklyCompetition = openWeeklyCompetition;
 
 function tokenIconMarkup() {
-  return '<img class="upTokenIcon" src="img/gramup-logo-new.png" alt="" aria-hidden="true">';
+  return '<img class="upTokenIcon" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
+}
+function gramTokenIconMarkup() {
+  return '<img class="gramTokenIcon" src="img/gram-logo.svg" alt="" aria-hidden="true">';
+}
+function upRewardMarkup(value, showSign = true) {
+  const amount = `${showSign ? "+" : ""}${formatPoints(value)} UP`;
+  return `<span class="upAmountWithLogo" aria-label="${amount}">${tokenIconMarkup()}<span>${amount}</span></span>`;
 }
 function tokenAmount(value) {
   return `<strong>${formatPoints(value)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small>`;
@@ -3010,7 +3097,7 @@ function renderReferralRewardTasks() {
             <span style="display:inline-block;width:18px;height:1px;background:var(--text-muted);opacity:.7"></span>
             <span>${formatPoints(task.invitedCount)} ${t("referral_active_label")}</span>
           </div>
-          <div class="taskReward">+${formatPoints(task.rewardPoints)} ${t("points_unit")}</div>
+          <div class="taskReward">${upRewardMarkup(task.rewardPoints)}</div>
           <div style="height:6px;background:var(--surface-3);border-radius:999px;overflow:hidden;margin-top:8px">
             <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,var(--primary),var(--primary-2));border-radius:999px;transition:width .3s ease"></div>
           </div>
@@ -3060,8 +3147,8 @@ function renderReferralStatsCard() {
         <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_count")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.totalReferrals) || 0)}</div></div>
         <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_active_count")}</div><div style="font-size:18px;font-weight:850;margin-top:5px">${formatNumber(Number(stats.activeReferrals) || 0)}</div></div>
         ${levelRows}
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_invite_rewards")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${formatPoints(Number(stats.totalInviteRewardsPoints) || 0)} ${t("points_unit")}</div></div>
-        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_team_commission")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${formatPoints(Number(stats.totalTeamCommissionPoints) || 0)} ${t("points_unit")}</div></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_invite_rewards")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${upRewardMarkup(Number(stats.totalInviteRewardsPoints) || 0, false)}</div></div>
+        <div class="card" style="margin:0;padding:12px;background:var(--surface-2)"><div class="cardSubtitle">${t("referral_total_team_commission")}</div><div style="font-size:17px;font-weight:850;margin-top:5px">${upRewardMarkup(Number(stats.totalTeamCommissionPoints) || 0, false)}</div></div>
       </div>
     </div>`;
 }
@@ -3149,7 +3236,7 @@ function renderProfileReferral() {
       <div class="rf-level-top"><span>${escapeHTML(row.label)}</span><strong>${row.rateLabel}</strong></div>
       <small class="rf-level-desc">${t(`referral_level_relationship_${row.key}`)}</small>
       <div class="rf-level-bar"><i style="width:${Math.min(100, row.members / maxMembers * 100)}%"></i></div>
-      <div class="rf-level-foot"><span>${formatNumber(row.active)} / ${formatNumber(row.members)} ${t("referral_active_short")}</span><b>+${formatPoints(row.earned)}</b></div>
+      <div class="rf-level-foot"><span>${formatNumber(row.active)} / ${formatNumber(row.members)} ${t("referral_active_short")}</span><b>${upRewardMarkup(row.earned)}</b></div>
     </article>`).join("");
 
   const history = (Array.isArray(state.referralHistory) ? state.referralHistory : []).slice(0, 20);
@@ -3170,7 +3257,7 @@ function renderProfileReferral() {
       <li class="rf-history-row" key="${escapeHTML(item.id || "")}">
         <span class="rf-history-icon" aria-hidden="true">${item.kind === "commission" ? "↗" : item.kind === "milestone" ? "✦" : "＋"}</span>
         <span class="rf-history-main"><strong>${escapeHTML(title)}</strong><small>${escapeHTML(meta.join(" · "))}</small></span>
-        <b class="rf-history-points">+${formatPoints(Number(item.points) || 0)}<small>${t("points_unit")}</small></b>
+        <b class="rf-history-points">${upRewardMarkup(Number(item.points) || 0)}</b>
       </li>`;
   }).join("");
   const currentLevelLabel = currentLevel > 0 ? t("referral_level_label", { n: formatPoints(currentLevel) }) : "—";
@@ -3187,8 +3274,8 @@ function renderProfileReferral() {
         <div class="rf-hero-orbit" aria-hidden="true"></div>
         <div class="rf-hero-top"><span class="rf-overline">${t("referral_hero_eyebrow")}</span><span class="rf-hero-badge">${t("referral_reward_direct_badge", { n: rewardDisplay })}</span></div>
         <h2 class="rf-hero-title" id="rfHeroTitle">${t("referral_total_earnings_title")}</h2>
-        <div class="rf-hero-total"><span class="rf-hero-coin" aria-hidden="true">◇</span><strong>${formatPoints(totalEarnings)}</strong><span>${t("points_unit")}</span></div>
-        <div class="rf-hero-bottom"><span>${t("referral_this_month")}</span><strong>+${formatPoints(monthlyEarnings)} ${t("points_unit")}</strong></div>
+        <div class="rf-hero-total"><img class="rf-hero-coin" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><strong>${formatPoints(totalEarnings)}</strong><span>UP</span></div>
+        <div class="rf-hero-bottom"><span>${t("referral_this_month")}</span><strong>${upRewardMarkup(monthlyEarnings)}</strong></div>
       </section>
 
       <section class="rf-kpi-grid" aria-label="${escapeHTML(t("referral_stats_title"))}">
@@ -3341,7 +3428,7 @@ function renderProfileLeaderboard() {
       <div class="leaderboardItem ${isMe ? "me" : ""}">
         <div class="rankBadge ${rankClass}">${formatPoints(rank)}</div>
         <div class="leaderName">${escapeHTML(person.firstName || person.username || "—")}</div>
-        <div class="leaderPoints">${formatPoints(person.points)}${weekly && person.prizePoints ? `<small class="leaderPrize">+${formatPoints(person.prizePoints)}</small>` : ""}</div>
+        <div class="leaderPoints">${formatPoints(person.points)}<small class="leaderPointUnit">${tokenIconMarkup()}UP</small>${weekly && person.prizePoints ? `<small class="leaderPrize">${upRewardMarkup(person.prizePoints)}</small>` : ""}</div>
       </div>`;
   }).join("");
 
@@ -3363,7 +3450,7 @@ function renderProfileLeaderboard() {
       <div class="card" style="text-align:center">
         <div class="cardSubtitle">${t("leaderboard_rank_label")}</div>
         <div style="font-size:24px;font-weight:900;margin-top:4px">#${formatPoints(myRank)}</div>
-        ${weekly ? `<div class="cardSubtitle">${formatPoints(state.weeklyMyPoints)} ${t("points_unit")}</div>` : ""}
+        ${weekly ? `<div class="cardSubtitle">${upRewardMarkup(state.weeklyMyPoints, false)}</div>` : ""}
       </div>` : ""
     }
 
@@ -3379,9 +3466,13 @@ function renderProfileHistory() {
     const isPendingDeposit = item.type === "deposit" && item.status === "pending";
     const isPositive = item.type === "deposit" ? item.status === "confirmed" : Number(item.amount) >= 0;
     const unit = item.tokenSymbol || (item.currency === "gram" ? "GRAM" : t("points_unit"));
+    const amountValue = item.currency === "gram" ? formatNumber(item.amount, 9) : formatPoints(item.amount);
     const amountText = isPendingDeposit
       ? t("deposit_pending_amount")
-      : `${isPositive ? "+" : ""}${item.currency === "gram" ? formatNumber(item.amount, 9) : formatPoints(item.amount)} ${unit}`;
+      : `${isPositive ? "+" : ""}${amountValue}`;
+    const amountUnit = isPendingDeposit ? "" : item.currency === "gram"
+      ? `<span class="ledgerUnit gramAmountUnit">${gramTokenIconMarkup()}${escapeHTML(unit)}</span>`
+      : `<span class="ledgerUnit">${escapeHTML(unit)}${tokenIconMarkup()}</span>`;
     const icon = (LEDGER_TYPE_UI[item.type] || {}).icon || "🔸";
     const desc = item.description || t(`history_type_${item.type}`);
     const referralMeta = item.type === "referral_commission"
@@ -3403,7 +3494,7 @@ function renderProfileHistory() {
           <div class="ledgerDesc">${escapeHTML(desc)}</div>
           <div class="historyMeta">${timeAgo(item.transactionAt || item.verifiedAt || item.createdAt)}${depositStatusMeta ? ` · ${escapeHTML(depositStatusMeta)}` : ""}${referralMeta ? ` · ${escapeHTML(referralMeta)}` : ""}${transactionMeta ? ` · ${escapeHTML(transactionMeta)}` : ""}${earningMeta ? ` · ${escapeHTML(earningMeta)}` : ""}${referralUsersMeta ? ` · ${escapeHTML(referralUsersMeta)}` : ""}</div>
         </div>
-        <div class="ledgerAmount ${isPendingDeposit ? "" : isPositive ? "positive" : "negative"}">${amountText}</div>
+        <div class="ledgerAmount ${isPendingDeposit ? "" : isPositive ? "positive" : "negative"}">${escapeHTML(amountText)}${amountUnit}</div>
       </div>`;
   }).join("");
 
@@ -3575,11 +3666,11 @@ function renderProfileVip() {
           ${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}
         </div>
         <div class="vipPlanStats">
-          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${formatPoints(plan.pricePoints)}</b></div>
-          <div class="vipPlanStat"><span>${t(isNewVipPolicy ? "vip_daily_total_label" : "vip_plan_profit_label")}</span><b>${isNewVipPolicy ? `${formatPoints(dailyTotalPayoutPoints)} ${t("vip_points_unit")}` : `${formatNumber(plan.monthlyRewardPercent, 2)}%`}</b></div>
+          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${upRewardMarkup(plan.pricePoints, false)}</b></div>
+          <div class="vipPlanStat"><span>${t(isNewVipPolicy ? "vip_daily_total_label" : "vip_plan_profit_label")}</span><b>${isNewVipPolicy ? upRewardMarkup(dailyTotalPayoutPoints, false) : `${formatNumber(plan.monthlyRewardPercent, 2)}%`}</b></div>
           <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(plan.durationDays) })}</b></div>
         </div>
-        <div class="vipPlanReward"><span>${t(isNewVipPolicy ? "vip_total_received_label" : "vip_total_reward_label")}</span><b>${formatPoints(isNewVipPolicy ? totalReceivedPoints : totalRewardPoints)} ${t("vip_points_unit")}</b></div>
+        <div class="vipPlanReward"><span>${t(isNewVipPolicy ? "vip_total_received_label" : "vip_total_reward_label")}</span><b>${upRewardMarkup(isNewVipPolicy ? totalReceivedPoints : totalRewardPoints, false)}</b></div>
         ${isNewVipPolicy ? "" : `<div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>`}
         <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})">${isPurchasing ? t("vip_buying") : buttonLabel}</button>
       </article>`;
@@ -3637,8 +3728,8 @@ function renderProfileVip() {
     </div>
     <div class="vipHero" aria-label="${t("vip_current_balance")}">
       <div class="vipHeroTop"><div><span class="vipHeroKicker">${t("vip_membership_kicker")}</span><div class="vipBalanceLabel">${t("vip_current_balance")}</div></div><span class="vipHeroIcon" aria-hidden="true">✦</span></div>
-      <div class="vipBalanceValue"><strong>${formatPoints(state.points)}</strong><span>${t("vip_points_unit")}</span></div>
-      <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_daily_reward_summary")}</span><b>${formatPoints(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0))} ${t("vip_points_unit")}</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
+      <div class="vipBalanceValue">${tokenIconMarkup()}<strong>${formatPoints(state.points)}</strong><span>UP</span></div>
+      <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_daily_reward_summary")}</span><b>${upRewardMarkup(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0), false)}</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
     </div>
     ${subscriptions.length ? `<div class="vipSubscriptionTools" style="display:grid;gap:9px;margin:12px 0"><div class="vipStatusTabs" role="tablist" aria-label="${t("vip_subscription_filters_label")}" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:rgba(4,10,22,.58)"><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "active"}" onclick="setVipSubscriptionFilter('active')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "active" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "active" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "active" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_active")} <b>${formatPoints(activeSubscriptions.length)}</b></button><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "expired"}" onclick="setVipSubscriptionFilter('expired')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "expired" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "expired" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "expired" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_expired")} <b>${formatPoints(expiredSubscriptions.length)}</b></button></div><button type="button" class="vipClaimAll" ${!claimableSubscriptions.length || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" style="width:100%;min-height:43px;padding:10px 14px;border:1px solid rgba(74,222,128,.25);border-radius:13px;background:${claimableSubscriptions.length && !vipClaimAllBusy ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(34,211,238,.12))" : "rgba(71,85,105,.15)"};color:${claimableSubscriptions.length && !vipClaimAllBusy ? "#a7f3d0" : "#8792a5"};font-size:12px;font-weight:900">${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_all", { n: formatPoints(claimableSubscriptions.length) })}</button></div>${filteredSubscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t(vipSubscriptionFilter === "active" ? "vip_active_title" : "vip_expired_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t(vipSubscriptionFilter === "active" ? "vip_active_empty" : "vip_expired_empty")}</div></div>`}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
     <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
@@ -3834,6 +3925,259 @@ async function renderProfile() {
   }
 }
 
+let miningStatusPromise = null;
+async function loadMiningStatus({ force = false } = {}) {
+  if (miningStatusPromise && !force) return miningStatusPromise;
+  state.miningLoading = true;
+  state.miningError = "";
+  const request = (async () => {
+    try {
+      const data = await api("/api/mining/status");
+      if (!data?.mining) throw new Error(t("mining_load_error"));
+      const history = Array.isArray(data.history) ? data.history : Array.isArray(data.mining.history) ? data.mining.history : [];
+      state.mining = { ...data.mining, history };
+      return true;
+    } catch (error) {
+      state.miningError = error?.message || t("mining_load_error");
+      console.warn("Mining status load failed:", error);
+      return false;
+    } finally {
+      state.miningLoading = false;
+    }
+  })();
+  let sharedRequest;
+  sharedRequest = request.finally(() => {
+    if (miningStatusPromise === sharedRequest) miningStatusPromise = null;
+  });
+  miningStatusPromise = sharedRequest;
+  return sharedRequest;
+}
+let miningTickerTimer = null;
+
+function miningLiveValues() {
+  const mining = state.mining || {};
+  const maxPoints = Math.max(1, Number(mining.maxStoragePoints) || 1);
+  const serverNow = Date.parse(mining.serverNow || "");
+  const tickSeconds = mining.isStarted && Number.isFinite(serverNow) ? Math.max(0, (Date.now() - serverNow) / 1000) : 0;
+  const basePoints = Math.max(0, Number(mining.accumulatedPointsExact ?? mining.accumulatedPoints) || 0);
+  const baseRatePerHour = Math.max(0, Number(mining.baseRatePerHour || mining.effectiveRatePerHour) || 0);
+  const boostRemainingSeconds = Math.max(0, Number(mining.boostRemainingSeconds) || 0);
+  const boostedSeconds = mining.isStarted && mining.isBoosted ? Math.min(tickSeconds, boostRemainingSeconds) : 0;
+  const normalSeconds = mining.isStarted ? Math.max(0, tickSeconds - boostedSeconds) : 0;
+  const producedPoints = (boostedSeconds * baseRatePerHour * 2 + normalSeconds * baseRatePerHour) / 3600;
+  const points = Math.min(maxPoints, basePoints + producedPoints);
+  const isBoosted = Boolean(mining.isBoosted && tickSeconds < boostRemainingSeconds);
+  const effectiveRatePerHour = isBoosted ? baseRatePerHour * 2 : baseRatePerHour;
+  const elapsedSeconds = Math.max(0, Number(mining.elapsedSeconds) || 0) + tickSeconds;
+  const storageSeconds = Math.max(0, Number(mining.storageFullSeconds) || Number(mining.maxStorageHours) * 3600 || 0);
+  const remainingSeconds = mining.isStarted ? Math.max(0, storageSeconds - elapsedSeconds) : storageSeconds;
+  return { points, percent: Math.min(100, Math.max(0, points / maxPoints * 100)), remainingSeconds, full: points >= maxPoints, effectiveRatePerHour, isBoosted, multiplier: isBoosted ? 2 : 1 };
+}
+
+function formatMiningDuration(seconds) {
+  const value = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const remainingSeconds = value % 60;
+  return [hours, minutes, remainingSeconds].map(part => String(part).padStart(2, "0")).join(":");
+}
+
+function renderMiningHistory() {
+  const history = Array.isArray(state.mining?.history) ? state.mining.history : [];
+  if (!history.length) return `<div class="mineHistoryEmpty">${t("mining_history_empty")}</div>`;
+  return `<div class="mineHistoryList">${history.map(item => {
+    const amount = Math.max(0, Number(item.amount) || 0);
+    return `<div class="mineHistoryRow"><span class="mineHistoryIcon"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span><span class="mineHistoryCopy"><strong>${escapeHTML(item.description || t("mining_claim_success"))}</strong><small>${escapeHTML(timeAgo(item.createdAt))}</small></span><b>+${formatPoints(amount)} UP</b></div>`;
+  }).join("")}</div>`;
+}
+
+function renderMiningPanel() {
+  if (!state.mining) {
+    return `<section class="mineConsole mineConsole--empty" aria-live="polite"><div class="mineEmptySpinner" aria-hidden="true"></div><h2 class="mineTitle">${t("mining_title")}</h2><p>${state.miningLoading ? t("mining_loading") : escapeHTML(state.miningError || t("mining_load_error"))}</p>${state.miningLoading ? "" : `<button class="secondaryBtn" type="button" onclick="retryMiningStatus()">${t("mining_retry")}</button>`}</section>`;
+  }
+
+  const mining = state.mining;
+  const live = miningLiveValues();
+  const isStarted = Boolean(mining.isStarted);
+  const isReady = isStarted && (live.points >= 1 || mining.isStorageFull);
+  const multiplier = live.multiplier;
+  const currentLevel = Number(mining.level) || 1;
+  const rigs = Array.isArray(mining.rigs) && mining.rigs.length
+    ? mining.rigs
+    : [{ level: currentLevel, name: mining.rigName || t("mining_tier"), ratePerHour: mining.baseRatePerHour, upgradeCost: 0 }, ...(mining.nextRigUpgrade ? [{ ...mining.nextRigUpgrade, upgradeCost: mining.nextRigUpgrade.cost }] : [])];
+  const rigCards = rigs.map(rig => {
+    const level = Number(rig.level) || 1;
+    const current = level === currentLevel;
+    const owned = level < currentLevel || rig.owned === true;
+    const next = level === currentLevel + 1;
+    const statusKey = current ? "mining_state_current" : owned ? "mining_state_owned" : "mining_state_locked";
+    const rate = Number(rig.ratePerHour) || 0;
+    const cost = Number(rig.upgradeCost ?? rig.cost) || 0;
+    const canUpgrade = next && mining.nextRigUpgrade && Number(state.points) >= Number(mining.nextRigUpgrade.cost || 0);
+    return `<article class="minerTrainCard ${current ? "is-current" : owned ? "is-owned" : "is-locked"}"><div class="minerTrainIcon"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div><div class="minerTrainCopy"><strong class="minerTrainTitle">${escapeHTML(rig.name || `${t("mining_tier")} ${level}`)}</strong><span class="minerTrainMeta">+${formatPoints(rate)} UP/hr</span></div><span class="minerTrainState">${t(statusKey)}</span>${next && mining.nextRigUpgrade ? `<button class="mineCardUpgrade" type="button" data-mining-upgrade="rig" ${canUpgrade ? "" : "disabled"} onclick="upgradeMining('rig')">${t("mining_upgrade_btn", { cost: formatPoints(cost) })}</button>` : ""}</article>`;
+  }).join("");
+  const nextRigCost = Number(mining.nextRigUpgrade?.cost) || 0;
+  const canBoost = Boolean(mining.nextRigUpgrade && Number(state.points) >= nextRigCost);
+  const nextStorageCost = Number(mining.nextStorageUpgrade?.cost) || 0;
+  const canUpgradeStorage = Boolean(mining.nextStorageUpgrade && Number(state.points) >= nextStorageCost);
+  const progress = Math.min(100, Math.max(0, Number(live.percent) || 0));
+
+  return `<div class="mineConsole">
+    <header class="mineHeader"><div class="mineEmblem"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><span aria-hidden="true">⛏</span></div><div class="mineHeading"><span class="mineEyebrow">GRAMUP MINER</span><h1 class="mineTitle">${t("mining_title")}</h1><p class="mineSubtitle">${t("mining_subtitle")}</p></div><span class="mineActiveBadge ${isStarted ? "is-active" : "is-idle"}"><i aria-hidden="true"></i>${isStarted ? t("mining_status_active") : t("mining_status_idle")}</span></header>
+    <section class="mineSessionCard">
+      <div class="mineBalanceLine"><span>${t("mining_accumulated")}</span><span class="mineLiveAmount"><strong data-mine-earned>${formatNumber(live.points, 1)}</strong><span>UP</span><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span></div>
+      <div class="mineProgressMeta"><span>${t("mining_progress")}</span><strong data-mine-progress-label>${progress.toFixed(1)}%</strong></div>
+      <div class="mineProgressTrack" role="progressbar" aria-label="${escapeHTML(t("mining_progress"))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.toFixed(1)}"><span class="mineProgressFill" data-mine-progress style="width:${progress.toFixed(2)}%"></span></div>
+      <div class="mineTimerRow"><span>${t("mining_ready_in")}</span><strong data-mine-countdown>${isStarted ? formatMiningDuration(live.remainingSeconds) : t("mining_timer_unstarted")}</strong></div>
+      <div class="mineActions">${!isStarted
+        ? `<button id="startMiningBtn" class="primaryBtn minePrimaryBtn" type="button" onclick="startMining()">${t("mining_start_btn")}</button>`
+        : `<button id="claimMiningBtn" class="primaryBtn minePrimaryBtn" type="button" ${isReady ? "" : "disabled"} onclick="claimMining()">${isReady ? t("mining_claim_btn") : t("mining_waiting")}</button>`}
+        <button class="mineBoostBtn" type="button" data-mining-upgrade="rig" ${canBoost ? "" : "disabled"} onclick="upgradeMining('rig')">${t("mining_boost_btn")}${mining.nextRigUpgrade ? ` · ${formatPoints(nextRigCost)} UP` : ""}</button>
+      </div>
+    </section>
+    <div class="mineMetrics"><article class="mineMetricCard"><span>${t("mining_speed")}</span><strong data-mine-speed>+${formatPoints(live.effectiveRatePerHour || mining.baseRatePerHour)} UP/hr</strong><small data-mine-multiplier>${t("mining_multiplier", { n: multiplier })}${live.isBoosted ? ` · ${t("mining_boost_active")}` : ""}</small></article><article class="mineMetricCard"><span>${t("mining_tier")}</span><strong>${escapeHTML(mining.rigName || `${t("mining_tier")} ${currentLevel}`)}</strong><small>${t("mining_rank", { n: currentLevel })}</small></article></div>
+    <section class="minerTrainSection"><div class="mineSectionHeading"><h2>${t("mining_rigs_title")}</h2><span>${rigs.length}</span></div><div class="minerTrainScroller">${rigCards}</div></section>
+    <section class="mineStorageCard"><div><span>${t("mining_storage_title")}</span><strong data-mine-storage-balance>${formatNumber(live.points, 1)} / ${formatPoints(mining.maxStoragePoints)} UP</strong><small>${formatMiningDuration(Number(mining.maxStorageHours) * 3600)} ${t("mining_storage_capacity")}</small></div>${mining.nextStorageUpgrade ? `<button type="button" class="secondaryBtn" data-mining-upgrade="storage" ${canUpgradeStorage ? "" : "disabled"} onclick="upgradeMining('storage')">${t("mining_storage_upgrade", { cost: formatPoints(nextStorageCost) })}</button>` : `<span class="mineActiveBadge">${t("mining_state_current")}</span>`}</section>
+    <section class="mineHistorySection"><div class="mineSectionHeading"><h2>${t("mining_history_title")}</h2></div>${renderMiningHistory()}</section>
+  </div>`;
+}
+
+function startMiningTicker() {
+  if (miningTickerTimer) clearInterval(miningTickerTimer);
+  miningTickerTimer = null;
+  const tick = () => {
+    if (state.activeTab !== "mine" || !state.mining) return;
+    const live = miningLiveValues();
+    const earned = document.querySelector("[data-mine-earned]");
+    const fill = document.querySelector("[data-mine-progress]");
+    const label = document.querySelector("[data-mine-progress-label]");
+    const countdown = document.querySelector("[data-mine-countdown]");
+    const storageBalance = document.querySelector("[data-mine-storage-balance]");
+    const speed = document.querySelector("[data-mine-speed]");
+    const multiplier = document.querySelector("[data-mine-multiplier]");
+    if (earned) earned.textContent = formatNumber(live.points, 1);
+    if (fill) fill.style.width = `${live.percent.toFixed(2)}%`;
+    if (label) label.textContent = `${live.percent.toFixed(1)}%`;
+    if (fill?.parentElement) fill.parentElement.setAttribute("aria-valuenow", live.percent.toFixed(1));
+    if (countdown && state.mining.isStarted) countdown.textContent = formatMiningDuration(live.remainingSeconds);
+    if (storageBalance) storageBalance.textContent = `${formatNumber(live.points, 1)} / ${formatPoints(state.mining.maxStoragePoints)} UP`;
+    if (speed) speed.textContent = `+${formatPoints(live.effectiveRatePerHour)} UP/hr`;
+    if (multiplier) multiplier.textContent = `${t("mining_multiplier", { n: live.multiplier })}${live.isBoosted ? ` · ${t("mining_boost_active")}` : ""}`;
+    const claimButton = document.querySelector("#claimMiningBtn");
+    if (claimButton) {
+      claimButton.disabled = live.points < 1 || state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed;
+      claimButton.textContent = live.points >= 1 ? t("mining_claim_btn") : t("mining_waiting");
+    }
+  };
+  tick();
+  if (document.querySelector(".mineConsole")) miningTickerTimer = setInterval(tick, 1000);
+}
+function stopMiningTicker() {
+  if (miningTickerTimer) clearInterval(miningTickerTimer);
+  miningTickerTimer = null;
+}
+async function renderMiningTab() {
+  const renderRequestId = navigationSequence;
+  const content = $("#content");
+  if (!content) return;
+  const statusRequest = loadMiningStatus();
+  content.innerHTML = `<div class="minePage">${renderMiningPanel()}</div>`;
+  await statusRequest;
+  if (renderRequestId !== navigationSequence || state.activeTab !== "mine") return;
+  content.innerHTML = `<div class="minePage">${renderMiningPanel()}</div>`;
+  startMiningTicker();
+}
+async function retryMiningStatus() {
+  const content = $("#content");
+  const renderRequestId = navigationSequence;
+  const statusRequest = loadMiningStatus({ force: true });
+  if (content && !state.mining) content.innerHTML = `<div class="minePage">${renderMiningPanel()}</div>`;
+  await statusRequest;
+  if (renderRequestId === navigationSequence && state.activeTab === "mine" && content) {
+    content.innerHTML = `<div class="minePage">${renderMiningPanel()}</div>`;
+    startMiningTicker();
+  }
+}
+async function startMining() {
+  if (!readModelActionAllowed()) return;
+  const button = $("#startMiningBtn");
+  if (button) button.disabled = true;
+  try {
+    const result = await api("/api/mining/start", { method: "POST", body: {} });
+    state.mining = result.mining ? { ...result.mining, history: state.mining?.history || [] } : state.mining;
+    toast(t("mining_started_success"), "success");
+    await loadMiningStatus({ force: true });
+    if (state.activeTab === "mine") {
+      const content = $("#content");
+      if (content) content.innerHTML = `<div class="minePage">${renderMiningPanel()}</div>`;
+      startMiningTicker();
+    }
+  } catch (error) {
+    toast(translateServerMessage(error.code, error.message), "error");
+    if (button) button.disabled = false;
+  }
+}
+async function claimMining() {
+  if (!readModelActionAllowed()) return;
+  const button = $("#claimMiningBtn");
+  if (button) { button.disabled = true; button.textContent = t("checkin_processing"); }
+  const scope = "mining_claim";
+  try {
+    const result = await api("/api/mining/claim", {
+      method: "POST", body: {}, headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) }
+    });
+    clearPendingIdempotencyKey(scope);
+    state.points = upBalanceFromResponse(result);
+    if (result.mining) state.mining = { ...result.mining, history: state.mining?.history || [] };
+    updateHeader();
+    toast(`+${formatPoints(result.claimedPoints)} UP`, "success");
+    try { await loadUserData({ force: true }); } catch (error) { console.warn("Mining profile refresh failed:", error); }
+    await loadMiningStatus({ force: true });
+    if (state.activeTab === "mine") {
+      const content = $("#content");
+      if (content) content.innerHTML = `<div class="minePage">${renderMiningPanel()}</div>`;
+      startMiningTicker();
+    }
+  } catch (error) {
+    toast(translateServerMessage(error.code, error.message), "error");
+    if (button) button.disabled = false;
+  }
+}
+async function upgradeMining(type) {
+  if (!readModelActionAllowed()) return;
+  if (!['rig', 'storage'].includes(type)) return;
+  const upgrade = type === "rig" ? state.mining?.nextRigUpgrade : state.mining?.nextStorageUpgrade;
+  if (!upgrade) return;
+  const cost = Number(upgrade.cost) || 0;
+  if (Number(state.points) < cost) { toast(t("mining_insufficient_balance"), "warning"); return; }
+  const accepted = await confirmVipPurchase(t("mining_upgrade_confirm", { name: upgrade.name || t(type === "rig" ? "mining_tier" : "mining_storage_title"), cost: formatPoints(cost) }));
+  if (!accepted) return;
+  const scope = `mining_upgrade_${type}`;
+  try {
+    const result = await api("/api/mining/upgrade", {
+      method: "POST", body: { type }, headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) }
+    });
+    clearPendingIdempotencyKey(scope);
+    state.points = upBalanceFromResponse(result);
+    if (result.mining) state.mining = { ...result.mining, history: state.mining?.history || [] };
+    updateHeader();
+    toast(result.message || t("mining_upgrade_success"), "success");
+    try { await loadUserData({ force: true }); } catch (error) { console.warn("Mining upgrade profile refresh failed:", error); }
+    await loadMiningStatus({ force: true });
+    if (state.activeTab === "mine") {
+      const content = $("#content");
+      if (content) content.innerHTML = `<div class="minePage">${renderMiningPanel()}</div>`;
+      startMiningTicker();
+    }
+  } catch (error) {
+    toast(translateServerMessage(error.code, error.message), "error");
+  }
+}
+window.retryMiningStatus = retryMiningStatus;
+window.startMining = startMining;
+window.claimMining = claimMining;
+window.upgradeMining = upgradeMining;
+
 async function renderVipTab() {
   const renderRequestId = navigationSequence;
   profileView = "vip";
@@ -3875,6 +4219,10 @@ async function renderCurrentTab(requestId = navigationSequence) {
         renderTasks();
       }
       void loadReferralData();
+    } else if (tab === "mine") {
+      await loadUserData();
+      if (!isCurrentRender()) return;
+      await renderMiningTab();
     } else if (tab === "vip") {
       if (cachedReadModelAvailable) {
         const content = $("#content");

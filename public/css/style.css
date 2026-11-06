@@ -2489,3 +2489,151 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
   .profileOverviewCard { grid-template-columns: 40px minmax(0, 1fr); }
   .profileBalanceMini { position: static; grid-column: 1 / -1; justify-self: stretch; }
 }
+
+
+/* Gramup Mining console and official cube token mark. */
+.upTokenMark { display: block; object-fit: contain; padding: 2px; color: transparent; background: #07131e; border-color: rgba(53,215,200,.28); }
+.upTokenMarkSm { padding: 1px; }
+.upTokenMarkWallet { padding: 3px; }
+.upTokenIcon { display: inline-block; width: 17px; height: 17px; flex: 0 0 auto; object-fit: contain; padding: 1px; border-radius: 50%; background: #07131e; vertical-align: -3px; }
+.upAmountWithLogo { display: inline-flex; align-items: center; gap: 4px; color: inherit; direction: ltr; white-space: nowrap; }
+.upAmountWithLogo .upTokenIcon { width: 14px; height: 14px; }
+.ledgerUnit { display: inline-flex; align-items: center; gap: 3px; margin-inline-start: 4px; font-size: .88em; }
+.ledgerUnit .upTokenIcon { width: 13px; height: 13px; }
+.tbGemRing.upTokenEmblem { padding: 8px; background: #07131e; }
+.tbGemRing.upTokenEmblem img { width: 100%; height: 100%; object-fit: contain; }
+.rf-hero-coin { width: 25px; height: 25px; object-fit: contain; padding: 2px; border-radius: 8px; background: #07131e; }
+
+/* Seven-day cycle: exact UP amounts, official logo, and clear claim-state hierarchy. */
+.dailyCheckGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}
+.dailyCheckDay{min-width:0;padding:9px 3px;border:1px solid rgba(255,255,255,.09);border-radius:16px;background:rgba(0,0,0,.12);text-align:center;}
+.dailyCheckDay.is-claimed{border-color:rgba(52,211,153,.38);}
+.dailyCheckDay.is-today{border-color:rgba(53,215,200,.72);box-shadow:0 0 0 2px rgba(53,215,200,.12);}
+.dailyCheckDay.is-locked{opacity:.68;}
+.dailyCheckReward{display:flex;align-items:center;justify-content:center;gap:2px;margin-top:4px;color:var(--text);font-size:8px;font-weight:900;line-height:1.15;direction:ltr;white-space:nowrap;}
+.dailyCheckReward img{width:12px;height:12px;object-fit:contain;flex:0 0 12px;padding:1px;border-radius:4px;background:#07131e;}
+.dailyCheckState{display:block;margin-top:4px;color:var(--text-muted);font-size:7px;font-weight:800;line-height:1.2;}
+.dailyCheckDay.is-today .dailyCheckState{color:var(--primary-2);}
+.dailyCheckDay.is-claimed .dailyCheckState{color:#34d399;}
+.dailyCheckDay.is-locked .dailyCheckState{color:var(--text-muted);}
+
+/* Mine tab: responsive console, animated progress, and horizontal miner train. */
+.minePage{display:grid;gap:14px;padding-bottom:14px;}
+.mineConsole{display:grid;gap:14px;min-width:0;}
+.mineHeader{display:flex;align-items:center;gap:12px;padding:15px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(145deg,var(--surface),var(--surface-2));box-shadow:var(--shadow-soft);}
+.mineEmblem{position:relative;display:grid;place-items:center;width:52px;height:52px;flex:0 0 52px;border:1px solid rgba(53,215,200,.28);border-radius:17px;background:#07131e;box-shadow:0 8px 18px rgba(0,0,0,.18);}
+.mineEmblem img{width:34px;height:34px;object-fit:contain;}
+.mineEmblem span{position:absolute;right:-5px;bottom:-5px;display:grid;place-items:center;width:22px;height:22px;border:2px solid var(--surface);border-radius:50%;color:#fff;background:#0f766e;font-size:14px;}
+.mineHeading{min-width:0;flex:1;}
+.mineEyebrow{color:var(--primary-2);font-size:8px;font-weight:900;letter-spacing:.12em;}
+.mineTitle{margin:2px 0 3px;color:var(--text);font-size:18px;font-weight:900;line-height:1.25;}
+.mineSubtitle{margin:0;color:var(--text-muted);font-size:10px;line-height:1.5;}
+.mineActiveBadge{display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;padding:6px 9px;border:1px solid var(--line);border-radius:999px;color:var(--text-muted);background:var(--surface-3);font-size:8px;font-weight:900;white-space:nowrap;}
+.mineActiveBadge i{width:6px;height:6px;border-radius:50%;background:#94a3b8;}
+.mineActiveBadge.is-active i{background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.12);}
+.mineSessionCard,.mineStorageCard{padding:16px;border:1px solid var(--line);border-radius:21px;background:linear-gradient(145deg,var(--surface),var(--surface-2));box-shadow:var(--shadow-soft);}
+.mineBalanceLine,.mineProgressMeta,.mineTimerRow{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--text-muted);font-size:10px;font-weight:800;}
+.mineLiveAmount{display:inline-flex;align-items:center;gap:5px;color:var(--text);direction:ltr;font-variant-numeric:tabular-nums;}
+.mineLiveAmount strong{font-size:27px;font-weight:1000;letter-spacing:-.04em;}
+.mineLiveAmount>span{font-size:11px;font-weight:900;}
+.mineLiveAmount img{width:19px;height:19px;padding:1px;object-fit:contain;border-radius:6px;background:#07131e;}
+.mineProgressMeta{margin-top:14px;color:var(--text-soft);}
+.mineProgressMeta strong{color:var(--primary-2);font-variant-numeric:tabular-nums;}
+.mineProgressTrack{height:9px;margin-top:7px;overflow:hidden;border:1px solid var(--line);border-radius:999px;background:rgba(127,127,127,.16);}
+.mineProgressFill{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#14b8a6,#35d7c8 65%,#8be9df);box-shadow:0 0 15px rgba(53,215,200,.35);transition:width .9s cubic-bezier(.22,.7,.24,1);}
+.mineTimerRow{margin-top:9px;font-variant-numeric:tabular-nums;}
+.mineTimerRow strong{color:var(--text);font-size:11px;}
+.mineActions{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:8px;margin-top:14px;}
+.minePrimaryBtn,.mineBoostBtn{min-height:44px;margin:0;padding:9px 10px;border-radius:13px;font-size:11px;font-weight:900;}
+.mineBoostBtn{border:1px solid rgba(53,215,200,.26);color:var(--text);background:rgba(53,215,200,.09);}
+.mineBoostBtn:disabled{opacity:.55;}
+.mineMetrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+.mineMetricCard{display:flex;min-width:0;flex-direction:column;gap:5px;padding:13px;border:1px solid var(--line);border-radius:17px;background:var(--surface);box-shadow:var(--shadow-soft);}
+.mineMetricCard>span{color:var(--text-muted);font-size:9px;font-weight:800;}
+.mineMetricCard>strong{overflow:hidden;color:var(--text);font-size:14px;font-weight:950;text-overflow:ellipsis;white-space:nowrap;}
+.mineMetricCard>small{color:var(--text-muted);font-size:8px;}
+.minerTrainSection,.mineHistorySection{min-width:0;}
+.mineSectionHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 2px 9px;}
+.mineSectionHeading h2{margin:0;color:var(--text);font-size:13px;font-weight:900;}
+.mineSectionHeading>span{color:var(--text-muted);font-size:9px;}
+.minerTrainScroller{display:flex;gap:9px;overflow-x:auto;padding:2px 1px 10px;scroll-snap-type:x mandatory;scrollbar-width:thin;-webkit-overflow-scrolling:touch;}
+.minerTrainCard{display:grid;grid-template-columns:35px minmax(80px,1fr);align-items:center;gap:8px;min-width:178px;max-width:220px;flex:0 0 72%;padding:11px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-soft);scroll-snap-align:start;}
+.minerTrainCard.is-current{border-color:rgba(53,215,200,.56);}
+.minerTrainIcon{display:grid;place-items:center;width:35px;height:35px;border-radius:11px;background:#07131e;}
+.minerTrainIcon img{width:26px;height:26px;object-fit:contain;}
+.minerTrainCopy{min-width:0;}
+.minerTrainTitle{display:block;overflow:hidden;color:var(--text);font-size:9px;font-weight:900;text-overflow:ellipsis;white-space:nowrap;}
+.minerTrainMeta{display:block;margin-top:4px;color:var(--primary-2);font-size:8px;font-weight:900;direction:ltr;text-align:left;}
+.minerTrainState{grid-column:1/-1;color:var(--text-muted);font-size:8px;font-weight:800;}
+.minerTrainCard.is-current .minerTrainState{color:#10b981;}
+.minerTrainCard.is-locked .minerTrainState{color:var(--text-muted);}
+.minerTrainCost{justify-self:start;color:var(--text-muted);font-size:8px;}
+.mineCardUpgrade{grid-column:1/-1;min-height:30px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:9px;color:var(--text);background:var(--surface-3);font-size:8px;font-weight:900;}
+.mineStorageCard{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.mineStorageCard>div{display:grid;gap:4px;min-width:0;}
+.mineStorageCard>div>span{color:var(--text-muted);font-size:9px;font-weight:800;}
+.mineStorageCard>div>strong{color:var(--text);font-size:12px;}
+.mineStorageCard>div>small{color:var(--text-muted);font-size:8px;}
+.mineStorageCard .secondaryBtn{flex:0 0 auto;padding:8px 10px;font-size:9px;}
+.mineHistoryList{display:grid;gap:7px;}
+.mineHistoryRow{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--line);border-radius:13px;background:var(--surface);}
+.mineHistoryIcon{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:#07131e;}
+.mineHistoryIcon img{width:22px;height:22px;object-fit:contain;}
+.mineHistoryCopy{display:grid;min-width:0;flex:1;gap:3px;}
+.mineHistoryCopy strong{overflow:hidden;color:var(--text);font-size:9px;text-overflow:ellipsis;white-space:nowrap;}
+.mineHistoryCopy small{color:var(--text-muted);font-size:8px;}
+.mineHistoryRow>b{color:#10b981;font-size:10px;direction:ltr;white-space:nowrap;}
+.mineHistoryEmpty{padding:16px;border:1px dashed var(--line-strong);border-radius:14px;color:var(--text-muted);font-size:10px;text-align:center;}
+.mineConsole--empty{display:flex;min-height:245px;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:22px;border:1px solid var(--line);border-radius:21px;color:var(--text);background:linear-gradient(145deg,var(--surface),var(--surface-2));text-align:center;}
+.mineConsole--empty p{max-width:260px;margin:0;color:var(--text-muted);font-size:11px;line-height:1.7;}
+.mineEmptySpinner{width:30px;height:30px;border:3px solid rgba(53,215,200,.18);border-top-color:#35d7c8;border-radius:50%;animation:mineSpin .8s linear infinite;}
+@keyframes mineSpin{to{transform:rotate(360deg)}}
+
+/* Six destinations remain readable without horizontal scrolling on small Telegram viewports. */
+.bottomNav { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
+.bottomNav button { padding-inline: 1px; }
+@media (max-width: 380px) {
+  .bottomNav { gap: 1px; padding-inline: 5px; }
+  .tabLabel { font-size: 8.5px; }
+  .tabIcon { width: 22px; height: 22px; flex-basis: 22px; }
+  .tabSvg { width: 19px; height: 19px; }
+  .dailyCheckGrid { gap: 2px; }
+  .dailyCheckDay { padding-inline: 1px; }
+  .dailyCheckReward { gap: 1px; font-size: 7px; }
+  .dailyCheckReward img { width: 10px; height: 10px; flex-basis: 10px; }
+}
+@media (max-width: 420px) {
+  .mineHeader { gap: 8px; padding: 12px; }
+  .mineEmblem { width: 43px; height: 43px; flex-basis: 43px; border-radius: 14px; }
+  .mineEmblem img { width: 29px; height: 29px; }
+  .mineTitle { font-size: 15px; }
+  .mineActiveBadge { padding: 5px 7px; font-size: 7px; }
+  .mineSessionCard { padding: 13px; }
+  .mineLiveAmount strong { font-size: 23px; }
+  .mineStorageCard { align-items: flex-start; flex-direction: column; }
+  .mineStorageCard .secondaryBtn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mineProgressFill { transition: none; }
+  .mineEmptySpinner { animation-duration: 2s; }
+}
+
+.vipBalanceValue .upTokenIcon { width: 23px; height: 23px; align-self: center; }
+.vipPlanStat b .upAmountWithLogo,
+.vipPlanReward b .upAmountWithLogo,
+.vipDailySummary b .upAmountWithLogo { font-size: inherit; }
+.leaderPointUnit { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; color: var(--text-muted); font-size: 8px; direction: ltr; }
+.leaderPointUnit .upTokenIcon { width: 11px; height: 11px; }
+.leaderPrize .upAmountWithLogo { font-size: 8px; }
+.rf-level-foot .upAmountWithLogo { font-size: 10px; }
+.gramTokenIcon { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; vertical-align: -3px; }
+.gramBalanceUnit { display: inline-flex; align-items: center; gap: 6px; direction: ltr; font-variant-numeric: tabular-nums; }
+.gramAmountUnit { display: inline-flex; align-items: center; gap: 4px; }
+.gramAmountUnit .gramTokenIcon { width: 13px; height: 13px; }
+.walletChainBalance #walletChainBalanceValue .gramTokenIcon { width: 14px; height: 14px; }
+.tbWalletIcon .gramTokenIcon { width: 24px; height: 24px; }
+
+.exchangeQuickAmounts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: -3px 0 12px; }
+.exchangeQuickBtn { min-height: 34px; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-3); color: var(--text); font-size: 11px; font-weight: 800; }
+.exchangeQuickBtn:not(:disabled):active { transform: scale(.97); }
+.exchangeQuickBtn:disabled { opacity: .45; cursor: not-allowed; }
