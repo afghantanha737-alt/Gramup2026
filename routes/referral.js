@@ -163,6 +163,7 @@ router.get('/me', auth, async (req, res) => {
   const monthlyTotal = Number(monthlyRows[0]?.total) || 0;
   res.json({
     success: true,
+    upBalance: Number(u.points) || 0,
     referralCode: u.referralCode,
     invitedCount: totalReferralCount,
     activeInvitedCount: Number(u.activeInvitedCount) || 0,
@@ -259,6 +260,7 @@ router.post('/claim', auth, sensitiveRateLimit('claim'), async (req, res) => {
     taskId,
     rewardPoints: task.rewardPoints,
     points: updated.points,
+    upBalance: Number(updated.points) || 0,
     invitedCount: updated.invitedCount,
     activeInvitedCount: updated.activeInvitedCount,
     referralTasks: buildReferralTaskProgress(updated.activeInvitedCount, updated.referralRewardClaims)

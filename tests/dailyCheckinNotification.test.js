@@ -21,8 +21,8 @@ assert.strictEqual(nextCheckinDay({ streak: 6, lastCheckIn: yesterday }, now), 7
 assert.strictEqual(nextCheckinDay({ streak: 7, lastCheckIn: yesterday }, now), 1);
 assert.strictEqual(nextCheckinDay({ streak: 3, lastCheckIn: today }, now), 3);
 assert.strictEqual(nextCheckinDay({ streak: 20, lastCheckIn: null }, now), 1);
-assert.strictEqual(notificationText(2), 'Today is your Day 2! Go to the daily check-in and claim your 7 points for free.');
-assert.strictEqual(notificationText(7), 'Today is your Day 7! Go to the daily check-in and claim your 15 points for free.');
+assert.strictEqual(notificationText(2), 'Today is your Day 2! Go to the daily check-in and claim your 7 UP for free.');
+assert.strictEqual(notificationText(7), 'Today is your Day 7! Go to the daily check-in and claim your 15 UP for free.');
 
 async function testSweep() {
   const users = [
@@ -55,9 +55,9 @@ async function testSweep() {
   assert.match(query.projection, /telegramId/);
   assert.strictEqual(sentMessages.length, 3, 'every registered Telegram user is attempted, including banned/blocked records');
   assert.deepStrictEqual(sentMessages.map(message => message.text), [
-    'Today is your Day 2! Go to the daily check-in and claim your 7 points for free.',
-    'Today is your Day 7! Go to the daily check-in and claim your 15 points for free.',
-    'Today is your Day 1! Go to the daily check-in and claim your 5 points for free.'
+    'Today is your Day 2! Go to the daily check-in and claim your 7 UP for free.',
+    'Today is your Day 7! Go to the daily check-in and claim your 15 UP for free.',
+    'Today is your Day 1! Go to the daily check-in and claim your 5 UP for free.'
   ]);
   assert.deepStrictEqual(result, { sent: 2, failed: 1, alreadySent: 0, total: 3 });
 

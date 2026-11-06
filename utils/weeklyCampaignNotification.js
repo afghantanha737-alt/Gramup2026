@@ -7,9 +7,9 @@ const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 1100;
 const LANGUAGE_DELAY_MS = 7 * 60 * 1000;
 const CAMPAIGN_COPY = Object.freeze({
-  en: 'The new weekly campaign has started! Compete now, complete tasks, earn points, invite friends, climb the leaderboard, and win cash prizes.',
-  ps: 'نوې اونيزه کمپاين پيل شو! همدا اوس سيالي وکړئ، دندې بشپړې کړئ، پوائنټونه ترلاسه کړئ، ملګري بلنه ورکړئ، لیډربورډ ته پورته شئ، او نغدي جایزې وګټئ.',
-  fa: 'کمپین جدید هفتگی آغاز شد! هماکنون رقابت کنید، وظایف را تکمیل کنید، امتیاز کسب کنید، دوستان خود را دعوت کنید، در جدول امتیازات بالا بروید و برنده جوایز نقدی شوید.'
+  en: 'The new weekly campaign has started! Compete now, complete tasks, earn UP, invite friends, climb the leaderboard, and win cash prizes.',
+  ps: 'نوې اونيزه کمپاين پيل شو! همدا اوس سيالي وکړئ، دندې بشپړې کړئ، UP ترلاسه کړئ، ملګري بلنه ورکړئ، لیډربورډ ته پورته شئ، او نغدي جایزې وګټئ.',
+  fa: 'کمپین جدید هفتگی آغاز شد! هماکنون رقابت کنید، وظایف را تکمیل کنید، UP کسب کنید، دوستان خود را دعوت کنید، در جدول امتیازات بالا بروید و برنده جوایز نقدی شوید.'
 });
 const LANGUAGES = Object.freeze(['en', 'ps', 'fa']);
 

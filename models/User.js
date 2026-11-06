@@ -10,7 +10,9 @@ const userSchema = new mongoose.Schema(
     lastName: { type: String, default: '' },
     photoUrl: { type: String, default: '' },
 
-    points: { type: Number, default: 0, min: 0 },
+    // Persisted rewards balance; UP is the public alias, not a second balance.
+    // Keeping `points` as the stored path preserves every existing user record.
+    points: { type: Number, default: 0, min: 0, alias: 'upBalance' },
     // Mining state is server-authoritative; a missing claim anchor means mining has not started.
     miningLevel: { type: Number, default: 1, min: 1, max: 5 },
     miningStorageLevel: { type: Number, default: 1, min: 1, max: 3 },

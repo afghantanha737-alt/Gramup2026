@@ -5,12 +5,16 @@ const {
   claimDailyCheckin,
   claimNotificationDelivery,
   dailyCheckinSourceId,
+  notificationText,
   runDailyAutoCheckin,
   runDailyAutoCheckinSweep,
   isAutomaticCheckinDue
 } = require('../utils/dailyAutoCheckin');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+assert.match(notificationText({ language: 'en' }, { amount: 5, cycleDay: 1, streak: 1 }), /\+5 UP/);
+assert.match(notificationText({ language: 'fa' }, { amount: 5, cycleDay: 1, streak: 1 }), /\+5 UP/);
+assert.match(notificationText({ language: 'ps' }, { amount: 5, cycleDay: 1, streak: 1 }), /\+5 UP/);
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
 const query = value => {
   const promise = Promise.resolve(value);

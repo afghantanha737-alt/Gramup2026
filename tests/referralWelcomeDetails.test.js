@@ -14,7 +14,7 @@ for (const language of ['fa', 'ps', 'en']) {
 }
 
 const english = botText('referralInitial', 'en', '@new-user', 10, 1, 10, registeredAt, rates);
-assert.match(english, /exactly 10 points were added/);
+assert.match(english, /exactly 10 UP were added/);
 assert.match(english, /L1 10%, L2 5%, L3 3%, L4 and deeper 1%/);
 assert.match(english, /original earnings from approved tasks, daily check-ins, and leaderboard rewards/);
 assert.match(english, /referral rewards\/commissions, spins, conversions, withdrawals, and admin adjustments are excluded/);
@@ -27,4 +27,4 @@ for (const language of ['fa', 'ps', 'en']) {
   assert.ok(checkin.includes('2'), `${language} check-in message includes current streak`);
 }
 
-console.log('PASS — referral welcome states the paid 10 points, L1-L4 rates, eligible-income scope, and supports fa/ps/en');
+console.log('PASS — referral welcome states the paid 10 UP, L1-L4 rates, eligible-income scope, and supports fa/ps/en');

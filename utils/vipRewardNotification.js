@@ -31,7 +31,7 @@ function utcDayKey(date = new Date()) {
 
 function vipRewardNotificationText(subscription, rewardPoints) {
   const planName = `VIP Plan ${Math.max(1, Number(subscription.planNumber) || 1)}`;
-  return `Your VIP reward for ${planName} (${rewardPoints} Points) is ready to claim! Head over to your VIP dashboard and claim your reward.`;
+  return `Your VIP reward for ${planName} (${rewardPoints} UP) is ready to claim! Head over to your VIP dashboard and claim your reward.`;
 }
 
 async function reserveDailyNotification(eventKey, leaseUntil, DistributedJobLock) {

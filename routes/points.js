@@ -300,7 +300,7 @@ router.get('/me', auth, async (req, res) => {
   const canCheckIn = !u.lastCheckIn || utcDayKey(u.lastCheckIn) < todayKey;
   const minWithdrawGram = Number((settings.minWithdrawPoints * settings.rate).toFixed(6));
 
-  // مجموع پوینتی که کاربر تا امروز «کسب» کرده (بدون احتساب تبدیل GRAM→پوینت و اصلاح دستی ادمین)
+  // مجموع UP که کاربر تا امروز «کسب» کرده (بدون احتساب تبدیل GRAM→UP و اصلاح دستی ادمین)
   const earnedAgg = await PointsLedger.aggregate([
     { $match: { user: u._id, currency: 'points', amount: { $gt: 0 }, type: { $nin: ['exchange_in', 'admin_adjust', 'vip_principal_return'] } } },
     { $group: { _id: null, total: { $sum: '$amount' } } }
@@ -320,7 +320,9 @@ router.get('/me', auth, async (req, res) => {
     withdrawalRemainingGram,
     gramUsdPrice: settings.gramUsdPrice || 0,
     points: u.points,
+    upBalance: Number(u.points) || 0,
     gramBalance: u.gramBalance,
+    balances: { UP: Number(u.points) || 0, GRAM: Number(u.gramBalance) || 0 },
     rate: settings.rate,
     streak: u.streak,
     canCheckIn,
@@ -349,6 +351,7 @@ router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
     success: true,
     earned: result.amount,
     points: result.user.points,
+    upBalance: Number(result.user.points) || 0,
     streak: result.streak,
     cycleDay: result.cycleDay,
     nextResetAt: nextResetTimestamp()
@@ -358,7 +361,7 @@ router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
 const round6 = n => Number(Number(n).toFixed(6));
 
 /**
- * POST /api/points/exchange — تبدیل دوطرفه پوینت <-> موجودی GRAM
+ * POST /api/points/exchange — تبدیل دوطرفه UP <-> موجودی GRAM
  * (بر اساس نرخ فعلی؛ این مبلغ بعداً از طریق «برداشت» قابل خارج شدن است)
  * body: { direction: 'points_to_gram' | 'gram_to_points', amount }
  * برای سازگاری با نسخه‌ی قبلی، body.points هم به‌عنوان amount برای points_to_gram پذیرفته می‌شود.
@@ -384,7 +387,7 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
     const points = Math.floor(Number(body.amount != null ? body.amount : body.points) || 0);
 
     if (!Number.isSafeInteger(points) || points <= 0) {
-      return res.status(400).json({ success: false, message: 'مقدار پوینت نامعتبر است.', code: 'INVALID_AMOUNT' });
+      return res.status(400).json({ success: false, message: 'مقدار UP نامعتبر است.', code: 'INVALID_AMOUNT' });
     }
 
     const gramGained = round6(points * settings.rate);
@@ -403,17 +406,18 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
           { new: true, session }
         );
         if (!result) {
-          const error = new Error('موجودی پوینت کافی نیست.');
+          const error = new Error('موجودی UP کافی نیست.');
           error.code = 'INSUFFICIENT_BALANCE';
           throw error;
         }
-        await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'points', amount: -points, description: 'تبدیل پوینت به GRAM', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_gram', key: operationKey, leg: 'out' }), session });
-        await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'gram', amount: gramGained, description: 'تبدیل پوینت به GRAM', balanceAfter: result.gramBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_gram', key: operationKey, leg: 'in' }), session });
+        await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'points', amount: -points, description: 'تبدیل UP به GRAM', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_gram', key: operationKey, leg: 'out' }), session });
+        await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'gram', amount: gramGained, description: 'تبدیل UP به GRAM', balanceAfter: result.gramBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_gram', key: operationKey, leg: 'in' }), session });
         return { body: {
           success: true,
           direction,
-          message: `${points} پوینت به ${gramGained} GRAM تبدیل شد.`,
+          message: `${points} UP به ${gramGained} GRAM تبدیل شد.`,
           points: result.points,
+          upBalance: Number(result.points) || 0,
           gramBalance: result.gramBalance,
           gramGained
         } };
@@ -461,13 +465,14 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
         error.code = 'INSUFFICIENT_BALANCE';
         throw error;
       }
-      await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'gram', amount: -gramSpent, description: 'تبدیل GRAM به پوینت', balanceAfter: result.gramBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_gram_to_points', key: operationKey, leg: 'out' }), session });
-      await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'points', amount: pointsGained, description: 'تبدیل GRAM به پوینت', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_gram_to_points', key: operationKey, leg: 'in' }), session });
+      await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'gram', amount: -gramSpent, description: 'تبدیل GRAM به UP', balanceAfter: result.gramBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_gram_to_points', key: operationKey, leg: 'out' }), session });
+      await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'points', amount: pointsGained, description: 'تبدیل GRAM به UP', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_gram_to_points', key: operationKey, leg: 'in' }), session });
       return { body: {
         success: true,
         direction,
-        message: `${gramSpent} GRAM به ${pointsGained} پوینت تبدیل شد.`,
+        message: `${gramSpent} GRAM به ${pointsGained} UP تبدیل شد.`,
         points: result.points,
+        upBalance: Number(result.points) || 0,
         gramBalance: result.gramBalance,
         pointsGained
       } };
@@ -482,7 +487,7 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
   res.status(operation.status).json(operation.body);
 });
 
-// POST /api/points/withdraw — برداشت از موجودی GRAM (نه مستقیم از پوینت)
+// POST /api/points/withdraw — برداشت از موجودی GRAM (نه مستقیم از UP)
 router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
@@ -975,7 +980,7 @@ router.post('/swap/gram-to-points/intents/:id/verify', auth, sensitiveRateLimit(
   if (!intent) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
   if (intent.status === 'confirmed') {
     const user = await User.findById(req.dbUser._id).select('points');
-    return res.json({ success: true, status: 'confirmed', points: user?.points ?? 0, intent: publicSwapIntent(intent) });
+    return res.json({ success: true, status: 'confirmed', points: user?.points ?? 0, upBalance: Number(user?.points) || 0, intent: publicSwapIntent(intent) });
   }
   const sourceAddress = normalizeTonAddress(intent.walletAddressSnapshot);
   let verification;
@@ -990,12 +995,12 @@ router.post('/swap/gram-to-points/intents/:id/verify', auth, sensitiveRateLimit(
     await GramSwapIntent.updateOne({ _id: intent._id, user: req.dbUser._id, status: 'pending' }, { $set: { verificationNote: verification.code || 'pending' } });
     return res.status(202).json({ success: true, status: 'pending', code: verification.code, intent: publicSwapIntent(intent), message: 'تراکنش هنوز در TON نهایی نشده است؛ چند لحظه بعد دوباره بررسی کنید.' });
   }
-  if (verification.status !== 'verified') return res.status(400).json({ success: false, code: verification.code || 'SWAP_VERIFICATION_FAILED', message: 'تراکنش Swap با Reference معتبر مطابقت ندارد؛ هیچ Point اضافه نشد.' });
+  if (verification.status !== 'verified') return res.status(400).json({ success: false, code: verification.code || 'SWAP_VERIFICATION_FAILED', message: 'تراکنش Swap با Reference معتبر مطابقت ندارد؛ هیچ UP اضافه نشد.' });
   if (sourceAddress && verification.sourceAddress !== sourceAddress) {
-    return res.status(400).json({ success: false, code: 'SWAP_SOURCE_WALLET_MISMATCH', message: 'تراکنش از Wallet متصل‌شده ارسال نشده است؛ هیچ Point اضافه نشد.' });
+    return res.status(400).json({ success: false, code: 'SWAP_SOURCE_WALLET_MISMATCH', message: 'تراکنش از Wallet متصل‌شده ارسال نشده است؛ هیچ UP اضافه نشد.' });
   }
   const actualPoints = Math.floor(verification.amount / intent.rateSnapshot);
-  if (actualPoints <= 0) return res.status(400).json({ success: false, code: 'SWAP_AMOUNT_TOO_SMALL', message: 'مبلغ تراکنش برای دریافت Point کافی نیست.' });
+  if (actualPoints <= 0) return res.status(400).json({ success: false, code: 'SWAP_AMOUNT_TOO_SMALL', message: 'مبلغ تراکنش برای دریافت UP کافی نیست.' });
   let outcome;
   try {
     await withMongoTransaction(async session => {
@@ -1007,7 +1012,7 @@ router.post('/swap/gram-to-points/intents/:id/verify', auth, sensitiveRateLimit(
       if (!claimed) throw Object.assign(new Error('SWAP_ALREADY_PROCESSED'), { code: 'SWAP_ALREADY_PROCESSED' });
       const updated = await User.findByIdAndUpdate(req.dbUser._id, { $inc: { points: actualPoints } }, { new: true, session });
       if (!updated) throw new Error('SWAP_USER_NOT_FOUND');
-      const ledgerResult = await recordLedgerRequired({ user: updated._id, type: 'exchange_in', currency: 'points', amount: actualPoints, description: 'Swap خودکار Native GRAM به Point', balanceAfter: updated.points, sourceId: `swap:${verification.txHash}`, transactionId: verification.txHash, session });
+      const ledgerResult = await recordLedgerRequired({ user: updated._id, type: 'exchange_in', currency: 'points', amount: actualPoints, description: 'Swap خودکار Native GRAM به UP', balanceAfter: updated.points, sourceId: `swap:${verification.txHash}`, transactionId: verification.txHash, session });
       if (!ledgerResult.created) throw new Error('SWAP_LEDGER_ALREADY_EXISTS');
       outcome = { intent: claimed, points: updated.points };
     });
@@ -1016,7 +1021,7 @@ router.post('/swap/gram-to-points/intents/:id/verify', auth, sensitiveRateLimit(
     if (error?.code === 'SWAP_ALREADY_PROCESSED') return res.status(409).json({ success: false, code: error.code, message: 'این Swap قبلاً پردازش شده است.' });
     throw error;
   }
-  return res.json({ success: true, status: 'confirmed', points: outcome.points, pointsGained: actualPoints, intent: publicSwapIntent(outcome.intent), message: `${actualPoints} Point با تأیید تراکنش TON اضافه شد.` });
+  return res.json({ success: true, status: 'confirmed', points: outcome.points, upBalance: Number(outcome.points) || 0, pointsGained: actualPoints, intent: publicSwapIntent(outcome.intent), message: `${actualPoints} UP با تأیید تراکنش TON اضافه شد.` });
 });
 
 // VIP catalog and user subscription state. Plan values are always read from
@@ -1035,6 +1040,7 @@ router.get('/vip/plans', auth, async (req, res) => {
     success: true,
     serverNow: now.toISOString(),
     points: user?.points ?? req.dbUser.points,
+    upBalance: Number(user?.points ?? req.dbUser.points) || 0,
     plans: plans.map(publicVipPlan),
     subscriptions: subscriptions.map(subscription => publicVipSubscription(subscription, now))
   });
@@ -1100,7 +1106,7 @@ router.post('/vip/purchase', auth, sensitiveRateLimit('claim'), async (req, res)
           { $inc: { points: -pricePoints } },
           { new: true, session }
         );
-        if (!user) throw vipError('VIP_INSUFFICIENT_POINTS', 'موجودی Points برای خرید این پلن کافی نیست.', 400);
+        if (!user) throw vipError('VIP_INSUFFICIENT_POINTS', 'موجودی UP برای خرید این پلن کافی نیست.', 400);
 
         const startAt = new Date();
         const endAt = new Date(startAt.getTime() + durationDays * DAY_MS);
@@ -1196,6 +1202,7 @@ router.post('/vip/purchase', auth, sensitiveRateLimit('claim'), async (req, res)
         return { body: {
           success: true,
           points: finalPoints,
+          upBalance: Number(finalPoints) || 0,
           subscription: publicVipSubscription(subscription, startAt)
         } };
       }
@@ -1321,6 +1328,7 @@ router.post('/vip/:subscriptionId/claim', auth, sensitiveRateLimit('claim'), asy
             principalPoints,
             totalPayoutPoints,
             points: user.points,
+            upBalance: Number(user.points) || 0,
             subscription: publicVipSubscription(updatedSubscription, now)
           } };
         }
@@ -1366,6 +1374,7 @@ router.post('/vip/:subscriptionId/claim', auth, sensitiveRateLimit('claim'), asy
           success: true,
           rewardPoints,
           points: user.points,
+          upBalance: Number(user.points) || 0,
           subscription: publicVipSubscription(updatedSubscription, now)
         } };
       }
@@ -1436,14 +1445,32 @@ router.get('/history', auth, async (req, res) => {
     const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     return timeDiff || String(b._id).localeCompare(String(a._id));
   });
-  const page = history.slice(0, limit);
+  const page = history.slice(0, limit).map(item => ({
+    ...item,
+    tokenSymbol: item.currency === 'points' ? 'UP' : item.currency === 'gram' ? 'GRAM' : undefined,
+    ...(item.currency === 'points' ? {
+      upAmount: Number(item.amount) || 0,
+      upBalanceAfter: item.balanceAfter == null ? null : Number(item.balanceAfter)
+    } : {})
+  }));
   const hasMore = history.length > limit || ledgerItems.length > limit || depositItems.length > limit;
   const last = page[page.length - 1];
   const nextCursor = hasMore && last?._id && last?.createdAt
     ? Buffer.from(JSON.stringify({ createdAt: new Date(last.createdAt).toISOString(), _id: String(last._id) })).toString('base64url')
     : null;
 
-  res.json({ success: true, history: page, hasMore, nextCursor });
+  const upBalance = Number(req.dbUser.points) || 0;
+  const gramBalance = Number(req.dbUser.gramBalance) || 0;
+  res.json({
+    success: true,
+    upBalance,
+    points: upBalance,
+    gramBalance,
+    balances: { UP: upBalance, GRAM: gramBalance },
+    history: page,
+    hasMore,
+    nextCursor
+  });
 });
 
 /**

@@ -39,7 +39,7 @@ function nextCheckinDay(user, now = new Date()) {
 function notificationText(day) {
   const safeDay = Number.isInteger(day) && day >= 1 && day <= DAILY_CHECKIN_REWARDS.length ? day : 1;
   const points = DAILY_CHECKIN_REWARDS[safeDay - 1];
-  return `Today is your Day ${safeDay}! Go to the daily check-in and claim your ${points} points for free.`;
+  return `Today is your Day ${safeDay}! Go to the daily check-in and claim your ${points} UP for free.`;
 }
 
 async function runDailyCheckinNotificationSweep(now = new Date(), dependencies = {}) {

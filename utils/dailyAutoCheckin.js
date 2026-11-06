@@ -57,9 +57,9 @@ function notificationText(user, { amount, cycleDay, streak }) {
   const lang = String(user?.language || 'en').toLowerCase();
   const safeLanguage = ['fa', 'ps', 'en'].includes(lang) ? lang : 'en';
   const templates = {
-    fa: `پاداش ورود روزانه امروز ثبت شد: +${amount} پوینت. استریک شما ${streak} روز است (روز ${cycleDay} از چرخه ۷روزه).`,
-    ps: `ستاسو د نن ورځې د ننوتلو انعام ثبت شو: +${amount} پواینټه. ستاسو سټریک ${streak} ورځې دی (د ۷ ورځني پړاو ${cycleDay}مه ورځ).`,
-    en: `Today's daily check-in reward is credited: +${amount} points. Your streak is ${streak} days (cycle day ${cycleDay} of 7).`
+    fa: `پاداش ورود روزانه امروز ثبت شد: +${amount} UP. استریک شما ${streak} روز است (روز ${cycleDay} از چرخه ۷روزه).`,
+    ps: `ستاسو د نن ورځې د ننوتلو انعام ثبت شو: +${amount} UP. ستاسو سټریک ${streak} ورځې دی (د ۷ ورځني پړاو ${cycleDay}مه ورځ).`,
+    en: `Today's daily check-in reward is credited: +${amount} UP. Your streak is ${streak} days (cycle day ${cycleDay} of 7).`
   };
   return templates[safeLanguage];
 }

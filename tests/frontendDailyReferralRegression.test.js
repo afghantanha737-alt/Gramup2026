@@ -77,7 +77,7 @@ assert.match(index, /data-i18n-aria="notifications"/);
 assert.match(app, /t\("wallet_connect_required"\)/);
 assert.match(app, /t\("wallet_exchange_success"/);
 assert.match(app, /t\('deposit_network_ton_mainnet'\)/);
-assert.match(i18n, /streak_label: "اوسنۍ پرله‌پسې ورځې — د پرله‌پسې ورځو په ساتلو سره نور پوائنټونه ترلاسه کړئ"/);
+assert.match(i18n, /streak_label: "اوسنۍ پرله‌پسې ورځې — د پرله‌پسې ورځو په ساتلو سره نور UP ترلاسه کړئ"/);
 assert.match(i18n, /deposit_copy_empty: "د کاپي لپاره هېڅ شی نشته\."/);
 
 const context = { console, window: {}, globalThis: null };

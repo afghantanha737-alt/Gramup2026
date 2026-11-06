@@ -26,7 +26,7 @@ assert.strictEqual(claimReadiness({ ...readySub, lastClaimAt: new Date(now.getTi
 assert.strictEqual(claimReadiness({ ...readySub, status: 'completed' }, now), null);
 assert.strictEqual(claimReadiness({ ...readySub, claimsCompleted: 30 }, now), null);
 assert.strictEqual(vipRewardNotificationText(readySub, 7),
-  'Your VIP reward for VIP Plan 3 (7 Points) is ready to claim! Head over to your VIP dashboard and claim your reward.');
+  'Your VIP reward for VIP Plan 3 (7 UP) is ready to claim! Head over to your VIP dashboard and claim your reward.');
 
 async function testSweep() {
   const subscriptions = [
@@ -64,7 +64,7 @@ async function testSweep() {
   assert.strictEqual(first.totalReady, 1, 'only the currently claimable subscription is notified');
   assert.strictEqual(sent.length, 1);
   assert.strictEqual(sent[0].telegramId, user.telegramId);
-  assert.match(sent[0].text, /VIP Plan 3 \(7 Points\)/);
+  assert.match(sent[0].text, /VIP Plan 3 \(7 UP\)/);
 
   const repeated = await runVipRewardNotificationSweep(now, deps);
   assert.strictEqual(repeated.duplicate, 1);

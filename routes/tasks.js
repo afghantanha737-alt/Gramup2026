@@ -58,7 +58,7 @@ function parseScreenshot(req, res, next) {
 
 /**
  * Eligibility قدیمی برای تبدیل/برداشت و شمارنده‌ی دعوت فعال را به‌روز می‌کند؛
- * پاداش ثابت ۵۰ پوینتی در سیستم جدید غیرفعال شده و پرداخت اولیه هنگام اتصال Referral است.
+ * پاداش ثابت ۵۰ UP در سیستم جدید غیرفعال شده و پرداخت اولیه هنگام اتصال Referral است.
  */
 async function maybeAwardReferralBonus(userId) {
   const result = await withMongoTransaction(async session => {
@@ -408,8 +408,9 @@ router.post('/:id/engagement/check', auth, sensitiveRateLimit('claim'), async (r
     maybeAwardReferralBonus(user._id).catch(error => console.error('Referral bonus check failed:', error));
     return res.json({
       success: true,
-      message: `${payment.reward} پوینت به حساب شما اضافه شد.`,
+      message: `${payment.reward} UP به حساب شما اضافه شد.`,
       points: payment.points,
+      upBalance: payment.points,
       reward: payment.reward,
       status: 'approved',
       recurringClaimCount: payment.recurringClaimCount,
@@ -503,7 +504,7 @@ async function claimBioLinkTask(req, res, task) {
       return { points: rewarded.points, reward: BIO_LINK_REWARD, nextAvailableAt, serverNow: now.getTime(), recurringClaimCount: cycle };
     });
     maybeAwardReferralBonus(req.dbUser._id).catch(error => console.error('Referral bonus check failed:', error));
-    return res.json({ success: true, ...payment, cooldownHours: BIO_LINK_COOLDOWN_MS / (60 * 60 * 1000), status: 'approved', message: 'لینک بیو تأیید شد؛ ۵ پوینت به حساب شما اضافه شد.' });
+    return res.json({ success: true, ...payment, upBalance: payment.points, cooldownHours: BIO_LINK_COOLDOWN_MS / (60 * 60 * 1000), status: 'approved', message: 'لینک بیو تأیید شد؛ ۵ UP به حساب شما اضافه شد.' });
   } catch (error) {
     if (error?.status) return fail(error.status, error.code, error.message);
     if (error?.code === 11000) return fail(409, 'TASK_CLAIM_CONFLICT', 'درخواست هم‌زمان بود؛ وضعیت تسک را تازه کنید.');
@@ -652,8 +653,9 @@ router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) =>
     res.json({
       success: true,
       joined: true,
-      message: `${payment.reward} پوینت به حساب شما اضافه شد.`,
+      message: `${payment.reward} UP به حساب شما اضافه شد.`,
       points: payment.points,
+      upBalance: payment.points,
       status: 'approved'
     });
   } catch (error) {

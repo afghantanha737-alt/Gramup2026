@@ -433,6 +433,11 @@ function showLoading() {
 }
 
 /* ================= HEADER + STATIC TEXT ================= */
+function upBalanceFromResponse(response, fallback = state.points) {
+  const balance = Number(response?.upBalance ?? response?.points);
+  return Number.isFinite(balance) ? balance : fallback;
+}
+
 function updateHeader() {
   const telegramUser = getTelegramUser();
   const user = state.user || telegramUser || {};
@@ -440,6 +445,11 @@ function updateHeader() {
 
   const avatar = $("#avatar");
   const idLine = $("#userIdLine");
+  const upBalance = $("#headerUpBalanceValue");
+  const upBalanceWrap = $("#headerUpBalance");
+
+  if (upBalance) upBalance.textContent = formatPoints(state.points);
+  if (upBalanceWrap) upBalanceWrap.setAttribute("aria-label", `${t("wallet_points_card_title")}: ${formatPoints(state.points)} UP`);
 
   if (avatar) {
     avatar.textContent = getInitials(user);
@@ -924,7 +934,7 @@ window.setReferralMessageConsent = setReferralMessageConsent;
 function applyCachedReadModel(entry) {
   if (!entry || !state.verifiedSessionUserId || entry.userId !== state.verifiedSessionUserId) return false;
   const profile = entry.profile || {};
-  state.points = Number(profile.points) || 0;
+  state.points = Number(profile.upBalance ?? profile.points) || 0;
   state.gramBalance = Number(profile.gramBalance) || 0;
   state.rate = Number(profile.rate) || 0;
   state.streak = Number(profile.streak) || 0;
@@ -966,7 +976,7 @@ function persistReadModelCache() {
   if (!readModelCache || !state.verifiedSessionUserId) return;
   readModelCache.write(state.verifiedSessionUserId, {
     profile: {
-      points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
+      upBalance: state.points, points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
       canCheckIn: state.canCheckIn, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
       withdrawalProgress: state.withdrawalProgress, withdrawalRemainingGram: state.withdrawalRemainingGram,
@@ -1015,6 +1025,9 @@ async function bootstrapAuth() {
 
   try {
     const data = await api(url);
+    const authUpBalance = Number(data?.upBalance ?? data?.points);
+    if (Number.isFinite(authUpBalance)) state.points = authUpBalance;
+    if (data?.gramBalance != null && Number.isFinite(Number(data.gramBalance))) state.gramBalance = Number(data.gramBalance);
     state.language = localStorage.getItem("appLanguage") || data.language || "fa";
     state.referralMessageConsent = ["granted", "denied", "unset"].includes(data.referralMessageConsent)
       ? data.referralMessageConsent : "unset";
@@ -1036,7 +1049,7 @@ async function loadUserData({ force = false } = {}) {
   if (!force && !state.readModelStale && state.userDataLoadedAt && Date.now() - state.userDataLoadedAt < CLIENT_DATA_TTL_MS) return;
   const data = await api("/api/points/me");
   if (requestId !== userDataRequestSequence) return;
-  state.points = Number(data?.points) || 0;
+  state.points = Number(data?.upBalance ?? data?.points) || 0;
   state.gramBalance = Number(data?.gramBalance) || 0;
   state.rate = Number(data?.rate) || 0;
   state.streak = Number(data?.streak) || 0;
@@ -1149,7 +1162,8 @@ async function claimReferralTask(taskId) {
 
   try {
     const data = await api("/api/referral/claim", { method: "POST", body: { taskId } });
-    state.points = Number(data?.points) || state.points;
+    state.points = upBalanceFromResponse(data);
+    updateHeader();
     state.invitedCount = Number(data?.invitedCount) || state.invitedCount;
     state.activeInvitedCount = Number(data?.activeInvitedCount) || state.activeInvitedCount;
     state.referralTasks = Array.isArray(data?.referralTasks) ? data.referralTasks : state.referralTasks;
@@ -1327,14 +1341,14 @@ function renderHome() {
     <section class="tbCard tbBalance">
       <div class="tbBalanceTop">
         <div class="tbBalanceInfo">
-          <div class="tbLabel">${t("tb_total_balance")}</div>
-          <div class="tbAmount"><span class="tbAmountNum">${formatFixed(state.gramBalance, 3)}</span><span class="tbAmountUnit">GRAM</span></div>
+          <div class="tbLabel">${t("wallet_points_card_title")}</div>
+          <div class="tbAmount"><span class="upTokenMark" aria-hidden="true">UP</span><span class="tbAmountNum">${formatPoints(state.points)}</span><span class="tbAmountUnit">UP</span></div>
           <div class="tbPills">
-            <span class="tbPill tbPillPurple">${t("tb_points_chip", { n: formatPoints(state.points) })}</span>
+            <span class="tbPill tbPillPurple">${formatNumber(state.gramBalance, 6)} GRAM</span>
             <span class="tbPill tbPillOrange">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
           </div>
         </div>
-        <div class="tbGemRing"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#2f9bf0"/><path d="M20 24h24l6 8-18 20L14 32z" fill="#fff"/><path d="M32 30v10M27 35h10" stroke="#2f9bf0" stroke-width="3" stroke-linecap="round"/></svg></div>
+        <div class="tbGemRing upTokenEmblem" aria-label="UP">UP</div>
       </div>
       <div class="tbActions">
         <button class="tbBtnPrimary" type="button" onclick="showWithdraw()"><span class="tbBtnIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></span>${t("tb_withdraw")}</button>
@@ -1620,7 +1634,7 @@ async function verifyTelegramTask(taskId) {
     haptic("success");
     toast(result.message, "success");
     delete taskHints[taskId];
-    state.points = Number(result.points) || state.points;
+    state.points = upBalanceFromResponse(result);
     await loadTasks({ force: true });
     updateHeader();
     renderTasks();
@@ -1662,7 +1676,7 @@ async function verifyLatestPostTask(taskId) {
     latestPostOpenedTaskIds.delete(String(taskId));
     latestPostOpenedAt.delete(String(taskId));
     delete taskHints[taskId];
-    state.points = Number(result.points) || state.points;
+    state.points = upBalanceFromResponse(result);
     const serverNow = Number(result.serverNow);
     if (Number.isFinite(serverNow)) state.tasksServerOffsetMs = serverNow - Date.now();
     haptic("success");
@@ -1796,7 +1810,7 @@ async function doCheckIn() {
   if (button) { button.disabled = true; button.textContent = t("checkin_processing"); }
   try {
     const result = await api("/api/points/checkin", { method: "POST" });
-    state.points = Number(result.points) || state.points;
+    state.points = upBalanceFromResponse(result);
     state.streak = Number(result.streak) || state.streak;
     state.canCheckIn = false;
     state.totalCheckins += 1;
@@ -2161,7 +2175,7 @@ async function submitExchange() {
         body: { direction: exchangeDirection, amount }
       });
     if (exchangeDirection === "points_to_gram" || useInternalGramBalance) clearPendingIdempotencyKey(idempotencyScope);
-    state.points = Number(result.points) ?? state.points;
+    state.points = upBalanceFromResponse(result);
     if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
     haptic("success");
     toast(result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) }), "success");
@@ -2508,8 +2522,8 @@ function renderWallet() {
   content.innerHTML = `
     <section class="walletOverview">
       <div class="walletOverviewTop"><div><span class="walletOverline">${t("wallet_title")}</span><h1>${t("wallet_balance_title")}</h1></div><span class="walletLivePill">● ${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })}</span></div>
-      <div class="walletOverviewValue"><strong>${formatNumber(state.gramBalance, 6)}</strong><span>GRAM</span></div>
-      <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.gramUsdPrice > 0 ? `≈ $${formatFixed(state.gramBalance * state.gramUsdPrice, 3)}` : "—"}</b></div>
+      <div class="walletOverviewValue"><span class="upTokenMark upTokenMarkWallet" aria-hidden="true">UP</span><strong>${formatPoints(state.points)}</strong><span>UP</span></div>
+      <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.gramUsdPrice > 0 ? `≈ $${formatFixed(state.points * state.rate * state.gramUsdPrice, 3)}` : "—"}</b></div>
     </section>
     <div id="tonWalletConnection" aria-live="polite"></div>
     <section class="walletChainBalance" aria-live="polite">
@@ -2519,7 +2533,7 @@ function renderWallet() {
 
     <div class="tbWalletGrid">
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconOrange">${TB_ICONS.coin}</div>
+        <div class="tbWalletIcon tbIconOrange"><span class="upTokenMark upTokenMarkWallet" aria-hidden="true">UP</span></div>
         <div class="tbStatLabel tbColOrange">${t("wallet_points_card_title")}</div>
         <div class="tbWalletValue">${formatPoints(state.points)}</div>
       </div>
@@ -2833,6 +2847,13 @@ function openWeeklyCompetition() {
 }
 window.openWeeklyCompetition = openWeeklyCompetition;
 
+function tokenIconMarkup() {
+  return '<img class="upTokenIcon" src="img/gramup-logo-new.png" alt="" aria-hidden="true">';
+}
+function tokenAmount(value) {
+  return `<strong>${formatPoints(value)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small>`;
+}
+
 function renderProfileMenu() {
   const telegramUser = getTelegramUser();
   const user = state.user || telegramUser || {};
@@ -2853,13 +2874,13 @@ function renderProfileMenu() {
           <span class="tbPill tbPillGreen tbPillSm">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
         </div>
       </div>
-      <div class="profileBalanceMini"><span>${t("tb_total_balance")}</span><strong>${formatNumber(state.gramBalance, 3)} <small>GRAM</small></strong></div>
+      <div class="profileBalanceMini"><span>${t("wallet_gram_card_title")}</span><strong>${formatNumber(state.gramBalance, 3)} <small>GRAM</small></strong></div>
     </section>
 
     <section class="profilePulseGrid" aria-label="${escapeHTML(t("tb_your_progress"))}">
-      <div><strong>${formatPoints(state.points)}</strong><span>${t("wallet_points_card_title")}</span></div>
-      <div><strong>${formatNumber(state.invitedCount)}</strong><span>${t("referral_kpi_direct")}</span></div>
-      <div><strong>${formatPoints(state.totalEarnedPoints)}</strong><span>${t("tb_earned")}</span></div>
+      <div><strong>${formatPoints(state.points)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("profile_available_balance")}</span></div>
+      <div><strong>${formatNumber(state.invitedCount)}</strong><span class="profilePulseLabel">${t("referral_kpi_direct")}</span></div>
+      <div><strong>${formatPoints(state.totalEarnedPoints)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("profile_earned_label")}</span></div>
     </section>
     <div class="card profileMenuPanel">
       <div class="profileMenuLabel">${t("menu_referral")}</div>
@@ -3357,7 +3378,7 @@ function renderProfileHistory() {
   const rows = historyList.map(item => {
     const isPendingDeposit = item.type === "deposit" && item.status === "pending";
     const isPositive = item.type === "deposit" ? item.status === "confirmed" : Number(item.amount) >= 0;
-    const unit = item.currency === "gram" ? "GRAM" : t("points_unit");
+    const unit = item.tokenSymbol || (item.currency === "gram" ? "GRAM" : t("points_unit"));
     const amountText = isPendingDeposit
       ? t("deposit_pending_amount")
       : `${isPositive ? "+" : ""}${item.currency === "gram" ? formatNumber(item.amount, 9) : formatPoints(item.amount)} ${unit}`;
@@ -3414,7 +3435,7 @@ async function loadVipPlans() {
     const data = await api("/api/points/vip/plans");
     state.vipPlans = Array.isArray(data?.plans) ? data.plans : [];
     state.vipSubscriptions = Array.isArray(data?.subscriptions) ? data.subscriptions : [];
-    if (data?.points != null) state.points = Number(data.points) || 0;
+    if (data?.upBalance != null || data?.points != null) state.points = upBalanceFromResponse(data, 0);
     const serverNow = Date.parse(data?.serverNow || "");
     state.vipServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
     state.vipDataLoaded = true;
@@ -3667,7 +3688,7 @@ async function purchaseVipPlan(planNumber) {
       body: { planNumber: Number(plan.planNumber) }
     });
     clearPendingIdempotencyKey(scope);
-    state.points = Number(result.points) || state.points;
+    state.points = upBalanceFromResponse(result);
     updateHeader();
     state.vipDataLoaded = false;
     await loadVipPlans();
@@ -3699,7 +3720,7 @@ async function claimVipReward(subscriptionId, options = {}) {
       body: JSON.stringify({})
     });
     clearPendingIdempotencyKey(scope);
-    state.points = Number(result.points) || state.points;
+    state.points = upBalanceFromResponse(result);
     updateHeader();
     state.vipDataLoaded = false;
     await loadVipPlans();

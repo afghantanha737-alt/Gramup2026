@@ -46,7 +46,7 @@ function bioLinkTaskDefinition() {
   const botUsername = normalizeTelegramUsername(process.env.BOT_USERNAME || '');
   return {
     title: 'لینک Gramup را در بیوی تلگرام قرار دهید',
-    description: 'لینک ربات Gramup یا یکی از کانال‌های رسمی فعال را در بیوی تلگرام خود قرار دهید و برای بررسی و دریافت ۵ پوینت بزنید. هر ۲۴ ساعت یک‌بار قابل دریافت است.',
+    description: 'لینک ربات Gramup یا یکی از کانال‌های رسمی فعال را در بیوی تلگرام خود قرار دهید و برای بررسی و دریافت ۵ UP بزنید. هر ۲۴ ساعت یک‌بار قابل دریافت است.',
     type: 'custom',
     verifyType: 'telegram',
     taskKind: BIO_LINK_TASK_KIND,

@@ -28,6 +28,7 @@ assert.strictEqual(nextBioClaimAt(now).getTime() - now.getTime(), BIO_LINK_COOLD
 const definition = bioLinkTaskDefinition();
 assert.strictEqual(definition.taskKind, 'bio_link');
 assert.strictEqual(definition.reward, 5);
+assert.match(definition.description, /۵ UP/);
 assert.strictEqual(definition.verifyType, 'telegram');
 const route = fs.readFileSync('routes/tasks.js', 'utf8');
 assert(route.includes('bot.getChat(req.dbUser.telegramId)'), 'verifies the authenticated Telegram account through Bot API getChat');

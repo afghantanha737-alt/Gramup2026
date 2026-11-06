@@ -16,9 +16,9 @@ const {
 const start = new Date('2026-10-05T00:00:00.000Z');
 const duringWindow = new Date('2026-10-05T00:12:00.000Z');
 const afterWindow = new Date('2026-10-06T00:00:00.000Z');
-const expectedText = 'The new weekly campaign has started! Compete now, complete tasks, earn points, invite friends, climb the leaderboard, and win cash prizes.';
-const expectedPs = 'نوې اونيزه کمپاين پيل شو! همدا اوس سيالي وکړئ، دندې بشپړې کړئ، پوائنټونه ترلاسه کړئ، ملګري بلنه ورکړئ، لیډربورډ ته پورته شئ، او نغدي جایزې وګټئ.';
-const expectedFa = 'کمپین جدید هفتگی آغاز شد! هماکنون رقابت کنید، وظایف را تکمیل کنید، امتیاز کسب کنید، دوستان خود را دعوت کنید، در جدول امتیازات بالا بروید و برنده جوایز نقدی شوید.';
+const expectedText = 'The new weekly campaign has started! Compete now, complete tasks, earn UP, invite friends, climb the leaderboard, and win cash prizes.';
+const expectedPs = 'نوې اونيزه کمپاين پيل شو! همدا اوس سيالي وکړئ، دندې بشپړې کړئ، UP ترلاسه کړئ، ملګري بلنه ورکړئ، لیډربورډ ته پورته شئ، او نغدي جایزې وګټئ.';
+const expectedFa = 'کمپین جدید هفتگی آغاز شد! هماکنون رقابت کنید، وظایف را تکمیل کنید، UP کسب کنید، دوستان خود را دعوت کنید، در جدول امتیازات بالا بروید و برنده جوایز نقدی شوید.';
 
 assert.strictEqual(isWithinCampaignStartWindow(start), true);
 assert.strictEqual(isWithinCampaignStartWindow(duringWindow), true);

@@ -2416,3 +2416,76 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .referralConsentActions { display: grid; gap: 10px; margin-top: 14px; }
 .referralConsentActions .primaryBtn, .referralConsentActions .secondaryBtn { width: 100%; min-height: 46px; }
 .consentStatus { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--text-soft); background: var(--surface-3); font-size: 13px; }
+
+
+/* UP is the public ticker for the existing points-backed rewards balance. */
+.upTokenMark {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(178, 239, 255, .55);
+  border-radius: 9px;
+  color: #05101b;
+  background: linear-gradient(145deg, #a5f3fc, #60a5fa 58%, #818cf8);
+  box-shadow: 0 4px 14px rgba(56, 189, 248, .22), inset 0 1px 0 rgba(255,255,255,.55);
+  font-size: 10px;
+  font-weight: 1000;
+  letter-spacing: -.06em;
+  line-height: 1;
+  direction: ltr;
+}
+.upTokenMarkSm { width: 21px; height: 21px; border-radius: 7px; font-size: 8px; }
+.upTokenMarkWallet { width: 34px; height: 34px; border-radius: 11px; font-size: 11px; }
+.upTokenEmblem { color: #07131e; font-size: 19px; font-weight: 1000; letter-spacing: -.08em; }
+.headerUpBalance {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid rgba(103, 232, 249, .24);
+  border-radius: 999px;
+  color: var(--aurora-text, #edf7ff);
+  background: rgba(103, 232, 249, .08);
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+.headerUpBalanceValue { max-width: 82px; overflow: hidden; font-size: 11px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+html[data-theme="light"] .headerUpBalance { color: var(--text, #172033); background: rgba(90, 75, 221, .06); border-color: rgba(90, 75, 221, .18); }
+html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
+@media (max-width: 360px) {
+  .headerInner { gap: 6px; padding-inline: 10px; }
+  .headerUpBalance { gap: 4px; padding: 4px 6px; }
+  .headerUpBalanceValue { max-width: 62px; font-size: 10px; }
+  .upTokenMarkSm { width: 19px; height: 19px; font-size: 7px; }
+}
+
+
+/* Profile balances: the PNG mark pairs with the UP ticker, while GRAM stays separate. */
+.profileOverviewCard {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+}
+.profileBalanceMini {
+  position: static;
+  justify-self: end;
+  padding: 9px 11px;
+  border: 1px solid var(--product-border, rgba(255,255,255,.09));
+  border-radius: 13px;
+  background: var(--product-surface, rgba(255,255,255,.04));
+  text-align: end;
+}
+.profilePulseGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.profilePulseGrid > div { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 5px; padding: 12px 7px; border: 1px solid var(--product-border, rgba(255,255,255,.08)); border-radius: 15px; background: var(--product-surface, rgba(255,255,255,.035)); text-align: center; }
+.profilePulseGrid .profilePulseUnit { display: flex; align-items: center; justify-content: center; gap: 4px; color: var(--text-soft, #9ba6b6); font-size: 9px; font-weight: 900; line-height: 1; }
+.profilePulseGrid .profilePulseUnit .upTokenIcon { width: 12px; height: 12px; border-radius: 50%; object-fit: cover; }
+.profilePulseGrid .profilePulseLabel { color: var(--text-soft, #9ba6b6); font-size: 9px; font-weight: 750; line-height: 1.35; }
+@media (max-width: 420px) {
+  .profileOverviewCard { grid-template-columns: 40px minmax(0, 1fr); }
+  .profileBalanceMini { position: static; grid-column: 1 / -1; justify-self: stretch; }
+}

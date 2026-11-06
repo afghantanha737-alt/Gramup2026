@@ -23,11 +23,14 @@ console.log('PASS  utcDayKey: کل یک روز UTC یک کلید، روز بعد
 // ---- botText: هر سه زبان برای هر پیام موجود است و مقادیر را درست جای می‌گذارد
 for (const lang of ['fa', 'ps', 'en']) {
   assert.ok(botText('welcome', lang, 'Ali').includes('Ali'), `welcome/${lang}`);
+  assert.ok(botText('welcome', lang, 'Ali').includes('UP'), `welcome UP ticker/${lang}`);
   assert.ok(botText('taskNew', lang, 'Task X', 50, '').includes('Task X'), `taskNew/${lang}`);
+  assert.ok(botText('taskNew', lang, 'Task X', 50, '').includes('UP'), `taskNew UP ticker/${lang}`);
   assert.ok(botText('taskNew', lang, 'Task X', 50, 'Acme').includes('Acme'), `taskNew sponsored/${lang}`);
   assert.ok(botText('withdrawalApproved', lang, 1.5, 'GRAM', 'abc123').includes('abc123'), `withdrawalApproved/${lang}`);
   assert.ok(botText('withdrawalRejected', lang, 'too fast').includes('too fast'), `withdrawalRejected/${lang}`);
   assert.ok(botText('referralBonus', lang, 'Sara', 50, 200).includes('Sara'), `referralBonus/${lang}`);
+  assert.ok(botText('referralBonus', lang, 'Sara', 50, 200).includes('UP'), `referralBonus UP ticker/${lang}`);
   assert.ok(botText('dailyReminder', lang).length > 5, `dailyReminder/${lang}`);
   assert.ok(botText('leaderboardReward', lang, 1, 500, '2026-09-28').includes('500'), `leaderboardReward/${lang}`);
 }
@@ -44,7 +47,7 @@ console.log('PASS  streakAtRiskMessageFor: پیام خطر استریک برای
 
 const personalized = reminderMessageFor({ dailyReminderMessage: '' }, 'fa', 2, new Date('2026-01-01T02:00:00Z'), new Date('2026-01-02T02:30:00Z'));
 assert.match(personalized, /روز 3/);
-assert.match(personalized, /9 پوینت/);
+assert.match(personalized, /9 UP/);
 assert.ok(kabulDayStart(new Date('2026-01-02T02:30:00Z')) < new Date('2026-01-02T02:30:00Z'));
 console.log('PASS  reminderMessageFor: روز چرخه و پاداش بر اساس استریک شخصی‌سازی می‌شود');
 

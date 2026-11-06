@@ -79,6 +79,7 @@ function getMiningState(user, now = new Date()) {
     nextStorageUpgrade: nextStorage ? { level: nextStorage.level, name: nextStorage.name, maxHours: nextStorage.maxHours, cost: nextStorage.upgradeCost } : null,
     totalMinedPoints: Number(user.totalMinedPoints) || 0,
     userPoints: Number(user.points) || 0,
+    upBalance: Number(user.points) || 0,
     serverNow: now.toISOString()
   };
 }
@@ -116,7 +117,7 @@ router.post('/claim', auth, async (req, res) => {
       if (!current) throw miningError('USER_NOT_FOUND', 'کاربر پیدا نشد.', 404);
       const state = getMiningState(current, now);
       const pointsToClaim = state.accumulatedPoints;
-      if (pointsToClaim < 1) throw miningError('MINING_NO_POINTS', 'هنوز پوینتی برای دریافت جمع نشده است.', 400);
+      if (pointsToClaim < 1) throw miningError('MINING_NO_POINTS', 'هنوز UP برای دریافت جمع نشده است.', 400);
       const updated = await User.findOneAndUpdate(optimisticUserFilter(current), {
         $set: { miningSavedPoints: 0, miningLastClaimAt: now },
         $inc: { points: pointsToClaim, totalMinedPoints: pointsToClaim }
@@ -125,15 +126,16 @@ router.post('/claim', auth, async (req, res) => {
       const sourceId = `mining-claim:${updated._id}:${crypto.randomUUID()}`;
       await recordLedgerRequired({
         user: updated._id, type: 'mining_claim', currency: 'points', amount: pointsToClaim,
-        description: `استخراج ${pointsToClaim} پوینت از ماینر`, balanceAfter: updated.points,
+        description: `استخراج ${pointsToClaim} UP از ماینر`, balanceAfter: updated.points,
         sourceId, session
       });
       return { updated, pointsToClaim };
     });
     return res.json({
       success: true, claimedPoints: outcome.pointsToClaim, newBalance: outcome.updated.points,
+      upBalance: Number(outcome.updated.points) || 0,
       mining: getMiningState(outcome.updated, now),
-      message: `${outcome.pointsToClaim} پوینت استخراج‌شده با موفقیت واریز شد!`
+      message: `${outcome.pointsToClaim} UP استخراج‌شده با موفقیت واریز شد!`
     });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
@@ -154,7 +156,7 @@ router.post('/upgrade', auth, async (req, res) => {
       if (!next) throw miningError('MINING_MAX_LEVEL', type === 'rig' ? 'دستگاه ماینر شما در بالاترین سطح قرار دارد.' : 'ظرفیت باتری در بالاترین سطح قرار دارد.');
       const pendingPoints = state.accumulatedPoints;
       const newBalance = (Number(current.points) || 0) + pendingPoints - next.cost;
-      if (newBalance < 0) throw miningError('MINING_INSUFFICIENT_POINTS', `پوینت کافی نیست. هزینه ارتقاء: ${next.cost} پوینت.`);
+      if (newBalance < 0) throw miningError('MINING_INSUFFICIENT_POINTS', `UP کافی نیست. هزینه ارتقاء: ${next.cost} UP.`);
       const setFields = { miningSavedPoints: 0, miningLastClaimAt: now, points: newBalance };
       if (type === 'rig') setFields.miningLevel = next.level;
       else setFields.miningStorageLevel = next.level;
@@ -166,7 +168,7 @@ router.post('/upgrade', auth, async (req, res) => {
       if (pendingPoints > 0) {
         await recordLedgerRequired({
           user: updated._id, type: 'mining_claim', currency: 'points', amount: pendingPoints,
-          description: `تسویه خودکار ${pendingPoints} پوینت هنگام ارتقاء`,
+          description: `تسویه خودکار ${pendingPoints} UP هنگام ارتقاء`,
           balanceAfter: (Number(current.points) || 0) + pendingPoints,
           sourceId: `mining-claim:${updated._id}:${crypto.randomUUID()}`, session
         });
@@ -182,6 +184,7 @@ router.post('/upgrade', auth, async (req, res) => {
     const label = type === 'rig' ? 'ماینر' : 'ظرفیت باتری';
     return res.json({
       success: true, mining: getMiningState(outcome.updated, now), newBalance: outcome.updated.points,
+      upBalance: Number(outcome.updated.points) || 0,
       message: `${label} به سطح ${outcome.next.level} ارتقاء یافت!`
     });
   } catch (error) {

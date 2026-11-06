@@ -475,8 +475,8 @@ router.post('/tasks', async (req, res) => {
     targetType: 'task',
     targetId: task._id,
     details: sp.isSponsored
-      ? `«${taskTitle}» — اسپانسر: ${sp.sponsorName} (${sp.sponsorPriceUsd}$ هر عضو، بودجه ${sp.sponsorBudgetUsd}$، ظرفیت ${finalMaxCompletions}) — پاداش ${taskReward} پوینت`
-      : `«${taskTitle}» — پاداش ${taskReward} پوینت`
+      ? `«${taskTitle}» — اسپانسر: ${sp.sponsorName} (${sp.sponsorPriceUsd}$ هر عضو، بودجه ${sp.sponsorBudgetUsd}$، ظرفیت ${finalMaxCompletions}) — پاداش ${taskReward} UP`
+      : `«${taskTitle}» — پاداش ${taskReward} UP`
   });
 
   // اطلاع‌رسانی تسک جدید به همه‌ی کاربران فعال، هرکدام به زبان خودش؛ عمداً بدون await تا پاسخ به پنل ادمین معطل نماند
@@ -681,7 +681,7 @@ router.delete('/tasks/:id', async (req, res) => {
     action: 'task_delete',
     targetType: 'task',
     targetId: req.params.id,
-    details: task ? `«${task.title}» حذف شد (پاداش بود: ${task.reward} پوینت، chatId: ${task.chatId || '—'})` : 'تسک (که قبلاً هم پیدا نشد) حذف شد'
+    details: task ? `«${task.title}» حذف شد (پاداش بود: ${task.reward} UP، chatId: ${task.chatId || '—'})` : 'تسک (که قبلاً هم پیدا نشد) حذف شد'
   });
 });
 
@@ -837,13 +837,13 @@ router.post('/task-submissions/:id/approve', async (req, res) => {
       return { reward, points: user.points, taskTitle: task.title, userId: user._id };
     });
 
-    res.json({ success: true, status: 'approved', reward: payment.reward, points: payment.points });
+    res.json({ success: true, status: 'approved', reward: payment.reward, points: payment.points, upBalance: Number(payment.points) || 0 });
     recordAdminLog({
       actor: req.adminActor,
       action: 'task_submission_approve',
       targetType: 'task_completion',
       targetId: req.params.id,
-      details: `«${payment.taskTitle}» — پاداش ${payment.reward} پوینت به کاربر ${payment.userId} پرداخت شد`
+      details: `«${payment.taskTitle}» — پاداش ${payment.reward} UP به کاربر ${payment.userId} پرداخت شد`
     });
   } catch (error) {
     const status = error.code === 'SUBMISSION_NOT_FOUND' || error.code === 'TASK_NOT_FOUND' || error.code === 'SUBMISSION_USER_NOT_FOUND'
@@ -1567,7 +1567,7 @@ router.post('/users/bulk-balance', async (req, res) => {
   const batchId = String(req.body?.actionId || '').trim();
   const cleanReason = String(reason || '').trim();
   const userIds = Array.isArray(req.body?.userIds) ? [...new Set(req.body.userIds.map(String))] : [];
-  if (!['points', 'gram'].includes(currency) || !['add', 'zero'].includes(action)) return res.status(400).json({ success: false, message: 'عملیات گروهی فقط برای افزودن یا صفرکردن Points/GRAM است.' });
+  if (!['points', 'gram'].includes(currency) || !['add', 'zero'].includes(action)) return res.status(400).json({ success: false, message: 'عملیات گروهی فقط برای افزودن یا صفرکردن UP/GRAM است.' });
   if (batchId.length < 8 || batchId.length > 120) return res.status(400).json({ success: false, message: 'Batch Action ID معتبر و یکتا لازم است.' });
   if (!cleanReason || cleanReason.length > 500) return res.status(400).json({ success: false, message: 'دلیل الزامی است و حداکثر ۵۰۰ نویسه می‌تواند باشد.' });
   if (!userIds.length || userIds.length > 100 || userIds.some(id => !mongoose.Types.ObjectId.isValid(id))) return res.status(400).json({ success: false, message: '۱ تا ۱۰۰ شناسه کاربر معتبر انتخاب کنید.' });
@@ -2162,7 +2162,7 @@ router.put('/vip/plans', async (req, res) => {
       const dailyRewardCents = vipPolicy ? dailyPointsCentsFromBps(pricePoints, vipPolicy.rewardDailyBps) : null;
       const totalRewardCents = dailyRewardCents === null ? null : dailyRewardCents * durationDays;
       if (totalRewardCents == null || totalRewardCents < durationDays) {
-        return res.status(400).json({ success: false, code: 'VIP_REWARD_TOO_SMALL', message: `پاداش پلن ${planNumber} باید حداقل ۰٫۰۱ پوینت برای هر دریافت روزانه داشته باشد.` });
+        return res.status(400).json({ success: false, code: 'VIP_REWARD_TOO_SMALL', message: `پاداش پلن ${planNumber} باید حداقل ۰٫۰۱ UP برای هر دریافت روزانه داشته باشد.` });
       }
     }
     seen.add(planNumber);
@@ -2518,7 +2518,7 @@ router.put('/settings', async (req, res) => {
   if (Object.prototype.hasOwnProperty.call(body, 'referralInitialRewardPoints')) {
     const points = Number(body.referralInitialRewardPoints);
     if (points !== DEFAULT_REFERRAL_INITIAL_REWARD_POINTS) {
-      return res.status(400).json({ success: false, message: 'پاداش دعوت مستقیم طبق سیاست فعلی دقیقاً ۱۰ Points است.' });
+      return res.status(400).json({ success: false, message: 'پاداش دعوت مستقیم طبق سیاست فعلی دقیقاً ۱۰ UP است.' });
     }
     changes.referralInitialRewardPoints = DEFAULT_REFERRAL_INITIAL_REWARD_POINTS;
   }
