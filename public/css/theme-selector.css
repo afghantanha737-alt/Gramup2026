@@ -312,3 +312,27 @@ html[data-theme="silver"] #content .vipRedesign .vipStatusTab.is-selected{border
 html[data-theme="silver"] #content .vipRedesign .vipStatusTab.is-selected b{border-color:rgba(15,118,110,.16);color:#0f766e;background:rgba(20,184,166,.1)}
 html[data-theme="silver"] #content .vipRedesign .vipSubscriptionGrid>div{border-color:rgba(15,23,42,.075);color:#475569;background:rgba(255,255,255,.68)}
 html[data-theme="silver"] #content .vipRedesign .vipSubscriptionEmpty{border-color:rgba(15,23,42,.18);color:#64748b;background:rgba(255,255,255,.55)}
+
+
+/* Preserve the VIP vault identity in Silver Metallic instead of flattening every tier. */
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard{border-color:rgba(var(--vip-tier-rgb),.43);background:radial-gradient(ellipse at 96% 3%,rgba(var(--vip-tier-rgb),.14),transparent 40%),linear-gradient(145deg,#fbfcfd 0%,#e9eef2 48%,#d9e0e6 100%);box-shadow:0 13px 30px rgba(15,23,42,.1),inset 0 1px rgba(255,255,255,.96),inset 0 0 0 1px rgba(var(--vip-tier-rgb),.06)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard::before{background:linear-gradient(90deg,transparent,rgba(var(--vip-tier-rgb),.95),rgba(255,255,255,.98),transparent)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard::after{color:rgba(var(--vip-tier-rgb),.11)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanMark{border-color:rgba(var(--vip-tier-rgb),.38);color:#334155;background:linear-gradient(145deg,rgba(var(--vip-tier-rgb),.2),rgba(255,255,255,.9));box-shadow:0 5px 14px rgba(15,23,42,.08),inset 0 1px #fff}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanTopline{border-bottom-color:rgba(var(--vip-tier-rgb),.24)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanStat{border-color:rgba(var(--vip-tier-rgb),.17);background:linear-gradient(145deg,rgba(255,255,255,.94),rgba(255,255,255,.53));box-shadow:inset 0 1px rgba(255,255,255,.95)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanStat:first-child{border-color:rgba(var(--vip-tier-rgb),.27);background:linear-gradient(145deg,rgba(var(--vip-tier-rgb),.13),rgba(255,255,255,.73))}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanReward{border-color:rgba(var(--vip-tier-rgb),.26);background:linear-gradient(100deg,rgba(var(--vip-tier-rgb),.14),rgba(255,255,255,.62));box-shadow:inset 0 1px rgba(255,255,255,.86)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanReward b,html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanMiningRate b{color:#334155}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanMiningRate{border-color:rgba(var(--vip-tier-rgb),.21);background:linear-gradient(100deg,rgba(var(--vip-tier-rgb),.09),rgba(255,255,255,.68))}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanBadge--status{border-color:rgba(var(--vip-tier-rgb),.32);color:#334155;background:rgba(var(--vip-tier-rgb),.13)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard .vipPlanButton--primary{border-color:rgba(var(--vip-tier-rgb),.38);color:#172033;background:linear-gradient(110deg,rgba(var(--vip-tier-rgb),.7),rgba(var(--vip-tier-rgb),.43));box-shadow:0 8px 18px rgba(var(--vip-tier-rgb),.2),inset 0 1px rgba(255,255,255,.96)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard--spotlight-3{border-color:rgba(180,130,32,.68);background:radial-gradient(ellipse at 96% 3%,rgba(255,220,120,.36),transparent 43%),linear-gradient(145deg,#fffdf6,#f3ebd8 58%,#e6dcc3);box-shadow:0 0 0 1px rgba(180,130,32,.1),0 16px 34px rgba(120,83,15,.14),inset 0 1px #fff}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard--spotlight-3 .vipPlanButton--primary{border-color:rgba(180,130,32,.42);color:#392808;background:linear-gradient(110deg,#fceab3,#e8c66d 58%,#d8aa45);box-shadow:0 9px 20px rgba(180,130,32,.19),inset 0 1px rgba(255,255,255,.88)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard--spotlight-6{border-color:rgba(57,108,181,.55);background:radial-gradient(ellipse at 96% 3%,rgba(125,179,255,.25),transparent 42%),linear-gradient(145deg,#f9fcff,#e4edf7 65%,#dbe4ef)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard--spotlight-6 .vipPlanButton--primary{color:#102744;background:linear-gradient(110deg,#c4e0ff,#8dbdff 58%,#6c9ff0)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard--spotlight-10{border-color:rgba(138,90,180,.58);background:radial-gradient(ellipse at 96% 3%,rgba(221,190,255,.34),transparent 43%),linear-gradient(145deg,#fffbff,#efe5f6 61%,#e3d8ed)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard--spotlight-10 .vipPlanButton--primary{color:#2a1739;background:linear-gradient(110deg,#ffedb0,#dfc0fb 52%,#c8bbf9)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard--ultimate{border-color:rgba(138,90,180,.62);background:radial-gradient(ellipse at 100% 0%,rgba(255,218,120,.2),transparent 32%),radial-gradient(ellipse at 90% 4%,rgba(214,175,255,.28),transparent 46%),linear-gradient(145deg,#fffbff,#eee6f3 64%,#e5dce9)}
+html[data-theme="silver"] #content .vipRedesign .vipPlanCard--ultimate .vipPlanButton--primary{color:#271434;background:linear-gradient(110deg,#f8df90,#d6b2fa 52%,#c3b5f9)}
+@media(hover:hover){html[data-theme="silver"] #content .vipRedesign .vipPlanCard:hover{box-shadow:0 18px 38px rgba(15,23,42,.13),0 0 22px rgba(var(--vip-tier-rgb),.18),inset 0 1px #fff}}

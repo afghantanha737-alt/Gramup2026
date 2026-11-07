@@ -2751,3 +2751,48 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 @media(max-width:380px){#content .vipRedesign .vipPlanCard,#content .vipRedesign .vipSubscriptionCard{gap:9px;padding:11px}#content .vipRedesign .vipPlanStat{min-height:64px;padding:7px 3px}#content .vipRedesign .vipPlanStat span{font-size:7px}#content .vipRedesign .vipPlanStat b{font-size:10px}#content .vipRedesign .vipPlanReward{padding:8px}#content .vipRedesign .vipPlanReward b{font-size:11px}#content .vipRedesign .vipPlanMiningRate{align-items:center;flex-direction:row}#content .vipRedesign .vipPlanMiningRate b{justify-content:flex-end}}
 @media(prefers-reduced-motion:reduce){#content .vipRedesign .vipPlanCard,#content .vipRedesign .vipTierTab,#content .vipRedesign .vipStatusTab,#content .vipRedesign .vipPlanButton{transition:none}}
 @media(max-width:380px){.vipMiningConsole{padding:12px;gap:10px}.vipMiningHeader{gap:8px}.vipMiningEmblem{width:37px;height:37px;flex-basis:37px}.vipMiningHeading h2{font-size:15px}.vipMiningLiveBadge{padding:5px 6px;font-size:7px}.vipMiningMetric{padding-inline:4px}.vipMiningMetric b{font-size:9px}.vipPlanMiningRate{align-items:flex-start;flex-direction:column}.vipPlanMiningRate b{justify-content:flex-start}}
+
+
+/* Signature VIP collection: a private vault aesthetic, distinct from ordinary app cards. */
+#content .vipRedesign .vipPlanCard{--vip-tier-rgb:64,217,200;position:relative;isolation:isolate;overflow:hidden;border-color:rgba(var(--vip-tier-rgb),.36);border-inline-start-width:3px;background:radial-gradient(ellipse at 96% 3%,rgba(var(--vip-tier-rgb),.17),transparent 39%),radial-gradient(ellipse at 4% 100%,rgba(var(--vip-tier-rgb),.07),transparent 38%),linear-gradient(142deg,#172131 0%,#101722 48%,#0a111b 100%);box-shadow:0 16px 34px rgba(0,0,0,.29),inset 0 1px rgba(255,255,255,.09),inset 0 0 0 1px rgba(var(--vip-tier-rgb),.035)}
+#content .vipRedesign .vipPlanCard::before{position:absolute;z-index:0;top:0;inset-inline:14px 34%;height:1px;content:"";background:linear-gradient(90deg,transparent,rgba(var(--vip-tier-rgb),.95),rgba(255,255,255,.72),transparent);opacity:.9;pointer-events:none}
+#content .vipRedesign .vipPlanCard::after{position:absolute;z-index:0;inset-inline-end:10px;top:4px;content:attr(data-vip-plan);color:rgba(var(--vip-tier-rgb),.075);font-size:104px;font-weight:1000;letter-spacing:-9px;line-height:.95;pointer-events:none;user-select:none}
+#content .vipRedesign .vipPlanCard>*:not(.vipPlanGlow){position:relative;z-index:1}
+#content .vipRedesign .vipPlanCard .vipPlanGlow{z-index:0;top:-112px;inset-inline-end:-85px;width:205px;height:205px;background:radial-gradient(circle,rgba(var(--vip-tier-rgb),.34),rgba(var(--vip-tier-rgb),.12) 42%,transparent 72%);filter:blur(10px);opacity:.86;pointer-events:none}
+#content .vipRedesign .vipPlanCard--bronze{--vip-tier-accent:#f2b86f;--vip-tier-rgb:229,151,73}
+#content .vipRedesign .vipPlanCard--silver{--vip-tier-accent:#e2e8f0;--vip-tier-rgb:189,205,225}
+#content .vipRedesign .vipPlanCard--gold{--vip-tier-accent:#ffe08a;--vip-tier-rgb:244,190,67}
+#content .vipRedesign .vipPlanCard--neon{--vip-tier-accent:#9cbaff;--vip-tier-rgb:87,126,255}
+#content .vipRedesign .vipPlanCard--cyan{--vip-tier-accent:#7cecff;--vip-tier-rgb:34,211,238}
+#content .vipRedesign .vipPlanCard--sapphire{--vip-tier-accent:#9bc5ff;--vip-tier-rgb:59,130,246}
+#content .vipRedesign .vipPlanCard--emerald{--vip-tier-accent:#84f1c1;--vip-tier-rgb:16,185,129}
+#content .vipRedesign .vipPlanCard--ruby{--vip-tier-accent:#ff9caf;--vip-tier-rgb:244,63,94}
+#content .vipRedesign .vipPlanCard--ultimate{--vip-tier-accent:#e8c4ff;--vip-tier-rgb:168,85,247;border-color:rgba(215,168,255,.66);background:radial-gradient(ellipse at 100% 0%,rgba(250,204,21,.18),transparent 30%),radial-gradient(ellipse at 85% 8%,rgba(168,85,247,.24),transparent 43%),linear-gradient(140deg,#211633,#111522 56%,#0d111b);box-shadow:0 0 0 1px rgba(168,85,247,.12),0 18px 40px rgba(88,28,135,.22),inset 0 1px rgba(255,255,255,.13)}
+#content .vipRedesign .vipPlanCard .vipPlanMark{width:40px;height:40px;flex-basis:40px;border:1px solid rgba(var(--vip-tier-rgb),.42);border-radius:14px;color:var(--vip-tier-accent);background:linear-gradient(145deg,rgba(var(--vip-tier-rgb),.21),rgba(255,255,255,.045));box-shadow:0 0 20px rgba(var(--vip-tier-rgb),.13),inset 0 1px rgba(255,255,255,.16)}
+#content .vipRedesign .vipPlanCard .vipPlanTitle{font-size:16px;letter-spacing:.05px;text-shadow:0 1px 14px rgba(var(--vip-tier-rgb),.18)}
+#content .vipRedesign .vipPlanCard .vipPlanTopline{border-bottom-color:rgba(var(--vip-tier-rgb),.16)}
+#content .vipRedesign .vipPlanCard .vipPlanStat{border-color:rgba(var(--vip-tier-rgb),.16);background:linear-gradient(145deg,rgba(var(--vip-tier-rgb),.075),rgba(5,10,18,.38));box-shadow:inset 0 1px rgba(255,255,255,.04)}
+#content .vipRedesign .vipPlanCard .vipPlanStat:first-child{border-color:rgba(var(--vip-tier-rgb),.24);background:linear-gradient(145deg,rgba(var(--vip-tier-rgb),.12),rgba(5,10,18,.36))}
+#content .vipRedesign .vipPlanCard .vipPlanReward{border-color:rgba(var(--vip-tier-rgb),.25);background:linear-gradient(100deg,rgba(var(--vip-tier-rgb),.15),rgba(var(--vip-tier-rgb),.045));box-shadow:inset 0 1px rgba(255,255,255,.06)}
+#content .vipRedesign .vipPlanCard .vipPlanReward b,#content .vipRedesign .vipPlanCard .vipPlanMiningRate b{color:var(--vip-tier-accent)}
+#content .vipRedesign .vipPlanCard .vipPlanMiningRate{border-color:rgba(var(--vip-tier-rgb),.17);background:linear-gradient(100deg,rgba(var(--vip-tier-rgb),.08),rgba(255,255,255,.025))}
+#content .vipRedesign .vipPlanCard .vipPlanBadge--status{border-color:rgba(var(--vip-tier-rgb),.25);color:var(--vip-tier-accent);background:rgba(var(--vip-tier-rgb),.08)}
+#content .vipRedesign .vipPlanCard .vipPlanButton--primary{border-color:rgba(var(--vip-tier-rgb),.45);color:#09131c;background:linear-gradient(110deg,rgba(var(--vip-tier-rgb),.98),rgba(var(--vip-tier-rgb),.76));box-shadow:0 9px 22px rgba(var(--vip-tier-rgb),.2),inset 0 1px rgba(255,255,255,.56);text-shadow:0 1px rgba(255,255,255,.24)}
+#content .vipRedesign .vipPlanCard--bronze .vipPlanButton--primary{color:#281605}
+#content .vipRedesign .vipPlanCard--silver .vipPlanButton--primary{color:#15202d}
+#content .vipRedesign .vipPlanCard--gold .vipPlanButton--primary{color:#302106}
+#content .vipRedesign .vipPlanCard--spotlight{border-width:1px;border-inline-start-width:4px;box-shadow:0 18px 40px rgba(0,0,0,.32),0 0 0 1px rgba(var(--vip-tier-rgb),.12),0 0 34px rgba(var(--vip-tier-rgb),.09),inset 0 1px rgba(255,255,255,.12)}
+#content .vipRedesign .vipPlanCard--spotlight::before{height:2px;inset-inline:12px 18%;filter:drop-shadow(0 0 6px rgba(var(--vip-tier-rgb),.55))}
+#content .vipRedesign .vipPlanCard--spotlight-3{--vip-tier-rgb:244,190,67;--vip-tier-accent:#ffe08a;border-color:rgba(244,190,67,.72);background:radial-gradient(ellipse at 100% 0%,rgba(255,220,120,.24),transparent 41%),linear-gradient(140deg,#282116,#15171b 55%,#0d1118);box-shadow:0 0 0 1px rgba(255,220,120,.12),0 18px 40px rgba(130,81,14,.22),inset 0 1px rgba(255,255,255,.15)}
+#content .vipRedesign .vipPlanCard--spotlight-6{--vip-tier-rgb:59,130,246;--vip-tier-accent:#b4d5ff;border-color:rgba(96,165,250,.75);box-shadow:0 0 0 1px rgba(96,165,250,.13),0 18px 40px rgba(30,64,175,.22),inset 0 1px rgba(255,255,255,.15)}
+#content .vipRedesign .vipPlanCard--spotlight-10{--vip-tier-rgb:168,85,247;--vip-tier-accent:#edd7ff}
+#content .vipRedesign .vipPlanCard--spotlight-10::before{background:linear-gradient(90deg,transparent,#facc15,#e9d5ff,#67e8f9,transparent);height:2px}
+#content .vipRedesign .vipPlanCard--spotlight .vipPlanTitle{font-size:17px}
+#content .vipRedesign .vipPlanCard--spotlight .vipPlanMark{width:44px;height:44px;flex-basis:44px;border-radius:15px;font-size:21px}
+#content .vipRedesign .vipPlanCard--spotlight-3 .vipPlanButton--primary{background:linear-gradient(110deg,#ffe7a3,#f4be43 57%,#d99523);box-shadow:0 10px 23px rgba(244,190,67,.25),inset 0 1px rgba(255,255,255,.62)}
+#content .vipRedesign .vipPlanCard--spotlight-6 .vipPlanButton--primary{color:#08182a;background:linear-gradient(110deg,#b9dcff,#65a8ff 58%,#3982f6);box-shadow:0 10px 23px rgba(59,130,246,.25),inset 0 1px rgba(255,255,255,.62)}
+#content .vipRedesign .vipPlanCard--spotlight-10 .vipPlanButton--primary{color:#21102e;background:linear-gradient(110deg,#fde68a,#d8b4fe 52%,#c4b5fd);box-shadow:0 10px 25px rgba(168,85,247,.25),inset 0 1px rgba(255,255,255,.68)}
+@media(hover:hover){#content .vipRedesign .vipPlanCard:hover{transform:translateY(-3px);border-color:rgba(var(--vip-tier-rgb),.72);box-shadow:0 21px 44px rgba(0,0,0,.34),0 0 28px rgba(var(--vip-tier-rgb),.14),inset 0 1px rgba(255,255,255,.13)}#content .vipRedesign .vipPlanCard--spotlight:hover{transform:translateY(-4px)}}
+@media(max-width:380px){#content .vipRedesign .vipPlanCard::after{font-size:84px}#content .vipRedesign .vipPlanCard--spotlight .vipPlanMark{width:38px;height:38px;flex-basis:38px}}
+@media(prefers-reduced-motion:no-preference){#content .vipRedesign .vipPlanCard--spotlight-3::before,#content .vipRedesign .vipPlanCard--spotlight-10::before{background-size:220% 100%;animation:vipVaultGleam 5.5s ease-in-out infinite alternate}}
+@keyframes vipVaultGleam{from{background-position:0% 50%;opacity:.65}to{background-position:100% 50%;opacity:1}}

@@ -3820,6 +3820,7 @@ function renderProfileVip() {
     const planNumber = Number(plan.planNumber);
     const isOwned = subscriptions.some(subscription => Number(subscription.planNumber) === planNumber && subscription.status === "active");
     const theme = themeByPlan[planNumber] || "sapphire";
+    const spotlightClass = [3, 6, 10].includes(planNumber) ? ` vipPlanCard--spotlight vipPlanCard--spotlight-${planNumber}` : "";
     const statusKey = plan.comingSoon ? "vip_status_coming_soon"
       : !available ? "vip_status_inactive"
         : isOwned ? "vip_status_owned"
@@ -3841,7 +3842,7 @@ function renderProfileVip() {
     const totalReceivedPoints = Number(plan.totalReceivedPoints || 0);
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
-      <article class="vipPlanCard vipPlanCard--${theme}">
+      <article class="vipPlanCard vipPlanCard--${theme}${spotlightClass}" data-vip-plan="${planNumber}">
         <div class="vipPlanGlow" aria-hidden="true"></div>
         <div class="vipPlanTopline">
           <div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">${iconByPlan[planNumber] || "✦"}</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</div></div>
