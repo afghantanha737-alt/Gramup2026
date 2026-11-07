@@ -164,11 +164,25 @@ function calculateVipMiningStatus(subscriptions, now = new Date()) {
     if (!isVipMiningEligible(subscription)) continue;
     const accrual = calculateVipSubscriptionAccrual(subscription, nowDate);
     totalAccruedMicros += accrual.earnedMicros;
+    const durationMs = accrual.startAt && accrual.endAt
+      ? Math.max(0, accrual.endAt.getTime() - accrual.startAt.getTime())
+      : 0;
+    const remainingMs = accrual.active && accrual.endAt
+      ? Math.max(0, Math.min(durationMs, accrual.endAt.getTime() - nowDate.getTime()))
+      : 0;
+    const daysRemaining = accrual.active ? Math.ceil(remainingMs / (SECONDS_PER_DAY * 1000)) : 0;
+    const remainingPercent = accrual.active && durationMs > 0
+      ? Math.max(0, Math.min(100, Math.round(remainingMs / durationMs * 100)))
+      : 0;
     const miner = {
       id: String(subscription._id || subscription.id || ''),
       planNumber: Number(subscription.planNumber) || 0,
       dailyRate: accrual.dailyRate,
       dailyRateCents: accrual.dailyRateCents,
+      durationDays: Math.max(1, Number(subscription.durationDays) || 1),
+      daysRemaining,
+      remainingPercent,
+      startAt: accrual.startAt?.toISOString() || null,
       endAt: accrual.endAt?.toISOString() || null,
       nextAccrualAt: accrual.nextAccrualAt?.toISOString() || null,
       accruedPoints: accrual.earnedPoints

@@ -2661,12 +2661,17 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 .vipMiningMetric b{overflow:hidden;color:var(--text);font-size:11px;font-weight:950;text-overflow:ellipsis;white-space:nowrap}
 .vipMiningSecondRate{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;color:var(--text-soft);background:var(--surface-3);font-size:10px}
 .vipMiningSecondRate b{color:var(--primary);font-size:11px;font-variant-numeric:tabular-nums;direction:ltr;white-space:nowrap}
-.vipMiningMinerList{display:grid;gap:6px;max-height:190px;overflow:auto}
-.vipMiningMinerRow{display:flex;align-items:center;gap:8px;min-width:0;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.vipMiningMinerList{display:grid;gap:6px;max-height:420px;overflow:auto}
+.vipMiningMinerRow{display:grid;gap:4px;min-width:0;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.vipMiningMinerTop{display:flex;align-items:center;gap:8px;min-width:0}
 .vipMiningMinerMark{display:grid;place-items:center;width:26px;height:26px;flex:0 0 26px;border:1px solid var(--line);border-radius:8px;background:var(--surface-3)}
 .vipMiningMinerMark img{width:19px;height:19px;object-fit:contain}
 .vipMiningMinerName{flex:1;min-width:0;color:var(--text);font-size:10px;font-weight:850}
-.vipMiningMinerRate{color:var(--primary);font-size:9px;font-weight:850;direction:ltr;white-space:nowrap}
+.vipMiningMinerRate{display:flex;align-items:center;gap:4px;color:var(--primary);font-size:9px;font-weight:850;direction:ltr;white-space:nowrap}
+.vipMiningMinerRate i{color:var(--text-muted);font-style:normal}
+.vipMiningProgressMeta{display:flex;justify-content:flex-end;min-height:11px;color:var(--text-muted);font-size:8px;font-weight:800;line-height:1}
+.vipMiningProgressTrack{width:100%;height:5px;overflow:hidden;border-radius:999px;background:var(--line-strong)}
+.vipMiningProgressFill{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#20cbb5,#69e8d8);transition:width .5s linear}
 .vipMiningEmpty{padding:11px;border:1px dashed var(--line-strong);border-radius:13px;color:var(--text-muted);font-size:10px;line-height:1.6;text-align:center}
 .vipMiningClaim{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:49px;padding:11px 14px;border:1px solid var(--line-strong);border-radius:15px;color:#fff;background:linear-gradient(135deg,var(--primary-2),var(--primary));box-shadow:var(--shadow-soft);font-size:12px;font-weight:950;text-align:left}
 .vipMiningClaim b{font-size:11px;font-variant-numeric:tabular-nums;direction:ltr;white-space:nowrap}

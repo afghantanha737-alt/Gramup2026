@@ -3647,6 +3647,23 @@ function vipMiningLiveValues(nowMs = Date.now() + Number(state.vipServerOffsetMs
   };
 }
 
+function vipMinerRemainingValues(miner, nowMs = Date.now() + Number(state.vipServerOffsetMs || 0)) {
+  const startAt = Date.parse(miner?.startAt || "");
+  const endAt = Date.parse(miner?.endAt || "");
+  const durationMs = Number.isFinite(startAt) && Number.isFinite(endAt) ? Math.max(0, endAt - startAt) : 0;
+  if (!durationMs) {
+    return {
+      daysRemaining: Math.max(0, Number(miner?.daysRemaining) || 0),
+      remainingPercent: Math.max(0, Math.min(100, Number(miner?.remainingPercent) || 0))
+    };
+  }
+  const remainingMs = Math.max(0, Math.min(durationMs, endAt - nowMs));
+  return {
+    daysRemaining: Math.ceil(remainingMs / 86400000),
+    remainingPercent: Math.max(0, Math.min(100, Math.round(remainingMs / durationMs * 100)))
+  };
+}
+
 function tickVipMiningConsole() {
   if (!isVipMiningHubVisible() || !state.vipMining) return;
   const live = vipMiningLiveValues();
@@ -3664,6 +3681,24 @@ function tickVipMiningConsole() {
   if (perSecond) perSecond.textContent = `+${formatNumber(live.perSecondRate, 6)} UP/s`;
   if (claimAmount) claimAmount.textContent = `${formatNumber(live.accrued, 6)} UP`;
   if (claimButton) claimButton.disabled = vipMiningClaimBusy || live.accrued <= 0 || state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed;
+  document.querySelectorAll("[data-vip-miner-progress]").forEach(fill => {
+    const row = fill.closest("[data-vip-miner-row]");
+    if (!row) return;
+    const remaining = vipMinerRemainingValues(row.dataset);
+    const track = row.querySelector("[role='progressbar']");
+    const percent = row.querySelector("[data-vip-miner-percent]");
+    const days = row.querySelector("[data-vip-miner-days]");
+    fill.style.width = `${remaining.remainingPercent}%`;
+    if (track) {
+      track.setAttribute("aria-valuenow", String(remaining.remainingPercent));
+      track.setAttribute("aria-valuetext", t("vip_mining_remaining_accessible", {
+        percent: formatNumber(remaining.remainingPercent),
+        days: formatNumber(remaining.daysRemaining)
+      }));
+    }
+    if (percent) percent.textContent = t("vip_mining_remaining_percent", { n: formatNumber(remaining.remainingPercent) });
+    if (days) days.textContent = t("vip_mining_remaining_days", { n: formatNumber(remaining.daysRemaining) });
+  });
 }
 
 function stopVipMiningTicker() {
@@ -3738,8 +3773,20 @@ function renderVipMiningConsole() {
   }
   const mining = state.vipMining;
   const live = vipMiningLiveValues();
-  const miners = (mining.activeMiners || []).map(miner => `
-    <div class="vipMiningMinerRow"><span class="vipMiningMinerMark"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span><span class="vipMiningMinerName">${t("vip_mining_miner", { n: formatPoints(miner.planNumber) })}</span><span class="vipMiningMinerRate">+${formatNumber(miner.dailyRate, 2)} UP/day</span></div>`).join("");
+  const miners = (mining.activeMiners || []).map(miner => {
+    const remaining = vipMinerRemainingValues(miner);
+    const minerName = t("vip_mining_miner", { n: formatPoints(miner.planNumber) });
+    const remainingText = t("vip_mining_remaining_accessible", {
+      percent: formatNumber(remaining.remainingPercent),
+      days: formatNumber(remaining.daysRemaining)
+    });
+    return `
+    <article class="vipMiningMinerRow" data-vip-miner-row data-start-at="${escapeHTML(miner.startAt || "")}" data-end-at="${escapeHTML(miner.endAt || "")}" data-days-remaining="${remaining.daysRemaining}" data-remaining-percent="${remaining.remainingPercent}">
+      <div class="vipMiningMinerTop"><span class="vipMiningMinerMark"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span><span class="vipMiningMinerName">${minerName}</span><span class="vipMiningMinerRate">+${formatNumber(miner.dailyRate, 2)} UP/day <i aria-hidden="true">·</i> <span data-vip-miner-days>${t("vip_mining_remaining_days", { n: formatNumber(remaining.daysRemaining) })}</span></span></div>
+      <div class="vipMiningProgressMeta"><span data-vip-miner-percent>${t("vip_mining_remaining_percent", { n: formatNumber(remaining.remainingPercent) })}</span></div>
+      <div class="vipMiningProgressTrack" role="progressbar" aria-label="${escapeHTML(remainingText)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${remaining.remainingPercent}" aria-valuetext="${escapeHTML(remainingText)}"><span class="vipMiningProgressFill" data-vip-miner-progress style="width:${remaining.remainingPercent}%"></span></div>
+    </article>`;
+  }).join("");
   const noMiners = live.activeMinerCount === 0;
   return `<section class="vipMiningConsole" aria-label="${escapeHTML(t("vip_mining_title"))}">
     <header class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div class="vipMiningHeading"><span class="vipMiningKicker">GRAMUP VIP</span><h2>${t("vip_mining_title")}</h2><p>${t("vip_mining_subtitle")}</p></div><span class="vipMiningLiveBadge"><i aria-hidden="true"></i>${t("vip_mining_live")}</span></header>

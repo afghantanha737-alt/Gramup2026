@@ -42,12 +42,19 @@ assert.equal(calculateVipSubscriptionAccrual(vip1, new Date(start.getTime() + 86
 const vip4 = subscription(4, 100000, start, end);
 assert.equal(getVipMiningDailyRateCents(vip4) / 100, 1150, 'higher VIP tiers use their stored principal-plus-reward daily terms');
 const nowOneDay = new Date(start.getTime() + 86400 * 1000);
-const newlyPurchased = subscription(1, 10000, nowOneDay, end);
+const newlyPurchased = subscription(1, 10000, nowOneDay, new Date(nowOneDay.getTime() + 100 * 86400 * 1000));
 const stacked = calculateVipMiningStatus([vip1, vip4, newlyPurchased], nowOneDay);
 assert.equal(stacked.activeMinerCount, 3, 'every unexpired purchased subscription counts as an active miner');
 assert.equal(stacked.dailyRate, 1370, 'daily mining rates stack immediately across all active packages');
 assert.equal(stacked.accruedPoints, 1260, 'the old miners accrue for a day but the just-purchased miner does not accrue retroactively');
 assert.equal(stacked.perSecondRate, 1370 / 86400);
+const vip1Status = stacked.activeMiners.find(miner => miner.id === vip1._id);
+const newVip1Status = stacked.activeMiners.find(miner => miner.id === newlyPurchased._id);
+assert.equal(vip1Status.dailyRate, 110, 'each miner exposes its own daily UP income');
+assert.equal(vip1Status.daysRemaining, 99, 'remaining days are calculated from that subscription end time');
+assert.equal(vip1Status.remainingPercent, 99, 'remaining percentage is based on the contract duration');
+assert.equal(newVip1Status.daysRemaining, 100, 'a newly purchased miner starts at its full duration');
+assert.equal(newVip1Status.remainingPercent, 100, 'a newly purchased miner starts with 100% remaining');
 
 const oneSecondAt = new Date(start.getTime() + 1000);
 const firstFragment = calculateVipSubscriptionAccrual(vip1, oneSecondAt);

@@ -125,11 +125,11 @@ async function main() {
   })) {
     assert.ok(indexHtml.includes(`js/${asset}.js?v=${version}`), `${asset} must keep its current cache identifier`);
   }
-  assert.ok(indexHtml.includes('js/i18n.js?v=up_v34_vip_live_hub_20261107'), 'i18n.js must use the Mine status cache-busting version');
-  assert.ok(indexHtml.includes('js/app.js?v=up_v34_vip_live_hub_20261107'), 'app.js must use the VIP mining hub cache-busting version');
+  assert.ok(indexHtml.includes('js/i18n.js?v=up_v35_vip_miner_progress_20261107'), 'i18n.js must use the Mine status cache-busting version');
+  assert.ok(indexHtml.includes('js/app.js?v=up_v35_vip_miner_progress_20261107'), 'app.js must use the VIP mining hub cache-busting version');
   assert.doesNotMatch(indexHtml, /spinCelebration|luckySpinPage|spinWheel/i, 'Lucky Spin must not be loaded before its feature is built');
-  assert.ok(indexHtml.includes('css/style.css?v=up_v33_vip_live_hub_20261106'), 'main CSS must use the UP/Mine cache-busting version');
-  assert.ok(indexHtml.includes('css/theme-selector.css?v=up_v33_vip_live_hub_20261106'), 'theme CSS must use the Silver theme cache-busting version');
+  assert.ok(indexHtml.includes('css/style.css?v=up_v34_vip_miner_progress_20261107'), 'main CSS must use the UP/Mine cache-busting version');
+  assert.ok(indexHtml.includes('css/theme-selector.css?v=up_v34_vip_miner_progress_20261107'), 'theme CSS must use the Silver theme cache-busting version');
 
   const referralRoute = fs.readFileSync(path.join(root, 'routes/referral.js'), 'utf8');
   assert.match(referralRoute, /User\.countDocuments\(\{ referredBy: u\._id \}\)/,
