@@ -2038,6 +2038,91 @@ router.get('/vip/summary', async (req, res) => {
   });
 });
 
+router.get('/vip/users', async (req, res) => {
+  const now = new Date();
+  const requestedStatus = String(req.query.status || 'all').trim().toLowerCase();
+  if (!['all', 'active', 'expired'].includes(requestedStatus)) {
+    return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'وضعیت VIP نامعتبر است.' });
+  }
+  const query = {};
+  const planNumber = String(req.query.planNumber || '').trim();
+  if (planNumber) {
+    const parsed = Number(planNumber);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'پلن VIP نامعتبر است.' });
+    query.planNumber = parsed;
+  }
+  const dateFrom = String(req.query.dateFrom || '').trim();
+  const dateTo = String(req.query.dateTo || '').trim();
+  if (dateFrom || dateTo) {
+    const parseVipDate = (value, endOfDay = false) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+      const parsed = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+    query.createdAt = {};
+    if (dateFrom) query.createdAt.$gte = parseVipDate(dateFrom);
+    if (dateTo) query.createdAt.$lte = parseVipDate(dateTo, true);
+    if ((dateFrom && !query.createdAt.$gte) || (dateTo && !query.createdAt.$lte) || (query.createdAt.$gte && query.createdAt.$lte && query.createdAt.$gte > query.createdAt.$lte)) {
+      return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'محدوده تاریخ نامعتبر است.' });
+    }
+  }
+  const search = String(req.query.search || '').trim().slice(0, 100);
+  if (search) {
+    const regex = new RegExp(escapeRegex(search), 'i');
+    const userQuery = { $or: [{ telegramId: regex }, { username: regex }, { firstName: regex }, { lastName: regex }] };
+    if (mongoose.isValidObjectId(search)) userQuery.$or.push({ _id: new mongoose.Types.ObjectId(search) });
+    const users = await User.find(userQuery).select('_id').lean();
+    query.user = { $in: users.map(user => user._id) };
+  }
+  const subscriptions = await VipSubscription.find(query).populate('user', '_id telegramId username firstName lastName').sort({ createdAt: -1, _id: -1 }).lean();
+  const groups = new Map();
+  for (const subscription of subscriptions) {
+    const item = toVipAdminRecord(subscription, now);
+    const key = String(subscription.user?._id || subscription.user || 'unknown');
+    if (!groups.has(key)) {
+      const user = subscription.user || {};
+      groups.set(key, { userMongoId: key, userId: String(user.telegramId || key), username: String(user.username || ''), name: [user.firstName, user.lastName].filter(Boolean).join(' '), activeVips: 0, expiredVips: 0, totalVipsPurchased: 0, subscriptions: [] });
+    }
+    const group = groups.get(key);
+    group.totalVipsPurchased += 1;
+    if (item.status === 'active') group.activeVips += 1;
+    else group.expiredVips += 1;
+    group.subscriptions.push(item);
+  }
+  let users = [...groups.values()];
+  if (requestedStatus === 'active') users = users.filter(group => group.activeVips > 0);
+  if (requestedStatus === 'expired') users = users.filter(group => group.expiredVips > 0);
+  users.sort((a, b) => b.totalVipsPurchased - a.totalVipsPurchased || b.activeVips - a.activeVips || a.userId.localeCompare(b.userId));
+  const { page, limit, skip } = pageParams(req.query, 25, 100);
+  const total = users.length;
+  const pagedUsers = users.slice(skip, skip + limit).map(({ subscriptions, ...group }) => group);
+  return res.json({ success: true, users: pagedUsers, page, limit, total, totalPages: Math.ceil(total / limit), asOf: now.toISOString() });
+});
+
+router.get('/vip/users/:userId', async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.userId)) return res.status(400).json({ success: false, code: 'VIP_USER_INVALID', message: 'شناسه کاربر نامعتبر است.' });
+  const user = await User.findById(req.params.userId).select('_id telegramId username firstName lastName').lean();
+  if (!user) return res.status(404).json({ success: false, code: 'VIP_USER_NOT_FOUND', message: 'کاربر پیدا نشد.' });
+  const subscriptions = await VipSubscription.find({ user: user._id }).sort({ createdAt: -1, _id: -1 }).lean();
+  const records = subscriptions.map(subscription => toVipAdminRecord({ ...subscription, user }, new Date()));
+  return res.json({ success: true, user, subscriptions: records, active: records.filter(item => item.status === 'active'), expired: records.filter(item => item.status !== 'active') });
+});
+
+router.delete('/vip/users/:userId', async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.userId)) return res.status(400).json({ success: false, code: 'VIP_USER_INVALID', message: 'شناسه کاربر نامعتبر است.' });
+  const transactionStatus = getMongoTransactionStatus();
+  if (!transactionStatus.checked || !transactionStatus.supported) return res.status(503).json({ success: false, code: 'TRANSACTIONS_UNAVAILABLE', message: 'حذف انجام نشد؛ MongoDB Transaction در دسترس نیست.' });
+  const outcome = await withMongoTransaction(async session => {
+    const user = await User.findById(req.params.userId).session(session);
+    if (!user) return { missing: true };
+    const result = await VipSubscription.deleteMany({ user: user._id }).session(session);
+    await recordAdminLogRequired({ actor: req.adminActor, action: 'vip_user_reset', targetType: 'user', targetId: user._id, details: `Deleted ${result.deletedCount || 0} VIP subscriptions; future purchases remain allowed.` }, session);
+    return { deletedCount: Number(result.deletedCount) || 0, userId: user._id };
+  });
+  if (outcome.missing) return res.status(404).json({ success: false, code: 'VIP_USER_NOT_FOUND', message: 'کاربر پیدا نشد.' });
+  return res.json({ success: true, deletedCount: outcome.deletedCount, userId: String(outcome.userId) });
+});
+
 router.get('/vip/subscriptions', async (req, res) => {
   const { page, limit, skip } = pageParams(req.query, 25, 100);
   const now = new Date();

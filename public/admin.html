@@ -545,19 +545,24 @@
       </div>
 
       <div class="card">
-        <div class="flexBetween"><b>VIP Subscriptions</b><span id="vipSubscriptionsStatus" class="small"></span></div>
+        <div class="flexBetween"><b>VIP Users</b><span id="vipSubscriptionsStatus" class="small"></span></div>
+        <p class="small">هر کاربر فقط یک‌بار نمایش داده می‌شود و بر اساس بیشترین تعداد خرید VIP مرتب است. برای دیدن جزئیات روی ردیف کلیک کنید.</p>
+        <div role="tablist" aria-label="VIP status" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
+          <button type="button" class="secondary" data-vip-user-tab="active" aria-selected="true" onclick="setVipUserStatus('active')">وی‌آی‌پی‌های فعال</button>
+          <button type="button" class="secondary" data-vip-user-tab="expired" aria-selected="false" onclick="setVipUserStatus('expired')">وی‌آی‌پی‌های منقضی‌شده</button>
+          <button type="button" class="secondary" data-vip-user-tab="all" aria-selected="false" onclick="setVipUserStatus('all')">همه کاربران</button>
+        </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px">
           <input id="vipFilterSearch" placeholder="User ID / username / name" onkeydown="if(event.key==='Enter')loadVipSubscriptionsAdmin(1)">
           <select id="vipFilterPlan"><option value="">All plans</option><option value="1">Plan 1</option><option value="2">Plan 2</option><option value="3">Plan 3</option><option value="4">Plan 4</option><option value="5">Plan 5</option><option value="6">Plan 6</option><option value="7">Plan 7</option><option value="8">Plan 8</option><option value="9">Plan 9</option><option value="10">Plan 10</option></select>
-          <select id="vipFilterStatus"><option value="">All statuses</option><option value="active">Active</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select>
           <label class="small">Purchase date from<input id="vipFilterFrom" type="date"></label>
           <label class="small">Purchase date to<input id="vipFilterTo" type="date"></label>
           <div class="row"><button type="button" onclick="loadVipSubscriptionsAdmin(1)">Apply filters</button><button type="button" class="secondary" onclick="resetVipFilters()">Reset</button></div>
         </div>
         <div class="vipAdminTableWrap" style="overflow:auto;margin-top:10px">
-          <table class="vipAdminTable" style="min-width:1500px">
-            <thead><tr><th>User ID</th><th>Username / Name</th><th>Plan</th><th>Purchase Date</th><th>Start Date</th><th>Expiry Date</th><th>Duration</th><th>Purchase Amount</th><th>Daily Earning</th><th>Total Expected Earning</th><th>Status</th><th>Remaining Days</th><th>Details</th></tr></thead>
-            <tbody id="vipSubscriptionsRows"><tr><td colspan="13" class="empty">Loading…</td></tr></tbody>
+          <table class="vipAdminTable" style="min-width:850px">
+            <thead><tr><th>User</th><th>Username</th><th>User ID</th><th>Active VIPs</th><th>Expired VIPs</th><th>Total Purchased</th><th>Action</th></tr></thead>
+            <tbody id="vipSubscriptionsRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
           </table>
         </div>
         <div id="vipPagination" class="flexBetween" style="margin-top:12px"></div>
@@ -2453,97 +2458,95 @@ async function loadVipSummaryAdmin() {
   }
 }
 
-async function loadVipSubscriptionsAdmin(page = 1) {
-  const rows = document.getElementById("vipSubscriptionsRows");
-  const status = document.getElementById("vipSubscriptionsStatus");
-  const pagination = document.getElementById("vipPagination");
-  if (!rows || !status || !pagination) return;
-  vipAdminCurrentPage = Math.max(1, Number(page) || 1);
-  rows.innerHTML = '<tr><td colspan="13" class="empty">Loading subscriptions…</td></tr>';
-  status.textContent = "Loading…";
-  const params = new URLSearchParams({ page: String(vipAdminCurrentPage), limit: "25" });
-  const search = document.getElementById("vipFilterSearch")?.value.trim();
-  const planNumber = document.getElementById("vipFilterPlan")?.value;
-  const selectedStatus = document.getElementById("vipFilterStatus")?.value;
-  const dateFrom = document.getElementById("vipFilterFrom")?.value;
-  const dateTo = document.getElementById("vipFilterTo")?.value;
-  if (search) params.set("search", search);
-  if (planNumber) params.set("planNumber", planNumber);
-  if (selectedStatus) params.set("status", selectedStatus);
-  if (dateFrom) params.set("dateFrom", dateFrom);
-  if (dateTo) params.set("dateTo", dateTo);
-
-  try {
-    const data = await api(`/api/admin/vip/subscriptions?${params.toString()}`);
-    const subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-    status.textContent = `${formatVipAdminNumber(data.total)} record(s)`;
-    if (!subscriptions.length) {
-      rows.innerHTML = '<tr><td colspan="13" class="empty">No VIP subscriptions match these filters.</td></tr>';
-    } else {
-      rows.innerHTML = subscriptions.map(item => `
-        <tr>
-          <td>${escapeHtml(item.userId || "—")}</td>
-          <td>${escapeHtml(item.username ? `@${item.username}` : "—")}<br><span class="small">${escapeHtml(item.name || "")}</span></td>
-          <td>${formatVipAdminNumber(item.planNumber)}</td>
-          <td>${escapeHtml(formatVipAdminDate(item.purchaseDate))}</td>
-          <td>${escapeHtml(formatVipAdminDate(item.startDate))}</td>
-          <td>${escapeHtml(formatVipAdminDate(item.expiryDate))}</td>
-          <td>${formatVipAdminNumber(item.durationDays)} days</td>
-          <td>${formatVipAdminNumber(item.purchaseAmountPoints)} Points</td>
-          <td>${formatVipAdminNumber(item.dailyEarningPoints)} Points</td>
-          <td>${formatVipAdminNumber(item.totalExpectedEarningPoints)} Points</td>
-          <td><span class="badge ${escapeHtml(item.status)}">${vipAdminStatusLabel(item.status)}</span></td>
-          <td>${formatVipAdminNumber(item.remainingDays)}</td>
-          <td><button type="button" class="secondary" onclick="openVipDetails('${escapeHtml(item.id)}')">Details</button></td>
-        </tr>`).join("");
-    }
-    const totalPages = Math.max(1, Number(data.totalPages) || 1);
-    pagination.innerHTML = `<span class="small">Page ${vipAdminCurrentPage} of ${totalPages}</span><div class="row"><button type="button" class="secondary" ${vipAdminCurrentPage <= 1 ? "disabled" : ""} onclick="loadVipSubscriptionsAdmin(${vipAdminCurrentPage - 1})">Previous</button><button type="button" class="secondary" ${vipAdminCurrentPage >= totalPages ? "disabled" : ""} onclick="loadVipSubscriptionsAdmin(${vipAdminCurrentPage + 1})">Next</button></div>`;
-  } catch (error) {
-    status.textContent = "Could not load VIP subscriptions.";
-    rows.innerHTML = `<tr><td colspan="13" class="empty" style="color:var(--danger)">${escapeHtml(error.message)}</td></tr>`;
-    pagination.innerHTML = "";
-  }
-}
-
-function resetVipFilters() {
-  document.getElementById("vipFilterSearch").value = "";
-  document.getElementById("vipFilterPlan").value = "";
-  document.getElementById("vipFilterStatus").value = "";
-  document.getElementById("vipFilterFrom").value = "";
-  document.getElementById("vipFilterTo").value = "";
+let vipAdminUserStatus = 'active';
+function setVipUserStatus(status) {
+  if (!['active', 'expired', 'all'].includes(status)) return;
+  vipAdminUserStatus = status;
+  document.querySelectorAll('[data-vip-user-tab]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.vipUserTab === status)));
   void loadVipSubscriptionsAdmin(1);
 }
-
-async function openVipDetails(id) {
-  const overlay = document.getElementById("vipDetailOverlay");
-  const content = document.getElementById("vipDetailContent");
-  overlay.style.display = "flex";
-  content.innerHTML = '<div class="empty">Loading details…</div>';
+async function loadVipSubscriptionsAdmin(page = 1) {
+  const rows = document.getElementById('vipSubscriptionsRows');
+  const status = document.getElementById('vipSubscriptionsStatus');
+  const pagination = document.getElementById('vipPagination');
+  if (!rows || !status || !pagination) return;
+  vipAdminCurrentPage = Math.max(1, Number(page) || 1);
+  rows.innerHTML = '<tr><td colspan="7" class="empty">Loading VIP users…</td></tr>';
+  status.textContent = 'Loading…';
+  const params = new URLSearchParams({ page: String(vipAdminCurrentPage), limit: '25', status: vipAdminUserStatus });
+  const search = document.getElementById('vipFilterSearch')?.value.trim();
+  const planNumber = document.getElementById('vipFilterPlan')?.value;
+  const dateFrom = document.getElementById('vipFilterFrom')?.value;
+  const dateTo = document.getElementById('vipFilterTo')?.value;
+  if (search) params.set('search', search);
+  if (planNumber) params.set('planNumber', planNumber);
+  if (dateFrom) params.set('dateFrom', dateFrom);
+  if (dateTo) params.set('dateTo', dateTo);
   try {
-    const data = await api(`/api/admin/vip/subscriptions/${encodeURIComponent(id)}`);
-    const item = data.subscription;
-    const fields = [
-      ["User ID", item.userId], ["Username", item.username ? `@${item.username}` : "—"], ["Name", item.name || "—"],
-      ["VIP Plan", item.planNumber], ["Purchase Amount", `${formatVipAdminNumber(item.purchaseAmountPoints)} Points`],
-      ["Purchase Date", formatVipAdminDate(item.purchaseDate)], ["Start Date", formatVipAdminDate(item.startDate)],
-      ["Expiry Date", formatVipAdminDate(item.expiryDate)], ["Duration", `${formatVipAdminNumber(item.durationDays)} days`],
-      ["Daily Earning", `${formatVipAdminNumber(item.dailyEarningPoints)} Points`],
-      ["Total Expected Earning", `${formatVipAdminNumber(item.totalExpectedEarningPoints)} Points`],
-      ["Earned to Date", `${formatVipAdminNumber(item.earnedToDatePoints)} Points`],
-      ["Remaining Earning", `${formatVipAdminNumber(item.remainingEarningPoints)} Points`],
-      ["Claims", `${formatVipAdminNumber(item.claimsCompleted)} / ${formatVipAdminNumber(item.totalClaims)}`],
-      ["Remaining Days", formatVipAdminNumber(item.remainingDays)], ["Current Status", vipAdminStatusLabel(item.status)]
-    ];
-    content.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">${fields.map(([label, value]) => `<div class="card" style="margin:0"><div class="small">${escapeHtml(label)}</div><b>${escapeHtml(value)}</b></div>`).join("")}</div>`;
+    const data = await api(`/api/admin/vip/users?${params.toString()}`);
+    const users = Array.isArray(data.users) ? data.users : [];
+    status.textContent = `${formatVipAdminNumber(data.total)} user(s) · sorted by total purchases`;
+    rows.innerHTML = users.length ? users.map(user => `
+      <tr style="cursor:pointer" onclick="openVipUserDetails('${escapeHtml(user.userMongoId)}')">
+        <td><b>${escapeHtml(user.name || '—')}</b></td>
+        <td>${escapeHtml(user.username ? `@${user.username}` : '—')}</td>
+        <td style="font-family:monospace">${escapeHtml(user.userId || user.userMongoId || '—')}</td>
+        <td><span class="badge approved">${formatVipAdminNumber(user.activeVips)}</span></td>
+        <td><span class="badge">${formatVipAdminNumber(user.expiredVips)}</span></td>
+        <td><b>${formatVipAdminNumber(user.totalVipsPurchased)}</b></td>
+        <td><button type="button" class="secondary" onclick="event.stopPropagation();openVipUserDetails('${escapeHtml(user.userMongoId)}')">Details</button></td>
+      </tr>`).join('') : '<tr><td colspan="7" class="empty">No VIP users match these filters.</td></tr>';
+    const totalPages = Math.max(1, Number(data.totalPages) || 1);
+    pagination.innerHTML = `<span class="small">Page ${vipAdminCurrentPage} of ${totalPages}</span><div class="row"><button type="button" class="secondary" ${vipAdminCurrentPage <= 1 ? 'disabled' : ''} onclick="loadVipSubscriptionsAdmin(${vipAdminCurrentPage - 1})">Previous</button><button type="button" class="secondary" ${vipAdminCurrentPage >= totalPages ? 'disabled' : ''} onclick="loadVipSubscriptionsAdmin(${vipAdminCurrentPage + 1})">Next</button></div>`;
+  } catch (error) {
+    status.textContent = 'Could not load VIP users.';
+    rows.innerHTML = `<tr><td colspan="7" class="empty" style="color:var(--danger)">${escapeHtml(error.message)}</td></tr>`;
+    pagination.innerHTML = '';
+  }
+}
+function resetVipFilters() {
+  document.getElementById('vipFilterSearch').value = '';
+  document.getElementById('vipFilterPlan').value = '';
+  document.getElementById('vipFilterFrom').value = '';
+  document.getElementById('vipFilterTo').value = '';
+  void loadVipSubscriptionsAdmin(1);
+}
+function renderVipDetailRows(items) {
+  if (!items.length) return '<div class="empty">No subscriptions in this category.</div>';
+  return `<div style="display:grid;gap:8px">${items.map(item => `
+    <article class="card" style="margin:0">
+      <div class="flexBetween"><b>VIP ${formatVipAdminNumber(item.planNumber)}</b><span class="badge ${escapeHtml(item.status)}">${vipAdminStatusLabel(item.status)}</span></div>
+      <div class="small" style="margin-top:7px">Purchase: ${escapeHtml(formatVipAdminDate(item.purchaseDate))} · Expiry: ${escapeHtml(formatVipAdminDate(item.expiryDate))}</div>
+      <div class="small">Duration: ${formatVipAdminNumber(item.durationDays)} days · Remaining: ${formatVipAdminNumber(item.remainingDays)} days</div>
+      <div class="small">Earned / claimed: <b>${formatVipAdminNumber(item.earnedToDatePoints)} Points</b> · Remaining expected: <b>${formatVipAdminNumber(item.remainingEarningPoints)} Points</b></div>
+    </article>`).join('')}</div>`;
+}
+async function openVipUserDetails(userId) {
+  const overlay = document.getElementById('vipDetailOverlay');
+  const content = document.getElementById('vipDetailContent');
+  overlay.style.display = 'flex';
+  content.innerHTML = '<div class="empty">Loading user VIP details…</div>';
+  try {
+    const data = await api(`/api/admin/vip/users/${encodeURIComponent(userId)}`);
+    const user = data.user || {};
+    const active = Array.isArray(data.active) ? data.active : [];
+    const expired = Array.isArray(data.expired) ? data.expired : [];
+    document.getElementById('vipDetailTitle').textContent = `VIPs · ${user.firstName || user.username || user.telegramId || userId}`;
+    content.innerHTML = `<div class="card"><b>${escapeHtml(user.firstName || '—')}</b><div class="small">@${escapeHtml(user.username || '—')} · Telegram ID: ${escapeHtml(user.telegramId || '—')}</div><button class="danger" type="button" style="margin-top:10px" onclick="deleteAllUserVips('${escapeHtml(userId)}')">حذف کامل تمام وی‌آی‌پی‌های این کاربر</button></div><h3>Active VIPs (${active.length})</h3>${renderVipDetailRows(active)}<h3 style="margin-top:14px">Expired VIPs (${expired.length})</h3>${renderVipDetailRows(expired)}`;
   } catch (error) {
     content.innerHTML = `<div class="empty" style="color:var(--danger)">${escapeHtml(error.message)}</div>`;
   }
 }
-
-function closeVipDetails() {
-  document.getElementById("vipDetailOverlay").style.display = "none";
+async function deleteAllUserVips(userId) {
+  if (!confirm('تمام اشتراک‌های VIP این کاربر برای همیشه حذف می‌شود. خریدهای آینده همچنان مجاز می‌ماند. ادامه می‌دهید؟')) return;
+  try {
+    const result = await api(`/api/admin/vip/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+    showMsg(`تمام VIPها حذف شد: ${formatVipAdminNumber(result.deletedCount)} مورد.`, 'success');
+    closeVipDetails();
+    await loadVipManagement();
+  } catch (error) { showMsg(error.message, 'error'); }
 }
+function closeVipDetails() { document.getElementById('vipDetailOverlay').style.display = 'none'; }
 
 let vipAdminSelectedCategory = "starter";
 function setVipAdminCategory(category) {
