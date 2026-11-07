@@ -1045,7 +1045,9 @@ router.get('/vip/plans', auth, async (req, res) => {
   await settleMaturedVipSubscriptions({ userId: req.dbUser._id, now });
   const [plans, subscriptions, user] = await Promise.all([
     VipPlan.find({}).sort({ planNumber: 1 }).lean(),
-    VipSubscription.find({ user: req.dbUser._id }).sort({ createdAt: -1 }).limit(30).lean(),
+    // Do not cap this list: every purchased package contributes to the VIP
+    // ownership state shown in the UI, and older purchases must remain visible.
+    VipSubscription.find({ user: req.dbUser._id }).sort({ createdAt: -1 }).lean(),
     User.findById(req.dbUser._id).select('points').lean()
   ]);
   res.json({

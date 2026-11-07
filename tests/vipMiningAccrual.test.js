@@ -54,7 +54,16 @@ assert.equal(vip1Status.dailyRate, 110, 'each miner exposes its own daily UP inc
 assert.equal(vip1Status.daysRemaining, 99, 'remaining days are calculated from that subscription end time');
 assert.equal(vip1Status.remainingPercent, 99, 'remaining percentage is based on the contract duration');
 assert.equal(newVip1Status.daysRemaining, 100, 'a newly purchased miner starts at its full duration');
-assert.equal(newVip1Status.remainingPercent, 100, 'a newly purchased miner starts with 100% remaining');
+assert.equal(newVip1Status.remainingPercent, 100, 'a newly purchased miner starts at 100% remaining');
+
+const elevenMiners = Array.from({ length: 11 }, (_, index) =>
+  subscription((index % 10) + 1, 10000, start, end));
+const elevenMinerStatus = calculateVipMiningStatus(elevenMiners, nowOneDay);
+assert.equal(elevenMinerStatus.activeMinerCount, 11, 'all eleven active purchased miners remain eligible');
+assert.equal(elevenMinerStatus.activeMiners.length, 11, 'the status response retains every active miner without a display cap');
+assert.equal(elevenMinerStatus.dailyRate,
+  elevenMiners.reduce((sum, miner) => sum + getVipMiningDailyRateCents(miner) / 100, 0),
+  'all eleven miners contribute to the combined mining rate');
 
 const oneSecondAt = new Date(start.getTime() + 1000);
 const firstFragment = calculateVipSubscriptionAccrual(vip1, oneSecondAt);

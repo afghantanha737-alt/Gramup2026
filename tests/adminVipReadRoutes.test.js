@@ -88,6 +88,8 @@ async function invoke(path, req) {
       return {
         populate() { return this; },
         async lean() {
+          const activeStartAt = new Date();
+          const activeEndAt = new Date(activeStartAt.getTime() + 30 * 24 * 60 * 60 * 1000);
           return {
             _id: id,
             user: { _id: 'mongo-user-1', telegramId: '700001', username: 'test_user', firstName: 'Test' },
@@ -98,9 +100,9 @@ async function invoke(path, req) {
             dailyRewardAveragePoints: 1.67,
             claimedRewardPoints: 0,
             claimsCompleted: 0,
-            startAt: '2026-10-04T00:00:00.000Z',
-            endAt: '2026-11-03T00:00:00.000Z',
-            createdAt: '2026-10-04T00:00:00.000Z',
+            startAt: activeStartAt.toISOString(),
+            endAt: activeEndAt.toISOString(),
+            createdAt: activeStartAt.toISOString(),
             status: 'active'
           };
         }
