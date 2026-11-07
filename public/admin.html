@@ -502,6 +502,20 @@
         <div id="vipSummaryGrid" class="statsGrid" style="margin-top:12px"><div class="empty">Loading VIP summary…</div></div>
       </div>
 
+      <div class="card" id="vipEntitlementAuditCard">
+        <div class="flexBetween"><b>VIP &amp; Miners Audit</b><span id="vipEntitlementAuditStatus" class="small" role="status" aria-live="polite">Not run</span></div>
+        <p class="small">Read-only database summary of purchased subscriptions, active miner counts, legacy VIP flags, purchase-ledger records, and potential status/date anomalies.</p>
+        <div class="row">
+          <button type="button" id="vipEntitlementAuditRun" onclick="loadVipEntitlementAudit()">Run audit</button>
+          <button type="button" class="secondary" id="vipEntitlementAuditCopy" onclick="copyVipEntitlementAudit()" disabled>Copy JSON</button>
+        </div>
+        <div id="vipEntitlementAuditSummary" style="margin-top:12px"><div class="empty">Run the audit to load current counts.</div></div>
+        <details style="margin-top:12px">
+          <summary class="small" style="cursor:pointer">Raw JSON summary</summary>
+          <pre id="vipEntitlementAuditJson" style="max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface2);padding:12px;border-radius:10px;font-size:11px">No audit data loaded.</pre>
+        </details>
+      </div>
+
       <div class="card">
         <div class="flexBetween"><b>VIP Reserve Dashboard</b><button type="button" class="secondary" onclick="loadVipReserveDashboard()">Refresh</button></div>
         <p class="small">نمایش حسابداری Reserve و تعهدات VIP v2. این داشبورد فقط از داده‌های ثبت‌شده استفاده می‌کند و موجودی واقعی خارج از سیستم را ادعا نمی‌کند.</p>
@@ -2313,6 +2327,92 @@ async function downloadVipReserveExcel() {
     status.style.color = "var(--danger)";
   }
 }
+function renderVipEntitlementAudit(data) {
+  const container = document.getElementById("vipEntitlementAuditSummary");
+  const copyButton = document.getElementById("vipEntitlementAuditCopy");
+  const subscriptions = data.vipSubscriptions || {};
+  const statusCounts = subscriptions.byStatus || {};
+  const distribution = subscriptions.eligibleMinerCountDistributionByUser || {};
+  const anomalies = [
+    ["Active but past end date", subscriptions.activeButPastEndDate],
+    ["Active with claims counter at duration", subscriptions.activeButClaimsCounterAtDuration],
+    ["Active with reserve liability fully paid", subscriptions.activeButReserveLiabilityFullyPaid],
+    ["Completed before end with unpaid liability", subscriptions.completedBeforeEndWithUnpaidLiability]
+  ];
+  const unusualDateTypes = (subscriptions.startEndBsonTypes || []).filter(row => row.startAt !== "date" || row.endAt !== "date");
+  const statusCards = Object.entries(statusCounts).map(([status, count]) =>
+    `<div class="card" style="margin:0"><div class="small">${escapeHtml(status)}</div><strong style="display:block;font-size:18px;margin-top:6px">${formatVipAdminNumber(count)}</strong></div>`
+  ).join("") || '<div class="empty">No subscription records.</div>';
+  const distributionRows = Object.entries(distribution).sort((a, b) => Number(a[0]) - Number(b[0])).map(([miners, users]) =>
+    `<tr><td>${escapeHtml(miners)}</td><td>${formatVipAdminNumber(users)}</td></tr>`
+  ).join("") || '<tr><td colspan="2" class="empty">No currently eligible miners.</td></tr>';
+  const anomalyRows = anomalies.map(([label, count]) =>
+    `<tr><td>${escapeHtml(label)}</td><td>${formatVipAdminNumber(count)}</td></tr>`
+  ).join("");
+  const dateTypeRows = (subscriptions.startEndBsonTypes || []).map(row =>
+    `<tr><td>${escapeHtml(row.startAt || "missing")}</td><td>${escapeHtml(row.endAt || "missing")}</td><td>${formatVipAdminNumber(row.count)}</td></tr>`
+  ).join("") || '<tr><td colspan="3" class="empty">No date field records.</td></tr>';
+  const transactionCounts = data.purchaseLedger?.transactionRecordsByStatus || {};
+  const pointsLedgerCounts = data.purchaseLedger?.pointsLedgerRecordsByStatus || {};
+  container.innerHTML = `
+    <div class="statsGrid">
+      <div class="card" style="margin:0"><div class="small">All VIP subscriptions</div><strong style="display:block;font-size:18px;margin-top:6px">${formatVipAdminNumber(subscriptions.total)}</strong></div>
+      <div class="card" style="margin:0"><div class="small">Currently eligible active miners</div><strong style="display:block;font-size:18px;margin-top:6px">${formatVipAdminNumber(subscriptions.currentlyEligibleActiveMiners)}</strong></div>
+      <div class="card" style="margin:0"><div class="small">Users with future legacy vipGoldUntil</div><strong style="display:block;font-size:18px;margin-top:6px">${formatVipAdminNumber(data.legacy?.usersWithFutureVipGoldUntil)}</strong></div>
+    </div>
+    <h4 style="margin:16px 0 8px">Subscriptions by stored status</h4>
+    <div class="statsGrid">${statusCards}</div>
+    <h4 style="margin:16px 0 8px">Active miner count per user</h4>
+    <div style="overflow:auto"><table><thead><tr><th>Active miners</th><th>Users</th></tr></thead><tbody>${distributionRows}</tbody></table></div>
+    <h4 style="margin:16px 0 8px">Potential anomalies</h4>
+    <div style="overflow:auto"><table><thead><tr><th>Check</th><th>Records</th></tr></thead><tbody>${anomalyRows}<tr><td>Records with non-Date start/end BSON fields</td><td>${formatVipAdminNumber(unusualDateTypes.reduce((sum, row) => sum + (Number(row.count) || 0), 0))}</td></tr></tbody></table></div>
+    <details style="margin-top:8px"><summary class="small" style="cursor:pointer">Date field BSON types</summary><div style="overflow:auto;margin-top:8px"><table><thead><tr><th>startAt type</th><th>endAt type</th><th>Records</th></tr></thead><tbody>${dateTypeRows}</tbody></table></div></details>
+    <h4 style="margin:16px 0 8px">VIP purchase ledger records by status</h4>
+    <div class="small">Transaction: ${escapeHtml(JSON.stringify(transactionCounts))}</div>
+    <div class="small">Points ledger: ${escapeHtml(JSON.stringify(pointsLedgerCounts))}</div>
+    <div class="small" style="margin-top:10px">Generated: ${escapeHtml(formatVipAdminDate(data.generatedAt))} · Read-only</div>`;
+  document.getElementById("vipEntitlementAuditJson").textContent = JSON.stringify(data, null, 2);
+  copyButton.disabled = false;
+}
+
+async function loadVipEntitlementAudit() {
+  const button = document.getElementById("vipEntitlementAuditRun");
+  const status = document.getElementById("vipEntitlementAuditStatus");
+  const container = document.getElementById("vipEntitlementAuditSummary");
+  const copyButton = document.getElementById("vipEntitlementAuditCopy");
+  if (!button || !status || !container) return;
+  button.disabled = true;
+  copyButton.disabled = true;
+  status.textContent = "Running read-only audit…";
+  container.innerHTML = '<div class="empty">Loading VIP entitlement counts…</div>';
+  try {
+    const data = await api("/api/admin/audit-vip-entitlements");
+    renderVipEntitlementAudit(data);
+    status.textContent = `Audit complete · ${formatVipAdminDate(data.generatedAt)}`;
+    status.style.color = "var(--success)";
+  } catch (error) {
+    status.textContent = "Audit failed";
+    status.style.color = "var(--danger)";
+    container.innerHTML = `<div class="empty" style="color:var(--danger)">${escapeHtml(error.message)}</div>`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function copyVipEntitlementAudit() {
+  const status = document.getElementById("vipEntitlementAuditStatus");
+  const value = document.getElementById("vipEntitlementAuditJson")?.textContent || "";
+  if (!value || value === "No audit data loaded.") return;
+  try {
+    await navigator.clipboard.writeText(value);
+    status.textContent = "Audit JSON copied to clipboard.";
+    status.style.color = "var(--success)";
+  } catch (error) {
+    status.textContent = "Clipboard unavailable; select and copy the raw JSON below.";
+    status.style.color = "var(--danger)";
+  }
+}
+
 async function loadVipSummaryAdmin() {
   const grid = document.getElementById("vipSummaryGrid");
   if (!grid) return;

@@ -50,6 +50,7 @@ const { validateLatestPostConfig } = require('../utils/latestPostEngagement');
 const { getTelegramWebhookMetrics } = require('../utils/telegramWebhookMetrics');
 const { calculateTotalRewardCents } = require('../utils/vipRewards');
 const { toVipAdminRecord } = require('../utils/vipAdminReadModel');
+const { buildVipEntitlementAudit } = require('../utils/vipEntitlementAudit');
 const { toCents: vipReserveToCents, fundReserve: fundVipReserve, reserveSnapshot: vipReserveSnapshot } = require('../utils/vipReserve');
 const { isTestEnvironment, normalizeAllowedTelegramIds } = require('../utils/maintenance');
 const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
@@ -1965,6 +1966,12 @@ router.post('/required-channels/:id/test', async (req, res) => {
 });
 
 /* -------------------- SETTINGS -------------------- */
+router.get('/audit-vip-entitlements', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const audit = await buildVipEntitlementAudit();
+  return res.json({ success: true, ...audit });
+});
+
 router.get('/vip/summary', async (req, res) => {
   const now = new Date();
   const activeExpression = { $and: [{ $eq: ['$status', 'active'] }, { $gt: ['$endAt', now] }] };
