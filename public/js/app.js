@@ -64,6 +64,7 @@ const state = {
   taskSection: "daily",
   tasks: [],
   completions: [],
+  taskSession: null,
   tasksServerOffsetMs: 0,
   userDataLoadedAt: 0,
   tasksLoadedAt: 0,
@@ -122,7 +123,7 @@ function updateReadModelFreshness() {
   }
   const protectedSelectors = [
     "#checkinBtn", "#submitWithdraw", "#submitExchange", "#depositVerifyButton", "#startMiningBtn", "#claimMiningBtn", "[data-mining-upgrade]",
-    "[data-verify]", "[data-latest-post-open]", "[data-latest-post-check]",
+    "[data-task-start]", "[data-verify]", "[data-latest-post-open]", "[data-latest-post-check]",
     "[data-upload-screenshot]", "[data-referral-claim]"
   ].join(",");
   document.querySelectorAll(protectedSelectors).forEach(element => {
@@ -164,7 +165,7 @@ function readModelActionAllowed() {
 function guardReadModelAction(event) {
   if (!state.readModelStale && state.financialDataConfirmed && state.membershipDataConfirmed) return;
   const target = event.target?.closest?.(
-    "#checkinBtn,#submitWithdraw,#submitExchange,#depositVerifyButton,#startMiningBtn,#claimMiningBtn,[data-mining-upgrade],[data-verify],[data-latest-post-open],[data-latest-post-check],[data-upload-screenshot],[data-referral-claim]"
+    "#checkinBtn,#submitWithdraw,#submitExchange,#depositVerifyButton,#startMiningBtn,#claimMiningBtn,[data-mining-upgrade],[data-task-start],[data-verify],[data-latest-post-open],[data-latest-post-check],[data-upload-screenshot],[data-referral-claim]"
   );
   if (!target) return;
   event.preventDefault();
@@ -977,6 +978,7 @@ function applyCachedReadModel(entry) {
   const tasks = entry.tasks || {};
   state.tasks = Array.isArray(tasks.tasks) ? tasks.tasks : [];
   state.completions = Array.isArray(tasks.completions) ? tasks.completions : [];
+  state.taskSession = tasks.taskSession || state.taskSession || null;
   latestPostOpenedTaskIds.clear();
   latestPostOpenedAt.clear();
   (Array.isArray(tasks.latestPostStates) ? tasks.latestPostStates : []).forEach(item => {
@@ -1235,6 +1237,7 @@ async function loadTasks({ force = false } = {}) {
     tasksLoadError = null;
     state.tasks = Array.isArray(data?.tasks) ? data.tasks : [];
     state.completions = Array.isArray(data?.completions) ? data.completions : [];
+    state.taskSession = data?.taskSession || null;
     latestPostOpenedTaskIds.clear();
     latestPostOpenedAt.clear();
     (Array.isArray(data?.latestPostStates) ? data.latestPostStates : []).forEach(item => {
@@ -1497,7 +1500,69 @@ function openTaskLinkOnly(url) {
 }
 window.openTaskLinkOnly = openTaskLinkOnly;
 
+let taskSequenceTimer = null;
+function taskSessionFor(id) {
+  return state.taskSession && String(state.taskSession.task) === String(id) ? state.taskSession : null;
+}
+function taskSessionLockedByOther(id) {
+  return Boolean(state.taskSession?.task && String(state.taskSession.task) !== String(id) && state.taskSession.state !== "idle");
+}
+function taskSequenceRemaining() {
+  const until = Date.parse(state.taskSession?.cooldownUntil || "");
+  return Number.isFinite(until) ? until - (Date.now() + state.tasksServerOffsetMs) : 0;
+}
+function startTaskSequenceTimer() {
+  clearInterval(taskSequenceTimer);
+  if (!state.taskSession?.task) return;
+  const tick = () => {
+    const button = Array.from(document.querySelectorAll("[data-task-sequence-cooldown]"))
+      .find(item => String(item.dataset.taskSequenceCooldown) === String(state.taskSession.task));
+    const remaining = taskSequenceRemaining();
+    if (button && remaining > 0) {
+      button.textContent = t("task_sequence_available_in", { time: formatCountdown(remaining) });
+      return;
+    }
+    if (remaining <= 0 && state.activeTab === "tasks") renderTasks();
+    if (!document.querySelector("[data-task-sequence-cooldown]")) {
+      clearInterval(taskSequenceTimer);
+      taskSequenceTimer = null;
+    }
+  };
+  tick();
+  taskSequenceTimer = setInterval(tick, 1000);
+}
+
+async function startTaskSequence(taskId) {
+  if (!readModelActionAllowed()) return;
+  if (taskSessionLockedByOther(taskId)) {
+    toast(t("task_locked_by_other"), "warning");
+    return;
+  }
+  const button = findByData("[data-task-start]", "taskStart", taskId);
+  if (button) { button.disabled = true; button.textContent = t("task_sequence_starting"); }
+  try {
+    const result = await api(`/api/tasks/${encodeURIComponent(taskId)}/start`, { method: "POST" });
+    state.taskSession = result.taskSession || null;
+    haptic("selection");
+    toast(t("task_sequence_started"), "success");
+    renderTasks();
+    startTaskSequenceTimer();
+  } catch (error) {
+    haptic("error");
+    if (error?.taskSession) state.taskSession = error.taskSession;
+    toast(translateServerMessage(error.code, error.message), "warning");
+    renderTasks();
+  }
+}
+window.startTaskSequence = startTaskSequence;
+
 document.addEventListener("click", event => {
+  const startButton = event.target?.closest?.("[data-task-start]");
+  if (startButton) {
+    event.preventDefault();
+    void startTaskSequence(startButton.dataset.taskStart);
+    return;
+  }
   const referralButton = event.target?.closest?.("[data-referral-claim]");
   if (referralButton) {
     event.preventDefault();
@@ -1955,6 +2020,9 @@ function renderTasks() {
         const taskTitle = task.taskKind === "bio_link" ? t("bio_link_task_title") : task.title;
         const taskDescription = task.taskKind === "bio_link" ? t("bio_link_task_desc") : task.description;
         const safeUrl = safeTaskHttpUrl(task.url).replaceAll("'", "\\'");
+        const activeTaskSession = taskSessionFor(task._id);
+        const lockedByOtherTask = taskSessionLockedByOther(task._id);
+        const sequenceRemaining = activeTaskSession ? taskSequenceRemaining() : 0;
         let actionHtml;
 
         if (task.taskKind === "vip_activation") {
@@ -2016,6 +2084,14 @@ function renderTasks() {
               ${safeUrl ? `<button class="taskAction" data-task-open-url="${escapeHTML(safeUrl)}" style="background:var(--surface-3);color:var(--text)">${t("task_action_open")}</button>` : ""}
               <button type="button" class="taskAction" data-verify="${escapeHTML(task._id)}">${t("task_action_verify")}</button>
             </div>`;
+        }
+
+        if (lockedByOtherTask && status !== "approved") {
+          actionHtml = `<button class="taskAction pending taskSequenceLocked" disabled>🔒 ${t("task_locked_short")}</button>`;
+        } else if (activeTaskSession && sequenceRemaining > 0) {
+          actionHtml = `<button class="taskAction pending" data-task-sequence-cooldown="${escapeHTML(String(task._id))}" disabled>${t("task_sequence_available_in", { time: formatCountdown(sequenceRemaining) })}</button>`;
+        } else if (!activeTaskSession && status !== "approved" && status !== "pending" && task.taskKind !== "vip_activation") {
+          actionHtml = `<button type="button" class="taskAction" data-task-start="${escapeHTML(String(task._id))}">${t("task_action_start")}</button>`;
         }
 
         const hint = status === "todo" || task.verifyType === "latest_post" ? taskHints[task._id] : null;
