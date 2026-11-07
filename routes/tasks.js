@@ -31,35 +31,6 @@ const {
 // احراز هویت تلگرام + بررسی عضویت فعلی در کانال‌های اجباری (روی هر درخواست محافظت‌شده)
 const { withMembership } = require('../utils/membership');
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
-const TASK_START_COOLDOWN_MS = 3 * 60 * 1000;
-
-function taskSequenceError(code, message, status = 409, extra = {}) {
-  return Object.assign(new Error(message), { code, status }, extra);
-}
-
-function publicTaskSession(user) {
-  const session = user?.taskSession;
-  if (!session?.task || session.state === 'idle') return null;
-  return { task: String(session.task), state: session.state, startedAt: session.startedAt || null, cooldownUntil: session.cooldownUntil || null, pendingAt: session.pendingAt || null };
-}
-
-async function requireTaskSession(userId, taskId, session, { cooldownExpired = false } = {}) {
-  let query = User.findById(userId);
-  if (session) query = query.session(session);
-  const user = await query;
-  const active = user?.taskSession;
-  if (!user || !active?.task || String(active.task) !== String(taskId) || active.state === 'idle') {
-    throw taskSequenceError('TASK_SEQUENCE_REQUIRED', 'ابتدا همین Task را Start کنید؛ تا تکمیل آن Task دیگری قابل اجرا نیست.');
-  }
-  if (cooldownExpired && active.cooldownUntil && active.cooldownUntil > new Date()) {
-    throw taskSequenceError('TASK_COOLDOWN_ACTIVE', 'این Task هنوز در Cooldown است.', 429, { nextAvailableAt: active.cooldownUntil });
-  }
-  return user;
-}
-
-async function clearTaskSession(userId, taskId, session) {
-  await User.updateOne({ _id: userId, 'taskSession.task': taskId }, { $set: { taskSession: { state: 'idle', task: null, startedAt: null, cooldownUntil: null, pendingAt: null } } }, { session });
-}
 const screenshotUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 0 },
@@ -150,81 +121,16 @@ router.get('/', auth, async (req, res) => {
       ? await LatestPostEngagementState.find({ user: req.dbUser._id, task: { $in: latestPostTaskIds } })
         .select('task openedAt').lean()
       : [];
-    const effectiveTaskSession = publicTaskSession(req.dbUser) || (pendingScreenshotTaskIds[0] ? {
-      task: String(pendingScreenshotTaskIds[0]), state: 'pending', startedAt: null, cooldownUntil: null, pendingAt: null
-    } : null);
     res.json({
       success: true,
       tasks,
       completions,
-      taskSession: effectiveTaskSession,
       latestPostStates: latestPostStates.map(item => ({ task: String(item.task), openedAt: item.openedAt })),
       serverNow: Date.now()
     });
   } catch (error) {
     console.error('GET /api/tasks failed:', error);
     res.status(500).json({ success: false, message: 'خطایی در بارگذاری تسک‌ها رخ داد.', code: 'SERVER_ERROR' });
-  }
-});
-
-/** POST /api/tasks/:id/start — reserves the user's single sequential task slot. */
-router.post('/:id/start', auth, sensitiveRateLimit('task'), async (req, res) => {
-  try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(404).json({ success: false, code: 'TASK_NOT_FOUND', message: 'تسک پیدا نشد.' });
-    }
-    const task = await Task.findOne({
-      _id: req.params.id,
-      isActive: true,
-      $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }]
-    }).select('_id');
-    if (!task) return res.status(404).json({ success: false, code: 'TASK_NOT_FOUND', message: 'تسک پیدا نشد.' });
-
-    const existingCompletion = await TaskCompletion.findOne({ user: req.dbUser._id, task: task._id }).select('status').lean();
-    if (existingCompletion?.status === 'approved') {
-      return res.status(409).json({ success: false, code: 'ALREADY_DONE', message: 'این Task قبلاً تکمیل شده است.' });
-    }
-    if (existingCompletion?.status === 'pending') {
-      return res.status(409).json({ success: false, code: 'SUBMISSION_PENDING', message: 'این Task در انتظار بررسی است.' });
-    }
-    const anyPending = await TaskCompletion.findOne({ user: req.dbUser._id, status: 'pending' }).select('task').lean();
-    if (anyPending && String(anyPending.task) !== String(task._id)) {
-      return res.status(409).json({ success: false, code: 'TASK_LOCKED', message: 'یک Task در انتظار بررسی است؛ ابتدا نتیجه آن را دریافت کنید.', taskSession: { task: String(anyPending.task), state: 'pending', startedAt: null, cooldownUntil: null, pendingAt: null }, serverNow: Date.now() });
-    }
-
-    const now = new Date();
-    const current = await User.findById(req.dbUser._id).select('taskSession').lean();
-    if (current?.taskSession?.task && String(current.taskSession.task) === String(task._id) && current.taskSession.state !== 'idle') {
-      return res.json({ success: true, taskSession: publicTaskSession(current), cooldownMs: TASK_START_COOLDOWN_MS, serverNow: Date.now(), alreadyStarted: true });
-    }
-    const cooldownUntil = new Date(now.getTime() + TASK_START_COOLDOWN_MS);
-    const started = await User.findOneAndUpdate(
-      {
-        _id: req.dbUser._id,
-        $or: [
-          { 'taskSession.task': null },
-          { 'taskSession.task': { $exists: false } },
-          { 'taskSession.state': 'idle' },
-          { 'taskSession.task': task._id }
-        ]
-      },
-      { $set: {
-        'taskSession.task': task._id,
-        'taskSession.state': 'cooldown',
-        'taskSession.startedAt': now,
-        'taskSession.cooldownUntil': cooldownUntil,
-        'taskSession.pendingAt': null
-      } },
-      { new: true, runValidators: true }
-    );
-    if (!started) {
-      const current = await User.findById(req.dbUser._id).select('taskSession').lean();
-      return res.status(409).json({ success: false, code: 'TASK_LOCKED', message: 'یک Task دیگر در حال انجام است؛ ابتدا آن را تکمیل و Claim کنید.', taskSession: publicTaskSession(current), serverNow: Date.now() });
-    }
-    return res.json({ success: true, taskSession: publicTaskSession(started), cooldownMs: TASK_START_COOLDOWN_MS, serverNow: Date.now() });
-  } catch (error) {
-    console.error(`POST /api/tasks/${req.params.id}/start failed:`, error);
-    return res.status(500).json({ success: false, code: 'SERVER_ERROR', message: 'شروع Task انجام نشد؛ دوباره تلاش کنید.' });
   }
 });
 
@@ -250,7 +156,6 @@ router.post('/:id/submission', auth, sensitiveRateLimit('task'), parseScreenshot
     }
 
     const now = new Date();
-    await requireTaskSession(req.dbUser._id, task._id, null, { cooldownExpired: true });
     const existing = await TaskCompletion.findOne({ user: req.dbUser._id, task: task._id });
     if (existing && existing.status !== 'rejected') {
       return res.status(409).json({
@@ -293,10 +198,6 @@ router.post('/:id/submission', auth, sensitiveRateLimit('task'), parseScreenshot
           submittedAt: now
         }).save();
       }
-      await User.updateOne(
-        { _id: req.dbUser._id, 'taskSession.task': task._id },
-        { $set: { 'taskSession.state': 'pending', 'taskSession.pendingAt': now } }
-      );
     } catch (error) {
       if (error?.code === 11000) {
         return res.status(409).json({ success: false, message: 'برای این تسک قبلاً submission ثبت شده است.', code: 'SUBMISSION_DUPLICATE' });
@@ -311,7 +212,6 @@ router.post('/:id/submission', auth, sensitiveRateLimit('task'), parseScreenshot
     });
   } catch (error) {
     console.error(`POST /api/tasks/${req.params.id}/submission failed:`, error);
-    if (error?.status) return res.status(error.status).json({ success: false, code: error.code, message: error.message, nextAvailableAt: error.nextAvailableAt || null });
     return res.status(500).json({ success: false, message: 'ارسال اسکرین‌شات انجام نشد.', code: 'SERVER_ERROR' });
   }
 });
@@ -331,7 +231,6 @@ router.post('/:id/engagement/open', auth, sensitiveRateLimit('task'), async (req
     if (!task.isActive || (task.expiresAt && task.expiresAt <= now)) {
       return res.status(409).json({ success: false, code: 'TASK_INACTIVE', message: 'این Task فعال نیست.' });
     }
-    await requireTaskSession(user._id, task._id, null, { cooldownExpired: true });
     if (task.isSponsored || !task.url || !Number.isFinite(task.reward) || task.reward <= 0) {
       return res.status(503).json({ success: false, code: 'TASK_SETUP_INCOMPLETE', message: 'تنظیمات این Task کامل نیست.' });
     }
@@ -365,11 +264,6 @@ router.post('/:id/engagement/open', auth, sensitiveRateLimit('task'), async (req
       if (!openState) throw error;
     }
 
-    await User.updateOne(
-      { _id: user._id, 'taskSession.task': task._id },
-      { $set: { 'taskSession.state': 'pending', 'taskSession.pendingAt': now } }
-    );
-
     return res.json({
       success: true,
       status: 'WAITING_FOR_CHECK',
@@ -378,7 +272,6 @@ router.post('/:id/engagement/open', auth, sensitiveRateLimit('task'), async (req
     });
   } catch (error) {
     console.error(`POST /api/tasks/${req.params.id}/engagement/open failed:`, error);
-    if (error?.status) return res.status(error.status).json({ success: false, code: error.code, message: error.message, nextAvailableAt: error.nextAvailableAt || null });
     return res.status(500).json({ success: false, code: 'SERVER_ERROR', message: 'ثبت Open Task انجام نشد.' });
   }
 });
@@ -415,8 +308,6 @@ router.post('/:id/engagement/check', auth, sensitiveRateLimit('claim'), async (r
       if (currentTask.isSponsored || !Number.isFinite(currentTask.reward) || currentTask.reward <= 0) {
         throw fail('TASK_SETUP_INCOMPLETE', 'تنظیمات این Task کامل نیست.');
       }
-
-      await requireTaskSession(user._id, currentTask._id, session, { cooldownExpired: true });
 
       const completion = await TaskCompletion.findOne({ user: user._id, task: currentTask._id }).session(session);
       if (isLatestPostCooldownActive(completion?.nextAvailableAt, transactionNow)) {
@@ -505,8 +396,6 @@ router.post('/:id/engagement/check', auth, sensitiveRateLimit('claim'), async (r
         throw fail('TASK_CLAIM_CONFLICT', 'این چرخه قبلاً در Transaction ثبت شده است؛ Reward دوباره پرداخت نشد.');
       }
 
-      await clearTaskSession(user._id, currentTask._id, session);
-
       return {
         points: rewardedUser.points,
         reward: currentTask.reward,
@@ -552,8 +441,6 @@ async function claimBioLinkTask(req, res, task) {
     .map(normalizeTelegramUsername).filter(Boolean).forEach(username => allowed.add(username));
   if (!allowed.size) return fail(503, 'BIO_LINK_TARGETS_NOT_CONFIGURED', 'لینک رسمی ربات یا کانال برای این تسک پیکربندی نشده است.');
 
-  await requireTaskSession(req.dbUser._id, task._id, null, { cooldownExpired: true });
-
   let profile;
   let profileTimeout;
   try {
@@ -577,7 +464,6 @@ async function claimBioLinkTask(req, res, task) {
       const currentTask = await Task.findOne({ _id: task._id, taskKind: BIO_LINK_TASK_KIND, isActive: true }).session(session);
       const now = new Date();
       if (!currentTask) throw Object.assign(new Error('این تسک فعال نیست.'), { status: 409, code: 'TASK_INACTIVE' });
-      await requireTaskSession(req.dbUser._id, currentTask._id, session, { cooldownExpired: true });
       if (Number(currentTask.reward) !== BIO_LINK_REWARD) throw Object.assign(new Error('تنظیم پاداش تسک نامعتبر است.'), { status: 503, code: 'TASK_SETUP_INCOMPLETE' });
       const completion = await TaskCompletion.findOne({ user: req.dbUser._id, task: currentTask._id }).session(session);
       if (completion?.nextAvailableAt && new Date(completion.nextAvailableAt).getTime() > now.getTime()) {
@@ -615,7 +501,6 @@ async function claimBioLinkTask(req, res, task) {
         sourceId: buildRecurringTaskSourceId(currentTask._id, req.dbUser._id, cycle), session
       });
       if (!ledgerResult.created) throw Object.assign(new Error('این دوره قبلاً پرداخت شده است.'), { status: 409, code: 'TASK_CLAIM_CONFLICT' });
-      await clearTaskSession(req.dbUser._id, currentTask._id, session);
       return { points: rewarded.points, reward: BIO_LINK_REWARD, nextAvailableAt, serverNow: now.getTime(), recurringClaimCount: cycle };
     });
     maybeAwardReferralBonus(req.dbUser._id).catch(error => console.error('Referral bonus check failed:', error));
@@ -656,8 +541,6 @@ router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) =>
       return res.status(409).json({ success: false, message: 'این نوع تسک هنوز برای ارسال و بررسی Proof فعال نشده است.', code: 'MANUAL_TASK_DISABLED' });
     }
 
-    await requireTaskSession(u._id, task._id, null, { cooldownExpired: true });
-
     const existing = await TaskCompletion.findOne({ user: u._id, task: task._id });
     if (existing && existing.status !== 'rejected') {
       return res.status(400).json({ success: false, message: 'این تسک قبلاً انجام شده است.', code: 'ALREADY_DONE' });
@@ -694,7 +577,6 @@ router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) =>
       if (!Number.isFinite(currentTask.reward) || currentTask.reward <= 0) {
         throw Object.assign(new Error('Task reward configuration is invalid.'), { code: 'TASK_SETUP_INCOMPLETE' });
       }
-      await requireTaskSession(u._id, currentTask._id, session, { cooldownExpired: true });
 
       const currentCompletion = await TaskCompletion.findOne({ user: u._id, task: currentTask._id }).session(session);
       if (currentCompletion && currentCompletion.status !== 'rejected') {
@@ -759,7 +641,6 @@ router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) =>
         error.code = 'ALREADY_DONE';
         throw error;
       }
-      await clearTaskSession(u._id, currentTask._id, session);
       return { points: rewarded.points, reward: currentTask.reward };
     });
 
@@ -779,7 +660,6 @@ router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) =>
     });
   } catch (error) {
     console.error(`POST /api/tasks/${req.params.id}/claim failed:`, error);
-    if (error?.status) return res.status(error.status).json({ success: false, code: error.code, message: error.message, nextAvailableAt: error.nextAvailableAt || null });
     if (error.code === 'ALREADY_DONE' || error.code === 'TASK_FULL' || error?.code === 11000) {
       return res.status(409).json({ success: false, message: error.message || 'این تسک قبلاً ثبت شده است؛ وضعیت را تازه کنید.', code: error.code === 11000 ? 'ALREADY_DONE' : error.code });
     }

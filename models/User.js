@@ -42,16 +42,6 @@ const userSchema = new mongoose.Schema(
     miningBoostUntil: { type: Date, default: null },
     miningBoostMultiplier: { type: Number, default: 1, min: 1, max: 2 },
 
-    // Sequential Tasks session. Optional so legacy users and records remain readable
-    // without a migration; only the active task is serialized here.
-    taskSession: {
-      task: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
-      state: { type: String, enum: ['cooldown', 'pending', 'idle'], default: 'idle' },
-      startedAt: { type: Date, default: null },
-      cooldownUntil: { type: Date, default: null },
-      pendingAt: { type: Date, default: null }
-    },
-
 
     referralCode: { type: String, required: true, unique: true, index: true },
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

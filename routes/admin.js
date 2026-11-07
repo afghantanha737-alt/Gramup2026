@@ -834,11 +834,6 @@ router.post('/task-submissions/:id/approve', async (req, res) => {
         { $set: { revenueUsd, costUsd } },
         { session }
       );
-      await User.updateOne(
-        { _id: submission.user, 'taskSession.task': task._id },
-        { $set: { taskSession: { state: 'idle', task: null, startedAt: null, cooldownUntil: null, pendingAt: null } } },
-        { session }
-      );
       return { reward, points: user.points, taskTitle: task.title, userId: user._id };
     });
 
@@ -881,10 +876,6 @@ router.post('/task-submissions/:id/reject', async (req, res) => {
       code: exists ? 'SUBMISSION_NOT_PENDING' : 'SUBMISSION_NOT_FOUND'
     });
   }
-  await User.updateOne(
-    { _id: submission.user, 'taskSession.task': submission.task },
-    { $set: { taskSession: { state: 'idle', task: null, startedAt: null, cooldownUntil: null, pendingAt: null } } }
-  );
   res.json({ success: true, status: 'rejected' });
   recordAdminLog({
     actor: req.adminActor,
