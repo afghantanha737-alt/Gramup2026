@@ -18,10 +18,15 @@ assert.match(tasksBranch, /renderTasks\(\)/);
 assert.match(app, /function setupNavigation\(\)/);
 assert.match(app, /\$\$\("#tabbar \[data-tab\]"\)\.forEach/);
 assert.match(app, /button\.addEventListener\("click"/);
-assert.match(app, /const validTabs = \["home", "mine", "tasks", "vip", "wallet", "profile"\]/);
-for (const tab of ['home', 'tasks', 'mine', 'vip', 'wallet', 'profile']) {
-  assert.match(html, new RegExp(`data-tab="${tab}"`), `missing bottom-nav tab ${tab}`);
+assert.match(app, /if \(tab === "mine"\) tab = "vip"/);
+assert.match(app, /const validTabs = \["home", "tasks", "vip", "wallet", "profile"\]/);
+for (const tab of ['home', 'tasks', 'vip', 'wallet', 'profile']) {
+  assert.match(html, new RegExp(`data-tab="${tab}"`), `missing original bottom-nav tab ${tab}`);
 }
+assert.doesNotMatch(html, /data-tab="mine"/, 'the extra Mine tab must be removed');
+assert.strictEqual((html.match(/data-tab="(?:home|tasks|vip|wallet|profile)"/g) || []).length, 5);
+assert.match(dispatcher, /} else if \(tab === "vip"\)/);
+assert.doesNotMatch(dispatcher, /tab === "mine"/, 'there should be no standalone Mine dispatcher branch');
 assert.match(app, /if \(!state\.tasks\.length && tasksLoadError && !isInviteSection\)/);
 assert.match(html, /app\.js\?v=/);
-console.log('ALL PASS — delegated tab clicks, all tab routes, non-blocking Home/Tasks rendering and loading state');
+console.log('ALL PASS — original five tabs retained; legacy Mine requests open the VIP & Live Mining hub');

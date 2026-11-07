@@ -80,6 +80,9 @@ const state = {
   vipLoading: false,
   vipError: "",
   vipServerOffsetMs: 0,
+  vipMining: null,
+  vipMiningLoading: false,
+  vipMiningError: "",
   mining: null,
   miningLoading: false,
   miningError: "",
@@ -120,7 +123,7 @@ function updateReadModelFreshness() {
   const protectedSelectors = [
     "#checkinBtn", "#submitWithdraw", "#submitExchange", "#depositVerifyButton", "#startMiningBtn", "#claimMiningBtn", "[data-mining-upgrade]",
     "[data-verify]", "[data-latest-post-open]", "[data-latest-post-check]",
-    "[data-upload-screenshot]", "[data-referral-claim]", "[data-vip-claim]", ".vipClaimAll"
+    "[data-upload-screenshot]", "[data-referral-claim]"
   ].join(",");
   document.querySelectorAll(protectedSelectors).forEach(element => {
     if (state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed) {
@@ -161,7 +164,7 @@ function readModelActionAllowed() {
 function guardReadModelAction(event) {
   if (!state.readModelStale && state.financialDataConfirmed && state.membershipDataConfirmed) return;
   const target = event.target?.closest?.(
-    "#checkinBtn,#submitWithdraw,#submitExchange,#depositVerifyButton,#startMiningBtn,#claimMiningBtn,[data-mining-upgrade],[data-verify],[data-latest-post-open],[data-latest-post-check],[data-upload-screenshot],[data-referral-claim],[data-vip-claim],.vipClaimAll"
+    "#checkinBtn,#submitWithdraw,#submitExchange,#depositVerifyButton,#startMiningBtn,#claimMiningBtn,[data-mining-upgrade],[data-verify],[data-latest-post-open],[data-latest-post-check],[data-upload-screenshot],[data-referral-claim]"
   );
   if (!target) return;
   event.preventDefault();
@@ -293,7 +296,7 @@ function escapeHTML(value) {
 /* ================= FORMATTERS ================= */
 function formatPoints(value) {
   const amount = Number(value) || 0;
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Number(amount.toFixed(2)));
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(Number(amount.toFixed(6)));
 }
 function formatNumber(value, decimals = 4) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: decimals }).format(Number(value) || 0);
@@ -528,10 +531,12 @@ let navigationSequence = 0;
 async function navigate(tab) {
   const requestId = ++navigationSequence;
   if (tab !== "profile") profileRenderSequence += 1;
-  const validTabs = ["home", "mine", "tasks", "vip", "wallet", "profile"];
+  if (tab === "mine") tab = "vip";
+  const validTabs = ["home", "tasks", "vip", "wallet", "profile"];
   if (!validTabs.includes(tab)) tab = "home";
   clearInterval(countdownInterval);
-  if (tab !== "mine") stopMiningTicker();
+  if (tab !== "vip") stopVipMiningTicker();
+  stopMiningTicker();
   state.activeTab = tab;
   syncReferralTelegramBackButton();
   updateNavigation();
@@ -1101,10 +1106,10 @@ function rerenderActiveUserDataView() {
   else if (state.activeTab === "wallet") renderWallet();
   else if (state.activeTab === "vip") {
     const content = $("#content");
-    if (content) content.innerHTML = state.vipError
-      ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondaryBtn" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
-      : renderProfileVip();
+    if (content) content.innerHTML = renderProfileVip();
     startVipCountdown();
+    startVipMiningTicker();
+    void loadVipMiningStatus({ force: true }).then(tickVipMiningConsole);
   } else if (state.activeTab === "profile") {
     void renderProfile();
   }
@@ -1121,6 +1126,9 @@ async function refreshUserDataOnReturn() {
   userDataReturnRefreshPromise = (async () => {
     try {
       await loadUserData({ force: true });
+      if (state.activeTab === "vip" || (state.activeTab === "profile" && profileView === "vip")) {
+        await loadVipMiningStatus({ force: true });
+      }
       rerenderActiveUserDataView();
     } catch (error) {
       // This is a read-only return refresh; keep the current view on network failure.
@@ -1490,12 +1498,6 @@ function openTaskLinkOnly(url) {
 window.openTaskLinkOnly = openTaskLinkOnly;
 
 document.addEventListener("click", event => {
-  const vipClaimButton = event.target?.closest?.("[data-vip-claim]");
-  if (vipClaimButton) {
-    event.preventDefault();
-    void claimVipReward(vipClaimButton.dataset.vipClaim);
-    return;
-  }
   const referralButton = event.target?.closest?.("[data-referral-claim]");
   if (referralButton) {
     event.preventDefault();
@@ -3554,12 +3556,13 @@ function formatVipCountdown(milliseconds) {
 
 let vipCountdownTimer = null;
 let vipCountdownRefreshPending = false;
-const vipClaimingIds = new Set();
 const vipPurchasingPlanNumbers = new Set();
 let vipSelectedCategory = "starter";
 let vipSubscriptionFilter = "active";
-let vipClaimAllBusy = false;
-let vipClaimAllProgress = { done: 0, total: 0 };
+let vipMiningStatusPromise = null;
+let vipMiningTickerTimer = null;
+let vipMiningSyncTimer = null;
+let vipMiningClaimBusy = false;
 
 function setVipPlanCategory(category) {
   if (!["starter", "pro", "ultimate"].includes(category)) return;
@@ -3582,6 +3585,113 @@ function setVipSubscriptionFilter(filter) {
   }
 }
 window.setVipSubscriptionFilter = setVipSubscriptionFilter;
+
+function isVipMiningHubVisible() {
+  return state.activeTab === "vip" || (state.activeTab === "profile" && profileView === "vip");
+}
+
+async function loadVipMiningStatus({ force = false } = {}) {
+  if (vipMiningStatusPromise && !force) return vipMiningStatusPromise;
+  state.vipMiningLoading = true;
+  state.vipMiningError = "";
+  const request = (async () => {
+    try {
+      const data = await api("/api/mining/status");
+      const mining = data?.vipMining || data?.mining;
+      if (!mining || !Array.isArray(mining.activeMiners)) throw new Error(t("vip_mining_error"));
+      state.vipMining = mining;
+      const serverNow = Date.parse(mining.serverNow || "");
+      if (Number.isFinite(serverNow)) state.vipServerOffsetMs = serverNow - Date.now();
+      return true;
+    } catch (error) {
+      state.vipMiningError = translateServerMessage(error.code, error.message) || t("vip_mining_error");
+      console.warn("VIP mining status failed:", error);
+      return false;
+    } finally {
+      state.vipMiningLoading = false;
+    }
+  })();
+  let sharedRequest;
+  sharedRequest = request.finally(() => {
+    if (vipMiningStatusPromise === sharedRequest) vipMiningStatusPromise = null;
+  });
+  vipMiningStatusPromise = sharedRequest;
+  return sharedRequest;
+}
+
+function vipMiningLiveValues(nowMs = Date.now() + Number(state.vipServerOffsetMs || 0)) {
+  const mining = state.vipMining || {};
+  const serverNow = Date.parse(mining.serverNow || "");
+  const statusTime = Number.isFinite(serverNow) ? serverNow : nowMs;
+  const activeMiners = Array.isArray(mining.activeMiners) ? mining.activeMiners : [];
+  let accrued = Math.max(0, Number(mining.pendingCompletedPoints) || 0);
+  let dailyRate = 0;
+  let activeMinerCount = 0;
+  for (const miner of activeMiners) {
+    const endAt = Date.parse(miner.endAt || "");
+    if (!Number.isFinite(endAt) || nowMs >= endAt) continue;
+    const rate = Math.max(0, Number(miner.dailyRate) || 0);
+    const nextAccrualAt = Date.parse(miner.nextAccrualAt || "");
+    const tickerStart = Number.isFinite(nextAccrualAt) ? Math.max(statusTime, nextAccrualAt) : statusTime;
+    const liveSeconds = Math.max(0, (Math.min(nowMs, endAt) - tickerStart) / 1000);
+    accrued += Math.max(0, Number(miner.accruedPoints) || 0) + rate * liveSeconds / 86400;
+    dailyRate += rate;
+    activeMinerCount += 1;
+  }
+  return {
+    accrued: Number(accrued.toFixed(6)),
+    activeMinerCount,
+    dailyRate,
+    hourlyRate: dailyRate / 24,
+    perSecondRate: dailyRate / 86400
+  };
+}
+
+function tickVipMiningConsole() {
+  if (!isVipMiningHubVisible() || !state.vipMining) return;
+  const live = vipMiningLiveValues();
+  const earned = document.querySelector("[data-vip-mining-earned]");
+  const count = document.querySelector("[data-vip-miner-count]");
+  const daily = document.querySelector("[data-vip-mining-daily]");
+  const hourly = document.querySelector("[data-vip-mining-hourly]");
+  const perSecond = document.querySelector("[data-vip-mining-second]");
+  const claimAmount = document.querySelector("[data-vip-mining-claim-amount]");
+  const claimButton = document.querySelector("[data-vip-mining-claim]");
+  if (earned) earned.textContent = formatNumber(live.accrued, 6);
+  if (count) count.textContent = formatNumber(live.activeMinerCount);
+  if (daily) daily.textContent = `+${formatNumber(live.dailyRate, 2)} UP/day`;
+  if (hourly) hourly.textContent = `+${formatNumber(live.hourlyRate, 4)} UP/hr`;
+  if (perSecond) perSecond.textContent = `+${formatNumber(live.perSecondRate, 6)} UP/s`;
+  if (claimAmount) claimAmount.textContent = `${formatNumber(live.accrued, 6)} UP`;
+  if (claimButton) claimButton.disabled = vipMiningClaimBusy || live.accrued <= 0 || state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed;
+}
+
+function stopVipMiningTicker() {
+  if (vipMiningTickerTimer) clearInterval(vipMiningTickerTimer);
+  if (vipMiningSyncTimer) clearInterval(vipMiningSyncTimer);
+  vipMiningTickerTimer = null;
+  vipMiningSyncTimer = null;
+}
+
+function startVipMiningTicker() {
+  stopVipMiningTicker();
+  if (!isVipMiningHubVisible()) return;
+  tickVipMiningConsole();
+  vipMiningTickerTimer = setInterval(tickVipMiningConsole, 1000);
+  vipMiningSyncTimer = setInterval(() => {
+    void loadVipMiningStatus({ force: true }).then(tickVipMiningConsole);
+  }, 60000);
+}
+
+async function retryVipMiningStatus() {
+  await loadVipMiningStatus({ force: true });
+  if (!isVipMiningHubVisible()) return;
+  const content = $("#content");
+  if (content) content.innerHTML = renderProfileVip();
+  startVipCountdown();
+  startVipMiningTicker();
+}
+window.retryVipMiningStatus = retryVipMiningStatus;
 
 function stopVipCountdown() {
   if (vipCountdownTimer) clearInterval(vipCountdownTimer);
@@ -3621,13 +3731,37 @@ function startVipCountdown() {
   vipCountdownTimer = setInterval(tickVipCountdowns, 1000);
 }
 
+function renderVipMiningConsole() {
+  if (!state.vipMining) {
+    const message = state.vipMiningLoading ? t("vip_mining_loading") : escapeHTML(state.vipMiningError || t("vip_mining_error"));
+    return `<section class="vipMiningConsole vipMiningConsole--empty" role="status" aria-live="polite"><div class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div><span class="vipMiningKicker">GRAMUP VIP</span><h2>${t("vip_mining_title")}</h2></div></div><p>${message}</p>${state.vipMiningLoading ? "" : `<button class="vipMiningRetry" type="button" onclick="retryVipMiningStatus()">${t("vip_mining_retry")}</button>`}</section>`;
+  }
+  const mining = state.vipMining;
+  const live = vipMiningLiveValues();
+  const miners = (mining.activeMiners || []).map(miner => `
+    <div class="vipMiningMinerRow"><span class="vipMiningMinerMark"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span><span class="vipMiningMinerName">${t("vip_mining_miner", { n: formatPoints(miner.planNumber) })}</span><span class="vipMiningMinerRate">+${formatNumber(miner.dailyRate, 2)} UP/day</span></div>`).join("");
+  const noMiners = live.activeMinerCount === 0;
+  return `<section class="vipMiningConsole" aria-label="${escapeHTML(t("vip_mining_title"))}">
+    <header class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div class="vipMiningHeading"><span class="vipMiningKicker">GRAMUP VIP</span><h2>${t("vip_mining_title")}</h2><p>${t("vip_mining_subtitle")}</p></div><span class="vipMiningLiveBadge"><i aria-hidden="true"></i>${t("vip_mining_live")}</span></header>
+    <div class="vipMiningCounter"><div class="vipMiningCounterLabel">${t("vip_mining_accrued")}</div><div class="vipMiningCounterValue"><strong data-vip-mining-earned>${formatNumber(live.accrued, 6)}</strong><span>UP</span><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div></div>
+    <div class="vipMiningMetrics">
+      <article class="vipMiningMetric"><span>${t("vip_mining_active_miners")}</span><b data-vip-miner-count>${formatNumber(live.activeMinerCount)}</b></article>
+      <article class="vipMiningMetric"><span>${t("vip_mining_daily_rate")}</span><b data-vip-mining-daily>+${formatNumber(live.dailyRate, 2)} UP/day</b></article>
+      <article class="vipMiningMetric"><span>${t("vip_mining_hourly_rate")}</span><b data-vip-mining-hourly>+${formatNumber(live.hourlyRate, 4)} UP/hr</b></article>
+    </div>
+    <div class="vipMiningSecondRate"><span>${t("vip_mining_per_second_rate")}</span><b data-vip-mining-second>+${formatNumber(live.perSecondRate, 6)} UP/s</b></div>
+    ${noMiners ? `<div class="vipMiningEmpty">${t("vip_mining_empty")}</div>` : `<div class="vipMiningMinerList">${miners}</div>`}
+    <button class="vipMiningClaim" type="button" data-vip-mining-claim onclick="claimVipMining()" ${vipMiningClaimBusy || live.accrued <= 0 || state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed ? "disabled" : ""}><span>${vipMiningClaimBusy ? t("vip_mining_claiming") : t("vip_mining_claim")}</span><b data-vip-mining-claim-amount>${formatNumber(live.accrued, 6)} UP</b></button>
+    <p class="vipMiningFootnote">${t("vip_mining_precision_note")}</p>
+  </section>`;
+}
+
 function renderProfileVip() {
   const plans = state.vipPlans || [];
   const subscriptions = state.vipSubscriptions || [];
   const activeSubscriptions = subscriptions.filter(subscription => subscription.status === "active");
   const expiredSubscriptions = subscriptions.filter(subscription => subscription.status !== "active");
   const filteredSubscriptions = vipSubscriptionFilter === "active" ? activeSubscriptions : expiredSubscriptions;
-  const claimableSubscriptions = activeSubscriptions.filter(subscription => subscription.canClaim === true);
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
@@ -3656,6 +3790,7 @@ function renderProfileVip() {
     const dailyAveragePoints = plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays));
     const isNewVipPolicy = plan.policyVersion === "v2_100d";
     const dailyTotalPayoutPoints = Number(plan.dailyTotalPayoutPoints || 0);
+    const miningDailyRate = Number(plan.miningDailyRate ?? plan.dailyTotalPayoutPoints ?? dailyAveragePoints) || 0;
     const totalReceivedPoints = Number(plan.totalReceivedPoints || 0);
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
@@ -3671,6 +3806,7 @@ function renderProfileVip() {
           <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(plan.durationDays) })}</b></div>
         </div>
         <div class="vipPlanReward"><span>${t(isNewVipPolicy ? "vip_total_received_label" : "vip_total_reward_label")}</span><b>${upRewardMarkup(isNewVipPolicy ? totalReceivedPoints : totalRewardPoints, false)}</b></div>
+        <div class="vipPlanMiningRate"><span>${t("vip_mining_package_rate")}</span><b>+${formatNumber(miningDailyRate, 2)} UP/day <small>+${formatNumber(miningDailyRate / 86400, 6)} UP/s</small></b></div>
         ${isNewVipPolicy ? "" : `<div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>`}
         <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})">${isPurchasing ? t("vip_buying") : buttonLabel}</button>
       </article>`;
@@ -3680,33 +3816,32 @@ function renderProfileVip() {
     const isActive = subscription.status === "active";
     const isCancelled = subscription.status === "cancelled";
     const statusText = isActive ? t("vip_status_active") : isCancelled ? t("vip_status_cancelled") : t("vip_status_completed");
-    const nextReward = formatPoints(subscription.nextRewardPoints || 0);
-    let claimMarkup = "";
-    if (isActive && subscription.canClaim) {
-      const claiming = vipClaimingIds.has(subscription.id) || vipClaimAllBusy;
-      claimMarkup = `<button type="button" class="primary" data-vip-claim="${escapeHTML(subscription.id)}" ${claiming ? "disabled" : ""}>${claiming ? t("vip_loading") : t("vip_claim_button", { n: nextReward })}</button>`;
-    } else if (isActive && subscription.nextClaimAt) {
-      const claimTime = Date.parse(subscription.nextClaimAt);
-      const serverNow = Date.now() + Number(state.vipServerOffsetMs || 0);
-      const hasClaimed = Number(subscription.claimsCompleted) > 0;
-      const label = hasClaimed ? `<div class="cardSubtitle">${t("vip_claimed_today")}</div>` : "";
-      claimMarkup = `${label}${claimTime > serverNow ? `<div class="cardSubtitle">${t("vip_claim_next", { time: `<span data-vip-countdown="${escapeHTML(subscription.nextClaimAt)}">${formatVipCountdown(claimTime - serverNow)}</span>` })}</div>` : ""}`;
-    }
+    const claimMarkup = isActive ? `<div class="vipMiningSubscriptionNote">${t("vip_mining_live")}</div>` : "";
     return `
       <article class="vipSubscriptionCard">
         <div class="vipPlanTopline"><div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">◌</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</div></div><span class="badge ${isActive ? "success" : "info"}">${statusText}</span></div>
         <div class="vipSubscriptionGrid">
           <div>${t("vip_days_progress", { done: formatPoints(subscription.daysCompleted), total: formatPoints(subscription.durationDays) })}</div>
           <div>${t("vip_days_remaining", { n: formatPoints(subscription.daysRemaining) })}</div>
-          <div>${t("vip_claim_progress", { claimed: formatPoints(subscription.claimsCompleted), total: formatPoints(subscription.totalClaims) })}</div>
-          ${isActive ? `<div>${t("vip_todays_reward", { n: nextReward })}</div>` : ""}
-          <div>${t("vip_total_earned", { n: formatPoints(subscription.claimedRewardPoints) })}</div>
+          ${isActive ? `<div>${t("vip_mining_daily_rate")}: +${formatNumber(subscription.miningDailyRate, 2)} UP/day</div>` : ""}
+          <div>${t("vip_mining_paid", { n: formatNumber(subscription.miningPaidPoints, 6) })}</div>
           <div>${t("vip_total_reward", { n: formatPoints(subscription.totalRewardPoints) })}</div>
           ${isActive ? `<div>${t("vip_principal_note", { n: formatPoints(subscription.pricePoints) })}</div>` : isCancelled ? "" : `<div>${t("vip_status_completed")}</div>`}
         </div>
         ${claimMarkup}
       </article>`;
   }).join("");
+
+  const vipCatalogMarkup = `
+    <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
+      <div class="vipCatalogHeading"><h3>${t("vip_catalog_title")}</h3><p>${t("vip_intro")}</p></div>
+      <div class="vipPlanTabs" role="tablist" aria-label="${t("vip_tier_tabs_label")}">
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "starter"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('starter')"><span>${t("vip_tier_starter")}</span><small>1–3</small></button>
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "pro"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('pro')"><span>${t("vip_tier_pro")}</span><small>4–7</small></button>
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "ultimate"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('ultimate')"><span>${t("vip_tier_ultimate")}</span><small>8–10</small></button>
+      </div>
+      <div class="vipPlanList" id="vipPlanGrid" role="tabpanel" aria-live="polite">${state.vipError ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondaryBtn" onclick="retryVipPlans()">${t("vip_retry")}</button></div>` : plans.length ? (planCards || `<div class="vipEmptyTier">${t("vip_category_empty")}</div>`) : `<div class="card"><div class="emptyDesc">${t("vip_empty_plans")}</div></div>`}</div>
+    </section>`;
 
   return `
     <style>
@@ -3724,23 +3859,16 @@ function renderProfileVip() {
     <div class="vipRedesign">
     <div class="sectionHeader">
       <button class="sectionMore" type="button" onclick="${state.activeTab === "vip" ? "navigate('home')" : "setProfileView('menu')"}">${t("referral_back")}</button>
-      <h2 class="sectionTitle">${t("vip_title")}</h2><span></span>
+      <h2 class="sectionTitle">${t("vip_hub_title")}</h2><span></span>
     </div>
+    ${renderVipMiningConsole()}
+    ${vipCatalogMarkup}
     <div class="vipHero" aria-label="${t("vip_current_balance")}">
       <div class="vipHeroTop"><div><span class="vipHeroKicker">${t("vip_membership_kicker")}</span><div class="vipBalanceLabel">${t("vip_current_balance")}</div></div><span class="vipHeroIcon" aria-hidden="true">✦</span></div>
       <div class="vipBalanceValue">${tokenIconMarkup()}<strong>${formatPoints(state.points)}</strong><span>UP</span></div>
-      <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_daily_reward_summary")}</span><b>${upRewardMarkup(subscriptions.reduce((sum, item) => sum + (Number(item.nextRewardPoints) || 0), 0), false)}</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
+      <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_mining_daily_rate")}</span><b>${upRewardMarkup(vipMiningLiveValues().dailyRate, false)}</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
     </div>
-    ${subscriptions.length ? `<div class="vipSubscriptionTools" style="display:grid;gap:9px;margin:12px 0"><div class="vipStatusTabs" role="tablist" aria-label="${t("vip_subscription_filters_label")}" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:rgba(4,10,22,.58)"><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "active"}" onclick="setVipSubscriptionFilter('active')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "active" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "active" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "active" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_active")} <b>${formatPoints(activeSubscriptions.length)}</b></button><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "expired"}" onclick="setVipSubscriptionFilter('expired')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "expired" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "expired" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "expired" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_expired")} <b>${formatPoints(expiredSubscriptions.length)}</b></button></div><button type="button" class="vipClaimAll" ${!claimableSubscriptions.length || vipClaimAllBusy || vipClaimingIds.size ? "disabled" : ""} onclick="claimAllVipRewards()" style="width:100%;min-height:43px;padding:10px 14px;border:1px solid rgba(74,222,128,.25);border-radius:13px;background:${claimableSubscriptions.length && !vipClaimAllBusy ? "linear-gradient(135deg,rgba(16,185,129,.18),rgba(34,211,238,.12))" : "rgba(71,85,105,.15)"};color:${claimableSubscriptions.length && !vipClaimAllBusy ? "#a7f3d0" : "#8792a5"};font-size:12px;font-weight:900">${vipClaimAllBusy ? t("vip_claim_all_progress", vipClaimAllProgress) : t("vip_claim_all", { n: formatPoints(claimableSubscriptions.length) })}</button></div>${filteredSubscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t(vipSubscriptionFilter === "active" ? "vip_active_title" : "vip_expired_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t(vipSubscriptionFilter === "active" ? "vip_active_empty" : "vip_expired_empty")}</div></div>`}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
-    <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
-      <div class="vipCatalogHeading"><h3>${t("vip_catalog_title")}</h3><p>${t("vip_intro")}</p></div>
-      <div class="vipPlanTabs" role="tablist" aria-label="${t("vip_tier_tabs_label")}">
-        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "starter"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('starter')"><span>${t("vip_tier_starter")}</span><small>1–3</small></button>
-        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "pro"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('pro')"><span>${t("vip_tier_pro")}</span><small>4–7</small></button>
-        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "ultimate"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('ultimate')"><span>${t("vip_tier_ultimate")}</span><small>8–10</small></button>
-      </div>
-      <div class="vipPlanList" id="vipPlanGrid" role="tabpanel" aria-live="polite">${plans.length ? (planCards || `<div class="vipEmptyTier">${t("vip_category_empty")}</div>`) : `<div class="card"><div class="emptyDesc">${t("vip_empty_plans")}</div></div>`}</div>
-    </section>
+    ${subscriptions.length ? `<div class="vipSubscriptionTools" style="display:grid;gap:9px;margin:12px 0"><div class="vipStatusTabs" role="tablist" aria-label="${t("vip_subscription_filters_label")}" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:rgba(4,10,22,.58)"><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "active"}" onclick="setVipSubscriptionFilter('active')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "active" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "active" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "active" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_active")} <b>${formatPoints(activeSubscriptions.length)}</b></button><button type="button" class="vipStatusTab" role="tab" aria-selected="${vipSubscriptionFilter === "expired"}" onclick="setVipSubscriptionFilter('expired')" style="min-height:38px;padding:7px;border:1px solid ${vipSubscriptionFilter === "expired" ? "rgba(103,232,249,.25)" : "transparent"};border-radius:11px;background:${vipSubscriptionFilter === "expired" ? "rgba(34,211,238,.12)" : "transparent"};color:${vipSubscriptionFilter === "expired" ? "#cffafe" : "#a8aec2"};font-size:11px;font-weight:850">${t("vip_subscription_filter_expired")} <b>${formatPoints(expiredSubscriptions.length)}</b></button></div></div>${filteredSubscriptions.length ? `<h3 class="sectionTitle" style="margin:16px 4px 8px">${t(vipSubscriptionFilter === "active" ? "vip_active_title" : "vip_expired_title")}</h3>${subscriptionCards}` : `<div class="card"><div class="emptyDesc">${t(vipSubscriptionFilter === "active" ? "vip_active_empty" : "vip_expired_empty")}</div></div>`}` : `<div class="card"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div>`}
     </div>
   `;
 }
@@ -3782,7 +3910,7 @@ async function purchaseVipPlan(planNumber) {
     state.points = upBalanceFromResponse(result);
     updateHeader();
     state.vipDataLoaded = false;
-    await loadVipPlans();
+    await Promise.all([loadVipPlans(), loadVipMiningStatus({ force: true })]);
     await renderProfile();
     toast(t("vip_buy_success"), "success");
   } catch (error) {
@@ -3795,84 +3923,44 @@ async function purchaseVipPlan(planNumber) {
 }
 window.purchaseVipPlan = purchaseVipPlan;
 
-async function claimVipReward(subscriptionId, options = {}) {
-  if (!readModelActionAllowed()) return false;
-  if (!subscriptionId || vipClaimingIds.has(subscriptionId) || (vipClaimAllBusy && !options.bulk)) return false;
-  vipClaimingIds.add(subscriptionId);
-  const scope = `vip_claim_${subscriptionId}`;
-  if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") {
-    const content = $("#content");
-    if (content) content.innerHTML = renderProfileVip();
-  }
+async function claimVipMining() {
+  if (!readModelActionAllowed() || vipMiningClaimBusy) return;
+  if (vipMiningLiveValues().accrued <= 0) return;
+  vipMiningClaimBusy = true;
+  tickVipMiningConsole();
+  const scope = "vip_mining_claim";
   try {
-    const result = await api(`/api/points/vip/${encodeURIComponent(subscriptionId)}/claim`, {
+    const result = await api("/api/mining/claim", {
       method: "POST",
-      headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) },
-      body: JSON.stringify({})
+      body: {},
+      headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) }
     });
     clearPendingIdempotencyKey(scope);
     state.points = upBalanceFromResponse(result);
+    if (result.vipMining || result.mining) state.vipMining = result.vipMining || result.mining;
     updateHeader();
-    state.vipDataLoaded = false;
-    await loadVipPlans();
-    if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") await renderProfile();
-    if (!options.silent) toast(t("vip_claim_success", { n: formatPoints(result.rewardPoints) }), "success");
-    return true;
-  } catch (error) {
-    clearDefinitiveIdempotencyFailure(scope, error);
-    if (!options.silent) toast(translateServerMessage(error.code, error.message), "error");
-    state.vipDataLoaded = false;
-    await loadVipPlans();
-    if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") await renderProfile();
-    return false;
-  } finally {
-    vipClaimingIds.delete(subscriptionId);
-    if ((state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip") startVipCountdown();
-  }
-}
-window.claimVipReward = claimVipReward;
-
-async function claimAllVipRewards() {
-  if (vipClaimAllBusy || vipClaimingIds.size) return;
-  const subscriptionIds = (state.vipSubscriptions || [])
-    .filter(subscription => subscription.status === "active" && subscription.canClaim === true)
-    .map(subscription => subscription.id)
-    .filter(Boolean);
-  if (!subscriptionIds.length) return;
-
-  vipClaimAllBusy = true;
-  vipClaimAllProgress = { done: 0, total: subscriptionIds.length };
-  const isVipView = () => (state.activeTab === "profile" && profileView === "vip") || state.activeTab === "vip";
-  if (isVipView()) {
-    const content = $("#content");
-    if (content) content.innerHTML = renderProfileVip();
-  }
-
-  let succeeded = 0;
-  try {
-    for (const subscriptionId of subscriptionIds) {
-      const claimed = await claimVipReward(subscriptionId, { silent: true, bulk: true });
-      if (claimed) succeeded += 1;
-      vipClaimAllProgress.done += 1;
-      if (isVipView()) {
-        const content = $("#content");
-        if (content) content.innerHTML = renderProfileVip();
-      }
+    toast(t("vip_mining_claim_success", { n: formatNumber(result.claimedPoints, 6) }), "success");
+    try {
+      await Promise.all([loadUserData({ force: true }), loadVipMiningStatus({ force: true })]);
+    } catch (error) {
+      console.warn("VIP mining wallet refresh failed:", error);
     }
-    const failed = subscriptionIds.length - succeeded;
-    toast(t("vip_claim_all_result", { success: succeeded, failed, total: subscriptionIds.length }), failed ? "warning" : "success");
-  } finally {
-    vipClaimAllBusy = false;
-    vipClaimAllProgress = { done: 0, total: 0 };
-    if (isVipView()) {
-      state.vipDataLoaded = false;
-      await loadVipPlans();
-      await renderProfile();
+    if (isVipMiningHubVisible()) {
+      const content = $("#content");
+      if (content) content.innerHTML = renderProfileVip();
       startVipCountdown();
+      startVipMiningTicker();
     }
+  } catch (error) {
+    toast(translateServerMessage(error.code, error.message), "error");
+  } finally {
+    vipMiningClaimBusy = false;
+    tickVipMiningConsole();
   }
 }
-window.claimAllVipRewards = claimAllVipRewards;
+window.claimVipMining = claimVipMining;
+
+
 
 let profileRenderSequence = 0;
 async function renderProfile() {
@@ -3881,7 +3969,10 @@ async function renderProfile() {
     && (state.activeTab === "profile" || (state.activeTab === "vip" && profileView === "vip"));
   const content = $("#content");
   if (profileView !== "leaderboard" || leaderboardMode !== "weekly") stopWeeklyCompetitionCountdown();
-  if (profileView !== "vip") stopVipCountdown();
+  if (profileView !== "vip") {
+    stopVipCountdown();
+    stopVipMiningTicker();
+  }
   if (profileView === "leaderboard" && state.leaderboard.length === 0) {
     content.innerHTML = `<div class="loading" style="height:300px"></div>`;
     await loadLeaderboard();
@@ -3897,9 +3988,12 @@ async function renderProfile() {
     await loadHistory(true);
     if (!isCurrentProfileRender()) return;
   }
-  if (profileView === "vip" && !state.vipDataLoaded && !state.vipLoading) {
+  if (profileView === "vip" && ((!state.vipDataLoaded && !state.vipLoading) || (!state.vipMining && !state.vipMiningLoading))) {
     content.innerHTML = `<div class="loading" style="height:300px"></div>`;
-    await loadVipPlans();
+    await Promise.all([
+      !state.vipDataLoaded && !state.vipLoading ? loadVipPlans() : Promise.resolve(true),
+      !state.vipMining && !state.vipMiningLoading ? loadVipMiningStatus() : Promise.resolve(true)
+    ]);
     if (!isCurrentProfileRender()) return;
   }
   if (profileView === "referral") {
@@ -3916,10 +4010,9 @@ async function renderProfile() {
   } else if (profileView === "history") {
     content.innerHTML = renderProfileHistory();
   } else if (profileView === "vip") {
-    content.innerHTML = state.vipError
-      ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondary" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
-      : renderProfileVip();
+    content.innerHTML = renderProfileVip();
     startVipCountdown();
+    startVipMiningTicker();
   } else {
     content.innerHTML = renderProfileMenu();
   }
@@ -4181,15 +4274,17 @@ window.upgradeMining = upgradeMining;
 async function renderVipTab() {
   const renderRequestId = navigationSequence;
   profileView = "vip";
-  if (!state.vipDataLoaded && !state.vipLoading) {
+  if ((!state.vipDataLoaded && !state.vipLoading) || (!state.vipMining && !state.vipMiningLoading)) {
     $("#content").innerHTML = `<div class="loading" style="height:300px"></div>`;
-    await loadVipPlans();
+    await Promise.all([
+      !state.vipDataLoaded && !state.vipLoading ? loadVipPlans() : Promise.resolve(true),
+      !state.vipMining && !state.vipMiningLoading ? loadVipMiningStatus() : Promise.resolve(true)
+    ]);
   }
   if (renderRequestId !== navigationSequence || state.activeTab !== "vip") return;
-  $("#content").innerHTML = state.vipError
-    ? `<div class="card"><div class="emptyDesc">${escapeHTML(state.vipError)}</div><button type="button" class="secondary" onclick="retryVipPlans()">${t("vip_retry")}</button></div>`
-    : renderProfileVip();
+  $("#content").innerHTML = renderProfileVip();
   startVipCountdown();
+  startVipMiningTicker();
 }
 
 /* ================= TAB DISPATCH ================= */
@@ -4219,15 +4314,9 @@ async function renderCurrentTab(requestId = navigationSequence) {
         renderTasks();
       }
       void loadReferralData();
-    } else if (tab === "mine") {
-      await loadUserData();
-      if (!isCurrentRender()) return;
-      await renderMiningTab();
     } else if (tab === "vip") {
       if (cachedReadModelAvailable) {
-        const content = $("#content");
-        if (content) content.innerHTML = renderProfileVip();
-        startVipCountdown();
+        void renderVipTab();
         void refreshReadModelInBackground();
       } else {
         await loadUserData();

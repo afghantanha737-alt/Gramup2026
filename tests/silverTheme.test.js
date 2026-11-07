@@ -32,8 +32,8 @@ assert.doesNotMatch(`${app}\n${html}`, /luckySpinPage|spinWheel|data-tab=["']spi
 assert.match(css, /--bg: #d9dfe5/);
 assert.match(css, /--text: #0f172a/);
 assert.match(css, /background: linear-gradient\(145deg, rgba\(250,251,252/);
-assert.match(html, /theme-selector\.css\?v=up_v29_silver_theme/);
-assert.match(html, /i18n\.js\?v=up_v31_mine_status_fix/);
-assert.match(html, /app\.js\?v=up_v32_up_mine_20261106/);
+assert.match(html, /theme-selector\.css\?v=up_v33_vip_live_hub_20261106/);
+assert.match(html, /i18n\.js\?v=up_v34_vip_live_hub_20261107/);
+assert.match(html, /app\.js\?v=up_v34_vip_live_hub_20261107/);
 
 console.log('PASS — Silver Metallic theme is selectable, persisted across reloads, localized, and styled across key app sections');

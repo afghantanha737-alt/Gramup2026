@@ -4,7 +4,6 @@ process.env.BOT_TOKEN = 'telegram-isolation-test-token-not-real';
 const { safelySendTelegram } = require('../utils/telegramNotification');
 const { bot, withTelegramDeliveryDeadline } = require('../utils/bot');
 const { runDailyCheckinNotificationSweep } = require('../utils/dailyCheckinNotification');
-const { runVipRewardNotificationSweep } = require('../utils/vipRewardNotification');
 const { sendNotificationOnce, enqueuePendingNotification } = require('../utils/notificationDelivery');
 (async () => {
   const logs = [];
@@ -47,21 +46,11 @@ const { sendNotificationOnce, enqueuePendingNotification } = require('../utils/n
   assert.strictEqual(daily.sent, 2); assert.strictEqual(daily.failed, 1);
   assert.strictEqual(attempts.length, 3, 'one failed daily message cannot abort the batch');
   attempts.length = 0;
-  const subscriptions = users.map(u => ({ _id: `sub-${u._id}`, user: u._id, status: 'active', planNumber: 1,
-    startAt: new Date('2026-10-29'), endAt: new Date('2027-02-06'), durationDays: 100, claimsCompleted: 0, totalRewardCents: 10000 }));
-  const locks = new Set();
-  const DistributedJobLock = { create: async ({ _id }) => { if (locks.has(_id)) throw Object.assign(Error('duplicate'), { code: 11000 }); locks.add(_id); } };
-  const deps = { User, notifyUser, DistributedJobLock, VipSubscription: { find: () => ({ lean: async () => subscriptions }) } };
-  const vip = await runVipRewardNotificationSweep(now, deps);
-  assert.strictEqual(vip.sent, 2); assert.strictEqual(vip.failed, 1); assert.strictEqual(attempts.length, 3);
-  const repeat = await runVipRewardNotificationSweep(now, deps);
-  assert.strictEqual(repeat.duplicate, 3, 'failed delivery never clears the notification lock or triggers repeated rewards');
-
   // Required transactional persistence must still fail closed; softening
   // provider failures must never fabricate a durably stored outbox status.
   const offline = { findOneAndUpdate: async () => { throw Error('outbox unavailable'); } };
   const payload = { eventKey: 'test-event', type: 'referral_initial', user: 'u1', telegramId: '1', text: 'test' };
   await assert.rejects(sendNotificationOnce(payload, { NotificationDelivery: offline }), /outbox unavailable/);
   await assert.rejects(enqueuePendingNotification(payload, { NotificationDelivery: offline }), /outbox unavailable/);
-  console.log('PASS — Telegram sync/rejected/timeout/malformed-response errors are isolated; daily/VIP batches continue and outbox/lock safety remains fail-closed');
+  console.log('PASS — Telegram sync/rejected/timeout/malformed-response errors are isolated; daily notifications continue and outbox/lock safety remains fail-closed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

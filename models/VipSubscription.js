@@ -30,6 +30,10 @@ const vipSubscriptionSchema = new mongoose.Schema({
   claimsCompleted: { type: Number, default: 0, min: 0 },
   claimedRewardPoints: { type: Number, default: 0, min: 0 },
   lastClaimAt: { type: Date, default: null },
+  vipMiningLastClaimAt: { type: Date, default: null },
+  vipMiningRemainder: { type: Number, default: 0, min: 0, max: 86399 },
+  vipMiningPaidMicros: { type: Number, default: 0, min: 0, max: Number.MAX_SAFE_INTEGER },
+  vipMiningReserveRemainderMicros: { type: Number, default: 0, min: 0, max: 9999 },
   status: { type: String, enum: ['active', 'completed', 'cancelled'], default: 'active', index: true },
   principalReturnedAt: { type: Date, default: null }
 }, { timestamps: true });

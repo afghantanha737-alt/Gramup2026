@@ -54,6 +54,7 @@ const ledgerModel = fs.readFileSync(path.join(root, 'models/PointsLedger.js'), '
 const referralCore = fs.readFileSync(path.join(root, 'utils/referralCore.js'), 'utf8');
 const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
+const miningRoute = fs.readFileSync(path.join(root, 'routes/mining.js'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 const adminUi = fs.readFileSync(path.join(root, 'public/admin.html'), 'utf8');
 const translations = fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8');
@@ -67,11 +68,12 @@ assert.match(pointsRoute, /router\.get\('\/vip\/plans'/);
 assert.match(pointsRoute, /router\.post\('\/vip\/purchase'/);
 assert.match(pointsRoute, /router\.post\('\/vip\/:subscriptionId\/claim'/);
 assert.match(pointsRoute, /scope: 'vip_purchase'/);
-assert.match(pointsRoute, /scope: 'vip_daily_claim'/);
-assert.match(pointsRoute, /type: 'vip_daily_reward'/);
+assert.match(pointsRoute, /VIP_REWARDS_MOVED_TO_MINING/);
+assert.doesNotMatch(pointsRoute, /scope: 'vip_daily_claim'/);
+assert.doesNotMatch(pointsRoute, /type: 'vip_daily_reward'/);
 assert.match(pointsRoute, /type: 'vip_purchase'/);
-assert.match(pointsRoute, /sourceId = `vip:\$\{subscription\._id\}:claim:\$\{claimIndex \+ 1\}`/);
-assert.match(pointsRoute, /lastClaimAt\.getTime\(\) \+ DAY_MS/);
+assert.match(miningRoute, /releaseForPayout\(reserveCentsToRelease, session\)/);
+assert.match(miningRoute, /reservePaidCents/);
 assert.match(pointsRoute, /body: \{ planNumber \}/, 'purchase request hash must cover plan ID, not client reward fields');
 assert.match(pointsRoute, /calculateTotalRewardCents\(pricePoints, plan\.monthlyRewardPercent, plan\.durationDays\)/);
 assert.match(vipPurchaseSection, /points: finalPoints/,
@@ -90,7 +92,6 @@ assert.match(ledgerModel, /'vip_principal_return'/);
 assert.match(server, /VipPlan\.ensureDefaults\(\)/);
 assert.match(server, /settleMaturedVipSubscriptions\(\)/);
 assert.match(app, /\/api\/points\/vip\/purchase/);
-assert.match(app, /\/api\/points\/vip\/\$\{encodeURIComponent\(subscriptionId\)\}\/claim/);
 assert.match(app, /getPendingIdempotencyKey\(scope\)/);
 assert.match(app, /vip_need_more_points/);
 assert.match(app, /function setVipPlanCategory\(category\)/);
@@ -101,9 +102,9 @@ assert.match(app, /function renderProfileVip\(\)/);
 assert.match(app, /function setVipSubscriptionFilter\(filter\)/);
 assert.match(app, /subscription\.status === "active"/);
 assert.match(app, /subscription\.status !== "active"/);
-assert.match(app, /function claimAllVipRewards\(\)/);
-assert.match(app, /await claimVipReward\(subscriptionId, \{ silent: true, bulk: true \}\)/);
-assert.strictEqual((translations.match(/vip_claim_all:/g) || []).length, 3, 'Claim All label must exist in English, Persian, and Pashto');
+assert.doesNotMatch(app, /function claimAllVipRewards\(\)|function claimVipReward\(/);
+assert.doesNotMatch(app, /data-vip-claim|vipClaimAll/);
+assert.strictEqual((translations.match(/vip_claim_all:/g) || []).length, 3, 'unused legacy Claim All labels remain available to older cached clients');
 assert.strictEqual((translations.match(/vip_subscription_filter_expired:/g) || []).length, 3, 'expired filter label must exist in all supported locales');
 assert.deepStrictEqual(VIP_PRICE_GRAMS, [1, 3, 5, 10, 20, 35, 50, 70, 85, 100]);
 assert.deepStrictEqual(VIP_PRICE_POINTS, [10000, 30000, 50000, 100000, 200000, 350000, 500000, 700000, 850000, 1000000]);
@@ -133,9 +134,10 @@ for (const [planNumber, pricePoints] of [[1, 10000], [2, 30000], [3, 50000]]) {
   assert.strictEqual((dailyCents * 100) / 100, pricePoints + pricePoints / 10, `VIP ${planNumber} total 100-day payout`);
 }
 assert.match(indexHtml, /data-tab="vip"/);
-assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|mine|vip|wallet|profile)"/g) || []).length, 6);
-assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'mine', 'vip', 'wallet', 'profile']);
-assert.match(app, /validTabs = \["home", "mine", "tasks", "vip", "wallet", "profile"\]/);
+assert.strictEqual((indexHtml.match(/data-tab="(?:home|tasks|vip|wallet|profile)"/g) || []).length, 5);
+assert.deepStrictEqual([...indexHtml.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]), ['home', 'tasks', 'vip', 'wallet', 'profile']);
+assert.doesNotMatch(indexHtml, /data-tab="mine"/);
+assert.match(app, /validTabs = \["home", "tasks", "vip", "wallet", "profile"\]/);
 assert.match(app, /function renderDailyCheckinCard\(\)/);
 assert.match(app, /DAILY_CHECKIN_REWARDS = Object\.freeze\(\[5, 7, 9, 11, 13, 14, 15\]\)/);
 assert.doesNotMatch(app, /function renderDaily\(\)/);
@@ -147,4 +149,4 @@ for (const key of ['menu_vip_plans', 'vip_title', 'vip_buy_confirm', 'vip_claim_
   assert.ok(translations.includes(`${key}:`), `missing translation ${key}`);
 }
 
-console.log('ALL PASS — VIP return math, exact cent allocation, claim cadence and server-side/idempotency contracts');
+console.log('ALL PASS — VIP return math, continuous reserved mining payout, UP purchase flow, and five-tab hub contracts');

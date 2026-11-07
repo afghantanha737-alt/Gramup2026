@@ -224,3 +224,45 @@ html[data-theme="silver"] .upTokenIcon { background: rgba(255,255,255,.8); borde
 @media (max-width: 370px) {
   .themeChoice { font-size: 8px; }
 }
+
+
+/* Silver Metallic treatment for the combined VIP & live-mining hub. */
+html[data-theme="silver"] .vipRedesign{--vip-ink:#0f172a;--vip-muted:#64748b;--vip-line:rgba(15,23,42,.12);color:#0f172a;background:none}
+html[data-theme="silver"] .vipMiningConsole,
+html[data-theme="silver"] .vipMiningCounter,
+html[data-theme="silver"] .vipMiningMetric,
+html[data-theme="silver"] .vipMiningMinerRow,
+html[data-theme="silver"] .vipMiningSecondRate{color:#0f172a;border-color:rgba(15,23,42,.12);background:linear-gradient(145deg,rgba(250,251,252,.98),rgba(232,237,241,.98));box-shadow:0 8px 24px rgba(15,23,42,.06)}
+html[data-theme="silver"] .vipMiningHeading h2,
+html[data-theme="silver"] .vipMiningCounterValue,
+html[data-theme="silver"] .vipMiningMetric b,
+html[data-theme="silver"] .vipMiningMinerName{color:#0f172a}
+html[data-theme="silver"] .vipMiningHeading p,
+html[data-theme="silver"] .vipMiningCounterLabel,
+html[data-theme="silver"] .vipMiningMetric span,
+html[data-theme="silver"] .vipMiningFootnote{color:#64748b}
+html[data-theme="silver"] .vipMiningSecondRate b,
+html[data-theme="silver"] .vipMiningMinerRate,
+html[data-theme="silver"] .vipMiningCounterValue span{color:#0f766e}
+html[data-theme="silver"] .vipMiningClaim{color:#062b29;border-color:rgba(15,118,110,.22);background:linear-gradient(135deg,#67e8d9,#35d7c8 55%,#14b8a6);box-shadow:0 8px 18px rgba(15,118,110,.16)}
+html[data-theme="silver"] .vipMiningSubscriptionNote{border-color:rgba(15,118,110,.16);color:#0f766e;background:rgba(20,184,166,.09)}
+html[data-theme="silver"] .vipMiningClaim:disabled{color:#64748b}
+html[data-theme="silver"] .vipMiningEmpty{color:#475569;border-color:rgba(15,23,42,.22)}
+html[data-theme="silver"] .vipPlanCard,
+html[data-theme="silver"] .vipSubscriptionCard{color:#0f172a;border-color:rgba(15,23,42,.14);background:linear-gradient(145deg,rgba(250,251,252,.98),rgba(225,231,236,.98));box-shadow:0 8px 24px rgba(15,23,42,.08)}
+html[data-theme="silver"] .vipPlanTitle,
+html[data-theme="silver"] .vipPlanStat b{color:#0f172a}
+html[data-theme="silver"] .vipPlanStat,
+html[data-theme="silver"] .vipSubscriptionGrid>div{border-color:rgba(15,23,42,.08);background:rgba(255,255,255,.68);color:#475569}
+html[data-theme="silver"] .vipPlanReward{border-color:rgba(15,23,42,.08);background:rgba(53,215,200,.11);color:#475569}
+html[data-theme="silver"] .vipPlanReward b{color:#0f766e}
+html[data-theme="silver"] .vipPlanMiningRate{border-color:rgba(15,23,42,.11);background:rgba(255,255,255,.72);color:#475569}
+html[data-theme="silver"] .vipPlanMiningRate b{color:#0f766e}
+html[data-theme="silver"] .vipPlanMiningRate small{color:#64748b}
+html[data-theme="silver"] .vipPlanButton--primary{color:#062b29;border-color:rgba(15,118,110,.2);background:linear-gradient(135deg,#67e8d9,#14b8a6);box-shadow:0 8px 18px rgba(15,118,110,.14)}
+html[data-theme="silver"] .vipPlanButton--insufficient,
+html[data-theme="silver"] .vipPlanButton--secondary{color:#475569;border-color:rgba(15,23,42,.15);background:rgba(255,255,255,.72)}
+html[data-theme="silver"] .vipPlanDaily{color:#64748b}
+html[data-theme="silver"] .vipCatalogHeading h3,
+html[data-theme="silver"] .vipRedesign>.sectionHeader .sectionTitle{color:#0f172a}
+html[data-theme="silver"] .vipCatalogHeading p{color:#64748b}

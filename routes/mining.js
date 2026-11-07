@@ -9,6 +9,11 @@ const { executeIdempotently, validateIdempotencyKey, idempotencyTransactionId } 
 const { sensitiveRateLimit } = require('../utils/apiSecurity');
 const User = require('../models/User');
 const PointsLedger = require('../models/PointsLedger');
+const Settings = require('../models/Settings');
+const VipSubscription = require('../models/VipSubscription');
+const { releaseForPayout } = require('../utils/vipReserve');
+const { NEW_VIP_POLICY_VERSION } = require('../utils/vipPolicy');
+const { calculateVipSubscriptionAccrual, calculateVipMiningStatus, isVipMiningEligible, ACTIVE_STATUSES, MICRO_UNITS_PER_POINT } = require('../utils/vipMining');
 
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
 const claimRateLimit = sensitiveRateLimit('claim');
@@ -134,45 +139,39 @@ function sendOperationResult(res, result) {
 router.get('/status', auth, async (req, res) => {
   const user = await User.findById(req.dbUser._id);
   if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+  const now = new Date();
+  const subscriptions = await VipSubscription.find({
+    user: user._id,
+    status: { $in: ['active', 'completed'] },
+    startAt: { $lte: now }
+  }).select('_id user planNumber pricePoints monthlyRewardPercent durationDays principalDailyBps rewardDailyBps dailyRewardAveragePoints totalRewardCents totalRewardPoints claimedRewardPoints startAt endAt status policyVersion claimsCompleted reserveLiabilityCents reservePaidCents lastClaimAt vipMiningLastClaimAt vipMiningRemainder vipMiningPaidMicros vipMiningReserveRemainderMicros').lean();
   const history = await PointsLedger.find({
     user: user._id,
     type: { $in: ['mining_claim', 'mining_upgrade'] },
     currency: 'points'
   }).sort({ createdAt: -1, _id: -1 }).limit(MINING_HISTORY_LIMIT)
     .select('type amount currency description balanceAfter sourceId transactionId createdAt').lean();
-  const mining = getMiningState(user, new Date());
+  const mining = calculateVipMiningStatus(subscriptions, now);
+  const balance = Number(user.points) || 0;
   mining.history = history;
+  mining.userPoints = balance;
+  mining.points = balance;
+  mining.balance = balance;
+  mining.upBalance = balance;
   return res.json({
     success: true,
     mining,
+    vipMining: mining,
     history,
-    userPoints: mining.userPoints,
-    points: mining.points,
-    balance: mining.balance,
-    upBalance: mining.upBalance
+    userPoints: balance,
+    points: balance,
+    balance,
+    upBalance: balance
   });
 });
 
 router.post('/start', auth, startRateLimit, async (req, res) => {
-  const now = new Date();
-  const started = await User.findOneAndUpdate(
-    { _id: req.dbUser._id, miningLastClaimAt: null },
-    { $set: { miningLastClaimAt: now } },
-    { new: true }
-  );
-  const user = started || await User.findById(req.dbUser._id);
-  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-  const mining = getMiningState(user, now);
-  return res.json({
-    success: true,
-    started: Boolean(started),
-    mining,
-    newBalance: Number(user.points) || 0,
-    userPoints: Number(user.points) || 0,
-    points: Number(user.points) || 0,
-    balance: Number(user.points) || 0,
-    upBalance: Number(user.points) || 0
-  });
+  return res.status(409).json({ success: false, code: 'VIP_MINING_PURCHASE_REQUIRED', message: 'برای شروع ماینینگ باید یک پلن VIP فعال خریداری کنید.' });
 });
 
 router.post('/claim', auth, claimRateLimit, async (req, res) => {
@@ -188,27 +187,104 @@ router.post('/claim', auth, claimRateLimit, async (req, res) => {
         const now = new Date();
         const current = await User.findById(req.dbUser._id).session(session);
         if (!current) throw miningError('USER_NOT_FOUND', 'کاربر پیدا نشد.', 404);
-        const state = getMiningState(current, now);
-        const pointsToClaim = state.accumulatedPoints;
-        if (pointsToClaim < 1) throw miningError('MINING_NO_POINTS', 'هنوز UP برای دریافت جمع نشده است.', 400);
-        const updated = await User.findOneAndUpdate(optimisticUserFilter(current), {
-          $set: { miningSavedPoints: 0, miningLastClaimAt: now },
+        const subscriptions = await VipSubscription.find({
+          user: current._id,
+          status: { $in: ['active', 'completed'] },
+          startAt: { $lte: now }
+        }).session(session).sort({ startAt: 1 });
+        const state = calculateVipMiningStatus(subscriptions, now);
+        const pointsToClaim = Number((state.accruedMicros / MICRO_UNITS_PER_POINT).toFixed(6)) || 0;
+        if (state.accruedMicros < 1 || pointsToClaim <= 0) {
+          throw miningError('VIP_MINING_NO_POINTS', 'هنوز UP قابل دریافت جمع نشده است؛ برای ماینینگ باید پلن VIP فعال داشته باشید.', 400);
+        }
+
+        const hasNewPolicyMiner = subscriptions.some(subscription =>
+          isVipMiningEligible(subscription) && String(subscription.policyVersion || '') === NEW_VIP_POLICY_VERSION
+        );
+        const settings = hasNewPolicyMiner
+          ? await Settings.findOne({ key: 'global' }).session(session).lean()
+          : null;
+        if (hasNewPolicyMiner && settings?.vipPayoutsEnabled !== true) {
+          throw miningError('VIP_PAYOUTS_DISABLED', 'پرداخت‌های این نسخه VIP موقتاً فعال نیست.', 409);
+        }
+
+        for (const subscription of subscriptions) {
+          if (!isVipMiningEligible(subscription)) continue;
+          const accrual = calculateVipSubscriptionAccrual(subscription, now);
+          if (accrual.earnedMicros < 1) continue;
+          const isNewPolicy = String(subscription.policyVersion || '') === NEW_VIP_POLICY_VERSION;
+          const previousReservePaidCents = Number(subscription.reservePaidCents) || 0;
+          const reserveLiabilityCents = Number(subscription.reserveLiabilityCents) || 0;
+          const previousMiningPaidMicros = Math.max(0, Number(subscription.vipMiningPaidMicros) || 0);
+          const nextMiningPaidMicros = previousMiningPaidMicros + accrual.earnedMicros;
+          const reserveCentsToRelease = isNewPolicy
+            ? Math.floor(nextMiningPaidMicros / 10000) - Math.floor(previousMiningPaidMicros / 10000)
+            : 0;
+          const nextReserveRemainderMicros = isNewPolicy ? nextMiningPaidMicros % 10000 : 0;
+          if (isNewPolicy && reserveCentsToRelease > reserveLiabilityCents - previousReservePaidCents) {
+            throw miningError('VIP_RESERVE_EXCEEDED', 'مقدار پرداخت از تعهد ذخیره VIP بیشتر است؛ تراکنش انجام نشد.', 409);
+          }
+          if (isNewPolicy && reserveCentsToRelease > 0) {
+            const released = await releaseForPayout(reserveCentsToRelease, session);
+            if (!released) throw miningError('VIP_RESERVE_UNAVAILABLE', 'Reserve قابل پرداخت کافی نیست؛ پرداخت انجام نشد.', 409);
+          }
+
+          const expectedMiningRemainder = Number(subscription.vipMiningRemainder) || 0;
+          const subscriptionFilter = {
+            _id: subscription._id,
+            user: current._id,
+            status: subscription.status,
+            vipMiningLastClaimAt: subscription.vipMiningLastClaimAt || null,
+            vipMiningRemainder: expectedMiningRemainder === 0 ? { $in: [null, 0] } : expectedMiningRemainder,
+            vipMiningPaidMicros: previousMiningPaidMicros === 0 ? { $in: [null, 0] } : previousMiningPaidMicros
+          };
+          const subscriptionUpdate = {
+            $set: {
+              vipMiningLastClaimAt: accrual.accrualUntil,
+              vipMiningRemainder: 0,
+              vipMiningPaidMicros: nextMiningPaidMicros,
+              ...(isNewPolicy ? { vipMiningReserveRemainderMicros: nextReserveRemainderMicros } : {})
+            }
+          };
+          if (isNewPolicy) {
+            subscriptionFilter.reservePaidCents = previousReservePaidCents === 0 ? { $in: [null, 0] } : previousReservePaidCents;
+            const previousReserveRemainderMicros = Math.min(9999, Math.max(0, Number(subscription.vipMiningReserveRemainderMicros) || 0));
+            subscriptionFilter.vipMiningReserveRemainderMicros = previousReserveRemainderMicros === 0 ? { $in: [null, 0] } : previousReserveRemainderMicros;
+            const nextReservePaidCents = previousReservePaidCents + reserveCentsToRelease;
+            subscriptionUpdate.$set.reservePaidCents = nextReservePaidCents;
+            if (reserveLiabilityCents > 0 && nextReservePaidCents >= reserveLiabilityCents) {
+              subscriptionUpdate.$set.status = 'completed';
+              subscriptionUpdate.$set.reserveReleasedAt = now;
+            }
+          }
+          const updatedSubscription = await VipSubscription.findOneAndUpdate(subscriptionFilter, subscriptionUpdate, { new: true, session });
+          if (!updatedSubscription) throw miningError('VIP_MINING_CONFLICT', 'وضعیت ماینر هم‌زمان تغییر کرده است؛ دوباره تلاش کنید.', 409);
+        }
+
+        const updated = await User.findByIdAndUpdate(current._id, {
           $inc: { points: pointsToClaim, totalMinedPoints: pointsToClaim }
         }, { new: true, session });
-        if (!updated) throw miningError('MINING_CONFLICT', 'وضعیت استخراج تغییر کرده است؛ دوباره تلاش کنید.', 409);
+        if (!updated) throw miningError('USER_NOT_FOUND', 'کاربر پیدا نشد.', 404);
         const identity = miningLedgerIdentity(updated._id, scope, key, 'claim');
         await recordLedgerRequired({
           user: updated._id, type: 'mining_claim', currency: 'points', amount: pointsToClaim,
-          description: `استخراج ${pointsToClaim} UP از ماینر`, balanceAfter: updated.points,
+          description: `استخراج ${pointsToClaim} UP از ماینر VIP`, balanceAfter: updated.points,
           ...identity, session
         });
+        const refreshedSubscriptions = await VipSubscription.find({
+          user: updated._id,
+          status: { $in: ['active', 'completed'] },
+          startAt: { $lte: now }
+        }).session(session).sort({ startAt: 1 });
+        const mining = calculateVipMiningStatus(refreshedSubscriptions, now);
         return {
           status: 200,
           body: {
             success: true, claimedPoints: pointsToClaim, newBalance: updated.points,
             userPoints: Number(updated.points) || 0, points: Number(updated.points) || 0,
             balance: Number(updated.points) || 0, upBalance: Number(updated.points) || 0,
-            mining: getMiningState(updated, now),
+            mining,
+            vipMining: mining,
             message: `${pointsToClaim} UP استخراج‌شده با موفقیت واریز شد!`
           },
           resourceId: updated._id
@@ -223,72 +299,12 @@ router.post('/claim', auth, claimRateLimit, async (req, res) => {
 });
 
 router.post('/upgrade', auth, claimRateLimit, async (req, res) => {
-  const type = String(req.body?.type || '').trim();
-  if (!['rig', 'storage'].includes(type)) return res.status(400).json({ success: false, message: 'نوع ارتقاء نامعتبر است.' });
-  try {
-    const key = validatedKey(req);
-    const scope = 'mining_upgrade';
-    const result = await executeIdempotently({
-      userId: req.dbUser._id,
-      scope,
-      key,
-      body: req.body || {},
-      execute: async session => {
-        const now = new Date();
-        const current = await User.findById(req.dbUser._id).session(session);
-        if (!current) throw miningError('USER_NOT_FOUND', 'کاربر پیدا نشد.', 404);
-        const state = getMiningState(current, now);
-        const next = type === 'rig' ? state.nextRigUpgrade : state.nextStorageUpgrade;
-        if (!next) throw miningError('MINING_MAX_LEVEL', type === 'rig' ? 'دستگاه ماینر شما در بالاترین سطح قرار دارد.' : 'ظرفیت باتری در بالاترین سطح قرار دارد.');
-        const pendingPoints = state.accumulatedPoints;
-        const previousBalance = Number(current.points) || 0;
-        const newBalance = previousBalance + pendingPoints - next.cost;
-        if (newBalance < 0) throw miningError('MINING_INSUFFICIENT_POINTS', `UP کافی نیست. هزینه ارتقاء: ${next.cost} UP.`);
-        const setFields = { miningSavedPoints: 0, miningLastClaimAt: now, points: newBalance };
-        if (type === 'rig') setFields.miningLevel = next.level;
-        else setFields.miningStorageLevel = next.level;
-        const updated = await User.findOneAndUpdate(optimisticUserFilter(current), {
-          $set: setFields,
-          ...(pendingPoints ? { $inc: { totalMinedPoints: pendingPoints } } : {})
-        }, { new: true, session });
-        if (!updated) throw miningError('MINING_CONFLICT', 'وضعیت استخراج تغییر کرده است؛ دوباره تلاش کنید.', 409);
-        if (pendingPoints > 0) {
-          const claimIdentity = miningLedgerIdentity(updated._id, scope, key, 'settlement');
-          await recordLedgerRequired({
-            user: updated._id, type: 'mining_claim', currency: 'points', amount: pendingPoints,
-            description: `تسویه خودکار ${pendingPoints} UP هنگام ارتقاء`,
-            balanceAfter: previousBalance + pendingPoints,
-            ...claimIdentity, session
-          });
-        }
-        const upgradeIdentity = miningLedgerIdentity(updated._id, scope, key, 'upgrade');
-        await recordLedgerRequired({
-          user: updated._id, type: 'mining_upgrade', currency: 'points', amount: -next.cost,
-          description: type === 'rig' ? `ارتقاء ماینر به سطح ${next.level} (${next.name})` : `ارتقاء ظرفیت ذخیره به سطح ${next.level} (${next.name})`,
-          balanceAfter: updated.points,
-          ...upgradeIdentity, session
-        });
-        const label = type === 'rig' ? 'ماینر' : 'ظرفیت باتری';
-        return {
-          status: 200,
-          body: {
-            success: true, mining: getMiningState(updated, now), newBalance: updated.points,
-            userPoints: Number(updated.points) || 0, points: Number(updated.points) || 0,
-            balance: Number(updated.points) || 0, upBalance: Number(updated.points) || 0,
-            message: `${label} به سطح ${next.level} ارتقاء یافت!`
-          },
-          resourceId: updated._id
-        };
-      }
-    });
-    return sendOperationResult(res, result);
-  } catch (error) {
-    if (error.statusCode) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
-    throw error;
-  }
+  return res.status(409).json({ success: false, code: 'VIP_MINING_PACKAGES_ONLY', message: 'برای افزایش سرعت استخراج، پلن VIP خریداری کنید.' });
 });
 
 module.exports = router;
 module.exports.getMiningState = getMiningState;
 module.exports.RIG_LEVELS = RIG_LEVELS;
 module.exports.STORAGE_LEVELS = STORAGE_LEVELS;
+module.exports.calculateVipSubscriptionAccrual = calculateVipSubscriptionAccrual;
+module.exports.calculateVipMiningStatus = calculateVipMiningStatus;
