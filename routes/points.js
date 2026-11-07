@@ -1055,8 +1055,14 @@ router.get('/vip/plans', auth, async (req, res) => {
   await settleMaturedVipSubscriptions({ userId: req.dbUser._id, now });
   const [plans, subscriptions, user] = await Promise.all([
     VipPlan.find({}).sort({ planNumber: 1 }).lean(),
+<<<<<<< HEAD
     // Do not cap this list: every purchased package contributes to the VIP
     // ownership state shown in the UI, and older purchases must remain visible.
+=======
+    // Do not cap this read: the dashboard must receive every subscription,
+    // especially active miners, so users with more than 30 purchases are not
+    // silently shown an incomplete mining list.
+>>>>>>> 420e918 (Show all active VIP subscriptions in dashboard)
     VipSubscription.find({ user: req.dbUser._id }).sort({ createdAt: -1 }).lean(),
     User.findById(req.dbUser._id).select('points').lean()
   ]);

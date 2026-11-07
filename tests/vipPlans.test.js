@@ -63,9 +63,17 @@ const vipPurchaseSection = pointsRoute.slice(
   pointsRoute.indexOf("router.post('/vip/purchase'"),
   pointsRoute.indexOf("router.post('/vip/:subscriptionId/claim'")
 );
+const vipCatalogRoute = pointsRoute.slice(
+  pointsRoute.indexOf("router.get('/vip/plans'"),
+  pointsRoute.indexOf("router.post('/vip/purchase'")
+);
 
 assert.match(pointsRoute, /router\.get\('\/vip\/plans'/);
 assert.match(pointsRoute, /VipSubscription\.find\(\{ user: req\.dbUser\._id \}\)\.sort\(\{ createdAt: -1 \}\)\.lean\(\)/, 'the plan API returns all historical subscriptions without a fixed cap');
+assert.doesNotMatch(vipCatalogRoute, /VipSubscription\.find\(\{ user: req\.dbUser\._id \}\)[\s\S]*\.limit\(/,
+  'the user VIP catalog must not cap subscriptions before they reach the dashboard');
+assert.match(app, /const activePlanRows = activeSubscriptions\.map\(subscription =>/,
+  'the dashboard must render a row for every active subscription returned by the API');
 assert.match(pointsRoute, /purchasedAt: purchasedAt\?\.toISOString\(\) \|\| null/, 'plan history receives a safe purchase-date value');
 assert.match(pointsRoute, /const lastPrincipalPaidAt = asValidDate\(subscription\.lastPrincipalPaidAt\)/, 'legacy principal payment timestamps are parsed defensively');
 assert.match(pointsRoute, /const principalReturnedAt = asValidDate\(subscription\.principalReturnedAt\)/, 'legacy principal return timestamps are parsed defensively');
