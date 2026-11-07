@@ -1104,6 +1104,19 @@ router.get('/liability-summary', async (req, res) => {
   });
 });
 
+function connectedWalletAddress(user) {
+  return String(user?.connectedWallet?.address || user?.connectedWallet?.canonicalAddress || user?.walletAddress || '').trim();
+}
+function publicAdminUser(user) {
+  const row = user?.toObject ? user.toObject() : (user || {});
+  return {
+    ...row,
+    walletAddress: String(row.walletAddress || '').trim(),
+    connectedWalletAddress: connectedWalletAddress(row),
+    connectedWallet: row.connectedWallet || null
+  };
+}
+
 function publicAdminDeposit(deposit) {
   const row = deposit.toObject ? deposit.toObject() : deposit;
   return {
@@ -1116,6 +1129,7 @@ function publicAdminDeposit(deposit) {
     amount: row.amount,
     txHash: row.txHash || row.submittedTxHash || '',
     sourceAddress: row.sourceAddress || row.walletAddressSnapshot || '',
+    walletAddress: connectedWalletAddress(row.user) || row.walletAddressSnapshot || row.sourceAddress || '',
     depositAddress: row.depositAddressSnapshot,
     verificationNote: row.verificationNote || '',
     createdAt: row.createdAt,
@@ -1125,7 +1139,10 @@ function publicAdminDeposit(deposit) {
       _id: row.user._id,
       telegramId: row.user.telegramId || '',
       username: row.user.username || '',
-      firstName: row.user.firstName || ''
+      firstName: row.user.firstName || '',
+      walletAddress: String(row.user.walletAddress || '').trim(),
+      connectedWalletAddress: connectedWalletAddress(row.user),
+      connectedWallet: row.user.connectedWallet || null
     } : { _id: row.user }
   };
 }
@@ -1136,10 +1153,16 @@ router.get('/deposits', async (req, res) => {
   if (status && !['pending', 'confirmed', 'rejected'].includes(status)) {
     return res.status(400).json({ success: false, message: 'وضعیت Deposit نامعتبر است.' });
   }
+  const search = String(req.query.search || '').trim();
   const filter = { assetType: 'native_gram', ...(status ? { status } : {}) };
+  if (search) {
+    const regex = new RegExp(escapeRegex(search), 'i');
+    const matchingUsers = await User.find({ $or: [{ walletAddress: regex }, { 'connectedWallet.address': regex }, { 'connectedWallet.canonicalAddress': regex }, { telegramId: regex }, { username: regex }] }).select('_id').lean();
+    filter.$or = [{ walletAddressSnapshot: regex }, { sourceAddress: regex }, { user: { $in: matchingUsers.map(user => user._id) } }];
+  }
   const { page, limit, skip } = pageParams(req.query, 100, 300);
   const [list, total, totals] = await Promise.all([
-    Deposit.find(filter).populate('user', 'telegramId username firstName').sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Deposit.find(filter).populate('user', 'telegramId username firstName walletAddress connectedWallet').sort({ createdAt: -1 }).skip(skip).limit(limit),
     Deposit.countDocuments(filter),
     Deposit.aggregate([
       { $match: { assetType: 'native_gram' } },
@@ -1216,11 +1239,17 @@ router.get('/ops-metrics', (req, res) => {
 
 router.get('/withdrawals', async (req, res) => {
   const status = req.query.status;
+  const search = String(req.query.search || '').trim();
   const filter = status ? { status } : {};
+  if (search) {
+    const regex = new RegExp(escapeRegex(search), 'i');
+    const matchingUsers = await User.find({ $or: [{ walletAddress: regex }, { 'connectedWallet.address': regex }, { 'connectedWallet.canonicalAddress': regex }, { telegramId: regex }, { username: regex }] }).select('_id').lean();
+    filter.$or = [{ address: regex }, { user: { $in: matchingUsers.map(user => user._id) } }];
+  }
   const { page, limit, skip } = pageParams(req.query, 100, 300);
   const [list, total] = await Promise.all([
     Withdrawal.find(filter)
-      .populate('user', 'firstName username telegramId')
+      .populate('user', 'firstName username telegramId walletAddress connectedWallet')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
@@ -1228,7 +1257,11 @@ router.get('/withdrawals', async (req, res) => {
   ]);
   res.json({
     success: true,
-    withdrawals: list.map(w => ({ ...w.toObject(), timeline: synthesizeHistory(w) })),
+    withdrawals: list.map(w => {
+      const row = w.toObject();
+      const userWallet = connectedWalletAddress(row.user);
+      return { ...row, walletAddress: row.address || '', connectedWalletAddress: userWallet, timeline: synthesizeHistory(w) };
+    }),
     pagination: { page, limit, total, pages: Math.ceil(total / limit) }
   });
 });
@@ -1450,7 +1483,7 @@ router.get('/users', async (req, res) => {
 
   if (search) {
     const regex = new RegExp(escapeRegex(String(search).trim()), 'i');
-    filter.$or = [{ firstName: regex }, { lastName: regex }, { username: regex }, { telegramId: regex }, { referralCode: regex }];
+    filter.$or = [{ firstName: regex }, { lastName: regex }, { username: regex }, { telegramId: regex }, { referralCode: regex }, { walletAddress: regex }, { 'connectedWallet.address': regex }, { 'connectedWallet.canonicalAddress': regex }];
   }
   if (status === 'banned') filter.isBanned = true;
   if (status === 'active') filter.isBanned = false;
@@ -1463,7 +1496,7 @@ router.get('/users', async (req, res) => {
     User.find(filter).select('-__v -signupIpHash -referralRiskFlags -referralRiskScore').sort(sortBy).skip(skip).limit(limit).lean(),
     User.countDocuments(filter)
   ]);
-  res.json({ success: true, users, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+  res.json({ success: true, users: users.map(publicAdminUser), pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
 });
 
 function balanceField(currency) { return currency === 'gram' ? 'gramBalance' : 'points'; }
@@ -1491,7 +1524,7 @@ router.get('/users/:id/account', async (req, res) => {
   ]);
   res.json({
     success: true,
-    user,
+    user: publicAdminUser(user),
     balances: {
       totalEarnedPoints: earned[0]?.total || 0,
       currentPoints: Number(user.points) || 0,

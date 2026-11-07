@@ -299,7 +299,7 @@
       <div class="card">
         <div class="flexBetween">
           <b>درخواست‌های برداشت</b>
-          <select id="withdrawFilter" onchange="loadWithdrawals()" style="width:auto;margin:0">
+          <input id="withdrawSearch" placeholder="جستجو با کیف‌پول/آیدی/یوزرنیم..." style="flex:1;min-width:180px;margin:0" oninput="debouncedLoadWithdrawals()"><select id="withdrawFilter" onchange="loadWithdrawals()" style="width:auto;margin:0">
             <option value="">همه</option>
             <option value="pending" selected>در انتظار بررسی</option>
             <option value="approved">تاییدشده</option>
@@ -319,7 +319,7 @@
         <div class="flexBetween">
           <b>واریزهای Native GRAM</b>
           <div class="row">
-            <select id="depositFilter" onchange="loadDeposits()" style="width:auto;margin:0">
+            <input id="depositSearch" placeholder="جستجو با کیف‌پول/آیدی/یوزرنیم..." style="flex:1;min-width:180px;margin:0" oninput="debouncedLoadDeposits()"><select id="depositFilter" onchange="loadDeposits()" style="width:auto;margin:0">
               <option value="">همه</option>
               <option value="pending" selected>در انتظار تأیید</option>
               <option value="confirmed">تأییدشده</option>
@@ -370,7 +370,7 @@
       <div class="card">
         <div class="flexBetween"><b>کاربران</b></div>
         <div class="row" style="margin-top:10px">
-          <input id="userSearch" placeholder="جستجو با نام/یوزرنیم/آیدی تلگرام..." style="flex:2;min-width:160px;margin:0" oninput="debouncedLoadUsers()">
+          <input id="userSearch" placeholder="جستجو با نام/یوزرنیم/آیدی تلگرام/کیف‌پول..." style="flex:2;min-width:160px;margin:0" oninput="debouncedLoadUsers()">
           <select id="userStatusFilter" onchange="loadUsers()" style="flex:1;min-width:110px;margin:0">
             <option value="">همه</option>
             <option value="active">فعال</option>
@@ -1416,12 +1416,29 @@ function renderWithdrawTimeline(timeline) {
   </div>`;
 }
 
+function walletAddressValue(item) {
+  return String(item?.connectedWalletAddress || item?.user?.connectedWalletAddress || item?.walletAddress || item?.user?.walletAddress || item?.address || item?.sourceAddress || item?.walletAddressSnapshot || '').trim();
+}
+function walletMarkup(address, label = 'کیف‌پول') {
+  const value = String(address || '').trim();
+  if (!value) return `<span class="badge pending">Not Connected</span>`;
+  const safe = escapeHtml(value);
+  const jsValue = value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+  return `<span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><a href="https://tonviewer.com/${encodeURIComponent(value)}" target="_blank" rel="noopener noreferrer" title="${safe}" style="direction:ltr;font-family:monospace">${escapeHtml(truncateMiddle(value))}</a><button class="secondary" type="button" style="padding:3px 7px;font-size:10px" onclick="copyAddress('${jsValue}', this)">کپی</button></span>`;
+}
+let withdrawalSearchDebounce = null;
+let depositSearchDebounce = null;
+function debouncedLoadWithdrawals() { clearTimeout(withdrawalSearchDebounce); withdrawalSearchDebounce = setTimeout(loadWithdrawals, 350); }
+function debouncedLoadDeposits() { clearTimeout(depositSearchDebounce); depositSearchDebounce = setTimeout(loadDeposits, 350); }
+
 async function loadWithdrawals() {
   const container = document.getElementById("withdrawalsList");
   const status = document.getElementById("withdrawFilter").value;
+  const search = document.getElementById("withdrawSearch")?.value.trim() || "";
   container.innerHTML = '<div class="empty">در حال بارگذاری...</div>';
   try {
-    const data = await api(`/api/admin/withdrawals${status ? "?status=" + status : ""}`);
+    const params = new URLSearchParams(); if (status) params.set("status", status); if (search) params.set("search", search);
+    const data = await api(`/api/admin/withdrawals${params.toString() ? "?" + params.toString() : ""}`);
     const list = data.withdrawals || [];
     if (list.length === 0) {
       container.innerHTML = '<div class="empty">درخواستی یافت نشد.</div>';
@@ -1432,7 +1449,7 @@ async function loadWithdrawals() {
         <div class="flexBetween" style="margin-bottom:8px">
           <div style="min-width:0;display:flex;flex-direction:column;gap:3px">
             <b>${escapeHtml(w.user?.firstName || w.user?.username || "—")}</b>
-            <span class="small" style="direction:ltr;text-align:left;font-family:monospace;user-select:all;cursor:text">Telegram ID: ${escapeHtml(w.user?.telegramId || "—")}</span>
+            <span class="small" style="direction:ltr;text-align:left;font-family:monospace;user-select:all;cursor:text">Telegram ID: ${escapeHtml(w.user?.telegramId || "—")}</span><span class="small">کیف‌پول: ${walletMarkup(walletAddressValue(w))}</span>
           </div>
           <span class="badge ${w.status}">${STATUS_FA[w.status] || w.status}</span>
         </div>
@@ -1497,8 +1514,10 @@ async function loadDeposits() {
   if (!container) return;
   container.innerHTML = '<div class="empty">در حال بارگذاری واریزها...</div>';
   const status = document.getElementById("depositFilter")?.value || "";
+  const search = document.getElementById("depositSearch")?.value.trim() || "";
   try {
-    const data = await api(`/api/admin/deposits${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+    const params = new URLSearchParams(); if (status) params.set("status", status); if (search) params.set("search", search);
+    const data = await api(`/api/admin/deposits${params.toString() ? "?" + params.toString() : ""}`);
     renderDepositSummary(data.summary || {});
     const list = data.deposits || [];
     if (!list.length) { container.innerHTML = '<div class="empty">واریزی برای این وضعیت وجود ندارد.</div>'; return; }
@@ -1507,7 +1526,7 @@ async function loadDeposits() {
       const user = d.user?.firstName || (d.user?.username ? `@${d.user.username}` : d.user?.telegramId || "کاربر حذف‌شده");
       const date = d.createdAt ? new Date(d.createdAt).toLocaleString("fa-IR") : "—";
       return `<div class="card" style="margin-bottom:10px">
-        <div class="flexBetween"><div><b>${escapeHtml(user)}</b><div class="small">Telegram ID: ${escapeHtml(d.user?.telegramId || "—")}</div></div><span class="badge ${d.status === "confirmed" ? "approved" : d.status === "rejected" ? "rejected" : "pending"}">${escapeHtml(DEPOSIT_STATUS_FA[d.status] || d.status)}</span></div>
+        <div class="flexBetween"><div><b>${escapeHtml(user)}</b><div class="small">Telegram ID: ${escapeHtml(d.user?.telegramId || "—")}</div></div><div class="small">کیف‌پول: ${walletMarkup(walletAddressValue(d))}</div><span class="badge ${d.status === "confirmed" ? "approved" : d.status === "rejected" ? "rejected" : "pending"}">${escapeHtml(DEPOSIT_STATUS_FA[d.status] || d.status)}</span></div>
         <div class="small" style="margin-top:8px">شناسه: <span style="font-family:monospace">${escapeHtml(d._id)}</span> · تاریخ: ${escapeHtml(date)}</div>
         <div style="margin-top:6px">مبلغ: <b>${n(d.amount || d.requestedAmount)} GRAM</b> · شبکه: ${escapeHtml(d.network || "TON Mainnet")}</div>
         <div class="small" style="margin-top:5px">Reference: <span style="font-family:monospace;user-select:all">${escapeHtml(d.reference || "—")}</span></div>
@@ -1715,12 +1734,12 @@ async function loadUsers() {
     }
     container.innerHTML = `
       <table class="adminUsersTable">
-        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه کاربران این صفحه" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>Points</th><th>GRAM</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه کاربران این صفحه" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>کیف‌پول</th><th>Points</th><th>GRAM</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
         <tbody>
           ${users.map(u => `
             <tr>
               <td class="usersSelectCell"><input class="user-select" type="checkbox" value="${u._id}" aria-label="انتخاب کاربر" style="width:auto;margin:0"></td>
-              <td class="usersNameCell" data-label="نام / یوزرنیم · Telegram ID">${escapeHtml(u.firstName || u.username || "—")}<div class="small">Telegram ID: ${escapeHtml(u.telegramId || "—")}</div></td>
+              <td class="usersNameCell" data-label="نام / یوزرنیم · Telegram ID">${escapeHtml(u.firstName || u.username || "—")}<div class="small">Telegram ID: ${escapeHtml(u.telegramId || "—")}</div></td><td data-label="کیف‌پول">${walletMarkup(u.connectedWalletAddress || u.walletAddress)}</td>
               <td data-label="Points">${Number(u.points || 0)}</td>
               <td data-label="GRAM">${Number(u.gramBalance || 0)}</td>
               <td data-label="دعوت‌شده">${u.invitedCount || 0}</td>
@@ -1792,6 +1811,7 @@ function renderUserAccount(data) {
       <div class="card"><div class="small">GRAM برداشت‌شده</div><b>${Number(b.totalWithdrawnGram || 0)}</b></div>
       <div class="card"><div class="small">دعوت / فعال</div><b>${Number(b.referralCount || 0)} / ${Number(b.activeReferralCount || 0)}</b></div>
     </div>
+    <div class="card"><b>کیف‌پول متصل</b><div style="margin-top:8px">${walletMarkup(u.connectedWalletAddress || u.walletAddress)}</div></div>
     <div class="card">
       <b>تغییر دستی موجودی</b>
       <div class="row" style="margin-top:10px">
