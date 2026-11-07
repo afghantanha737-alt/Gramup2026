@@ -32,6 +32,12 @@
   button.danger{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
   button.success{background:rgba(34,197,94,.15);color:var(--success);border:1px solid rgba(34,197,94,.3)}
   button:disabled{opacity:.5;cursor:not-allowed}
+  .broadcastFormatToolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 8px;direction:rtl}
+  .broadcastFormatToolbar button{display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:38px;margin:0;padding:7px 10px}
+  .broadcastFormatToolbar button:focus-visible{outline:2px solid var(--primary2);outline-offset:2px}
+  .broadcastButtonRow{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(180px,1.4fr) 42px;gap:7px;align-items:start}
+  .broadcastButtonRow input{min-width:0;direction:ltr;text-align:left}
+  .broadcastRemoveButton{min-height:40px;margin:0;padding:8px}
   .tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
   .tabs button{background:var(--surface2);color:var(--muted);border:1px solid var(--line)}
   .tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
@@ -47,6 +53,9 @@
   }
   @media (max-width:600px){
     .wrap{padding:16px 12px 48px}
+    .broadcastButtonRow{grid-template-columns:minmax(0,1fr) 42px;gap:4px}
+    .broadcastButtonRow .broadcastButtonLabel,.broadcastButtonRow .broadcastButtonUrl{grid-column:1}
+    .broadcastButtonRow .broadcastRemoveButton{grid-column:2;grid-row:1 / span 2}
     .tabs{gap:7px}
     .tabs button{padding:8px 4px;font-size:12px}
     .adminHeaderActions{gap:7px}
@@ -405,7 +414,24 @@
         <p class="small">این پیام برای همه‌ی کاربران فعال (غیرمسدود) ربات ارسال می‌شود.</p>
         <br>
         <label>متن پیام</label>
+        <div class="broadcastFormatToolbar" role="toolbar" aria-label="Broadcast message formatting" dir="rtl">
+          <button type="button" class="secondary" title="Bold" aria-label="Bold" onclick="formatBroadcastMessage('bold')"><b>B</b></button>
+          <button type="button" class="secondary" title="Italic" aria-label="Italic" onclick="formatBroadcastMessage('italic')"><i>I</i></button>
+          <button type="button" class="secondary" title="Code" aria-label="Code" onclick="formatBroadcastMessage('code')"><code>&lt;/&gt;</code></button>
+          <button type="button" class="secondary" title="Inline link" aria-label="Inline link" onclick="formatBroadcastMessage('link')">🔗</button>
+        </div>
+        <p class="small">از دکمهٔ B برای پررنگ‌کردن متن استفاده کنید؛ قالب‌بندی امن HTML در تلگرام نمایش داده می‌شود.</p>
         <textarea id="broadcastText" placeholder="متن پیام همگانی..."></textarea>
+        <label>دکمه‌های درون‌خطی (اختیاری؛ حداکثر ۸ دکمه)</label>
+        <div id="broadcastButtonRows">
+          <div class="broadcastButtonRow">
+            <input class="broadcastButtonLabel" type="text" maxlength="64" value="Open Gramup 🚀" aria-label="Button label" placeholder="Open Gram App">
+            <input class="broadcastButtonUrl" type="text" maxlength="2048" aria-label="Button destination URL" placeholder="https://... (خالی = باز کردن Mini App)">
+            <button type="button" class="secondary broadcastRemoveButton" aria-label="Remove button" title="حذف دکمه" onclick="removeBroadcastButtonRow(this)">×</button>
+          </div>
+        </div>
+        <button type="button" class="secondary" onclick="addBroadcastButtonRow()">+ افزودن دکمه</button>
+        <p class="small">هر دکمه در پایین پیام نمایش داده می‌شود. مقصد باید یک لینک HTTP(S) معتبر باشد.</p>
         <label>تصویر (اختیاری)</label>
         <input id="broadcastImage" type="file" accept="image/*">
         <button onclick="sendBroadcast()">ارسال به همه کاربران</button>
@@ -1892,9 +1918,90 @@ async function testWeeklyRewardNotification(id) {
 }
 
 /* ---------- BROADCAST ---------- */
+function normalizeBroadcastInlineLink(value) {
+  let url;
+  try { url = new URL(String(value || '').trim()); }
+  catch { return ''; }
+  if (!['https:', 'http:'].includes(url.protocol) || !url.hostname || url.username || url.password) return '';
+  if (url.hostname.toLowerCase() === 't.me' && url.protocol !== 'https:') return '';
+  return url.toString();
+}
+
+function escapeBroadcastHtmlAttribute(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function formatBroadcastMessage(format) {
+  const textarea = document.getElementById('broadcastText');
+  if (!textarea) return;
+  const start = Number.isInteger(textarea.selectionStart) ? textarea.selectionStart : textarea.value.length;
+  const end = Number.isInteger(textarea.selectionEnd) ? textarea.selectionEnd : start;
+  const selected = textarea.value.slice(start, end);
+  let openTag, closeTag, placeholder;
+  if (format === 'bold') { openTag = '<b>'; closeTag = '</b>'; placeholder = 'bold text'; }
+  else if (format === 'italic') { openTag = '<i>'; closeTag = '</i>'; placeholder = 'italic text'; }
+  else if (format === 'code') { openTag = '<code>'; closeTag = '</code>'; placeholder = 'code'; }
+  else if (format === 'link') {
+    const providedUrl = window.prompt('لینک را وارد کنید (https://...)', 'https://');
+    if (providedUrl === null) return;
+    const url = normalizeBroadcastInlineLink(providedUrl);
+    if (!url) {
+      document.getElementById('broadcastMsg').textContent = 'لینک معتبر HTTP(S) وارد کنید.';
+      return;
+    }
+    openTag = `<a href="${escapeBroadcastHtmlAttribute(url)}">`;
+    closeTag = '</a>';
+    placeholder = 'link text';
+  } else return;
+  const innerText = selected || placeholder;
+  const replacement = `${openTag}${innerText}${closeTag}`;
+  textarea.value = textarea.value.slice(0, start) + replacement + textarea.value.slice(end);
+  textarea.focus();
+  const innerStart = start + openTag.length;
+  textarea.setSelectionRange(innerStart, innerStart + innerText.length);
+}
+
+function collectBroadcastButtons() {
+  return Array.from(document.querySelectorAll('#broadcastButtonRows .broadcastButtonRow')).map(row => ({
+    text: row.querySelector('.broadcastButtonLabel').value.trim(),
+    url: row.querySelector('.broadcastButtonUrl').value.trim()
+  })).filter(button => button.text || button.url);
+}
+
+function addBroadcastButtonRow(text = '', url = '') {
+  const container = document.getElementById('broadcastButtonRows');
+  const message = document.getElementById('broadcastMsg');
+  if (!container) return;
+  if (container.querySelectorAll('.broadcastButtonRow').length >= 8) {
+    if (message) message.textContent = 'حداکثر ۸ دکمه می‌توانید اضافه کنید.';
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'broadcastButtonRow';
+  const label = document.createElement('input');
+  label.className = 'broadcastButtonLabel'; label.type = 'text'; label.maxLength = 64;
+  label.placeholder = 'Subscribe'; label.setAttribute('aria-label', 'Button label'); label.value = String(text || '');
+  const destination = document.createElement('input');
+  destination.className = 'broadcastButtonUrl'; destination.type = 'text'; destination.maxLength = 2048;
+  destination.placeholder = 'https://...'; destination.setAttribute('aria-label', 'Button destination URL'); destination.value = String(url || '');
+  const remove = document.createElement('button');
+  remove.type = 'button'; remove.className = 'secondary broadcastRemoveButton';
+  remove.setAttribute('aria-label', 'Remove button'); remove.title = 'حذف دکمه'; remove.textContent = '×';
+  remove.addEventListener('click', () => removeBroadcastButtonRow(remove));
+  row.append(label, destination, remove);
+  container.appendChild(row);
+  if (message) message.textContent = '';
+}
+
+function removeBroadcastButtonRow(button) {
+  const row = button && button.closest('.broadcastButtonRow');
+  if (row) row.remove();
+}
+
 async function sendBroadcast() {
   const text = document.getElementById("broadcastText").value.trim();
   const fileInput = document.getElementById("broadcastImage");
+  const buttons = collectBroadcastButtons();
   const msgEl = document.getElementById("broadcastMsg");
 
   if (!text) {
@@ -1904,6 +2011,7 @@ async function sendBroadcast() {
 
   const formData = new FormData();
   formData.append("text", text);
+  formData.append("buttons", JSON.stringify(buttons));
   if (fileInput.files[0]) formData.append("image", fileInput.files[0]);
 
   msgEl.textContent = "در حال ارسال...";

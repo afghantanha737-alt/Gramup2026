@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 const html = fs.readFileSync('public/admin.html', 'utf8');
-const match = html.match(/function normalizeBroadcastInlineLink\(value\) \{[\s\S]*?\n\}\n\nfunction escapeBroadcastHtmlAttribute\(value\) \{[\s\S]*?\n\}\n\nfunction formatBroadcastMessage\(format\) \{[\s\S]*?\n\}\n\nasync function sendBroadcast/);
+const match = html.match(/function normalizeBroadcastInlineLink\(value\) \{[\s\S]*?function escapeBroadcastHtmlAttribute\(value\) \{[\s\S]*?function formatBroadcastMessage\(format\) \{[\s\S]*?\n\}\n[\s\S]*?async function sendBroadcast/);
 assert.ok(match, 'the admin formatting helpers and toolbar handler must exist');
 const functionSource = match[0].replace(/\n\nasync function sendBroadcast$/, '');
 
@@ -55,5 +55,9 @@ textarea = {
 sandbox.formatBroadcastMessage('link');
 assert.equal(textarea.value, 'Open <a href="https://example.com/path?q=1&amp;x=2">this</a> now');
 assert.equal(textarea.value.slice(textarea.selectionStart, textarea.selectionEnd), 'this');
+
+assert.match(html, /id="broadcastButtonRows"/);
+assert.match(html, /function collectBroadcastButtons\(\)/);
+assert.match(html, /formData\.append\("buttons", JSON\.stringify\(buttons\)\)/);
 
 console.log('PASS — broadcast toolbar wraps selected text, inserts placeholders, and adds escaped inline links');

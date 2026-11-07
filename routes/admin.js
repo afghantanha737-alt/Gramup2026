@@ -10,7 +10,7 @@ const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
-const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, broadcastToActiveUsers } = require('../utils/bot');
+const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, broadcastToActiveUsers, buildBroadcastButtonsReplyMarkup, sanitizeTelegramHtml } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { postWithdrawalPaid } = require('../utils/payoutChannel');
 const { sendNotificationOnce } = require('../utils/notificationDelivery');
@@ -2844,12 +2844,31 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
   if (!bot) {
     return res.status(500).json({ success: false, message: 'ربات پیکربندی نشده.' });
   }
-  const text = String((req.body && req.body.text) || '').trim();
-  if (!text) {
+  const rawText = String((req.body && req.body.text) || '').trim();
+  if (!rawText) {
     return res.status(400).json({ success: false, message: 'متن پیام الزامی است.' });
   }
+  const text = sanitizeTelegramHtml(rawText);
+  let requestedButtons = [];
+  if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'buttons')) {
+    try {
+      requestedButtons = typeof req.body.buttons === 'string' ? JSON.parse(req.body.buttons) : req.body.buttons;
+    } catch {
+      return res.status(400).json({ success: false, message: 'فهرست دکمه‌ها قابل‌خواندن نیست.' });
+    }
+    if (!Array.isArray(requestedButtons)) {
+      return res.status(400).json({ success: false, message: 'فهرست دکمه‌ها باید آرایه باشد.' });
+    }
+  }
+  const webAppUrl = String(process.env.MINI_APP_URL || process.env.APP_URL || '').trim();
+  let replyMarkup = null;
+  try {
+    replyMarkup = buildBroadcastButtonsReplyMarkup(requestedButtons, webAppUrl);
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message || 'متن یا لینک دکمه معتبر نیست.' });
+  }
 
-  const users = await User.find({ isBanned: false, telegramBlockedAt: null }, 'telegramId');
+  const users = await User.find(activeTelegramUserFilter(), 'telegramId');
   const job = await BroadcastJob.create({
     actor: req.adminActor,
     hasImage: Boolean(req.file),
@@ -2861,6 +2880,7 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
   // ارسال را به‌صورت دسته‌ای و با تأخیر کوتاه انجام می‌دهیم.
   const BATCH_SIZE = 20;
   const DELAY_MS = 1100;
+  const sendOptions = { parse_mode: 'HTML', ...(replyMarkup ? { reply_markup: replyMarkup } : {}) };
 
   res.json({
     success: true,
@@ -2886,8 +2906,8 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
         const batch = users.slice(i, i + BATCH_SIZE);
         const results = await Promise.all(batch.map(async user => {
           try {
-            if (req.file) await bot.sendPhoto(user.telegramId, req.file.buffer, { caption: text });
-            else await bot.sendMessage(user.telegramId, text);
+            if (req.file) await bot.sendPhoto(user.telegramId, req.file.buffer, { caption: text, ...sendOptions });
+            else await bot.sendMessage(user.telegramId, text, sendOptions);
             return true;
           } catch (error) {
             if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
