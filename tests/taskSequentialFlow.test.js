@@ -8,7 +8,7 @@ const admin = fs.readFileSync('routes/admin.js', 'utf8');
 assert.match(user, /taskSession:/);
 assert.match(user, /state: \{ type: String, enum: \['cooldown', 'pending', 'idle'\]/);
 assert.match(route, /router\.post\('\/:id\/start'/);
-assert.match(route, /TASK_START_COOLDOWN_MS = 3 \* 60 \* 1000/);
+assert.match(route, /TASK_START_COOLDOWN_MS = 20 \* 1000/);
 assert.match(route, /taskSession\.task/);
 assert.match(route, /TASK_SEQUENCE_REQUIRED/);
 assert.match(route, /TASK_COOLDOWN_ACTIVE/);
