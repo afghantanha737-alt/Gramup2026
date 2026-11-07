@@ -31,7 +31,7 @@ const {
 // احراز هویت تلگرام + بررسی عضویت فعلی در کانال‌های اجباری (روی هر درخواست محافظت‌شده)
 const { withMembership } = require('../utils/membership');
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
-const TASK_START_COOLDOWN_MS = 20 * 1000;
+const TASK_START_COOLDOWN_MS = 3 * 60 * 1000;
 
 function taskSequenceError(code, message, status = 409, extra = {}) {
   return Object.assign(new Error(message), { code, status }, extra);
