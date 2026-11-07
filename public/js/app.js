@@ -3782,8 +3782,9 @@ function renderVipMiningConsole() {
     });
     return `
     <article class="vipMiningMinerRow" data-vip-miner-row data-start-at="${escapeHTML(miner.startAt || "")}" data-end-at="${escapeHTML(miner.endAt || "")}" data-days-remaining="${remaining.daysRemaining}" data-remaining-percent="${remaining.remainingPercent}">
-      <div class="vipMiningMinerTop"><span class="vipMiningMinerMark"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span><span class="vipMiningMinerName">${minerName}</span><span class="vipMiningMinerRate">+${formatNumber(miner.dailyRate, 2)} UP/day <i aria-hidden="true">·</i> <span data-vip-miner-days>${t("vip_mining_remaining_days", { n: formatNumber(remaining.daysRemaining) })}</span></span></div>
-      <div class="vipMiningProgressMeta"><span data-vip-miner-percent>${t("vip_mining_remaining_percent", { n: formatNumber(remaining.remainingPercent) })}</span></div>
+      <div class="vipMiningMinerTop"><span class="vipMiningMinerMark"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span><span class="vipMiningMinerName">${minerName}</span></div>
+      <div class="vipMiningMinerRates"><span>+${formatNumber(miner.dailyRate, 2)} UP/day</span><span>+${formatNumber((Number(miner.dailyRate) || 0) / 86400, 6)} UP/s</span></div>
+      <div class="vipMiningProgressMeta"><span data-vip-miner-percent>${t("vip_mining_remaining_percent", { n: formatNumber(remaining.remainingPercent) })}</span><span>${t("vip_mining_duration", { n: formatPoints(miner.durationDays) })}</span><span data-vip-miner-days>${t("vip_mining_remaining_days", { n: formatNumber(remaining.daysRemaining) })}</span></div>
       <div class="vipMiningProgressTrack" role="progressbar" aria-label="${escapeHTML(remainingText)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${remaining.remainingPercent}" aria-valuetext="${escapeHTML(remainingText)}"><span class="vipMiningProgressFill" data-vip-miner-progress style="width:${remaining.remainingPercent}%"></span></div>
     </article>`;
   }).join("");
@@ -3797,9 +3798,60 @@ function renderVipMiningConsole() {
       <article class="vipMiningMetric"><span>${t("vip_mining_hourly_rate")}</span><b data-vip-mining-hourly>+${formatNumber(live.hourlyRate, 4)} UP/hr</b></article>
     </div>
     <div class="vipMiningSecondRate"><span>${t("vip_mining_per_second_rate")}</span><b data-vip-mining-second>+${formatNumber(live.perSecondRate, 6)} UP/s</b></div>
+    <h3 class="vipMiningSectionTitle">${t("vip_mining_active_miners")}</h3>
     ${noMiners ? `<div class="vipMiningEmpty">${t("vip_mining_empty")}</div>` : `<div class="vipMiningMinerList">${miners}</div>`}
     <button class="vipMiningClaim" type="button" data-vip-mining-claim onclick="claimVipMining()" ${vipMiningClaimBusy || live.accrued <= 0 || state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed ? "disabled" : ""}><span>${vipMiningClaimBusy ? t("vip_mining_claiming") : t("vip_mining_claim")}</span><b data-vip-mining-claim-amount>${formatNumber(live.accrued, 6)} UP</b></button>
     <p class="vipMiningFootnote">${t("vip_mining_precision_note")}</p>
+  </section>`;
+}
+
+function vipSubscriptionArchiveState(subscription, nowMs = Date.now() + Number(state.vipServerOffsetMs || 0)) {
+  const status = String(subscription?.status || "").toLowerCase();
+  const startAt = Date.parse(subscription?.startAt || "");
+  const endAt = Date.parse(subscription?.endAt || "");
+  if (!Number.isFinite(startAt) || !Number.isFinite(endAt)) return "review";
+
+  const reserveLiability = Math.max(0, Number(subscription?.reserveLiabilityPoints) || 0);
+  const reservePaid = Math.max(0, Number(subscription?.reservePaidPoints) || 0);
+  const rewardTotal = Math.max(0, Number(subscription?.totalRewardPoints) || 0);
+  const rewardPaid = Math.max(0, Number(subscription?.claimedRewardPoints) || 0)
+    + Math.max(0, Number(subscription?.miningPaidPoints) || 0);
+  const outstanding = reserveLiability > 0
+    ? Math.max(0, reserveLiability - reservePaid)
+    : Math.max(0, rewardTotal - rewardPaid);
+
+  if (status === "completed" && endAt > nowMs && outstanding > 0.01) return "review";
+  const claimsComplete = Number(subscription?.totalClaims) > 0
+    && Number(subscription?.claimsCompleted) >= Number(subscription.totalClaims);
+  const reserveComplete = reserveLiability > 0 && reservePaid >= reserveLiability - 0.01;
+  if (["completed", "cancelled"].includes(status) || endAt <= nowMs || claimsComplete || reserveComplete) return "ended";
+  return null;
+}
+
+function renderVipExpiredPlans(subscriptions = []) {
+  const nowMs = Date.now() + Number(state.vipServerOffsetMs || 0);
+  const pastPlans = (Array.isArray(subscriptions) ? subscriptions : [])
+    .map(subscription => ({ subscription, archiveState: vipSubscriptionArchiveState(subscription, nowMs) }))
+    .filter(item => item.archiveState)
+    .sort((a, b) => Date.parse(b.subscription.purchasedAt || b.subscription.startAt || "")
+      - Date.parse(a.subscription.purchasedAt || a.subscription.startAt || ""));
+  const cards = pastPlans.map(({ subscription, archiveState }) => {
+    const purchasedAtMs = Date.parse(subscription.purchasedAt || subscription.startAt || "");
+    const purchasedDate = Number.isFinite(purchasedAtMs)
+      ? new Date(purchasedAtMs).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+      : t("vip_date_unavailable");
+    const purchasedIso = Number.isFinite(purchasedAtMs) ? new Date(purchasedAtMs).toISOString() : "";
+    const planTitle = t("vip_plan_title", { n: formatPoints(subscription.planNumber) });
+    const durationDays = Math.max(0, Number(subscription.durationDays) || 0);
+    return `<article class="vipExpiredPlan" data-vip-expired-plan="${escapeHTML(subscription.id || "")}">
+      <div class="vipExpiredPlanTop"><h4>${escapeHTML(planTitle)}</h4><span class="vipExpiredPlanBadge ${archiveState === "review" ? "vipExpiredPlanBadge--review" : ""}">${t(archiveState === "review" ? "vip_plan_needs_review" : "vip_plan_ended")}</span></div>
+      <div class="vipExpiredPlanMeta"><div><span>${t("vip_purchased_on")}</span><time ${purchasedIso ? `datetime="${purchasedIso}"` : ""}>${escapeHTML(purchasedDate)}</time></div><div><span>${t("vip_total_duration")}</span><b>${durationDays ? t("vip_plan_duration_value", { n: formatPoints(durationDays) }) : t("vip_date_unavailable")}</b></div></div>
+    </article>`;
+  }).join("");
+
+  return `<section class="vipExpiredPlans" aria-label="${escapeHTML(t("vip_expired_plans_title"))}">
+    <header class="vipExpiredPlansHeading"><h3>${t("vip_expired_plans_title")}</h3><span>${formatPoints(pastPlans.length)}</span></header>
+    ${cards ? `<div class="vipExpiredPlansList">${cards}</div>` : `<p class="vipExpiredPlansEmpty">${t("vip_expired_plans_empty")}</p>`}
   </section>`;
 }
 
@@ -3888,6 +3940,7 @@ function renderProfileVip() {
     </div>
     ${renderVipMiningConsole()}
     ${vipCatalogMarkup}
+    ${renderVipExpiredPlans(subscriptions)}
     </div>
   `;
 }

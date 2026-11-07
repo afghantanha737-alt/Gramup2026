@@ -65,6 +65,10 @@ const vipPurchaseSection = pointsRoute.slice(
 );
 
 assert.match(pointsRoute, /router\.get\('\/vip\/plans'/);
+assert.match(pointsRoute, /VipSubscription\.find\(\{ user: req\.dbUser\._id \}\)\.sort\(\{ createdAt: -1 \}\)\.lean\(\)/, 'the plan API returns all historical subscriptions without a fixed cap');
+assert.match(pointsRoute, /purchasedAt: purchasedAt\?\.toISOString\(\) \|\| null/, 'plan history receives a safe purchase-date value');
+assert.match(pointsRoute, /const lastPrincipalPaidAt = asValidDate\(subscription\.lastPrincipalPaidAt\)/, 'legacy principal payment timestamps are parsed defensively');
+assert.match(pointsRoute, /const principalReturnedAt = asValidDate\(subscription\.principalReturnedAt\)/, 'legacy principal return timestamps are parsed defensively');
 assert.match(pointsRoute, /router\.post\('\/vip\/purchase'/);
 assert.match(pointsRoute, /router\.post\('\/vip\/:subscriptionId\/claim'/);
 assert.match(pointsRoute, /scope: 'vip_purchase'/);

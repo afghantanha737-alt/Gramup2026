@@ -140,10 +140,11 @@ router.get('/status', auth, async (req, res) => {
   const user = await User.findById(req.dbUser._id);
   if (!user) return res.status(404).json({ success: false, message: 'User not found' });
   const now = new Date();
+  // Do not filter startAt in Mongo: legacy BSON strings compare differently
+  // from Date values. The accrual helper normalizes parseable dates in JS.
   const subscriptions = await VipSubscription.find({
     user: user._id,
-    status: { $in: ['active', 'completed'] },
-    startAt: { $lte: now }
+    status: { $in: ['active', 'completed'] }
   }).select('_id user planNumber pricePoints monthlyRewardPercent durationDays principalDailyBps rewardDailyBps dailyRewardAveragePoints totalRewardCents totalRewardPoints claimedRewardPoints startAt endAt status policyVersion claimsCompleted reserveLiabilityCents reservePaidCents lastClaimAt vipMiningLastClaimAt vipMiningRemainder vipMiningPaidMicros vipMiningReserveRemainderMicros').lean();
   const history = await PointsLedger.find({
     user: user._id,
@@ -187,10 +188,11 @@ router.post('/claim', auth, claimRateLimit, async (req, res) => {
         const now = new Date();
         const current = await User.findById(req.dbUser._id).session(session);
         if (!current) throw miningError('USER_NOT_FOUND', 'کاربر پیدا نشد.', 404);
+        // Keep legacy string timestamps in scope; calculateVipMiningStatus
+        // decides eligibility after safely parsing each startAt/endAt value.
         const subscriptions = await VipSubscription.find({
           user: current._id,
-          status: { $in: ['active', 'completed'] },
-          startAt: { $lte: now }
+          status: { $in: ['active', 'completed'] }
         }).session(session).sort({ startAt: 1 });
         const state = calculateVipMiningStatus(subscriptions, now);
         const pointsToClaim = Number((state.accruedMicros / MICRO_UNITS_PER_POINT).toFixed(6)) || 0;
@@ -273,8 +275,7 @@ router.post('/claim', auth, claimRateLimit, async (req, res) => {
         });
         const refreshedSubscriptions = await VipSubscription.find({
           user: updated._id,
-          status: { $in: ['active', 'completed'] },
-          startAt: { $lte: now }
+          status: { $in: ['active', 'completed'] }
         }).session(session).sort({ startAt: 1 });
         const mining = calculateVipMiningStatus(refreshedSubscriptions, now);
         return {

@@ -2796,3 +2796,26 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 @media(max-width:380px){#content .vipRedesign .vipPlanCard::after{font-size:84px}#content .vipRedesign .vipPlanCard--spotlight .vipPlanMark{width:38px;height:38px;flex-basis:38px}}
 @media(prefers-reduced-motion:no-preference){#content .vipRedesign .vipPlanCard--spotlight-3::before,#content .vipRedesign .vipPlanCard--spotlight-10::before{background-size:220% 100%;animation:vipVaultGleam 5.5s ease-in-out infinite alternate}}
 @keyframes vipVaultGleam{from{background-position:0% 50%;opacity:.65}to{background-position:100% 50%;opacity:1}}
+
+
+/* VIP active miner clarity and compact purchase history */
+.vipMiningSectionTitle{margin:13px 2px 2px;color:var(--text);font-size:11px;font-weight:900}
+.vipMiningMinerRates{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px;color:var(--primary);font-size:9px;font-weight:850;font-variant-numeric:tabular-nums;direction:ltr}
+.vipMiningProgressMeta{justify-content:space-between;gap:7px}
+.vipExpiredPlans{margin-top:18px;padding:14px;border:1px solid var(--line);border-radius:19px;background:var(--surface-2, var(--surface))}
+.vipExpiredPlansHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 2px 10px}
+.vipExpiredPlansHeading h3{margin:0;color:var(--text);font-size:15px;font-weight:900}
+.vipExpiredPlansHeading>span{display:grid;place-items:center;min-width:25px;height:25px;padding:0 7px;border:1px solid var(--line);border-radius:999px;color:var(--text-soft);background:var(--surface);font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
+.vipExpiredPlansList{display:grid;gap:8px}
+.vipExpiredPlan{min-width:0;padding:11px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.vipExpiredPlanTop{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+.vipExpiredPlanTop h4{overflow:hidden;margin:0;color:var(--text);font-size:12px;font-weight:900;text-overflow:ellipsis;white-space:nowrap}
+.vipExpiredPlanBadge{flex:0 0 auto;padding:4px 8px;border:1px solid rgba(52,211,153,.24);border-radius:999px;color:#10b981;background:rgba(16,185,129,.09);font-size:9px;font-weight:850}
+.vipExpiredPlanBadge--review{border-color:rgba(251,191,36,.3);color:#d97706;background:rgba(245,158,11,.1)}
+.vipExpiredPlanMeta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.vipExpiredPlanMeta>div{min-width:0;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface-3)}
+.vipExpiredPlanMeta>div>span{display:block;margin-bottom:4px;color:var(--text-muted);font-size:8px;font-weight:750}
+.vipExpiredPlanMeta time,.vipExpiredPlanMeta b{display:block;overflow:hidden;color:var(--text);font-size:10px;font-weight:850;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}
+.vipExpiredPlanMeta time{direction:ltr;text-align:left}
+.vipExpiredPlansEmpty{margin:0;padding:12px;border:1px dashed var(--line-strong);border-radius:12px;color:var(--text-muted);font-size:10px;line-height:1.6;text-align:center}
+@media(max-width:380px){.vipExpiredPlans{padding:11px}.vipExpiredPlan{padding:9px}.vipExpiredPlanMeta{gap:5px}.vipExpiredPlanMeta>div{padding:7px}.vipMiningMinerRates{font-size:8px}}

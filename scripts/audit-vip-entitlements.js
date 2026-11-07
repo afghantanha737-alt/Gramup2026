@@ -12,6 +12,8 @@ async function main() {
   await mongoose.connect(process.env.MONGO_URI, {
     readPreference: 'secondaryPreferred',
     readConcern: { level: 'majority' },
+    autoIndex: false,
+    autoCreate: false,
     serverSelectionTimeoutMS: 10000
   });
   console.log(JSON.stringify(await buildVipEntitlementAudit(), null, 2));

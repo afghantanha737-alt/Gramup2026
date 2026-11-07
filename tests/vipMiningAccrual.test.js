@@ -42,6 +42,10 @@ assert.equal(calculateVipSubscriptionAccrual(vip1, new Date(start.getTime() + 86
 const vip4 = subscription(4, 100000, start, end);
 assert.equal(getVipMiningDailyRateCents(vip4) / 100, 1150, 'higher VIP tiers use their stored principal-plus-reward daily terms');
 const nowOneDay = new Date(start.getTime() + 86400 * 1000);
+const legacyStringDates = { ...vip1, startAt: start.toISOString(), endAt: end.toISOString() };
+const stringDateStatus = calculateVipMiningStatus([legacyStringDates], nowOneDay);
+assert.equal(stringDateStatus.activeMinerCount, 1, 'parseable legacy BSON string timestamps remain eligible for mining');
+assert.equal(stringDateStatus.accruedPoints, 110, 'string timestamps preserve the full elapsed-period accrual');
 const newlyPurchased = subscription(1, 10000, nowOneDay, new Date(nowOneDay.getTime() + 100 * 86400 * 1000));
 const stacked = calculateVipMiningStatus([vip1, vip4, newlyPurchased], nowOneDay);
 assert.equal(stacked.activeMinerCount, 3, 'every unexpired purchased subscription counts as an active miner');
@@ -137,6 +141,7 @@ assert.equal(noMiners.accruedPoints, 0, 'no subscriptions means no free mining')
 
 assert.match(miningRoute, /router\.post\('\/start'[\s\S]*VIP_MINING_PURCHASE_REQUIRED/);
 assert.match(miningRoute, /router\.post\('\/claim'[\s\S]*calculateVipMiningStatus/);
+assert.doesNotMatch(miningRoute, /startAt:\s*\{\s*\$lte:\s*now\s*\}/, 'Mongo date comparisons must not omit parseable legacy string timestamps');
 assert.match(miningRoute, /VIP_MINING_PACKAGES_ONLY/);
 assert.match(miningRoute, /VIP_RESERVE_EXCEEDED/);
 assert.match(pointsRoute, /miningDailyRate/);

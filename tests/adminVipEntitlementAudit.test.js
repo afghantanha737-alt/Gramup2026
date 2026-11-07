@@ -28,6 +28,10 @@ auditModule.buildVipEntitlementAudit = async () => fixture;
 const router = require('../routes/admin');
 const adminSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
 const panelSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin.html'), 'utf8');
+const auditCliSource = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'audit-vip-entitlements.js'), 'utf8');
+assert.match(auditCliSource, /read-only MongoDB credential/);
+assert.match(auditCliSource, /autoIndex:\s*false/);
+assert.match(auditCliSource, /autoCreate:\s*false/);
 const authPosition = adminSource.indexOf('router.use(requireAdmin);');
 const endpointPosition = adminSource.indexOf("router.get('/audit-vip-entitlements'");
 assert.ok(authPosition >= 0 && endpointPosition > authPosition,

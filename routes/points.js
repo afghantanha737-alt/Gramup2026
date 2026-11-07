@@ -91,11 +91,20 @@ function publicVipPlan(plan) {
   };
 }
 
+function asValidDate(value) {
+  if (value == null || value === '') return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
 function publicVipSubscription(subscription, now = new Date()) {
-  const startAt = new Date(subscription.startAt);
-  const endAt = new Date(subscription.endAt);
-  const active = subscription.status === 'active' && now >= startAt && now < endAt;
-  const displayStatus = subscription.status === 'active' && now >= endAt ? 'completed' : subscription.status;
+  const startAt = asValidDate(subscription.startAt);
+  const endAt = asValidDate(subscription.endAt);
+  const purchasedAt = asValidDate(subscription.createdAt) || startAt;
+  const lastPrincipalPaidAt = asValidDate(subscription.lastPrincipalPaidAt);
+  const principalReturnedAt = asValidDate(subscription.principalReturnedAt);
+  const active = Boolean(subscription.status === 'active' && startAt && endAt && now >= startAt && now < endAt);
+  const displayStatus = subscription.status === 'active' && endAt && now >= endAt ? 'completed' : subscription.status;
   const claimIndex = Number(subscription.claimsCompleted || 0);
   const canClaim = false;
   const todayRewardCents = active && claimIndex < subscription.durationDays
@@ -115,8 +124,9 @@ function publicVipSubscription(subscription, now = new Date()) {
     totalRewardPoints: subscription.totalRewardPoints,
     dailyRewardAveragePoints: subscription.dailyRewardAveragePoints,
     miningDailyRate: getVipMiningDailyRatePoints(subscription),
-    startAt: startAt.toISOString(),
-    endAt: endAt.toISOString(),
+    startAt: startAt?.toISOString() || null,
+    endAt: endAt?.toISOString() || null,
+    purchasedAt: purchasedAt?.toISOString() || null,
     daysCompleted: active ? calculateDaysCompleted(startAt, subscription.durationDays, now) : subscription.durationDays,
     daysRemaining: active ? calculateDaysRemaining(endAt, now) : 0,
     claimsCompleted: claimIndex,
@@ -127,7 +137,7 @@ function publicVipSubscription(subscription, now = new Date()) {
     productGroup: subscription.productGroup || 'legacy',
     principalPaidDays: Number(subscription.principalPaidDays) || 0,
     principalPaidPoints: Number(subscription.principalPaidPoints) || 0,
-    lastPrincipalPaidAt: subscription.lastPrincipalPaidAt ? new Date(subscription.lastPrincipalPaidAt).toISOString() : null,
+    lastPrincipalPaidAt: lastPrincipalPaidAt?.toISOString() || null,
     nextRewardPoints: todayRewardCents == null ? 0 : pointsFromCents(todayRewardCents),
     nextPrincipalPoints: todayPrincipalCents == null ? 0 : reservePointsFromCents(todayPrincipalCents),
     nextTotalPayoutPoints: todayTotalCents > 0 ? reservePointsFromCents(todayTotalCents) : 0,
@@ -136,7 +146,7 @@ function publicVipSubscription(subscription, now = new Date()) {
     nextClaimAt: null,
     canClaim,
     status: displayStatus,
-    principalReturnedAt: subscription.principalReturnedAt ? new Date(subscription.principalReturnedAt).toISOString() : null
+    principalReturnedAt: principalReturnedAt?.toISOString() || null
   };
 }
 
