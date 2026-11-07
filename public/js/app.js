@@ -3806,9 +3806,6 @@ function renderVipMiningConsole() {
 function renderProfileVip() {
   const plans = state.vipPlans || [];
   const subscriptions = state.vipSubscriptions || [];
-  const activeSubscriptions = subscriptions.filter(subscription => subscription.status === "active");
-  const expiredSubscriptions = subscriptions.filter(subscription => subscription.status !== "active");
-  const filteredSubscriptions = vipSubscriptionFilter === "active" ? activeSubscriptions : expiredSubscriptions;
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
   const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
   const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
@@ -3860,26 +3857,6 @@ function renderProfileVip() {
       </article>`;
   }).join("");
 
-  const subscriptionCards = filteredSubscriptions.map(subscription => {
-    const isActive = subscription.status === "active";
-    const isCancelled = subscription.status === "cancelled";
-    const statusText = isActive ? t("vip_status_active") : isCancelled ? t("vip_status_cancelled") : t("vip_status_completed");
-    const claimMarkup = isActive ? `<div class="vipMiningSubscriptionNote">${t("vip_mining_live")}</div>` : "";
-    return `
-      <article class="vipSubscriptionCard">
-        <div class="vipPlanTopline"><div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">◌</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(subscription.planNumber) })}</div></div><span class="badge ${isActive ? "success" : "info"}">${statusText}</span></div>
-        <div class="vipSubscriptionGrid">
-          <div>${t("vip_days_progress", { done: formatPoints(subscription.daysCompleted), total: formatPoints(subscription.durationDays) })}</div>
-          <div>${t("vip_days_remaining", { n: formatPoints(subscription.daysRemaining) })}</div>
-          ${isActive ? `<div>${t("vip_mining_daily_rate")}: +${formatNumber(subscription.miningDailyRate, 2)} UP/day</div>` : ""}
-          <div>${t("vip_mining_paid", { n: formatNumber(subscription.miningPaidPoints, 6) })}</div>
-          <div>${t("vip_total_reward", { n: formatPoints(subscription.totalRewardPoints) })}</div>
-          ${isActive ? `<div>${t("vip_principal_note", { n: formatPoints(subscription.pricePoints) })}</div>` : isCancelled ? "" : `<div>${t("vip_status_completed")}</div>`}
-        </div>
-        ${claimMarkup}
-      </article>`;
-  }).join("");
-
   const vipCatalogMarkup = `
     <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
       <div class="vipCatalogHeading"><h3>${t("vip_catalog_title")}</h3><p>${t("vip_intro")}</p></div>
@@ -3911,22 +3888,6 @@ function renderProfileVip() {
     </div>
     ${renderVipMiningConsole()}
     ${vipCatalogMarkup}
-    <div class="vipHero" aria-label="${t("vip_current_balance")}">
-      <div class="vipHeroTop"><div><span class="vipHeroKicker">${t("vip_membership_kicker")}</span><div class="vipBalanceLabel">${t("vip_current_balance")}</div></div><span class="vipHeroIcon" aria-hidden="true">✦</span></div>
-      <div class="vipBalanceValue">${tokenIconMarkup()}<strong>${formatPoints(state.points)}</strong><span>UP</span></div>
-      <div class="vipHeroBottom"><div class="vipDailySummary"><span>${t("vip_mining_daily_rate")}</span><b>${upRewardMarkup(vipMiningLiveValues().dailyRate, false)}</b></div><button type="button" class="vipHeroButton" onclick="document.querySelector('.vipPlanTabs')?.scrollIntoView({behavior:'smooth',block:'center'})">${t("vip_buy")}</button></div>
-    </div>
-    ${subscriptions.length ? `
-      <section class="vipSubscriptionsSection" aria-label="${t("vip_subscription_filters_label")}">
-        <div class="vipStatusTabs" role="tablist" aria-label="${t("vip_subscription_filters_label")}">
-          <button type="button" class="vipStatusTab ${vipSubscriptionFilter === "active" ? "is-selected" : ""}" role="tab" aria-selected="${vipSubscriptionFilter === "active"}" onclick="setVipSubscriptionFilter('active')"><span>${t("vip_subscription_filter_active")}</span><b>${formatPoints(activeSubscriptions.length)}</b></button>
-          <button type="button" class="vipStatusTab ${vipSubscriptionFilter === "expired" ? "is-selected" : ""}" role="tab" aria-selected="${vipSubscriptionFilter === "expired"}" onclick="setVipSubscriptionFilter('expired')"><span>${t("vip_subscription_filter_expired")}</span><b>${formatPoints(expiredSubscriptions.length)}</b></button>
-        </div>
-        ${filteredSubscriptions.length
-          ? `<h3 class="sectionTitle vipSubscriptionHeading">${t(vipSubscriptionFilter === "active" ? "vip_active_title" : "vip_expired_title")}</h3>${subscriptionCards}`
-          : `<div class="vipSubscriptionEmpty"><div class="emptyDesc">${t(vipSubscriptionFilter === "active" ? "vip_active_empty" : "vip_expired_empty")}</div></div>`}
-      </section>
-    ` : `<section class="vipSubscriptionsSection"><div class="vipSubscriptionEmpty"><div class="emptyDesc">${t("vip_no_subscriptions")}</div></div></section>`}
     </div>
   `;
 }

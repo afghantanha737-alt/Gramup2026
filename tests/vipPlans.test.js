@@ -101,7 +101,7 @@ assert.doesNotMatch(app, /vipPlanBalance/);
 assert.match(app, /function renderProfileVip\(\)/);
 assert.match(app, /function setVipSubscriptionFilter\(filter\)/);
 assert.match(app, /subscription\.status === "active"/);
-assert.match(app, /subscription\.status !== "active"/);
+assert.doesNotMatch(app, /subscription\.status !== "active"/);
 assert.doesNotMatch(app, /function claimAllVipRewards\(\)|function claimVipReward\(/);
 assert.doesNotMatch(app, /data-vip-claim|vipClaimAll/);
 assert.strictEqual((translations.match(/vip_claim_all:/g) || []).length, 3, 'unused legacy Claim All labels remain available to older cached clients');
