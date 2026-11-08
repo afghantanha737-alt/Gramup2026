@@ -42,7 +42,6 @@ const {
   createDepositReference
 } = require('../utils/tonNativeDepositVerify');
 const { comment } = require('@ton/ton');
-const { normalizeAsset, normalizeNetwork, roundAsset, validAmount, validateAddress, balanceField, ledgerCurrency, isAssetNetworkSupported } = require('../utils/walletAssets');
 
 // احراز هویت تلگرام + بررسی عضویت فعلی در کانال‌های اجباری (روی هر درخواست محافظت‌شده)
 const { withMembership } = require('../utils/membership');
@@ -340,8 +339,6 @@ router.get('/me', auth, async (req, res) => {
     points: u.points,
     upBalance: Number(u.points) || 0,
     gramBalance: u.gramBalance,
-    usdtBalance: Number(u.usdtBalance) || 0,
-    // Keep the legacy balances object stable; /api/wallet/balances exposes USDT.
     balances: { UP: Number(u.points) || 0, GRAM: Number(u.gramBalance) || 0 },
     rate: settings.rate,
     streak: u.streak,
@@ -512,51 +509,35 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
   res.status(operation.status).json(operation.body);
 });
 
-// POST /api/points/withdraw — manual-review withdrawal for GRAM/USDT.
-// Blockchain sending remains outside the API; Admin attaches and verifies txHash.
+// POST /api/points/withdraw — برداشت از موجودی GRAM (نه مستقیم از UP)
 router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
-  const body = req.body || {};
-  const asset = normalizeAsset(body.asset || body.token || 'GRAM');
-  const network = normalizeNetwork(body.network || (asset === 'GRAM' ? 'TON_MAINNET' : 'TON_MAINNET'));
-  const rawAmount = body.amount != null ? body.amount : body.gram;
-  const address = body.address;
-  if (!['GRAM', 'USDT'].includes(asset) || !['number', 'string'].includes(typeof rawAmount) || typeof address !== 'string') {
+  const { gram, address } = req.body || {};
+  if (!['number', 'string'].includes(typeof gram) || typeof address !== 'string') {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار برداشت یا آدرس نامعتبر است.' });
   }
-  const amount = roundAsset(rawAmount, asset);
+  const amount = round6(gram);
   const walletAddress = String(address || '').trim();
-  const enabledNetworks = Array.isArray(settings.enabledWithdrawalNetworks) && settings.enabledWithdrawalNetworks.length
-    ? settings.enabledWithdrawalNetworks.map(normalizeNetwork).filter(Boolean)
-    : ['TON_MAINNET'];
-  const minimumAmount = asset === 'USDT'
-    ? roundAsset(settings.minimumWithdrawUsdt, 'USDT')
-    : round6(settings.minWithdrawPoints * settings.rate);
+  const minWithdrawGram = round6(settings.minWithdrawPoints * settings.rate);
 
-  if (!validAmount(amount, asset)) {
-    return res.status(400).json({ success: false, message: `مقدار ${asset} نامعتبر است.`, code: 'INVALID_AMOUNT' });
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ success: false, message: 'مقدار GRAM نامعتبر است.', code: 'INVALID_AMOUNT' });
   }
-  if (!isAssetNetworkSupported(asset, network) || !enabledNetworks.includes(network)) {
-    return res.status(400).json({ success: false, message: 'این دارایی روی شبکه انتخاب‌شده فعال نیست.', code: 'NETWORK_DISABLED' });
-  }
-  if (!validateAddress(asset, network, walletAddress)) {
-    return res.status(400).json({ success: false, message: 'آدرس کیف پول برای این شبکه نامعتبر است.', code: 'INVALID_ADDRESS' });
+  if (!/^[A-Za-z0-9_\-:+/=.]{6,120}$/.test(walletAddress)) {
+    return res.status(400).json({ success: false, message: 'آدرس کیف پول نامعتبر است.', code: 'INVALID_ADDRESS' });
   }
   const connectedAddress = String(u.connectedWallet?.address || '').trim();
-  if (asset === 'GRAM') {
-    if (!hasRecentWalletProof(u) || u.connectedWallet?.network !== '-239') {
-      return res.status(403).json({ success: false, message: 'برای برداشت، یک Wallet تأییدشده در TON Mainnet وصل کنید.', code: 'WALLET_PROOF_REQUIRED' });
-    }
+  if (!hasRecentWalletProof(u) || u.connectedWallet?.network !== '-239') {
+    return res.status(403).json({ success: false, message: 'برای برداشت، یک Wallet تأییدشده در TON Mainnet وصل کنید.', code: 'WALLET_PROOF_REQUIRED' });
   }
-  if (asset === 'GRAM') {
-    if (!connectedAddress || walletAddress !== connectedAddress) {
-      return res.status(409).json({ success: false, message: 'آدرس برداشت باید با Wallet متصل‌شده یکسان باشد.', code: 'WALLET_ADDRESS_MISMATCH' });
-    }
+  if (!connectedAddress || walletAddress !== connectedAddress) {
+    return res.status(409).json({ success: false, message: 'آدرس برداشت باید با Wallet متصل‌شده یکسان باشد.', code: 'WALLET_ADDRESS_MISMATCH' });
   }
-  if (amount < minimumAmount) {
+  if (amount < minWithdrawGram) {
     return res.status(400).json({
-      success: false, message: `حداقل مقدار برداشت ${minimumAmount} ${asset} است.`,
+      success: false,
+      message: `حداقل مقدار برداشت ${minWithdrawGram} GRAM است.`,
       code: 'BELOW_MIN_WITHDRAW'
     });
   }
@@ -568,39 +549,34 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
       userId: u._id,
       scope: 'withdraw',
       key: operationKey,
-      body: { asset, network, amount, address: walletAddress },
+      body: { amount, address: walletAddress },
       execute: async session => {
-        const sourceField = balanceField(asset);
-        const sourceCurrency = ledgerCurrency(asset);
         const nextUser = await User.findOneAndUpdate(
-          { _id: u._id, [sourceField]: { $gte: amount } },
-          { $inc: { [sourceField]: -amount }, $set: { walletAddress } },
+          { _id: u._id, gramBalance: { $gte: amount } },
+          { $inc: { gramBalance: -amount }, $set: { walletAddress } },
           { new: true, session }
         );
         if (!nextUser) {
-          const error = new Error(`موجودی ${asset} کافی نیست.`);
+          const error = new Error('موجودی GRAM کافی نیست.');
           error.code = 'INSUFFICIENT_BALANCE';
           throw error;
         }
 
         const nextWithdrawal = await new Withdrawal({
           user: u._id,
-          pointsSpent: asset === 'GRAM' && settings.rate > 0 ? Math.round(amount / settings.rate) : 0,
+          pointsSpent: settings.rate > 0 ? Math.round(amount / settings.rate) : 0,
           cryptoAmount: amount,
           address: walletAddress,
-          network,
-          token: asset,
-          asset,
-          statusHistory: [{ status: 'pending', at: new Date(), note: 'manual_review_required' }]
+          statusHistory: [{ status: 'pending', at: new Date() }]
         }).save({ session });
 
         const ledger = await recordLedgerRequired({
           user: u._id,
           type: 'withdraw',
-          currency: sourceCurrency,
+          currency: 'gram',
           amount: -amount,
-          description: `درخواست برداشت ${asset} روی ${network} به ${truncateAddress(walletAddress)}`,
-          balanceAfter: nextUser[sourceField],
+          description: `درخواست برداشت به ${truncateAddress(walletAddress)}`,
+          balanceAfter: nextUser.gramBalance,
           sourceId: `withdrawal:${nextWithdrawal._id}`,
           transactionId: idempotencyTransactionId({ userId: u._id, scope: 'withdraw', key: operationKey, leg: 'debit' }),
           session
@@ -611,8 +587,6 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
           success: true,
           message: 'درخواست برداشت ثبت شد و به‌زودی بررسی می‌شود.',
           gramBalance: nextUser.gramBalance,
-          usdtBalance: nextUser.usdtBalance,
-          balances: { UP: Number(nextUser.points) || 0, GRAM: Number(nextUser.gramBalance) || 0, USDT: Number(nextUser.usdtBalance) || 0 },
           withdrawalId: String(nextWithdrawal._id)
         } };
       }
@@ -625,7 +599,7 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
 
   res.status(operation.status).json(operation.body);
   if (!operation.replayed) {
-    notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, asset)).catch(() => {});
+    notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, 'GRAM')).catch(() => {});
     Withdrawal.findById(operation.body.withdrawalId).lean()
       .then(createdWithdrawal => {
         if (createdWithdrawal) return postWithdrawalRequested(u, createdWithdrawal);

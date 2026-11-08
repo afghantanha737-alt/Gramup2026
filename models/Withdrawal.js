@@ -9,7 +9,6 @@ const withdrawalSchema = new mongoose.Schema(
     address: { type: String, required: true },
     network: { type: String, default: 'TON' },
     token: { type: String, default: 'GRAM' },
-    asset: { type: String, enum: ['GRAM', 'USDT'], default: 'GRAM' },
     fromAddress: { type: String, default: '' },
     txHash: { type: String, default: null },
     // Deliberately unset until a verified chain transaction is attached.

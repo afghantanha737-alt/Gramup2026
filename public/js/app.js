@@ -29,7 +29,6 @@ const state = {
   referralMessageConsent: "unset",
   points: 0,
   gramBalance: 0,
-  usdtBalance: 0,
   chainGramBalance: 0,
   rate: 0,
   streak: 0,
@@ -961,7 +960,6 @@ function applyCachedReadModel(entry) {
   const profile = entry.profile || {};
   state.points = Number(profile.upBalance ?? profile.points) || 0;
   state.gramBalance = Number(profile.gramBalance) || 0;
-  state.usdtBalance = Number(profile.usdtBalance) || 0;
   state.rate = Number(profile.rate) || 0;
   state.streak = Number(profile.streak) || 0;
   state.canCheckIn = Boolean(profile.canCheckIn);
@@ -1004,7 +1002,7 @@ function persistReadModelCache() {
   if (!readModelCache || !state.verifiedSessionUserId) return;
   readModelCache.write(state.verifiedSessionUserId, {
     profile: {
-      upBalance: state.points, points: state.points, gramBalance: state.gramBalance, usdtBalance: state.usdtBalance, rate: state.rate, streak: state.streak,
+      upBalance: state.points, points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
       canCheckIn: state.canCheckIn, dailyCheckinCycleDay: state.dailyCheckinCycleDay,
       dailyCheckinReward: state.dailyCheckinReward, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
@@ -1057,7 +1055,6 @@ async function bootstrapAuth() {
     const authUpBalance = Number(data?.upBalance ?? data?.points);
     if (Number.isFinite(authUpBalance)) state.points = authUpBalance;
     if (data?.gramBalance != null && Number.isFinite(Number(data.gramBalance))) state.gramBalance = Number(data.gramBalance);
-    if (data?.usdtBalance != null && Number.isFinite(Number(data.usdtBalance))) state.usdtBalance = Number(data.usdtBalance);
     state.language = localStorage.getItem("appLanguage") || data.language || "fa";
     state.referralMessageConsent = ["granted", "denied", "unset"].includes(data.referralMessageConsent)
       ? data.referralMessageConsent : "unset";
@@ -1081,7 +1078,6 @@ async function loadUserData({ force = false } = {}) {
   if (requestId !== userDataRequestSequence) return;
   state.points = Number(data?.upBalance ?? data?.points) || 0;
   state.gramBalance = Number(data?.gramBalance) || 0;
-  state.usdtBalance = Number(data?.usdtBalance) || 0;
   state.rate = Number(data?.rate) || 0;
   state.streak = Number(data?.streak) || 0;
   state.canCheckIn = Boolean(data?.canCheckIn);
@@ -2050,12 +2046,11 @@ window.retryTasks = retryTasks;
 /* ================= WALLET ================= */
 function showWithdraw() {
   if (!readModelActionAllowed()) return;
-  const selectedAsset = String($('#withdrawAsset')?.value || 'GRAM');
-  if (selectedAsset === 'GRAM' && state.gramBalance < state.minWithdrawGram) {
+  if (state.gramBalance < state.minWithdrawGram) {
     toast(t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawGram, 6) }), "warning");
     return;
   }
-  if (selectedAsset === 'GRAM' && !window.gramupWallet?.isConnected()) {
+  if (!window.gramupWallet?.isConnected()) {
     toast(t("wallet_connect_required"), "warning");
     void window.gramupWallet?.connect();
     return;
@@ -2065,8 +2060,7 @@ function showWithdraw() {
   const addressInput = $("#withdrawAddress");
   const error = $("#withdrawError");
   if (pointsInput) pointsInput.value = "";
-  if (addressInput) addressInput.value = selectedAsset === 'GRAM' ? (window.gramupWallet?.getAddress?.() || '') : '';
-  updateWithdrawAsset();
+  if (addressInput) addressInput.value = window.gramupWallet.getAddress();
   if (error) error.textContent = "";
   if (overlay) overlay.style.display = "flex";
 }
@@ -2078,23 +2072,6 @@ function hideWithdraw() {
 }
 window.hideWithdraw = hideWithdraw;
 
-function updateWithdrawAsset() {
-  const asset = String($('#withdrawAsset')?.value || 'GRAM');
-  const network = $('#withdrawNetwork');
-  const address = $('#withdrawAddress');
-  if (network) {
-    [...network.options].forEach(option => { option.hidden = asset === 'GRAM' && option.value !== 'TON_MAINNET'; });
-    if (asset === 'GRAM') network.value = 'TON_MAINNET';
-  }
-  if (address) {
-    const isGram = asset === 'GRAM';
-    address.readOnly = isGram;
-    address.placeholder = isGram ? 'Wallet متصل‌شده' : '0x… یا آدرس شبکه انتخاب‌شده';
-    if (isGram) address.value = window.gramupWallet?.getAddress?.() || '';
-  }
-}
-window.updateWithdrawAsset = updateWithdrawAsset;
-
 async function submitWithdraw() {
   if (!readModelActionAllowed()) return;
   const gramInput = $("#withdrawPoints");
@@ -2103,24 +2080,20 @@ async function submitWithdraw() {
   const button = $("#submitWithdraw");
 
   const gram = Number(gramInput?.value);
-  const asset = String($('#withdrawAsset')?.value || 'GRAM');
-  const network = String($('#withdrawNetwork')?.value || 'TON_MAINNET');
   const address = String(window.gramupWallet?.getAddress?.() || addressInput?.value || "").trim();
 
   if (!gram || gram <= 0) {
     if (error) error.textContent = t("error_generic");
     return;
   }
-  if (asset === 'GRAM' && (!window.gramupWallet?.isConnected() || !window.gramupWallet?.isProofVerified?.() || address.length < 6)) {
+  if (!window.gramupWallet?.isConnected() || !window.gramupWallet?.isProofVerified?.() || address.length < 6) {
     if (error) error.textContent = t("error_generic");
     return;
   }
 
   if (button) button.disabled = true;
   try {
-    const result = asset === 'GRAM'
-      ? await window.gramupWallet.requestWithdrawal(gram, getPendingIdempotencyKey("withdraw"))
-      : await api('/api/points/withdraw', { method: 'POST', headers: { 'Idempotency-Key': getPendingIdempotencyKey('withdraw') }, body: { asset, network, amount: gram, address } });
+    const result = await window.gramupWallet.requestWithdrawal(gram, getPendingIdempotencyKey("withdraw"));
     clearPendingIdempotencyKey("withdraw");
     state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
     haptic("success");
@@ -2624,64 +2597,6 @@ window.refreshWalletChainBalance = () => loadWalletChainBalance(walletRenderSequ
 window.onGramupWalletChange = () => {
   if (state.activeTab === 'wallet') void loadWalletChainBalance(walletRenderSequence);
 };
-
-let walletQuote = null;
-let walletQuoteTimer = null;
-async function loadWalletMultiAsset(renderRequestId) {
-  try {
-    const data = await api('/api/wallet/balances');
-    if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
-    state.usdtBalance = Number(data?.balances?.USDT) || 0;
-    const card = document.querySelector('.walletUsdtCard .tbWalletValue');
-    if (card) card.textContent = `${formatNumber(state.usdtBalance, 6)} USDT`;
-  } catch { /* legacy Wallet remains usable when the additive endpoint is unavailable */ }
-}
-window.requestWalletQuote = function requestWalletQuote() {
-  clearTimeout(walletQuoteTimer);
-  walletQuote = null;
-  const preview = $('#walletSwapPreview');
-  const button = $('#walletSwapButton');
-  if (button) button.disabled = true;
-  const amount = Number($('#walletSwapAmount')?.value);
-  const from = String($('#walletSwapFrom')?.value || 'UP');
-  const to = String($('#walletSwapTo')?.value || 'GRAM');
-  if (!Number.isFinite(amount) || amount <= 0 || from === to) {
-    if (preview) preview.textContent = 'Enter a valid amount and two different assets.';
-    return;
-  }
-  walletQuoteTimer = setTimeout(async () => {
-    try {
-      const data = await api(`/api/wallet/quote?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&amount=${encodeURIComponent(amount)}`);
-      walletQuote = data.quote;
-      if (preview) preview.textContent = `${formatNumber(walletQuote.amount, 6)} ${from} → ${formatNumber(walletQuote.receiveAmount, 6)} ${to} · quote expires soon`;
-      if (button) button.disabled = false;
-    } catch (err) {
-      if (preview) preview.textContent = translateServerMessage(err.code, err.message);
-    }
-  }, 280);
-};
-window.convertWalletQuote = async function convertWalletQuote() {
-  if (!walletQuote) return;
-  const button = $('#walletSwapButton');
-  if (button) button.disabled = true;
-  try {
-    const result = await api('/api/wallet/convert', { method: 'POST', headers: { 'Idempotency-Key': getPendingIdempotencyKey('wallet_convert') }, body: { quoteId: walletQuote.quoteId } });
-    clearPendingIdempotencyKey('wallet_convert');
-    state.points = Number(result.balances?.UP) || state.points;
-    state.gramBalance = Number(result.balances?.GRAM) || state.gramBalance;
-    state.usdtBalance = Number(result.balances?.USDT) || state.usdtBalance;
-    walletQuote = null;
-    haptic('success');
-    toast(`Converted ${formatNumber(result.received, 6)} ${result.toAsset}`, 'success');
-    renderWallet();
-  } catch (err) {
-    clearDefinitiveIdempotencyFailure('wallet_convert', err);
-    haptic('error');
-    toast(translateServerMessage(err.code, err.message), 'error');
-    if (button) button.disabled = false;
-  }
-};
-
 function renderWallet() {
   const renderRequestId = ++walletRenderSequence;
   const content = $("#content");
@@ -2709,20 +2624,7 @@ function renderWallet() {
         <div class="tbStatLabel tbColBlue">${t("wallet_gram_card_title")}</div>
         <div class="tbWalletValue gramBalanceUnit">${formatNumber(state.gramBalance, 6)} GRAM</div>
       </div>
-      <div class="tbWalletCard walletUsdtCard">
-        <div class="tbWalletIcon tbIconCyan"><span aria-hidden="true">₮</span></div>
-        <div class="tbStatLabel tbColBlue">USDT</div>
-        <div class="tbWalletValue gramBalanceUnit">${formatNumber(state.usdtBalance, 6)} USDT</div>
-      </div>
     </div>
-
-    <section class="walletSwapPanel" aria-label="Multi-asset conversion">
-      <div class="walletSwapPanelHead"><div><span class="walletOverline">${t("exchange_eyebrow")}</span><h3>UP · GRAM · USDT</h3></div><span class="walletLivePill">Quote</span></div>
-      <div class="walletSwapFields"><select id="walletSwapFrom" aria-label="From asset" onchange="requestWalletQuote()"><option>UP</option><option>GRAM</option><option>USDT</option></select><span>→</span><select id="walletSwapTo" aria-label="To asset" onchange="requestWalletQuote()"><option>GRAM</option><option>UP</option><option>USDT</option></select></div>
-      <input id="walletSwapAmount" type="number" min="0" step="any" placeholder="Amount" oninput="requestWalletQuote()">
-      <div id="walletSwapPreview" class="walletSwapPreview">Enter an amount to receive a server quote.</div>
-      <button type="button" class="primaryBtn" id="walletSwapButton" onclick="convertWalletQuote()" disabled>Convert</button>
-    </section>
 
     <div class="tbWalletActions">
       <button class="tbAct" type="button" onclick="showDeposit()">
@@ -2765,7 +2667,6 @@ function renderWallet() {
 
   window.gramupWallet?.mount("tonWalletConnection");
   void loadWalletChainBalance(renderRequestId);
-  void loadWalletMultiAsset(renderRequestId);
 
   loadWalletHistory().then(() => {
     if (renderRequestId !== walletRenderSequence || state.activeTab !== "wallet") return;

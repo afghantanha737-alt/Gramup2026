@@ -38,7 +38,7 @@ const pointsLedgerSchema = new mongoose.Schema(
       ],
       required: true
     },
-    currency: { type: String, enum: ['points', 'gram', 'usdt'], default: 'points' },
+    currency: { type: String, enum: ['points', 'gram'], default: 'points' },
     // مقدار با علامت: مثبت یعنی اضافه شدن، منفی یعنی کسر شدن
     amount: { type: Number, required: true },
     // شناسه یکتای اختیاری برای جلوگیری از ثبت دوباره‌ی یک رویداد مالی
