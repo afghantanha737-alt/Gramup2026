@@ -144,6 +144,7 @@ app.use('/api/app-info', require('./routes/appInfo'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/ton-proof', require('./routes/tonProof'));
 app.use('/api/points', require('./routes/points'));
+app.use('/api/wallet', require('./routes/wallet'));
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/mining', require('./routes/mining'));
@@ -243,7 +244,7 @@ async function startServer() {
       './models/IdempotencyOperation', './models/TelegramWebhookUpdate', './models/RateLimitBucket',
       './models/AdminSession', './models/TelegramAdminConversation', './models/AdminLog', './models/DistributedJobLock',
       './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit',
-      './models/VipPlan', './models/VipSubscription', './models/VipReserve', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent'
+      './models/VipPlan', './models/VipSubscription', './models/VipReserve', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent', './models/WalletQuote'
     ]) await require(modelPath).init();
 
     // Route imports register every application model. Await all indexes too;

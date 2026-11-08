@@ -10,7 +10,11 @@ const settingsSchema = new mongoose.Schema(
     minWithdrawPoints: { type: Number, default: 1000 },
     dailyCheckInPoints: { type: Number, default: 10 },
     streakBonusPoints: { type: Number, default: 2 },
-    gramUsdPrice: { type: Number, default: 0, min: 0 },
+    gramUsdPrice: { type: Number, default: 0.2, min: 0 },
+    // Additive multi-asset wallet controls. No startup code enables new networks.
+    priceFeedEnabled: { type: Boolean, default: false },
+    enabledWithdrawalNetworks: { type: [String], default: () => ['TON_MAINNET', 'BSC_MAINNET'] },
+    minimumWithdrawUsdt: { type: Number, default: 1, min: 0 },
     // Retained for compatibility; v4 only credits on an authenticated manual Claim.
     dailyAutoCheckinEnabled: { type: Boolean, default: false },
     dailyReminderEnabled: { type: Boolean, default: true },

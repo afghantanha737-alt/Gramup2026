@@ -26,7 +26,8 @@ const TRANSACTION_TYPES = [
   'vip_daily_reward',
   'vip_principal_return',
   'admin_adjust',
-  'withdrawal_refund'
+  'withdrawal_refund',
+  'asset_conversion'
 ];
 
 const IMMUTABLE_ERROR = 'Transaction records are append-only and cannot be mutated.';
@@ -34,7 +35,7 @@ const IMMUTABLE_ERROR = 'Transaction records are append-only and cannot be mutat
 const transactionSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    currency: { type: String, enum: ['points', 'gram'], required: true, index: true },
+    currency: { type: String, enum: ['points', 'gram', 'usdt'], required: true, index: true },
     transactionId: { type: String, required: true, trim: true },
     sourceId: { type: String, required: true, trim: true },
     type: { type: String, enum: TRANSACTION_TYPES, required: true },
