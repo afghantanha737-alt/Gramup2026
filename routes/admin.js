@@ -10,7 +10,7 @@ const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
-const { bot, notifyUser, markTelegramBlocked, isTelegramDeliveryBlocked, activeTelegramUserFilter, broadcastToActiveUsers, buildBroadcastButtonsReplyMarkup, sanitizeTelegramHtml } = require('../utils/bot');
+const { bot, notifyUser, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers, buildBroadcastButtonsReplyMarkup, sanitizeTelegramHtml } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { postWithdrawalPaid } = require('../utils/payoutChannel');
 const { sendNotificationOnce } = require('../utils/notificationDelivery');
@@ -2957,7 +2957,8 @@ router.get('/broadcast/:id', async (req, res) => {
       totalRecipients: job.totalRecipients,
       sent: job.sent,
       failed: job.failed,
-      pending: Math.max(0, job.totalRecipients - job.sent - job.failed),
+      blocked: job.blocked || 0,
+      pending: Math.max(0, job.totalRecipients - job.sent - job.failed - (job.blocked || 0)),
       startedAt: job.startedAt,
       finishedAt: job.finishedAt,
       lastError: job.lastError || ''
@@ -2993,7 +2994,8 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
     return res.status(400).json({ success: false, message: error.message || 'متن یا لینک دکمه معتبر نیست.' });
   }
 
-  const users = await User.find(activeTelegramUserFilter(), 'telegramId');
+  const candidates = await User.find(activeTelegramUserFilter(), 'telegramId isBanned telegramBlockedAt').lean();
+  const users = filterActiveTelegramRecipients(candidates);
   const job = await BroadcastJob.create({
     actor: req.adminActor,
     hasImage: Boolean(req.file),
@@ -3001,10 +3003,6 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
     totalRecipients: users.length
   });
 
-  // برای جلوگیری از برخورد با محدودیت نرخ تلگرام (~۳۰ پیام در ثانیه)،
-  // ارسال را به‌صورت دسته‌ای و با تأخیر کوتاه انجام می‌دهیم.
-  const BATCH_SIZE = 20;
-  const DELAY_MS = 1100;
   const sendOptions = { parse_mode: 'HTML', ...(replyMarkup ? { reply_markup: replyMarkup } : {}) };
 
   res.json({
@@ -3024,30 +3022,26 @@ router.post('/broadcast', upload.single('image'), async (req, res) => {
   });
 
   void (async () => {
-    let sent = 0;
-    let failed = 0;
     try {
-      for (let i = 0; i < users.length; i += BATCH_SIZE) {
-        const batch = users.slice(i, i + BATCH_SIZE);
-        const results = await Promise.all(batch.map(async user => {
-          try {
-            if (req.file) await bot.sendPhoto(user.telegramId, req.file.buffer, { caption: text, ...sendOptions });
-            else await bot.sendMessage(user.telegramId, text, sendOptions);
-            return true;
-          } catch (error) {
-            if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(user.telegramId);
-            return false;
-          }
-        }));
-        sent += results.filter(Boolean).length;
-        failed += results.length - results.filter(Boolean).length;
-        await BroadcastJob.updateOne({ _id: job._id }, { $set: { sent, failed } });
-        if (i + BATCH_SIZE < users.length) await new Promise(resolve => setTimeout(resolve, DELAY_MS));
-      }
-      await BroadcastJob.updateOne({ _id: job._id }, { $set: { status: 'completed', sent, failed, finishedAt: new Date() } });
-      console.log(`📣 Broadcast finished: job=${job._id} sent=${sent} failed=${failed} total=${users.length}`);
+      const summary = await broadcastToActiveUsers(User, text, {
+        recipients: users,
+        sendOptions,
+        imageBuffer: req.file?.buffer,
+        intervalMs: 50,
+        progressEvery: 25,
+        onProgress: async progress => {
+          await BroadcastJob.updateOne({ _id: job._id }, { $set: {
+            sent: progress.sent, failed: progress.failed, blocked: progress.blocked
+          } });
+        }
+      });
+      await BroadcastJob.updateOne({ _id: job._id }, { $set: {
+        status: 'completed', sent: summary.sent, failed: summary.failed,
+        blocked: summary.blocked, finishedAt: new Date()
+      } });
+      console.log(`📣 Broadcast finished: job=${job._id} sent=${summary.sent} blocked=${summary.blocked} failed=${summary.failed} total=${summary.total}`);
     } catch (error) {
-      await BroadcastJob.updateOne({ _id: job._id }, { $set: { status: 'failed', sent, failed, finishedAt: new Date(), lastError: String(error.message || error).slice(0, 500) } }).catch(() => {});
+      await BroadcastJob.updateOne({ _id: job._id }, { $set: { status: 'failed', finishedAt: new Date(), lastError: String(error.message || error).slice(0, 500) } }).catch(() => {});
       console.error(`[broadcast:${job._id}] failed:`, error.message || error);
     }
   })();

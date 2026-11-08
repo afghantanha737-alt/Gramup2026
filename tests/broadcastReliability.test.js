@@ -5,7 +5,7 @@ const path = require('path');
 const BroadcastJob = require('../models/BroadcastJob');
 
 const fields = BroadcastJob.schema.paths;
-for (const field of ['status', 'totalRecipients', 'sent', 'failed', 'startedAt', 'finishedAt', 'lastError']) {
+for (const field of ['status', 'totalRecipients', 'sent', 'failed', 'blocked', 'startedAt', 'finishedAt', 'lastError']) {
   assert.ok(fields[field], `BroadcastJob must contain ${field}`);
 }
 assert.deepStrictEqual(fields.status.enumValues, ['running', 'completed', 'failed']);
@@ -22,12 +22,16 @@ assert.ok(source.includes('buildBroadcastButtonsReplyMarkup(requestedButtons, we
 assert.ok(source.includes("parse_mode: 'HTML'"));
 assert.ok(source.includes('reply_markup: replyMarkup'));
 assert.ok(source.includes('activeTelegramUserFilter()'));
-assert.ok(source.includes('caption: text, ...sendOptions'));
-assert.ok(source.includes('bot.sendMessage(user.telegramId, text, sendOptions)'));
+assert.ok(source.includes('filterActiveTelegramRecipients(candidates)'));
+assert.ok(source.includes('broadcastToActiveUsers(User, text, {'));
+assert.ok(source.includes('progressEvery: 25'));
+assert.ok(source.includes('blocked: job.blocked || 0'));
+assert.ok(source.includes('blocked: summary.blocked'));
 
 const botSource = fs.readFileSync(path.join(__dirname, '..', 'utils/bot.js'), 'utf8');
 assert.ok(botSource.includes('function sanitizeTelegramHtml(value)'));
 assert.ok(botSource.includes('function buildBroadcastButtonsReplyMarkup(buttons, webAppUrl)'));
+assert.ok(botSource.includes('getTelegramRetryAfterMs(error)'));
 assert.ok(botSource.includes('at most 8 inline buttons'));
 
-console.log('ALL PASS — durable Broadcast job status and delivery diagnostics contract');
+console.log('ALL PASS — Admin broadcast uses validated, paced shared delivery with retry and blocked-recipient progress');

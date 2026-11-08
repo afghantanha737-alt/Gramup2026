@@ -24,6 +24,35 @@
   };
   let proofVerificationInFlight = '';
   let clearServerInFlight = null;
+  let sdkLoadPromise = null;
+
+  function ensureTonConnectSdk() {
+    if (window.TON_CONNECT_UI?.TonConnectUI) return Promise.resolve();
+    if (sdkLoadPromise) return sdkLoadPromise;
+    sdkLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      const timeout = setTimeout(() => {
+        script.remove();
+        reject(new Error('TON Connect SDK loading timed out.'));
+      }, 15000);
+      script.src = 'https://unpkg.com/@tonconnect/ui@5.0.1/dist/tonconnect-ui.min.js';
+      script.async = true;
+      script.onload = () => {
+        clearTimeout(timeout);
+        if (window.TON_CONNECT_UI?.TonConnectUI) resolve();
+        else reject(new Error('TON Connect SDK did not initialize.'));
+      };
+      script.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('TON Connect SDK could not be downloaded.'));
+      };
+      document.head.appendChild(script);
+    }).catch(error => {
+      sdkLoadPromise = null;
+      throw error;
+    });
+    return sdkLoadPromise;
+  }
 
   function labels() {
     const lang = window.state?.language || 'fa';
@@ -337,10 +366,8 @@
 
   async function connect() {
     if (!state.ui) {
-      state.phase = 'error';
-      state.error = labels().unavailable;
-      notify();
-      return;
+      await init();
+      if (!state.ui) return;
     }
     if (state.phase === 'connecting' || state.phase === 'disconnecting') return;
 
@@ -504,10 +531,17 @@
   async function init() {
     if (state.ready) return state;
     if (!window.TON_CONNECT_UI?.TonConnectUI) {
-      state.phase = 'error';
-      state.error = labels().unavailable;
+      state.phase = 'initializing';
+      state.error = '';
       notify();
-      return state;
+      try {
+        await ensureTonConnectSdk();
+      } catch (error) {
+        state.phase = 'error';
+        state.error = error?.message || labels().unavailable;
+        notify();
+        return state;
+      }
     }
     try {
       const options = { manifestUrl };

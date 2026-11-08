@@ -33,11 +33,16 @@ const candidates = [
 assert.deepEqual(filterActiveTelegramRecipients(candidates), candidates.slice(0, 3));
 
 const webhook = fs.readFileSync('routes/telegramWebhook.js', 'utf8');
-assert.equal((webhook.match(/User\.find\(activeTelegramUserFilter\(\)\)/g) || []).length, 2,
-  'both bot broadcast payload paths must use the shared active-recipient query');
-assert.equal((webhook.match(/filterActiveTelegramRecipients\(candidates\)/g) || []).length, 2,
-  'both broadcast paths must validate candidates before iterating');
-assert.equal((webhook.match(/if \(isTelegramDeliveryBlocked\(error\)\) await markTelegramBlocked\(user\.telegramId\)/g) || []).length, 2,
+const botSource = fs.readFileSync('utils/bot.js', 'utf8');
+assert.ok(webhook.includes('broadcastCopyToActiveUsers(User, pending.fromChatId, pending.messageId)'),
+  'Telegram bot broadcast confirmation must delegate delivery to the shared copy-broadcast helper');
+assert.ok(botSource.includes("User.find(activeTelegramUserFilter(), 'telegramId isBanned telegramBlockedAt').lean()"),
+  'copy broadcasts must query active recipients with optional legacy flags available for validation');
+assert.ok(botSource.includes('const users = filterActiveTelegramRecipients(candidates);'),
+  'copy broadcasts must validate each stored Telegram ID before sending');
+assert.ok(botSource.includes('const retryAfterMs = getTelegramRetryAfterMs(error);'),
+  'copy broadcasts must retry a Telegram FloodWait once');
+assert.ok(botSource.includes('if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(telegramId);'),
   'blocked or chat-not-found recipients must be marked to prevent repeated failures');
 
 console.log('PASS — bot broadcasts select valid, active Telegram user IDs and skip blocked recipients');

@@ -104,6 +104,16 @@ const {
   assert.ok(delays.filter(value => value === 50).length >= 3, 'the worker paces recipients at no more than 20 messages per second');
   assert.ok(blockedUpdates.some(item => item.filter.telegramId === '103' && item.update.$set.telegramBlockedAt instanceof Date));
 
+  const progress = [];
+  await broadcastToActiveUsers({ find: async () => recipients }, formattedText, {
+    recipients,
+    intervalMs: 0,
+    progressEvery: 2,
+    onProgress: async value => progress.push(value.processed),
+    sleepFn: async () => {}
+  });
+  assert.deepEqual(progress, [2, 4], 'progress checkpoints honor the configured interval and include the final recipient');
+
   let customTextCall;
   bot.sendMessage = async (telegramId, text, options) => { customTextCall = { telegramId, text, options }; };
   const customTextSummary = await broadcastToActiveUsers({}, formattedText, {

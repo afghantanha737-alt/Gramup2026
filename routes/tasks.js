@@ -461,8 +461,10 @@ async function claimBioLinkTask(req, res, task) {
   try {
     const settings = await Settings.getGlobal();
     const payment = await withMongoTransaction(async session => {
-      const currentTask = await Task.findOne({ _id: task._id, taskKind: BIO_LINK_TASK_KIND, isActive: true }).session(session);
       const now = new Date();
+      const currentTask = await Task.findOne({
+        ...taskCapacityFilter(task._id, now), taskKind: BIO_LINK_TASK_KIND
+      }).session(session);
       if (!currentTask) throw Object.assign(new Error('این تسک فعال نیست.'), { status: 409, code: 'TASK_INACTIVE' });
       if (Number(currentTask.reward) !== BIO_LINK_REWARD) throw Object.assign(new Error('تنظیم پاداش تسک نامعتبر است.'), { status: 503, code: 'TASK_SETUP_INCOMPLETE' });
       const completion = await TaskCompletion.findOne({ user: req.dbUser._id, task: currentTask._id }).session(session);
@@ -489,10 +491,10 @@ async function claimBioLinkTask(req, res, task) {
         }).save({ session });
       }
       const reservedTask = await Task.findOneAndUpdate(
-        { _id: currentTask._id, taskKind: BIO_LINK_TASK_KIND, isActive: true },
+        { ...taskCapacityFilter(currentTask._id, now), taskKind: BIO_LINK_TASK_KIND },
         { $inc: { completedCount: 1 } }, { new: true, session }
       );
-      if (!reservedTask) throw Object.assign(new Error('این تسک غیرفعال شد.'), { status: 409, code: 'TASK_INACTIVE' });
+      if (!reservedTask) throw Object.assign(new Error('این تسک غیرفعال شد یا ظرفیت آن تکمیل شده است.'), { status: 409, code: 'TASK_FULL' });
       const rewarded = await User.findByIdAndUpdate(req.dbUser._id, { $inc: { points: BIO_LINK_REWARD } }, { new: true, session });
       if (!rewarded) throw new Error('کاربر برای ثبت پاداش پیدا نشد.');
       const ledgerResult = await recordLedgerRequired({
@@ -554,6 +556,15 @@ router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) =>
         joined: false,
         message: `⚠️ ${result.configError}`,
         code: 'VERIFY_CONFIG_ERROR'
+      });
+    }
+
+    if (result.transientError) {
+      return res.status(503).json({
+        success: false,
+        joined: false,
+        message: result.transientError,
+        code: 'MEMBERSHIP_VERIFY_UNAVAILABLE'
       });
     }
 

@@ -1257,6 +1257,7 @@ async function loadTasks({ force = false } = {}) {
 /* ================= TRANSACTION HISTORY (LEDGER) ================= */
 let historyList = [];
 let historyHasMore = false;
+let historyLoaded = false;
 let historyLoading = false;
 let historyCursor = "";
 let historyLoadError = null;
@@ -1284,6 +1285,7 @@ async function loadHistory(reset = true) {
   if (historyLoading && !reset) return false;
   const requestId = ++historyRequestSequence;
   historyLoading = true;
+  historyLoadError = null;
   const cursor = reset ? "" : historyCursor;
   try {
     const suffix = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
@@ -1293,6 +1295,7 @@ async function loadHistory(reset = true) {
     historyList = reset ? items : historyList.concat(items);
     historyHasMore = Boolean(data?.hasMore);
     historyCursor = String(data?.nextCursor || "");
+    historyLoaded = true;
     historyLoadError = null;
     return true;
   } catch (error) {
@@ -1311,6 +1314,11 @@ async function loadMoreHistory() {
   renderProfile();
 }
 window.loadMoreHistory = loadMoreHistory;
+async function retryHistory() {
+  await loadHistory(true);
+  await renderProfile();
+}
+window.retryHistory = retryHistory;
 
 let leaderboardLoadError = null;
 let leaderboardRequestSequence = 0;
@@ -2666,6 +2674,9 @@ function renderWallet() {
   `;
 
   window.gramupWallet?.mount("tonWalletConnection");
+  if (typeof window.initGramupWalletConnect === "function") {
+    void window.initGramupWalletConnect().catch(error => console.warn("Wallet connect initialization failed:", error));
+  }
   void loadWalletChainBalance(renderRequestId);
 
   loadWalletHistory().then(() => {
@@ -3509,12 +3520,15 @@ function renderProfileHistory() {
     </div>
 
     <div class="card" style="padding:0">
-      ${historyList.length === 0
-        ? `<div class="emptyState"><div class="emptyIcon">🧾</div><div class="emptyDesc">${t("history_empty")}</div></div>`
+      ${historyLoadError
+        ? `<div class="emptyState"><div class="emptyIcon">⚠️</div><div class="emptyDesc">${t("history_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryHistory()">${t("retry_button")}</button></div>`
+        : historyList.length === 0
+          ? `<div class="emptyState"><div class="emptyIcon">🧾</div><div class="emptyDesc">${t("history_empty")}</div></div>`
         : rows
       }
     </div>
 
+    ${historyLoadError && historyList.length ? `<div class="emptyDesc" role="alert">${t("history_load_error")} <button class="secondaryBtn" type="button" onclick="loadMoreHistory()">${t("retry_button")}</button></div>` : ""}
     ${historyHasMore ? `<button class="loadMoreBtn" id="historyLoadMoreBtn" type="button" onclick="loadMoreHistory()">${t("history_load_more")}</button>` : ""}
     </div>
   `;
@@ -4055,7 +4069,7 @@ async function renderProfile() {
     await loadWeeklyLeaderboard();
     if (!isCurrentProfileRender()) return;
   }
-  if (profileView === "history" && historyList.length === 0 && !historyLoading) {
+  if (profileView === "history" && !historyLoaded && !historyLoadError && !historyLoading) {
     content.innerHTML = `<div class="loading" style="height:300px"></div>`;
     await loadHistory(true);
     if (!isCurrentProfileRender()) return;
@@ -4375,7 +4389,11 @@ async function renderCurrentTab(requestId = navigationSequence) {
         if (!isCurrentRender()) return;
         renderHome();
       }
-      void loadReferralData();
+      if (!state.referralDataLoaded && !state.referralLoading) {
+        window.setTimeout(() => {
+          if (state.activeTab === "home") void loadReferralData();
+        }, 2500);
+      }
     } else if (tab === "tasks") {
       if (cachedReadModelAvailable) {
         renderTasks();
@@ -4385,7 +4403,6 @@ async function renderCurrentTab(requestId = navigationSequence) {
         if (!isCurrentRender()) return;
         renderTasks();
       }
-      void loadReferralData();
     } else if (tab === "vip") {
       if (cachedReadModelAvailable) {
         void renderVipTab();
@@ -4454,7 +4471,6 @@ async function boot() {
 
   await bootstrapAuth();
   applyStaticTranslations();
-  if (typeof window.initGramupWalletConnect === "function") await window.initGramupWalletConnect();
 
   if (!termsAccepted()) {
     showTerms();

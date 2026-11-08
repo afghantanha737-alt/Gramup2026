@@ -121,12 +121,12 @@ async function main() {
   for (const [asset, version] of Object.entries({
     maintenanceGate: '20261006-maintenance',
     readModelCache: '20261030-read-model-1',
-    walletConnect: '20261025-wallet-twa-return-1'
+    walletConnect: 'up_v40_audit_perf_20261108'
   })) {
     assert.ok(indexHtml.includes(`js/${asset}.js?v=${version}`), `${asset} must keep its current cache identifier`);
   }
   assert.ok(indexHtml.includes('js/i18n.js?v=up_v36_vip_history_20261107'), 'i18n.js must use the Mine status cache-busting version');
-  assert.ok(indexHtml.includes('js/app.js?v=up_v39_vip_history_20261107'), 'app.js must use the VIP mining hub cache-busting version');
+  assert.ok(indexHtml.includes('js/app.js?v=up_v40_audit_perf_20261108'), 'app.js must use the current audit/performance cache-busting version');
   assert.doesNotMatch(indexHtml, /spinCelebration|luckySpinPage|spinWheel/i, 'Lucky Spin must not be loaded before its feature is built');
   assert.ok(indexHtml.includes('css/style.css?v=up_v37_vip_history_20261107'), 'main CSS must use the UP/Mine cache-busting version');
   assert.ok(indexHtml.includes('css/theme-selector.css?v=up_v36_vip_signature_20261107'), 'theme CSS must use the Silver theme cache-busting version');

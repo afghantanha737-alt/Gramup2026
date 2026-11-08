@@ -305,7 +305,13 @@ const { cycleDayForStreak, dailyCheckinReward } = require('../utils/dailyCheckin
 // GET /api/points/me
 router.get('/me', auth, async (req, res) => {
   const u = req.dbUser;
-  const settings = await Settings.getGlobal();
+  const [settings, earnedAgg] = await Promise.all([
+    Settings.getGlobal(),
+    PointsLedger.aggregate([
+      { $match: { user: u._id, currency: 'points', amount: { $gt: 0 }, type: { $nin: ['exchange_in', 'admin_adjust', 'vip_principal_return'] } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ])
+  ]);
 
   const todayKey = utcDayKey(new Date());
   const canCheckIn = !u.lastCheckIn || utcDayKey(u.lastCheckIn) < todayKey;
@@ -318,10 +324,6 @@ router.get('/me', auth, async (req, res) => {
   const minWithdrawGram = Number((settings.minWithdrawPoints * settings.rate).toFixed(6));
 
   // مجموع UP که کاربر تا امروز «کسب» کرده (بدون احتساب تبدیل GRAM→UP و اصلاح دستی ادمین)
-  const earnedAgg = await PointsLedger.aggregate([
-    { $match: { user: u._id, currency: 'points', amount: { $gt: 0 }, type: { $nin: ['exchange_in', 'admin_adjust', 'vip_principal_return'] } } },
-    { $group: { _id: null, total: { $sum: '$amount' } } }
-  ]);
   const totalEarnedPoints = earnedAgg.length ? earnedAgg[0].total : 0;
   const level = getLevel(totalEarnedPoints);
   const withdrawalProgress = minWithdrawGram > 0

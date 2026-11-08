@@ -735,14 +735,25 @@ function showMsg(text, type) {
 }
 
 async function api(path, options = {}) {
-  const res = await fetch(path, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(ADMIN_SESSION ? { "x-admin-session": ADMIN_SESSION } : {}),
-      ...(options.headers || {})
-    }
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  let res;
+  try {
+    res = await fetch(path, {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(ADMIN_SESSION ? { "x-admin-session": ADMIN_SESSION } : {}),
+        ...(options.headers || {})
+      }
+    });
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("درخواست پس از ۳۰ ثانیه متوقف شد؛ دوباره تلاش کنید.");
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   let data = {};
   try { data = await res.json(); } catch {}
   if (!res.ok) {
@@ -934,7 +945,12 @@ async function loadStats() {
     document.getElementById("chartNewUsers").innerHTML = renderBarChart(s.newUsersTrend, "var(--accent, #6366f1)");
     document.getElementById("chartTasksDone").innerHTML = renderBarChart(s.tasksTrend, "var(--success, #22c55e)");
   } catch (error) {
-    grid.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+    const retryMarkup = `<div class="empty">${escapeHtml(error.message)}<br><button type="button" class="secondary" onclick="loadStats()" style="margin-top:8px">Retry dashboard</button></div>`;
+    grid.innerHTML = retryMarkup;
+    ["referralStatsGrid", "referralLevelStats", "topReferralActivity", "chartNewUsers", "chartTasksDone"].forEach(id => {
+      const target = document.getElementById(id);
+      if (target) target.innerHTML = retryMarkup;
+    });
   }
 }
 
@@ -2072,7 +2088,7 @@ async function pollBroadcastStatus(id, msgEl) {
       const result = await api(`/api/admin/broadcast/${encodeURIComponent(id)}`);
       const job = result.job || {};
       const state = job.status === "completed" ? "تکمیل شد" : job.status === "failed" ? "با خطا متوقف شد" : "در حال ارسال";
-      msgEl.textContent = `Broadcast ${state}: موفق ${job.sent || 0} · ناموفق ${job.failed || 0} · باقی‌مانده ${job.pending || 0}`;
+      msgEl.textContent = `Broadcast ${state}: موفق ${job.sent || 0} · مسدود/غیرقابل‌دسترسی ${job.blocked || 0} · خطا ${job.failed || 0} · باقی‌مانده ${job.pending || 0}`;
       if (job.status === "running" && Date.now() - startedAt < 30 * 60 * 1000) setTimeout(poll, 2000);
       else if (job.status === "failed" && job.lastError) msgEl.textContent += ` — ${job.lastError}`;
     } catch (error) {

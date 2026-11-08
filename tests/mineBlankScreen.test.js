@@ -44,5 +44,5 @@ assert.doesNotMatch(html, /data-tab="mine"/);
 assert.match(html, /style\.css\?v=up_v37_vip_history_20261107/);
 assert.match(html, /theme-selector\.css\?v=up_v36_vip_signature_20261107/);
 assert.match(html, /i18n\.js\?v=up_v36_vip_history_20261107/);
-assert.match(html, /app\.js\?v=up_v39_vip_history_20261107/);
+assert.match(html, /app\.js\?v=up_v40_audit_perf_20261108/);
 console.log('PASS — VIP mining data loads with visible retry state, ticks every second, and localized cache-busted assets');

@@ -212,7 +212,7 @@ async function checkChatMembership(chatId, telegramUserId) {
     const member = await withTimeout(bot.getChatMember(chatId, telegramUserId), 25000, 'TIMEOUT');
     if (member === 'TIMEOUT') {
       console.warn(`getChatMember timed out for chat=${chatId} user=${telegramUserId}`);
-      return { joined: false, configError: 'پاسخ تلگرام کند بود (Timeout). دوباره تلاش کن.' };
+      return { joined: false, transientError: 'پاسخ تلگرام کند بود (Timeout). دوباره تلاش کن.' };
     }
     return { joined: ['member', 'administrator', 'creator'].includes(member.status) };
   } catch (error) {
@@ -220,7 +220,7 @@ async function checkChatMembership(chatId, telegramUserId) {
     console.warn(`getChatMember failed for chat=${chatId} user=${telegramUserId}:`, raw);
     const isConfigIssue = /chat not found/i.test(raw) || /not enough rights/i.test(raw) || /member list is inaccessible/i.test(raw) || /bot is not a member/i.test(raw) || /kicked/i.test(raw);
     if (isConfigIssue) return { joined: false, configError: `مشکل تنظیمات تسک: ${raw}` };
-    return { joined: false };
+    return { joined: false, transientError: 'بررسی عضویت از تلگرام در دسترس نیست؛ دوباره تلاش کنید.' };
   }
 }
 
@@ -314,13 +314,21 @@ function buildBroadcastButtonReplyMarkup(buttonText, buttonUrl, webAppUrl) {
 }
 
 async function copyMessageSafe(User, telegramId, fromChatId, messageId) {
-  try {
-    await bot.copyMessage(telegramId, fromChatId, messageId);
-    return true;
-  } catch (error) {
-    if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(telegramId);
-    return false;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await bot.copyMessage(telegramId, fromChatId, messageId);
+      return true;
+    } catch (error) {
+      const retryAfterMs = getTelegramRetryAfterMs(error);
+      if (retryAfterMs !== null && attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+        continue;
+      }
+      if (isTelegramDeliveryBlocked(error)) await markTelegramBlocked(telegramId);
+      return false;
+    }
   }
+  return false;
 }
 
 async function broadcastToActiveUsers(User, textOrFn, options = {}) {
@@ -333,6 +341,7 @@ async function broadcastToActiveUsers(User, textOrFn, options = {}) {
   const sendOptions = { ...(options.sendOptions || {}) };
   if (options.replyMarkup) sendOptions.reply_markup = options.replyMarkup;
   const intervalMs = Number.isFinite(options.intervalMs) ? Math.max(0, options.intervalMs) : 50;
+  const progressEvery = Number.isFinite(options.progressEvery) ? Math.max(1, Math.floor(options.progressEvery)) : 1;
   const sleep = options.sleepFn || (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)));
   const sleepBeforeRetry = options.retrySleepFn || sleep;
   console.log(`📣 Text broadcast started: recipients=${users.length}`);
@@ -368,7 +377,9 @@ async function broadcastToActiveUsers(User, textOrFn, options = {}) {
     else if (blocked) summary.blocked += 1;
     else summary.failed += 1;
     summary.processed += 1;
-    if (typeof options.onProgress === 'function') await options.onProgress({ ...summary });
+    if (typeof options.onProgress === 'function' && (summary.processed % progressEvery === 0 || summary.processed === users.length)) {
+      await options.onProgress({ ...summary });
+    }
     if (intervalMs > 0 && index < users.length - 1) await sleep(intervalMs);
   }
   console.log(`📣 Broadcast finished: sent=${summary.sent} failed=${summary.failed} blocked=${summary.blocked} total=${summary.total}`);
@@ -377,7 +388,8 @@ async function broadcastToActiveUsers(User, textOrFn, options = {}) {
 
 async function broadcastCopyToActiveUsers(User, fromChatId, messageId) {
   if (!bot) return 0;
-  const users = await User.find(activeTelegramUserFilter(), 'telegramId');
+  const candidates = await User.find(activeTelegramUserFilter(), 'telegramId isBanned telegramBlockedAt').lean();
+  const users = filterActiveTelegramRecipients(candidates);
   console.log(`📣 Copy broadcast started: recipients=${users.length}, source=${fromChatId}/${messageId}`);
   const BATCH_SIZE = 20;
   const DELAY_MS = 1100;
