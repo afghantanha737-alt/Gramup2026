@@ -528,6 +528,20 @@
     }
   }
 
+  async function sendTonTransaction(transaction) {
+    assertVerifiedWallet();
+    if (!transaction?.messages?.length) throw new Error('TON transaction is unavailable.');
+    setOperation('ad_payment', 'sending');
+    try {
+      const result = await state.ui.sendTransaction(transaction);
+      setOperation('ad_payment', 'pending');
+      return result;
+    } catch (error) {
+      operationError('ad_payment', error);
+      throw error;
+    }
+  }
+
   async function init() {
     if (state.ready) return state;
     if (!window.TON_CONNECT_UI?.TonConnectUI) {
@@ -585,6 +599,7 @@
     verifyDeposit,
     requestWithdrawal,
     swapGramToPoints,
+    sendTonTransaction,
     getStatusHtml,
     getAddress: () => state.address,
     isConnected: () => state.connected,

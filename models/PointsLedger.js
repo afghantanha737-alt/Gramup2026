@@ -34,7 +34,9 @@ const pointsLedgerSchema = new mongoose.Schema(
         'vip_daily_principal', // پرداخت روزانه اصل سرمایه از Reserve VIP
         'vip_daily_reward', // پاداش روزانه‌ی دوره VIP
         'vip_principal_return', // بازگشت اصل پوینت پس از پایان دوره VIP
-        'admin_adjust'     // اصلاح دستی توسط ادمین (مثلاً بازگشت وجه بعد از رد برداشت)
+        'admin_adjust',     // اصلاح دستی توسط ادمین (مثلاً بازگشت وجه بعد از رد برداشت)
+        'ad_order_payment', // کسر GRAM بابت رزرو کمپین تبلیغاتی
+        'ad_order_refund'   // بازگشت GRAM کمپین ردشده یا لغوشده
       ],
       required: true
     },

@@ -26,7 +26,9 @@ const TRANSACTION_TYPES = [
   'vip_daily_reward',
   'vip_principal_return',
   'admin_adjust',
-  'withdrawal_refund'
+  'withdrawal_refund',
+  'ad_order_payment',
+  'ad_order_refund'
 ];
 
 const IMMUTABLE_ERROR = 'Transaction records are append-only and cannot be mutated.';

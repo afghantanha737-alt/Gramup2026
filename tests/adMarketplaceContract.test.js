@@ -1,0 +1,18 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const adRoute = fs.readFileSync('routes/adOrders.js', 'utf8');
+const app = fs.readFileSync('public/js/app.js', 'utf8');
+const wallet = fs.readFileSync('public/js/walletConnect.js', 'utf8');
+const model = fs.readFileSync('models/AdOrder.js', 'utf8');
+assert.match(adRoute, /router\.post\('\/ton-intents'/);
+assert.match(adRoute, /router\.post\('\/:id\/ton-verify'/);
+assert.match(adRoute, /findIncomingNativeGramTransferByReference/);
+assert.match(adRoute, /paymentTxHash/);
+assert.match(adRoute, /getChatMember/);
+assert.match(app, /Pay with TON Wallet|ad_pay_ton/);
+assert.match(app, /sendTonTransaction/);
+assert.match(wallet, /async function sendTonTransaction/);
+assert.match(model, /paymentReference/);
+assert.match(model, /paymentTxHash/);
+console.log('PASS — ad marketplace TON intent, replay guard, wallet transfer and bot-admin contracts');

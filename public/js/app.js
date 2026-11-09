@@ -1545,6 +1545,60 @@ document.addEventListener("click", event => {
   else openTaskLinkOnly(url);
 });
 
+function renderAdvertiserCard() {
+  return `<details class="card advertiserCard" style="margin:12px 0"><summary><b>${t("ad_marketplace_title")}</b><span class="small"> ${t("ad_marketplace_subtitle")}</span></summary>
+    <div style="display:grid;gap:8px;margin-top:12px">
+      <input data-ad-title maxlength="120" placeholder="${escapeHTML(t("ad_title_ph"))}">
+      <input data-ad-description maxlength="500" placeholder="${escapeHTML(t("ad_description_ph"))}">
+      <input data-ad-url type="url" placeholder="https://t.me/your_channel">
+      <input data-ad-chat type="text" placeholder="${escapeHTML(t("ad_chat_ph"))}">
+      <select data-ad-payment><option value="gram_balance">${escapeHTML(t("ad_pay_gram"))}</option><option value="ton_mainnet">${escapeHTML(t("ad_pay_ton"))}</option></select>
+      <button type="button" class="secondary" data-ad-bot-check>${escapeHTML(t("ad_check_bot"))}</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input data-ad-reward type="number" min="1" step="1" placeholder="${escapeHTML(t("ad_reward_ph"))}"><input data-ad-count type="number" min="1" step="1" placeholder="${escapeHTML(t("ad_count_ph"))}"></div>
+      <input data-ad-price type="number" min="0.000001" step="0.000001" placeholder="${escapeHTML(t("ad_price_ph"))}">
+      <button type="button" class="primaryBtn" data-ad-submit>${t("ad_submit")}</button>
+      <div class="small" data-ad-message role="status"></div>
+    </div></details>`;
+}
+async function submitAdCampaign(button) {
+  const root = button.closest(".advertiserCard");
+  const value = selector => root?.querySelector(selector)?.value || "";
+  const message = root?.querySelector("[data-ad-message]");
+  button.disabled = true;
+  try {
+    const body = { title: value("[data-ad-title]"), description: value("[data-ad-description]"), destinationUrl: value("[data-ad-url]"), telegramChatId: value("[data-ad-chat]"), rewardUp: Number(value("[data-ad-reward]")), completionsRequested: Number(value("[data-ad-count]")), priceGramPerCompletion: Number(value("[data-ad-price]")), verificationType: "telegram" };
+    const payment = value("[data-ad-payment]");
+    if (payment === "ton_mainnet") {
+      const created = await api("/api/ad-orders/ton-intents", { method: "POST", body });
+      if (!window.gramupWallet?.sendTonTransaction) throw new Error(t("ad_wallet_required"));
+      await window.gramupWallet.sendTonTransaction(created.transaction);
+      let verified;
+      for (let attempt = 0; attempt < 12; attempt += 1) { await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000)); verified = await api(`/api/ad-orders/${encodeURIComponent(created.intent.id)}/ton-verify`, { method: "POST", body: {} }); if (verified.status === "confirmed") break; }
+      if (verified?.status !== "confirmed") throw new Error(t("ad_payment_pending"));
+      if (message) message.textContent = verified.message || t("ad_submitted");
+    } else {
+      const result = await api("/api/ad-orders", { method: "POST", body });
+      if (message) message.textContent = result.message || t("ad_submitted");
+    }
+    root?.querySelectorAll("input").forEach(input => { input.value = ""; });
+  } catch (error) { if (message) message.textContent = error.message || t("error_generic"); }
+  finally { button.disabled = false; }
+}
+window.submitAdCampaign = submitAdCampaign;
+
+document.addEventListener("click", event => {
+  const button = event.target?.closest?.("[data-ad-submit]");
+  if (!button) return;
+  event.preventDefault();
+  void submitAdCampaign(button);
+});
+document.addEventListener("click", async event => {
+  const button = event.target?.closest?.("[data-ad-bot-check]");
+  if (!button) return;
+  const root = button.closest(".advertiserCard"); const chatId = root?.querySelector("[data-ad-chat]")?.value || "";
+  try { const result = await api(`/api/ad-orders/bot-check?chatId=${encodeURIComponent(chatId)}`); const message = root?.querySelector("[data-ad-message]"); if (message) message.textContent = result.message; } catch (error) { const message = root?.querySelector("[data-ad-message]"); if (message) message.textContent = error.message || t("error_generic"); }
+});
+
 async function openLatestPostTask(url, taskId) {
   if (!readModelActionAllowed()) return;
   const id = String(taskId || "");
@@ -1953,6 +2007,7 @@ function renderTasks() {
       <div class="tasksOverviewMeta"><span>${formatPoints(doneCount)} / ${formatPoints(visibleTasks.length)} ${t("task_btn_done")}</span><span>${t("tb_points_chip", { n: formatPoints(state.points) })}</span></div>
     </section>
     ${sectionTabs}
+    ${taskSection === "daily" ? renderAdvertiserCard() : ""}
     ${dailyCheckinHtml}
     ${taskErrorHtml}
     ${referralHtml}

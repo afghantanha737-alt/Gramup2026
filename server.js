@@ -142,6 +142,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/required-channels', require('./routes/membership'));
 app.use('/api/app-info', require('./routes/appInfo'));
 app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/ad-orders', require('./routes/adOrders'));
 app.use('/api/ton-proof', require('./routes/tonProof'));
 app.use('/api/points', require('./routes/points'));
 app.use('/api/referral', require('./routes/referral'));
@@ -149,6 +150,7 @@ app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/mining', require('./routes/mining'));
 app.use('/api/mobile-auth', require('./routes/mobileAuth'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin/ad-orders', require('./routes/adOrdersAdmin'));
 app.use('/api/maintenance', require('./routes/maintenance'));
 app.use('/api/telegram', require('./routes/telegramWebhook'));
 

@@ -59,7 +59,10 @@ const settingsSchema = new mongoose.Schema(
     luckySpinPrizes: {
       type: [{ _id: false, id: String, kind: { type: String, enum: ['points', 'gram', 'boost', 'spins', 'none'] }, amount: { type: Number, min: 0 }, label: { type: String, default: '' }, probability: { type: Number, min: 0, max: 100 } }],
       default: defaultSpinPrizes
-    }
+    },
+    adMarketplaceEnabled: { type: Boolean, default: true },
+    adCampaignMinBudgetGram: { type: Number, default: 0.1, min: 0 },
+    adCampaignMaxBudgetGram: { type: Number, default: 100000, min: 0 }
   },
   { timestamps: true }
 );

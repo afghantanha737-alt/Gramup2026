@@ -9,6 +9,7 @@ const { sensitiveRateLimit } = require('../utils/apiSecurity');
 const { bot, checkChatMembership } = require('../utils/bot');
 const { recordLedgerRequired } = require('../utils/ledger');
 const Task = require('../models/Task');
+const AdOrder = require('../models/AdOrder');
 const TaskCompletion = require('../models/TaskCompletion');
 const LatestPostEngagementState = require('../models/LatestPostEngagementState');
 const User = require('../models/User');
@@ -629,6 +630,23 @@ router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) =>
 
       if (reserved.maxCompletions != null && reserved.completedCount >= reserved.maxCompletions) {
         await Task.updateOne({ _id: reserved._id }, { $set: { isActive: false } }, { session });
+      }
+
+      if (currentTask.isSponsored) {
+        const campaign = await AdOrder.findOneAndUpdate(
+          { task: currentTask._id, status: { $in: ['running', 'approved'] }, completionsApproved: { $lt: currentTask.maxCompletions || Number.MAX_SAFE_INTEGER } },
+          { $inc: { completionsApproved: 1 } },
+          { new: true, session }
+        );
+        if (!campaign) {
+          const error = new Error('کمپین اسپانسری دیگر ظرفیت پرداخت ندارد.');
+          error.code = 'TASK_FULL';
+          throw error;
+        }
+        if (campaign.completionsApproved >= campaign.completionsRequested) {
+          campaign.status = 'completed';
+          await campaign.save({ session });
+        }
       }
 
       const rewarded = await User.findByIdAndUpdate(

@@ -137,6 +137,7 @@
     <div class="tabs">
       <button data-tab="stats" onclick="switchTab('stats')">آمار</button>
       <button data-tab="tasks" onclick="switchTab('tasks')">تسک‌ها</button>
+      <button data-tab="ad-orders" onclick="switchTab('ad-orders')">کمپین‌های تبلیغاتی</button>
       <button data-tab="withdrawals" onclick="switchTab('withdrawals')">برداشت‌ها</button>
       <button data-tab="deposits" onclick="switchTab('deposits')">واریزها</button>
       <button data-tab="weekly" onclick="switchTab('weekly')">جوایز لیدربورد</button>
@@ -589,6 +590,10 @@
       </div>
     </div>
 
+    <div id="tab-ad-orders" class="tabContent hidden">
+      <div class="card"><div class="flexBetween"><b>سفارش‌های تبلیغاتی</b><button class="secondary" onclick="loadAdOrders()">به‌روزرسانی</button></div><div id="adOrdersList" style="margin-top:12px">در حال بارگذاری…</div></div>
+    </div>
+
     <!-- SETTINGS -->
     <div id="tab-settings" class="tabContent hidden">
       <div class="card">
@@ -871,12 +876,26 @@ function switchTab(tab) {
   if (tab === "users") loadUsers();
   if (tab === "logs") loadLogs();
   if (tab === "tasks") loadTaskFormSettings();
+  if (tab === "ad-orders") loadAdOrders();
   if (tab === "channels") loadRequiredChannels();
   if (tab === "weekly") loadWeeklyAwards();
   if (tab === "audit") loadFinancialAudit();
   if (tab === "ops") loadOpsMetrics();
   if (tab === "settings") loadSettings();
   if (tab === "vip") loadVipManagement();
+}
+
+async function loadAdOrders() {
+  const el = document.getElementById("adOrdersList"); if (!el) return;
+  try {
+    const data = await api("/api/admin/ad-orders");
+    el.innerHTML = (data.orders || []).map(order => `<div class="card" style="margin:8px 0"><b>${escapeHtml(order.title)}</b><div class="small">${escapeHtml(order.advertiserTelegramId || "")} · ${order.totalCostGram} GRAM · ${order.status}</div><div class="row" style="margin-top:8px">${order.status === "pending_review" ? `<button onclick="reviewAdOrder('${order.id}','approve')">تأیید و ساخت تسک</button><button class="danger" onclick="reviewAdOrder('${order.id}','reject')">رد و بازگشت وجه</button>` : ""}</div></div>`).join("") || "سفارشی وجود ندارد.";
+  } catch (error) { el.textContent = error.message || "خطا در بارگذاری سفارش‌ها"; }
+}
+async function reviewAdOrder(id, action) {
+  const note = action === "reject" ? prompt("دلیل رد (اختیاری):", "") : "";
+  if (action === "reject" && note === null) return;
+  try { await api(`/api/admin/ad-orders/${encodeURIComponent(id)}/${action}`, { method: "POST", body: { note: note || "" } }); await loadAdOrders(); } catch (error) { showMsg(error.message || "عملیات انجام نشد", "error"); }
 }
 
 /* ---------- STATS (داشبورد آمار) ---------- */
