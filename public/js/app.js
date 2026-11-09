@@ -1546,58 +1546,60 @@ document.addEventListener("click", event => {
 });
 
 function renderAdvertiserCard() {
-  return `<details class="card advertiserCard" style="margin:12px 0"><summary><b>${t("ad_marketplace_title")}</b><span class="small"> ${t("ad_marketplace_subtitle")}</span></summary>
-    <div style="display:grid;gap:8px;margin-top:12px">
-      <input data-ad-title maxlength="120" placeholder="${escapeHTML(t("ad_title_ph"))}">
-      <input data-ad-description maxlength="500" placeholder="${escapeHTML(t("ad_description_ph"))}">
-      <input data-ad-url type="url" placeholder="https://t.me/your_channel">
-      <input data-ad-chat type="text" placeholder="${escapeHTML(t("ad_chat_ph"))}">
-      <select data-ad-payment><option value="gram_balance">${escapeHTML(t("ad_pay_gram"))}</option><option value="ton_mainnet">${escapeHTML(t("ad_pay_ton"))}</option></select>
-      <button type="button" class="secondary" data-ad-bot-check>${escapeHTML(t("ad_check_bot"))}</button>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input data-ad-reward type="number" min="1" step="1" placeholder="${escapeHTML(t("ad_reward_ph"))}"><input data-ad-count type="number" min="1" step="1" placeholder="${escapeHTML(t("ad_count_ph"))}"></div>
-      <input data-ad-price type="number" min="0.000001" step="0.000001" placeholder="${escapeHTML(t("ad_price_ph"))}">
-      <button type="button" class="primaryBtn" data-ad-submit>${t("ad_submit")}</button>
-      <div class="small" data-ad-message role="status"></div>
-    </div></details>`;
+  const q = [500, 1000, 2500, 5000];
+  return `<section class="adMarketplaceEntry card">
+    <div class="adEntryIcon">✦</div><div class="adEntryCopy"><span class="eyebrow">${t("ad_marketplace_eyebrow")}</span><h3>${t("ad_marketplace_title")}</h3><p>${t("ad_marketplace_subtitle")}</p></div>
+    <button type="button" class="adEntryButton" data-ad-open>${t("ad_start_button")}</button>
+  </section>
+  <div class="adModal" data-ad-modal hidden><div class="adModalBackdrop" data-ad-close></div><section class="adSheet" role="dialog" aria-modal="true" aria-labelledby="adSheetTitle">
+    <header class="adSheetHeader"><div><span class="eyebrow">${t("ad_marketplace_eyebrow")}</span><h3 id="adSheetTitle">${t("ad_marketplace_title")}</h3></div><button type="button" class="adClose" data-ad-close>×</button></header>
+    <div class="adTabs"><button type="button" class="adTab active" data-ad-tab="new">${t("ad_new_order")}</button><button type="button" class="adTab" data-ad-tab="orders">${t("ad_my_orders")}</button></div>
+    <div class="adPanel" data-ad-panel="new"><div class="adTypeGrid"><button type="button" class="adType active" data-ad-type="channel"><strong>◉ ${t("ad_type_channel")}</strong><small>${t("ad_type_channel_hint")}</small></button><button type="button" class="adType" data-ad-type="link"><strong>↗ ${t("ad_type_link")}</strong><small>${t("ad_type_link_hint")}</small></button></div>
+      <div class="adFields"><input data-ad-title maxlength="120" placeholder="${escapeHTML(t("ad_title_ph"))}"><textarea data-ad-description maxlength="500" placeholder="${escapeHTML(t("ad_description_ph"))}"></textarea><input data-ad-url type="url" placeholder="https://t.me/your_channel"></div>
+      <div class="adChannelFields"><input data-ad-chat type="text" placeholder="${escapeHTML(t("ad_chat_ph"))}"><div class="adBotRow"><button type="button" class="adSecondary" data-ad-add-bot>${t("ad_add_bot")}</button><button type="button" class="adCheck pending" data-ad-bot-check>${t("ad_check_bot")}</button></div><div class="adCheckMessage" data-ad-bot-message></div></div>
+      <label class="adLabel">${t("ad_languages")}</label><div class="adChips" data-ad-languages>${["FA","EN","AR","RU","TR","ALL"].map(x=>`<button type="button" data-ad-language="${x}">${x}</button>`).join("")}</div>
+      <label class="adToggle"><input type="checkbox" data-ad-premium><span class="adSwitch"></span><span>${t("ad_premium_only")} <small>+${t("ad_premium_fee")}</small></span></label>
+      <label class="adLabel">${t("ad_quantity")}</label><div class="adQuantity"><div class="adChips" data-ad-quantity>${q.map((x,i)=>`<button type="button" data-ad-quantity-value="${x}" class="${i===0?"active":""}">${x.toLocaleString()}</button>`).join("")}</div><input data-ad-count type="number" min="1" step="1" value="500" placeholder="${t("ad_custom_quantity")}"></div>
+      <div class="adSummary"><div><span>${t("ad_cost_per_action")}</span><b data-ad-cost>0.020 GRAM</b></div><div><span>${t("ad_player_reward")}</span><b data-ad-reward>10 UP</b></div><div><span>${t("ad_total_payable")}</span><b data-ad-total>10 GRAM</b></div><div><span>${t("ad_your_balance")}</span><b data-ad-balance>${Number(state.gramBalance || 0).toFixed(3)} GRAM</b></div></div>
+      <div class="adPaymentChoices"><button type="button" class="adPayment active" data-ad-payment="gram_balance">${t("ad_pay_gram")}</button><button type="button" class="adPayment" data-ad-payment="ton_mainnet">${t("ad_pay_ton")}</button></div>
+      <p class="adNotice">${t("ad_review_notice")}</p><button type="button" class="primaryBtn adSubmit" data-ad-submit>${t("ad_submit")}</button><div class="adMessage" data-ad-message role="status"></div>
+    </div></div>
+    <div class="adPanel" data-ad-panel="orders" hidden><div class="adOrdersList" data-ad-orders><div class="adEmpty">${t("ad_orders_loading")}</div></div></div>
+  </section></div>`;
+}
+
+function calculateAdPreview(root) {
+  const count = Math.max(1, Math.floor(Number(root?.querySelector("[data-ad-count]")?.value) || 500));
+  const languageCount = root?.querySelectorAll("[data-ad-language].active")?.length || 0;
+  const premium = root?.querySelector("[data-ad-premium]")?.checked;
+  const cost = 0.02 + languageCount * 0.002 + (premium ? 0.005 : 0);
+  const reward = Math.max(1, Math.round(cost * 500));
+  const set = (selector, text) => { const el = root?.querySelector(selector); if (el) el.textContent = text; };
+  set("[data-ad-cost]", `${cost.toFixed(3)} GRAM`); set("[data-ad-reward]", `${reward} UP`); set("[data-ad-total]", `${(cost * count).toFixed(3)} GRAM`);
+  return { count, cost, reward };
+}
+async function loadAdOrders(root) {
+  const target = root?.querySelector("[data-ad-orders]"); if (!target) return;
+  try { const result = await api("/api/ad-orders"); const orders = result.orders || []; target.innerHTML = orders.length ? orders.map(order => { const progress = Math.min(100, Math.round((Number(order.completionsApproved || 0) / Math.max(1, Number(order.completionsRequested || 1))) * 100)); return `<article class="adOrder"><div class="adOrderTop"><strong>${escapeHTML(order.title || "Campaign")}</strong><span class="adStatus adStatus-${escapeHTML(order.status || "pending_review")}">${escapeHTML(order.status || "pending_review")}</span></div><div class="adProgress"><i style="width:${progress}%"></i></div><small>${Number(order.completionsApproved || 0).toLocaleString()} / ${Number(order.completionsRequested || 0).toLocaleString()} · ${progress}%</small></article>`; }).join("") : `<div class="adEmpty">${t("ad_orders_empty")}</div>`; } catch (error) { target.innerHTML = `<div class="adEmpty">${escapeHTML(error.message || t("error_generic"))}</div>`; }
 }
 async function submitAdCampaign(button) {
-  const root = button.closest(".advertiserCard");
-  const value = selector => root?.querySelector(selector)?.value || "";
-  const message = root?.querySelector("[data-ad-message]");
-  button.disabled = true;
-  try {
-    const body = { title: value("[data-ad-title]"), description: value("[data-ad-description]"), destinationUrl: value("[data-ad-url]"), telegramChatId: value("[data-ad-chat]"), rewardUp: Number(value("[data-ad-reward]")), completionsRequested: Number(value("[data-ad-count]")), priceGramPerCompletion: Number(value("[data-ad-price]")), verificationType: "telegram" };
-    const payment = value("[data-ad-payment]");
-    if (payment === "ton_mainnet") {
-      const created = await api("/api/ad-orders/ton-intents", { method: "POST", body });
-      if (!window.gramupWallet?.sendTonTransaction) throw new Error(t("ad_wallet_required"));
-      await window.gramupWallet.sendTonTransaction(created.transaction);
-      let verified;
-      for (let attempt = 0; attempt < 12; attempt += 1) { await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000)); verified = await api(`/api/ad-orders/${encodeURIComponent(created.intent.id)}/ton-verify`, { method: "POST", body: {} }); if (verified.status === "confirmed") break; }
-      if (verified?.status !== "confirmed") throw new Error(t("ad_payment_pending"));
-      if (message) message.textContent = verified.message || t("ad_submitted");
-    } else {
-      const result = await api("/api/ad-orders", { method: "POST", body });
-      if (message) message.textContent = result.message || t("ad_submitted");
-    }
-    root?.querySelectorAll("input").forEach(input => { input.value = ""; });
-  } catch (error) { if (message) message.textContent = error.message || t("error_generic"); }
-  finally { button.disabled = false; }
+  const root = button.closest(".adSheet"); const value = selector => root?.querySelector(selector)?.value || ""; const message = root?.querySelector("[data-ad-message]"); button.disabled = true;
+  try { const preview = calculateAdPreview(root); const body = { title: value("[data-ad-title]"), description: value("[data-ad-description]"), destinationUrl: value("[data-ad-url]"), telegramChatId: value("[data-ad-chat]"), rewardUp: preview.reward, completionsRequested: preview.count, priceGramPerCompletion: preview.cost, verificationType: root.querySelector("[data-ad-type=channel].active") ? "telegram" : "latest_post" }; const payment = root.querySelector("[data-ad-payment].active")?.dataset.adPayment || "gram_balance"; if (payment === "ton_mainnet") { const created = await api("/api/ad-orders/ton-intents", { method: "POST", body }); if (!window.gramupWallet?.sendTonTransaction) throw new Error(t("ad_wallet_required")); await window.gramupWallet.sendTonTransaction(created.transaction); let verified; for (let attempt = 0; attempt < 12; attempt += 1) { await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000)); verified = await api(`/api/ad-orders/${encodeURIComponent(created.intent.id)}/ton-verify`, { method: "POST", body: {} }); if (verified.status === "confirmed") break; } if (verified?.status !== "confirmed") throw new Error(t("ad_payment_pending")); if (message) message.textContent = verified.message || t("ad_submitted"); } else { const result = await api("/api/ad-orders", { method: "POST", body }); if (message) message.textContent = result.message || t("ad_submitted"); } root.querySelectorAll("input,textarea").forEach(input => { if (input.type !== "checkbox") input.value = ""; }); } catch (error) { if (message) message.textContent = error.message || t("error_generic"); } finally { button.disabled = false; }
 }
 window.submitAdCampaign = submitAdCampaign;
 
 document.addEventListener("click", event => {
-  const button = event.target?.closest?.("[data-ad-submit]");
-  if (!button) return;
-  event.preventDefault();
-  void submitAdCampaign(button);
+  const open = event.target?.closest?.("[data-ad-open]"); if (open) { const modal = document.querySelector("[data-ad-modal]"); if (modal) modal.hidden = false; return; }
+  if (event.target?.closest?.("[data-ad-close]")) { const modal = event.target.closest("[data-ad-modal]"); if (modal) modal.hidden = true; return; }
+  const tab = event.target?.closest?.("[data-ad-tab]"); if (tab) { const modal = tab.closest("[data-ad-modal]"); modal?.querySelectorAll("[data-ad-tab]").forEach(x => x.classList.toggle("active", x === tab)); modal?.querySelectorAll("[data-ad-panel]").forEach(x => x.hidden = x.dataset.adPanel !== tab.dataset.adTab); if (tab.dataset.adTab === "orders") void loadAdOrders(modal); return; }
+  const type = event.target?.closest?.("[data-ad-type]"); if (type) { const root = type.closest(".adSheet"); root.querySelectorAll("[data-ad-type]").forEach(x => x.classList.toggle("active", x === type)); root.querySelector(".adChannelFields").hidden = type.dataset.adType !== "channel"; return; }
+  const lang = event.target?.closest?.("[data-ad-language]"); if (lang) { lang.classList.toggle("active"); calculateAdPreview(lang.closest(".adSheet")); return; }
+  const qty = event.target?.closest?.("[data-ad-quantity-value]"); if (qty) { const root = qty.closest(".adSheet"); root.querySelectorAll("[data-ad-quantity-value]").forEach(x => x.classList.toggle("active", x === qty)); root.querySelector("[data-ad-count]").value = qty.dataset.adQuantityValue; calculateAdPreview(root); return; }
+  const payment = event.target?.closest?.("[data-ad-payment]"); if (payment) { payment.closest(".adSheet").querySelectorAll("[data-ad-payment]").forEach(x => x.classList.toggle("active", x === payment)); return; }
+  const submit = event.target?.closest?.("[data-ad-submit]"); if (submit) { event.preventDefault(); void submitAdCampaign(submit); return; }
+  const check = event.target?.closest?.("[data-ad-bot-check]"); if (check) { const root = check.closest(".adSheet"); const chatId = root.querySelector("[data-ad-chat]")?.value || ""; void api(`/api/ad-orders/bot-check?chatId=${encodeURIComponent(chatId)}`).then(result => { const el = root.querySelector("[data-ad-bot-message]"); if (el) { el.textContent = result.message; el.className = `adCheckMessage ${result.isAdmin ? "ok" : "bad"}`; } }).catch(error => { const el = root.querySelector("[data-ad-bot-message]"); if (el) { el.textContent = error.message || t("error_generic"); el.className = "adCheckMessage bad"; } }); }
 });
-document.addEventListener("click", async event => {
-  const button = event.target?.closest?.("[data-ad-bot-check]");
-  if (!button) return;
-  const root = button.closest(".advertiserCard"); const chatId = root?.querySelector("[data-ad-chat]")?.value || "";
-  try { const result = await api(`/api/ad-orders/bot-check?chatId=${encodeURIComponent(chatId)}`); const message = root?.querySelector("[data-ad-message]"); if (message) message.textContent = result.message; } catch (error) { const message = root?.querySelector("[data-ad-message]"); if (message) message.textContent = error.message || t("error_generic"); }
-});
+document.addEventListener("input", event => { if (event.target.matches?.("[data-ad-count]")) calculateAdPreview(event.target.closest(".adSheet")); });
 
 async function openLatestPostTask(url, taskId) {
   if (!readModelActionAllowed()) return;
