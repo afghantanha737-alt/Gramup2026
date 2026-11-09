@@ -24,7 +24,7 @@ assert.match(mining, /releaseForPayout\(reserveCentsToRelease, session\)/,
 assert.match(mining, /findOneAndUpdate\(subscriptionFilter, subscriptionUpdate/,
   'mining claims use a compare-and-set subscription update');
 assert.match(mining, /recordLedgerRequired\([\s\S]*type: 'mining_claim'/);
-assert.match(app, /if \(!readModelActionAllowed\(\) \|\| vipMiningClaimBusy\) return;/,
+assert.match(app, /if \(!miningClaimActionAllowed\(\) \|\| vipMiningClaimBusy\) return;/,
   'wallet claims retain fresh-data safeguards');
 assert.doesNotMatch(app, /function claimAllVipRewards\(\)|function claimVipReward\(/);
 console.log('PASS — VIP payouts use idempotent mining claims, reserve-backed transactions, and no scheduled daily claim flow');

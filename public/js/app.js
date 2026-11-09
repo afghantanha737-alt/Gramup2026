@@ -162,6 +162,14 @@ function readModelActionAllowed() {
   updateReadModelFreshness();
   return false;
 }
+// A stale tasks read-model must not disable a claim for mining points already
+// shown by the server-authoritative mining status.
+function miningClaimActionAllowed() {
+  if (state.financialDataConfirmed && state.membershipDataConfirmed) return true;
+  toast(t("read_model_refreshing"), "warning");
+  updateReadModelFreshness();
+  return false;
+}
 function guardReadModelAction(event) {
   if (!state.readModelStale && state.financialDataConfirmed && state.membershipDataConfirmed) return;
   const target = event.target?.closest?.(
@@ -3772,7 +3780,7 @@ function tickVipMiningConsole() {
   if (hourly) hourly.textContent = `+${formatNumber(live.hourlyRate, 4)} UP/hr`;
   if (perSecond) perSecond.textContent = `+${formatNumber(live.perSecondRate, 6)} UP/s`;
   if (claimAmount) claimAmount.textContent = `${formatNumber(live.accrued, 6)} UP`;
-  if (claimButton) claimButton.disabled = vipMiningClaimBusy || live.accrued <= 0 || state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed;
+  if (claimButton) claimButton.disabled = vipMiningClaimBusy || live.accrued <= 0 || !state.financialDataConfirmed || !state.membershipDataConfirmed;
   document.querySelectorAll("[data-vip-miner-progress]").forEach(fill => {
     const row = fill.closest("[data-vip-miner-row]");
     if (!row) return;
@@ -3892,7 +3900,7 @@ function renderVipMiningConsole() {
     <div class="vipMiningSecondRate"><span>${t("vip_mining_per_second_rate")}</span><b data-vip-mining-second>+${formatNumber(live.perSecondRate, 6)} UP/s</b></div>
     <h3 class="vipMiningSectionTitle">${t("vip_mining_active_miners")}</h3>
     ${noMiners ? `<div class="vipMiningEmpty">${t("vip_mining_empty")}</div>` : `<div class="vipMiningMinerList">${miners}</div>`}
-    <button class="vipMiningClaim" type="button" data-vip-mining-claim onclick="claimVipMining()" ${vipMiningClaimBusy || live.accrued <= 0 || state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed ? "disabled" : ""}><span>${vipMiningClaimBusy ? t("vip_mining_claiming") : t("vip_mining_claim")}</span><b data-vip-mining-claim-amount>${formatNumber(live.accrued, 6)} UP</b></button>
+    <button class="vipMiningClaim" type="button" data-vip-mining-claim onclick="claimVipMining()" ${vipMiningClaimBusy || live.accrued <= 0 || !state.financialDataConfirmed || !state.membershipDataConfirmed ? "disabled" : ""}><span>${vipMiningClaimBusy ? t("vip_mining_claiming") : t("vip_mining_claim")}</span><b data-vip-mining-claim-amount>${formatNumber(live.accrued, 6)} UP</b></button>
     <p class="vipMiningFootnote">${t("vip_mining_precision_note")}</p>
   </section>`;
 }
@@ -4144,7 +4152,7 @@ async function activateVip0FreePlan() {
 window.activateVip0FreePlan = activateVip0FreePlan;
 
 async function claimVipMining() {
-  if (!readModelActionAllowed() || vipMiningClaimBusy) return;
+  if (!miningClaimActionAllowed() || vipMiningClaimBusy) return;
   if (vipMiningLiveValues().accrued <= 0) return;
   vipMiningClaimBusy = true;
   tickVipMiningConsole();
