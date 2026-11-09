@@ -60,14 +60,17 @@ assert.match(css, /\.mineConsole \{[^}]*background:radial-gradient\(circle at 92
 assert.match(css, /\.mineProgressTrack span \{[^}]*background:linear-gradient\(90deg,#22d3ee/, 
   'Mine progress must use cyan, violet and gold dashboard accents');
 
-assert.ok(html.includes('/css/style.css?v=up_v37_vip_history_20261107'), 'style.css must use the VIP history cache version');
-assert.ok(html.includes('/css/theme-selector.css?v=up_v36_vip_signature_20261107'), 'theme-selector.css must use the Silver theme cache version');
-for (const asset of ['maintenanceGate.js', 'readModelCache.js', 'walletConnect.js']) {
-  assert.ok(html.includes(`/js/${asset}?v=up_v28_20261105_2`), `${asset} must use the fresh cache version`);
+assert.ok(html.includes('css/style.css?v=ad_ui_v3_20261109'), 'style.css must use the current dashboard cache version');
+assert.ok(html.includes('css/theme-selector.css?v=up_v36_vip_signature_20261107'), 'theme-selector.css must use the Silver theme cache version');
+for (const [asset, version] of Object.entries({
+  maintenanceGate: '20261006-maintenance',
+  readModelCache: '20261030-read-model-1',
+  walletConnect: 'ad_ui_v3_20261109'
+})) {
+  assert.ok(html.includes(`js/${asset}.js?v=${version}`), `${asset} must use its current cache version`);
 }
-assert.ok(html.includes('/js/i18n.js?v=up_v36_vip_history_20261107'), 'i18n.js must use the VIP history cache version');
-assert.ok(html.includes('/js/app.js?v=up_v39_vip_history_20261107'), 'app.js must use the VIP history cache version');
-assert.ok(html.includes('/js/gamification.js?v=up_v28_20261106_1'), 'gamification.js must use the current Spinner feedback cache version');
-assert.ok(html.includes('/js/spinCelebration.js?v=up_v28_20261106_3'), 'spinCelebration.js must use the current cache version');
+assert.ok(html.includes('js/i18n.js?v=vip0_free_miner_20261109'), 'i18n.js must use the VIP0 locale cache version');
+assert.ok(html.includes('js/app.js?v=vip0_free_miner_20261109'), 'app.js must use the VIP0 UI cache version');
+assert.doesNotMatch(html, /gamification\.js|spinCelebration\.js/, 'unbuilt Lucky Spin scripts must remain unloaded');
 
 console.log('PASS — unified cyan/teal brand palette covers shared controls, Home stats, Mine plan tiers, and cache-busted assets');

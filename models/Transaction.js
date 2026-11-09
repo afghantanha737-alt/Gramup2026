@@ -22,6 +22,7 @@ const TRANSACTION_TYPES = [
   'withdraw',
   'deposit',
   'vip_purchase',
+  'vip_free_claim',
   'vip_daily_principal',
   'vip_daily_reward',
   'vip_principal_return',

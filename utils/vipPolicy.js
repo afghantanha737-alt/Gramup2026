@@ -2,6 +2,7 @@
 
 const LEGACY_VIP_POLICY_VERSION = 'legacy_v1';
 const NEW_VIP_POLICY_VERSION = 'v2_100d';
+const VIP0_POLICY_VERSION = 'vip0_free_v1';
 const NEW_VIP_DURATION_DAYS = 100;
 const NEW_VIP_GROUPS = Object.freeze({
   start: Object.freeze({ minPlan: 1, maxPlan: 3, rewardDailyBps: 10, principalDailyBps: 100 }),
@@ -35,6 +36,14 @@ function periodRewardPercentForPlan(planNumber) {
 }
 function policyForSubscription(subscription) {
   const version = String(subscription?.policyVersion || LEGACY_VIP_POLICY_VERSION);
+  if (version === VIP0_POLICY_VERSION) {
+    return {
+      policyVersion: VIP0_POLICY_VERSION,
+      productGroup: 'free',
+      durationDays: Number(subscription?.durationDays) || 0,
+      dailyMiningRatePoints: Number(subscription?.dailyMiningRatePoints) || 0
+    };
+  }
   if (version !== NEW_VIP_POLICY_VERSION) {
     return { policyVersion: LEGACY_VIP_POLICY_VERSION, productGroup: 'legacy', durationDays: Number(subscription?.durationDays) || 0 };
   }
@@ -57,6 +66,7 @@ function dailyPointsCentsFromBps(pricePoints, bps) {
 module.exports = {
   LEGACY_VIP_POLICY_VERSION,
   NEW_VIP_POLICY_VERSION,
+  VIP0_POLICY_VERSION,
   NEW_VIP_DURATION_DAYS,
   NEW_VIP_GROUPS,
   groupForPlan,

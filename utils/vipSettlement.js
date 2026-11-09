@@ -5,6 +5,7 @@ const User = require('../models/User');
 const PointsLedger = require('../models/PointsLedger');
 const { recordLedgerRequired } = require('./ledger');
 const { withMongoTransaction } = require('./mongoTransaction');
+const { VIP0_POLICY_VERSION } = require('./vipPolicy');
 
 function duplicateLedgerError() {
   const error = new Error('VIP principal return was already recorded; transaction was aborted to prevent a duplicate credit.');
@@ -61,12 +62,33 @@ async function settleOne(subscriptionId, now) {
   });
 }
 
+async function settleExpiredFreeVip0(subscriptionId, now) {
+  return withMongoTransaction(async session => {
+    const subscription = await VipSubscription.findOneAndUpdate({
+      _id: subscriptionId,
+      planNumber: 0,
+      policyVersion: VIP0_POLICY_VERSION,
+      status: 'active',
+      endAt: { $lte: now }
+    }, { $set: { status: 'completed' } }, { new: true, session });
+    return subscription
+      ? { settled: true, subscriptionId: String(subscription._id), free: true }
+      : { settled: false };
+  });
+}
+
 async function settleMaturedVipSubscriptions({ userId = null, now = new Date(), limit = 100 } = {}) {
   const filter = { status: 'active', policyVersion: { $in: [null, 'legacy_v1'] }, principalReturnedAt: null, endAt: { $lte: now } };
   if (userId) filter.user = userId;
-  const rows = await VipSubscription.find(filter).select('_id').sort({ endAt: 1 }).limit(Math.min(500, Math.max(1, limit))).lean();
+  const boundedLimit = Math.min(500, Math.max(1, limit));
+  const freeFilter = { status: 'active', planNumber: 0, policyVersion: VIP0_POLICY_VERSION, endAt: { $lte: now } };
+  if (userId) freeFilter.user = userId;
+  const [legacyRows, freeRows] = await Promise.all([
+    VipSubscription.find(filter).select('_id').sort({ endAt: 1 }).limit(boundedLimit).lean(),
+    VipSubscription.find(freeFilter).select('_id').sort({ endAt: 1 }).limit(boundedLimit).lean()
+  ]);
   const results = [];
-  for (const row of rows) {
+  for (const row of legacyRows) {
     try {
       results.push(await settleOne(row._id, now));
     } catch (error) {
@@ -74,7 +96,15 @@ async function settleMaturedVipSubscriptions({ userId = null, now = new Date(), 
       results.push({ settled: false, error: error.code || 'SETTLEMENT_FAILED' });
     }
   }
-  return { scanned: rows.length, settled: results.filter(result => result.settled).length, results };
+  for (const row of freeRows) {
+    try {
+      results.push(await settleExpiredFreeVip0(row._id, now));
+    } catch (error) {
+      console.error('Free VIP 0 settlement failed:', String(row._id), error.message || error);
+      results.push({ settled: false, error: error.code || 'SETTLEMENT_FAILED' });
+    }
+  }
+  return { scanned: legacyRows.length + freeRows.length, settled: results.filter(result => result.settled).length, results };
 }
 
 module.exports = { settleMaturedVipSubscriptions };

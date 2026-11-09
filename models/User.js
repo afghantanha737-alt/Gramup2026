@@ -22,6 +22,9 @@ const userSchema = new mongoose.Schema(
     miningStorageFullNotifiedAt: { type: Date, default: null },
     streakFreezeCredits: { type: Number, default: 0, min: 0 },
     vipGoldUntil: { type: Date, default: null },
+    // Permanent account-level guard for the one-time free VIP 0 miner.
+    vip0Claimed: { type: Boolean, default: false, index: true },
+    vip0ClaimedAt: { type: Date, default: null },
     zeroFeeSwapUntil: { type: Date, default: null },
     totalMinedPoints: { type: Number, default: 0, min: 0 },
     antiBotVerifiedAt: { type: Date, default: null },

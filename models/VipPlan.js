@@ -1,16 +1,17 @@
 'use strict';
 
 const mongoose = require('mongoose');
-const { NEW_VIP_POLICY_VERSION, periodRewardPercentForPlan } = require('../utils/vipPolicy');
+const { VIP0_POLICY_VERSION, NEW_VIP_POLICY_VERSION, periodRewardPercentForPlan } = require('../utils/vipPolicy');
 const { pricePointsForVipPlan } = require('../utils/vipPricing');
 
 const vipPlanSchema = new mongoose.Schema({
-  planNumber: { type: Number, required: true, min: 1, max: 10, unique: true, index: true },
+  planNumber: { type: Number, required: true, min: 0, max: 10, unique: true, index: true },
   pricePoints: { type: Number, required: true, min: 0, max: 100000000 },
   monthlyRewardPercent: { type: Number, required: true, min: 0, max: 100 },
   durationDays: { type: Number, required: true, min: 1, max: 3650 },
-  policyVersion: { type: String, enum: ['legacy_v1', 'v2_100d'], default: NEW_VIP_POLICY_VERSION, index: true },
-  productGroup: { type: String, enum: ['legacy', 'start', 'professional', 'final'], default: 'legacy' },
+  policyVersion: { type: String, enum: ['legacy_v1', 'v2_100d', VIP0_POLICY_VERSION], default: NEW_VIP_POLICY_VERSION, index: true },
+  productGroup: { type: String, enum: ['legacy', 'start', 'professional', 'final', 'free'], default: 'legacy' },
+  dailyMiningRatePoints: { type: Number, min: 0, max: 1000, default: null },
   principalDailyBps: { type: Number, min: 0, max: 10000, default: 0 },
   rewardDailyBps: { type: Number, min: 0, max: 10000, default: 0 },
   enabled: { type: Boolean, default: false, index: true },
@@ -20,6 +21,7 @@ const vipPlanSchema = new mongoose.Schema({
 vipPlanSchema.index({ enabled: 1, comingSoon: 1, planNumber: 1 });
 
 const DEFAULT_VIP_PLANS = [
+  { planNumber: 0, pricePoints: 0, monthlyRewardPercent: 0, durationDays: 100, policyVersion: VIP0_POLICY_VERSION, productGroup: 'free', dailyMiningRatePoints: 10, enabled: true, comingSoon: false },
   { planNumber: 1, pricePoints: pricePointsForVipPlan(1), monthlyRewardPercent: 10, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
   { planNumber: 2, pricePoints: pricePointsForVipPlan(2), monthlyRewardPercent: 10, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
   { planNumber: 3, pricePoints: pricePointsForVipPlan(3), monthlyRewardPercent: 10, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
@@ -45,7 +47,9 @@ vipPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
         upsert: true
       }
     })), { ordered: true, session });
-    await this.bulkWrite(DEFAULT_VIP_PLANS.map(plan => {
+    // VIP 0's duration and daily rate are admin-managed settings. Only seed it
+    // on insert; unlike paid-plan policy constants, never reset it at startup.
+    await this.bulkWrite(DEFAULT_VIP_PLANS.filter(plan => plan.planNumber >= 1).map(plan => {
       const { planNumber, pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps } = plan;
       return {
         updateOne: {

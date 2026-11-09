@@ -95,7 +95,8 @@ assert.match(vipPurchaseSection, /balanceAfter: user\.points/,
 assert.ok(vipPurchaseSection.indexOf("type: 'vip_purchase'") < vipPurchaseSection.indexOf("type: 'task'"),
   'the purchase debit ledger must be recorded before the activation reward ledger');
 assert.match(adminRoute, /router\.put\('\/vip\/plans'/);
-assert.match(adminRoute, /input\.length !== 10/);
+assert.match(adminRoute, /input\.length !== 11/);
+assert.match(adminRoute, /planNumber === 0/);
 assert.match(adminRoute, /pricePointsForVipPlan/);
 assert.match(adminRoute, /durationDays !== 100/);
 assert.match(ledgerModel, /'vip_purchase'/);
@@ -132,7 +133,9 @@ assert.deepStrictEqual([1, 2, 3].map(periodRewardPercentForPlan), [10, 10, 10]);
 assert.deepStrictEqual([4, 5, 6, 7].map(periodRewardPercentForPlan), [15, 15, 15, 15]);
 assert.deepStrictEqual([8, 9, 10].map(periodRewardPercentForPlan), [20, 20, 20]);
 assert.match(adminRoute, /expectedPeriodYieldPercent = periodRewardPercentForPlan\(planNumber\)/);
-assert.match(adminUi, /VIP 1–3/);
+assert.match(adminUi, /VIP 0–3/);
+assert.match(adminUi, /VIP 0 · Free Welcome Miner/);
+assert.match(adminUi, /vipPlanDailyRate0/);
 assert.match(adminUi, /VIP 4–7/);
 assert.match(adminUi, /VIP 8–10/);
 assert.match(adminUi, /بازدهی دوره \(۱۰۰ روزه/);

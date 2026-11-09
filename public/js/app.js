@@ -76,6 +76,7 @@ const state = {
   weeklyServerOffsetMs: 0,
   vipPlans: [],
   vipSubscriptions: [],
+  vip0Claimed: false,
   vipDataLoaded: false,
   vipLoading: false,
   vipError: "",
@@ -3618,6 +3619,7 @@ async function loadVipPlans() {
     const data = await api("/api/points/vip/plans");
     state.vipPlans = Array.isArray(data?.plans) ? data.plans : [];
     state.vipSubscriptions = Array.isArray(data?.subscriptions) ? data.subscriptions : [];
+    state.vip0Claimed = data?.vip0Claimed === true;
     if (data?.upBalance != null || data?.points != null) state.points = upBalanceFromResponse(data, 0);
     const serverNow = Date.parse(data?.serverNow || "");
     state.vipServerOffsetMs = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
@@ -3949,35 +3951,53 @@ function renderProfileVip() {
   const plans = state.vipPlans || [];
   const subscriptions = state.vipSubscriptions || [];
   const getPlanCategory = planNumber => Number(planNumber) <= 3 ? "starter" : Number(planNumber) <= 7 ? "pro" : "ultimate";
-  const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory);
-  const themeByPlan = { 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
-  const iconByPlan = { 1: "◈", 2: "✦", 3: "♛", 4: "✦", 5: "⬡", 6: "✧", 7: "◆", 8: "♦", 9: "⬦", 10: "♛" };
+  const visiblePlans = plans.filter(plan => getPlanCategory(plan.planNumber) === vipSelectedCategory)
+    .sort((left, right) => Number(left.planNumber) - Number(right.planNumber));
+  const themeByPlan = { 0: "cyan", 1: "bronze", 2: "silver", 3: "gold", 4: "neon", 5: "cyan", 6: "sapphire", 7: "emerald", 8: "ruby", 9: "emerald", 10: "ultimate" };
+  const iconByPlan = { 0: "⛏", 1: "◈", 2: "✦", 3: "♛", 4: "✦", 5: "⬡", 6: "✧", 7: "◆", 8: "♦", 9: "⬦", 10: "♛" };
   const planCards = visiblePlans.map(plan => {
-    const available = plan.enabled === true && plan.comingSoon !== true;
-    const canAfford = Number(state.points) >= Number(plan.pricePoints);
-    const neededPoints = Math.max(0, Number(plan.pricePoints) - (Number(state.points) || 0));
     const planNumber = Number(plan.planNumber);
-    const isOwned = subscriptions.some(subscription => Number(subscription.planNumber) === planNumber && subscription.status === "active");
+    const isFreeVip0 = planNumber === 0;
+    const freeSubscription = isFreeVip0 ? subscriptions.find(subscription => Number(subscription.planNumber) === 0) : null;
+    const freeClaimed = isFreeVip0 && (state.vip0Claimed || Boolean(freeSubscription));
+    const freeActive = isFreeVip0 && freeSubscription?.status === "active";
+    const freeDaysRemaining = Math.max(0, Number(freeSubscription?.daysRemaining) || 0);
+    const available = plan.enabled === true && plan.comingSoon !== true && (!isFreeVip0 || !freeClaimed);
+    const canAfford = isFreeVip0 || Number(state.points) >= Number(plan.pricePoints);
+    const neededPoints = Math.max(0, Number(plan.pricePoints) - (Number(state.points) || 0));
+    const isOwned = isFreeVip0 ? freeActive : subscriptions.some(subscription => Number(subscription.planNumber) === planNumber && subscription.status === "active");
     const theme = themeByPlan[planNumber] || "sapphire";
     const spotlightClass = [3, 6, 10].includes(planNumber) ? ` vipPlanCard--spotlight vipPlanCard--spotlight-${planNumber}` : "";
-    const statusKey = plan.comingSoon ? "vip_status_coming_soon"
+    const statusKey = isFreeVip0
+      ? freeActive ? "vip0_active_remaining" : freeClaimed ? "vip0_claimed" : available ? "vip0_free" : "vip0_unavailable"
+      : plan.comingSoon ? "vip_status_coming_soon"
       : !available ? "vip_status_inactive"
         : isOwned ? "vip_status_owned"
           : planNumber === 3 ? "vip_badge_popular"
             : planNumber === 6 ? "vip_badge_recommended"
               : planNumber === 10 ? "vip_badge_best_value" : "";
-    const statusClass = isOwned ? "vipPlanBadge--owned"
+    const statusLabel = isFreeVip0 && freeActive
+      ? t(statusKey, { n: formatPoints(freeDaysRemaining) })
+      : statusKey ? t(statusKey) : "";
+    const statusClass = (isOwned || (isFreeVip0 && freeClaimed)) ? "vipPlanBadge--owned"
       : planNumber === 3 ? "vipPlanBadge--popular"
         : planNumber === 6 ? "vipPlanBadge--recommended"
           : planNumber === 10 ? "vipPlanBadge--best-value" : "vipPlanBadge--status";
-    const buttonLabel = plan.comingSoon ? t("vip_status_coming_soon")
-      : available ? (canAfford ? t("vip_buy") : t("vip_need_more_points", { n: formatPoints(neededPoints) }))
-        : t("vip_status_inactive");
-    const totalRewardPoints = plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100);
-    const dailyAveragePoints = plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays));
+    const buttonLabel = isFreeVip0
+      ? freeActive ? t("vip0_active_remaining", { n: formatPoints(freeDaysRemaining) }) : freeClaimed ? t("vip0_claimed") : available ? t("vip0_activate") : t("vip0_unavailable")
+      : plan.comingSoon ? t("vip_status_coming_soon")
+        : available ? (canAfford ? t("vip_buy") : t("vip_need_more_points", { n: formatPoints(neededPoints) }))
+          : t("vip_status_inactive");
+    const totalRewardPoints = isFreeVip0
+      ? Number(freeSubscription?.totalRewardPoints ?? plan.totalRewardPoints ?? 0)
+      : plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100);
+    const dailyAveragePoints = isFreeVip0
+      ? Number(freeSubscription?.miningDailyRate ?? freeSubscription?.dailyRewardAveragePoints ?? plan.dailyMiningRatePoints ?? plan.miningDailyRate ?? 0)
+      : plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays));
+    const displayedDurationDays = isFreeVip0 ? Number(freeSubscription?.durationDays ?? plan.durationDays) : Number(plan.durationDays);
     const isNewVipPolicy = plan.policyVersion === "v2_100d";
     const dailyTotalPayoutPoints = Number(plan.dailyTotalPayoutPoints || 0);
-    const miningDailyRate = Number(plan.miningDailyRate ?? plan.dailyTotalPayoutPoints ?? dailyAveragePoints) || 0;
+    const miningDailyRate = isFreeVip0 ? dailyAveragePoints : Number(plan.miningDailyRate ?? plan.dailyTotalPayoutPoints ?? dailyAveragePoints) || 0;
     const totalReceivedPoints = Number(plan.totalReceivedPoints || 0);
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
@@ -3985,17 +4005,17 @@ function renderProfileVip() {
         <div class="vipPlanGlow" aria-hidden="true"></div>
         <div class="vipPlanTopline">
           <div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">${iconByPlan[planNumber] || "✦"}</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</div></div>
-          ${statusKey ? `<span class="vipPlanBadge ${statusClass}">${t(statusKey)}</span>` : ""}
+          ${statusKey ? `<span class="vipPlanBadge ${statusClass}">${statusLabel}</span>` : ""}
         </div>
         <div class="vipPlanStats">
-          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${upRewardMarkup(plan.pricePoints, false)}</b></div>
-          <div class="vipPlanStat"><span>${t(isNewVipPolicy ? "vip_daily_total_label" : "vip_plan_profit_label")}</span><b>${isNewVipPolicy ? upRewardMarkup(dailyTotalPayoutPoints, false) : `${formatNumber(plan.monthlyRewardPercent, 2)}%`}</b></div>
-          <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(plan.durationDays) })}</b></div>
+          <div class="vipPlanStat"><span>${t("vip_plan_cost_label")}</span><b>${isFreeVip0 ? t("vip0_free") : upRewardMarkup(plan.pricePoints, false)}</b></div>
+          <div class="vipPlanStat"><span>${isFreeVip0 ? t("vip0_daily_rate_label") : t(isNewVipPolicy ? "vip_daily_total_label" : "vip_plan_profit_label")}</span><b>${isFreeVip0 ? upRewardMarkup(miningDailyRate, false) : isNewVipPolicy ? upRewardMarkup(dailyTotalPayoutPoints, false) : `${formatNumber(plan.monthlyRewardPercent, 2)}%`}</b></div>
+          <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(displayedDurationDays) })}</b></div>
         </div>
-        <div class="vipPlanReward"><span>${t(isNewVipPolicy ? "vip_total_received_label" : "vip_total_reward_label")}</span><b>${upRewardMarkup(isNewVipPolicy ? totalReceivedPoints : totalRewardPoints, false)}</b></div>
-        <div class="vipPlanMiningRate"><span>${t("vip_mining_package_rate")}</span><b>+${formatNumber(miningDailyRate, 2)} UP/day <small>+${formatNumber(miningDailyRate / 86400, 6)} UP/s</small></b></div>
-        ${isNewVipPolicy ? "" : `<div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>`}
-        <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="purchaseVipPlan(${planNumber})">${isPurchasing ? t("vip_buying") : buttonLabel}</button>
+        <div class="vipPlanReward"><span>${t(isFreeVip0 ? "vip0_total_mining_label" : isNewVipPolicy ? "vip_total_received_label" : "vip_total_reward_label")}</span><b>${upRewardMarkup(isFreeVip0 ? totalRewardPoints : isNewVipPolicy ? totalReceivedPoints : totalRewardPoints, false)}</b></div>
+        ${isFreeVip0 ? "" : `<div class="vipPlanMiningRate"><span>${t("vip_mining_package_rate")}</span><b>+${formatNumber(miningDailyRate, 2)} UP/day <small>+${formatNumber(miningDailyRate / 86400, 6)} UP/s</small></b></div>`}
+        ${isNewVipPolicy || isFreeVip0 ? "" : `<div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>`}
+        <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="${isFreeVip0 ? "activateVip0FreePlan()" : `purchaseVipPlan(${planNumber})`}">${isPurchasing ? (isFreeVip0 ? t("vip0_activating") : t("vip_buying")) : buttonLabel}</button>
       </article>`;
   }).join("");
 
@@ -4003,7 +4023,7 @@ function renderProfileVip() {
     <section class="vipCatalog" aria-label="${t("vip_catalog_title")}">
       <div class="vipCatalogHeading"><h3>${t("vip_catalog_title")}</h3><p>${t("vip_intro")}</p></div>
       <div class="vipPlanTabs" role="tablist" aria-label="${t("vip_tier_tabs_label")}">
-        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "starter"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('starter')"><span>${t("vip_tier_starter")}</span><small>1–3</small></button>
+        <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "starter"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('starter')"><span>${t("vip_tier_starter")}</span><small>0–3</small></button>
         <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "pro"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('pro')"><span>${t("vip_tier_pro")}</span><small>4–7</small></button>
         <button type="button" class="vipTierTab" role="tab" aria-selected="${vipSelectedCategory === "ultimate"}" aria-controls="vipPlanGrid" onclick="setVipPlanCategory('ultimate')"><span>${t("vip_tier_ultimate")}</span><small>8–10</small></button>
       </div>
@@ -4084,6 +4104,44 @@ async function purchaseVipPlan(planNumber) {
   }
 }
 window.purchaseVipPlan = purchaseVipPlan;
+
+async function activateVip0FreePlan() {
+  const plan = (state.vipPlans || []).find(item => Number(item.planNumber) === 0);
+  const alreadyHasVip0 = state.vip0Claimed || (state.vipSubscriptions || []).some(item => Number(item.planNumber) === 0);
+  if (!plan || plan.enabled !== true || plan.comingSoon === true || alreadyHasVip0 || vipPurchasingPlanNumbers.has(0)) return;
+  vipPurchasingPlanNumbers.add(0);
+  if (isVipMiningHubVisible()) {
+    const content = $("#content");
+    if (content) content.innerHTML = renderProfileVip();
+  }
+  const scope = "vip0_claim";
+  try {
+    const result = await api("/api/points/vip/free/claim", {
+      method: "POST",
+      headers: { "Idempotency-Key": getPendingIdempotencyKey(scope) },
+      body: { planNumber: 0 }
+    });
+    clearPendingIdempotencyKey(scope);
+    state.points = upBalanceFromResponse(result);
+    state.vip0Claimed = true;
+    updateHeader();
+    state.vipDataLoaded = false;
+    await Promise.all([loadVipPlans(), loadVipMiningStatus({ force: true })]);
+    await renderProfile();
+    toast(t("vip0_activation_success"), "success");
+  } catch (error) {
+    clearDefinitiveIdempotencyFailure(scope, error);
+    if (error.code === "VIP0_ALREADY_CLAIMED") {
+      state.vipDataLoaded = false;
+      await loadVipPlans();
+    }
+    toast(translateServerMessage(error.code, error.message), "error");
+  } finally {
+    vipPurchasingPlanNumbers.delete(0);
+    if (isVipMiningHubVisible()) await renderProfile();
+  }
+}
+window.activateVip0FreePlan = activateVip0FreePlan;
 
 async function claimVipMining() {
   if (!readModelActionAllowed() || vipMiningClaimBusy) return;

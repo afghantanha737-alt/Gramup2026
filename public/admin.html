@@ -555,7 +555,7 @@
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px">
           <input id="vipFilterSearch" placeholder="User ID / username / name" onkeydown="if(event.key==='Enter')loadVipSubscriptionsAdmin(1)">
-          <select id="vipFilterPlan"><option value="">All plans</option><option value="1">Plan 1</option><option value="2">Plan 2</option><option value="3">Plan 3</option><option value="4">Plan 4</option><option value="5">Plan 5</option><option value="6">Plan 6</option><option value="7">Plan 7</option><option value="8">Plan 8</option><option value="9">Plan 9</option><option value="10">Plan 10</option></select>
+          <select id="vipFilterPlan"><option value="">All plans</option><option value="0">Plan 0 · Free</option><option value="1">Plan 1</option><option value="2">Plan 2</option><option value="3">Plan 3</option><option value="4">Plan 4</option><option value="5">Plan 5</option><option value="6">Plan 6</option><option value="7">Plan 7</option><option value="8">Plan 8</option><option value="9">Plan 9</option><option value="10">Plan 10</option></select>
           <label class="small">Purchase date from<input id="vipFilterFrom" type="date"></label>
           <label class="small">Purchase date to<input id="vipFilterTo" type="date"></label>
           <div class="row"><button type="button" onclick="loadVipSubscriptionsAdmin(1)">Apply filters</button><button type="button" class="secondary" onclick="resetVipFilters()">Reset</button></div>
@@ -571,9 +571,9 @@
 
       <div class="card">
         <div class="flexBetween"><b>VIP Plan Settings</b><span class="small">قیمت‌ها و سیاست پاداش کاتالوگ در راه‌اندازی سرور همگام می‌شوند.</span></div>
-        <p class="small">قیمت خرید از پوینت کسر می‌شود. تغییر کاتالوگ روی خریدهای جدید اثر دارد؛ اشتراک‌های قبلی کاربران تغییر نمی‌کنند.</p>
+        <p class="small">VIP 0 رایگان است. تنظیم نرخ و مدت VIP 0 فقط برای فعال‌سازی‌های جدید اعمال می‌شود؛ ماینرهای فعال شرایط زمان فعال‌سازی خود را حفظ می‌کنند. قیمت و سیاست پلن‌های پولی ثابت است.</p>
         <div role="tablist" aria-label="VIP plan categories" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
-          <button type="button" class="secondary" data-vip-admin-tab="starter" aria-selected="true" onclick="setVipAdminCategory('starter')">Starter · VIP 1–3</button>
+          <button type="button" class="secondary" data-vip-admin-tab="starter" aria-selected="true" onclick="setVipAdminCategory('starter')">Starter · VIP 0–3</button>
           <button type="button" class="secondary" data-vip-admin-tab="pro" aria-selected="false" onclick="setVipAdminCategory('pro')">Pro · VIP 4–7</button>
           <button type="button" class="secondary" data-vip-admin-tab="ultimate" aria-selected="false" onclick="setVipAdminCategory('ultimate')">Ultimate · VIP 8–10</button>
         </div>
@@ -2613,9 +2613,21 @@ async function loadVipPlansAdmin() {
     const data = await api("/api/admin/vip/plans");
     const plans = Array.isArray(data.plans) ? data.plans : [];
     const categoryForPlan = number => Number(number) <= 3 ? "starter" : Number(number) <= 7 ? "pro" : "ultimate";
+    const freePlan = plans.find(plan => Number(plan.planNumber) === 0);
+    const freePlanMarkup = freePlan ? `
+      <div style="border:1px solid rgba(34,211,238,.4);border-radius:12px;padding:12px;margin:8px 0;background:var(--surface)">
+        <b>VIP 0 · Free Welcome Miner</b>
+        <div class="small" style="margin:5px 0 8px">هزینه: Free · هر فعال‌سازی برای هر حساب فقط یک‌بار است.</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px">
+          <div><label>نرخ استخراج روزانه (UP/day)</label><input id="vipPlanDailyRate0" type="number" min="0.01" max="1000" step="0.01" value="${Number(freePlan.dailyMiningRatePoints) || 10}"></div>
+          <div><label>مدت ماینر (روز)</label><input id="vipPlanDays0" type="number" min="1" max="3650" step="1" value="${Number(freePlan.durationDays) || 100}"></div>
+          <label style="display:flex;align-items:center;gap:8px;margin:8px 0"><input id="vipPlanEnabled0" type="checkbox" style="width:auto" ${freePlan.enabled ? "checked" : ""}> فعال‌سازی پلن رایگان برای کاربران</label>
+        </div>
+      </div>` : `<div class="small">VIP 0 هنوز در کاتالوگ سرور ایجاد نشده است؛ صفحه را پس از به‌روزرسانی سرور دوباره بارگذاری کنید.</div>`;
     list.innerHTML = ["starter", "pro", "ultimate"].map(category => {
-      const categoryPlans = plans.filter(plan => categoryForPlan(plan.planNumber) === category);
+      const categoryPlans = plans.filter(plan => Number(plan.planNumber) > 0 && categoryForPlan(plan.planNumber) === category);
       return `<section data-vip-admin-panel="${category}" ${category === vipAdminSelectedCategory ? "" : "hidden"}>
+        ${category === "starter" ? freePlanMarkup : ""}
         ${categoryPlans.map(plan => `
           <div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:var(--surface)">
             <b>پلن ${Number(plan.planNumber)}</b>
@@ -2630,9 +2642,9 @@ async function loadVipPlansAdmin() {
       </section>`;
     }).join("");
     setVipAdminCategory(vipAdminSelectedCategory);
-    status.textContent = plans.length === 10
-      ? "تنظیمات هر ۱۰ پلن بارگذاری شد؛ قیمت‌ها و مدت دوره از کاتالوگ ثابت می‌آیند."
-      : "Catalog باید شامل هر ۱۰ پلن باشد؛ با به‌روزرسانی کاتالوگ سرور تکمیل می‌شود.";
+    status.textContent = plans.length === 11
+      ? "VIP 0 و هر ۱۰ پلن VIP بارگذاری شدند؛ تنظیم نرخ/مدت VIP 0 روی فعال‌سازی‌های بعدی اثر دارد."
+      : "Catalog باید شامل VIP 0 و هر ۱۰ پلن پولی باشد؛ پس از به‌روزرسانی کاتالوگ سرور صفحه را تازه کنید.";
   } catch (error) {
     status.textContent = `خطا در بارگذاری VIP Plans: ${error.message}`;
     status.style.color = "var(--danger)";
@@ -2642,7 +2654,27 @@ async function loadVipPlansAdmin() {
 async function saveVipPlansAdmin() {
   const status = document.getElementById("vipPlansAdminStatus");
   const plans = [];
-  for (let planNumber = 1; planNumber <= 10; planNumber += 1) {
+  for (let planNumber = 0; planNumber <= 10; planNumber += 1) {
+    if (planNumber === 0) {
+      const dailyRate = document.getElementById("vipPlanDailyRate0");
+      const duration = document.getElementById("vipPlanDays0");
+      const enabled = document.getElementById("vipPlanEnabled0");
+      if (!dailyRate || !duration || !enabled) {
+        status.textContent = "ابتدا تنظیمات VIP 0 و همه پلن‌ها را بارگذاری کنید.";
+        status.style.color = "var(--danger)";
+        return;
+      }
+      plans.push({
+        planNumber: 0,
+        pricePoints: 0,
+        monthlyRewardPercent: 0,
+        durationDays: Number(duration.value),
+        dailyMiningRatePoints: Number(dailyRate.value),
+        enabled: enabled.checked,
+        comingSoon: false
+      });
+      continue;
+    }
     const price = document.getElementById(`vipPlanPrice${planNumber}`);
     const rate = document.getElementById(`vipPlanRate${planNumber}`);
     const days = document.getElementById(`vipPlanDays${planNumber}`);

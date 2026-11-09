@@ -57,7 +57,7 @@ const { isTestDeleteEnvironment } = require('../utils/adminUserDeletion');
 const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/depositFinance');
 const { buildVipReserveReport, buildVipReserveWorkbook } = require('../utils/vipReserveReport');
 const { pricingForVipPlan, pricePointsForVipPlan } = require('../utils/vipPricing');
-const { newVipPolicyForPlan, dailyPointsCentsFromBps, periodRewardPercentForPlan } = require('../utils/vipPolicy');
+const { VIP0_POLICY_VERSION, newVipPolicyForPlan, dailyPointsCentsFromBps, periodRewardPercentForPlan } = require('../utils/vipPolicy');
 
 const MAX_REQUIRED_CHANNELS = 5;
 
@@ -2048,7 +2048,7 @@ router.get('/vip/users', async (req, res) => {
   const planNumber = String(req.query.planNumber || '').trim();
   if (planNumber) {
     const parsed = Number(planNumber);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'پلن VIP نامعتبر است.' });
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 10) return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'پلن VIP نامعتبر است.' });
     query.planNumber = parsed;
   }
   const dateFrom = String(req.query.dateFrom || '').trim();
@@ -2130,7 +2130,7 @@ router.get('/vip/subscriptions', async (req, res) => {
 
   if (req.query.planNumber != null && String(req.query.planNumber).trim()) {
     const planNumber = Number(req.query.planNumber);
-    if (!Number.isInteger(planNumber) || planNumber < 1 || planNumber > 10) {
+    if (!Number.isInteger(planNumber) || planNumber < 0 || planNumber > 10) {
       return res.status(400).json({ success: false, code: 'VIP_FILTER_INVALID', message: 'پلن VIP نامعتبر است.' });
     }
     match.planNumber = planNumber;
@@ -2237,20 +2237,22 @@ router.get('/vip/plans', async (req, res) => {
   ]);
   const rate = Number(settings.rate);
   res.json({
-    success: true,
-    rate,
-    plans: plans.map(plan => ({
-      ...plan,
-      pricing: pricingForVipPlan(plan.planNumber),
-      priceMatchesPolicy: Number(plan.pricePoints) === pricePointsForVipPlan(plan.planNumber)
-    }))
+      success: true,
+      rate,
+      plans: plans.map(plan => ({
+        ...plan,
+        pricing: Number(plan.planNumber) === 0 ? { planNumber: 0, grams: 0, pricePoints: 0 } : pricingForVipPlan(plan.planNumber),
+        priceMatchesPolicy: Number(plan.planNumber) === 0
+          ? Number(plan.pricePoints) === 0
+          : Number(plan.pricePoints) === pricePointsForVipPlan(plan.planNumber)
+      }))
   });
 });
 
 router.put('/vip/plans', async (req, res) => {
   const input = req.body && req.body.plans;
-  if (!Array.isArray(input) || input.length !== 10) {
-    return res.status(400).json({ success: false, code: 'VIP_CATALOG_INVALID', message: 'باید تنظیمات هر ۱۰ پلن VIP ارسال شود.' });
+  if (!Array.isArray(input) || input.length !== 11) {
+    return res.status(400).json({ success: false, code: 'VIP_CATALOG_INVALID', message: 'باید تنظیمات VIP 0 و هر ۱۰ پلن پولی VIP ارسال شود.' });
   }
 
   const seen = new Set();
@@ -2259,6 +2261,37 @@ router.put('/vip/plans', async (req, res) => {
   const rate = Number(settings.rate);
   for (const item of input) {
     const planNumber = Number(item?.planNumber);
+    if (planNumber === 0) {
+      const durationDays = Number(item?.durationDays);
+      const submittedDailyRate = Number(item?.dailyMiningRatePoints);
+      const dailyRateCents = Math.round(submittedDailyRate * 100);
+      const dailyMiningRatePoints = dailyRateCents / 100;
+      const enabled = item?.enabled === true;
+      const pricePoints = Number(item?.pricePoints);
+      const monthlyRewardPercent = Number(item?.monthlyRewardPercent);
+      if (seen.has(0) || pricePoints !== 0 || monthlyRewardPercent !== 0
+        || !Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650
+        || !Number.isSafeInteger(dailyRateCents) || dailyRateCents < 1 || dailyRateCents > 100000
+        || Math.abs(submittedDailyRate - dailyMiningRatePoints) > 1e-9
+        || item?.comingSoon === true) {
+        return res.status(400).json({ success: false, code: 'VIP0_CONFIG_INVALID', message: 'VIP 0 باید قیمت صفر، نرخ روزانهٔ ۰٫۰۱ تا ۱۰۰۰ UP و مدت ۱ تا ۳۶۵۰ روز داشته باشد.' });
+      }
+      seen.add(0);
+      plans.push({
+        planNumber: 0,
+        pricePoints: 0,
+        monthlyRewardPercent: 0,
+        durationDays,
+        enabled,
+        comingSoon: false,
+        policyVersion: VIP0_POLICY_VERSION,
+        productGroup: 'free',
+        principalDailyBps: 0,
+        rewardDailyBps: 0,
+        dailyMiningRatePoints
+      });
+      continue;
+    }
     const expectedPricePoints = pricePointsForVipPlan(planNumber);
     const expectedPeriodYieldPercent = periodRewardPercentForPlan(planNumber);
     const submittedPricePoints = Number(item?.pricePoints);

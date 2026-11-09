@@ -125,8 +125,8 @@ async function main() {
   })) {
     assert.ok(indexHtml.includes(`js/${asset}.js?v=${version}`), `${asset} must keep its current cache identifier`);
   }
-  assert.ok(indexHtml.includes('js/i18n.js?v=ad_ui_v3_20261109'), 'i18n.js must use the Mine status cache-busting version');
-  assert.ok(indexHtml.includes('js/app.js?v=ad_ui_v3_20261109'), 'app.js must use the current audit/performance cache-busting version');
+  assert.ok(indexHtml.includes('js/i18n.js?v=vip0_free_miner_20261109'), 'i18n.js must use the VIP0 locale cache-busting version');
+  assert.ok(indexHtml.includes('js/app.js?v=vip0_free_miner_20261109'), 'app.js must use the VIP0 UI cache-busting version');
   assert.doesNotMatch(indexHtml, /spinCelebration|luckySpinPage|spinWheel/i, 'Lucky Spin must not be loaded before its feature is built');
   assert.ok(indexHtml.includes('css/style.css?v=ad_ui_v3_20261109'), 'main CSS must use the UP/Mine cache-busting version');
   assert.ok(indexHtml.includes('css/theme-selector.css?v=up_v36_vip_signature_20261107'), 'theme CSS must use the Silver theme cache-busting version');

@@ -29,7 +29,7 @@ const {
   calculateDaysCompleted
 } = require('../utils/vipRewards');
 const { settleMaturedVipSubscriptions } = require('../utils/vipSettlement');
-const { LEGACY_VIP_POLICY_VERSION, NEW_VIP_POLICY_VERSION, newVipPolicyForPlan, dailyPointsCentsFromBps } = require('../utils/vipPolicy');
+const { LEGACY_VIP_POLICY_VERSION, NEW_VIP_POLICY_VERSION, VIP0_POLICY_VERSION, newVipPolicyForPlan, dailyPointsCentsFromBps } = require('../utils/vipPolicy');
 const { getVipMiningDailyRatePoints } = require('../utils/vipMining');
 const { reserveForSubscription, pointsFromCents: reservePointsFromCents } = require('../utils/vipReserve');
 const {
@@ -56,34 +56,43 @@ function vipError(code, message, statusCode = 400, extra = {}) {
 }
 
 function publicVipPlan(plan) {
-  const policy = String(plan.policyVersion || LEGACY_VIP_POLICY_VERSION) === NEW_VIP_POLICY_VERSION
+  const policyVersion = String(plan.policyVersion || LEGACY_VIP_POLICY_VERSION);
+  const isFreeVip0 = Number(plan.planNumber) === 0 && policyVersion === VIP0_POLICY_VERSION;
+  const durationDays = Math.max(1, Number(plan.durationDays) || 1);
+  const configuredDailyRate = isFreeVip0 ? Math.max(0, Number(plan.dailyMiningRatePoints) || 0) : 0;
+  const freeDailyCents = isFreeVip0 ? Math.round(configuredDailyRate * 100) : 0;
+  const freeTotalRewardCents = isFreeVip0 ? freeDailyCents * durationDays : null;
+  const policy = policyVersion === NEW_VIP_POLICY_VERSION
     ? newVipPolicyForPlan(plan.planNumber)
     : null;
-  const totalRewardCents = policy
+  const totalRewardCents = isFreeVip0 ? freeTotalRewardCents : policy
     ? dailyPointsCentsFromBps(plan.pricePoints, policy.rewardDailyBps) * policy.durationDays
     : calculateTotalRewardCents(plan.pricePoints, plan.monthlyRewardPercent, plan.durationDays);
   const dailyPrincipalCents = policy ? dailyPointsCentsFromBps(plan.pricePoints, policy.principalDailyBps) : 0;
   const dailyRewardCents = policy ? dailyPointsCentsFromBps(plan.pricePoints, policy.rewardDailyBps) : 0;
   const totalRewardPoints = totalRewardCents == null ? 0 : pointsFromCents(totalRewardCents);
-  const miningDailyRate = policy
+  const miningDailyRate = isFreeVip0
+    ? pointsFromCents(freeDailyCents)
+    : policy
     ? pointsFromCents(dailyPrincipalCents + dailyRewardCents)
     : Number((totalRewardPoints / Math.max(1, Number(plan.durationDays) || 1)).toFixed(6));
   return {
     planNumber: plan.planNumber,
     pricePoints: plan.pricePoints,
     monthlyRewardPercent: plan.monthlyRewardPercent,
-    durationDays: policy?.durationDays || plan.durationDays,
+    durationDays: isFreeVip0 ? durationDays : policy?.durationDays || plan.durationDays,
     totalRewardPoints,
-    dailyRewardAveragePoints: (policy?.durationDays || plan.durationDays) > 0 ? Number((totalRewardPoints / (policy?.durationDays || plan.durationDays)).toFixed(2)) : 0,
+    dailyRewardAveragePoints: (isFreeVip0 ? durationDays : policy?.durationDays || plan.durationDays) > 0 ? Number((totalRewardPoints / (isFreeVip0 ? durationDays : policy?.durationDays || plan.durationDays)).toFixed(2)) : 0,
     principalDailyPercent: policy ? policy.principalDailyBps / 100 : null,
     rewardDailyPercent: policy ? policy.rewardDailyBps / 100 : null,
     dailyPrincipalPoints: dailyPrincipalCents == null ? 0 : pointsFromCents(dailyPrincipalCents),
     dailyRewardPoints: dailyRewardCents == null ? 0 : pointsFromCents(dailyRewardCents),
     totalPrincipalPoints: policy ? pointsFromCents(dailyPrincipalCents * policy.durationDays) : 0,
-    dailyTotalPayoutPoints: policy ? pointsFromCents(dailyPrincipalCents + dailyRewardCents) : null,
+    dailyTotalPayoutPoints: policy ? pointsFromCents(dailyPrincipalCents + dailyRewardCents) : isFreeVip0 ? miningDailyRate : null,
     miningDailyRate,
-    totalReceivedPoints: policy ? pointsFromCents((dailyPrincipalCents + dailyRewardCents) * policy.durationDays) : null,
-    policyVersion: plan.policyVersion || LEGACY_VIP_POLICY_VERSION,
+    dailyMiningRatePoints: isFreeVip0 ? miningDailyRate : null,
+    totalReceivedPoints: policy ? pointsFromCents((dailyPrincipalCents + dailyRewardCents) * policy.durationDays) : isFreeVip0 ? totalRewardPoints : null,
+    policyVersion: policyVersion,
     productGroup: plan.productGroup || 'legacy',
     enabled: Boolean(plan.enabled),
     comingSoon: Boolean(plan.comingSoon),
@@ -1060,16 +1069,116 @@ router.get('/vip/plans', auth, async (req, res) => {
     // Do not cap this list: every purchased package contributes to the VIP
     // ownership state shown in the UI, including all active miners.
     VipSubscription.find({ user: req.dbUser._id }).sort({ createdAt: -1 }).lean(),
-    User.findById(req.dbUser._id).select('points').lean()
+    User.findById(req.dbUser._id).select('points vip0Claimed').lean()
   ]);
   res.json({
     success: true,
     serverNow: now.toISOString(),
     points: user?.points ?? req.dbUser.points,
     upBalance: Number(user?.points ?? req.dbUser.points) || 0,
+    vip0Claimed: Boolean(user?.vip0Claimed),
     plans: plans.map(publicVipPlan),
     subscriptions: subscriptions.map(subscription => publicVipSubscription(subscription, now))
   });
+});
+
+router.post('/vip/free/claim', auth, sensitiveRateLimit('claim'), async (req, res) => {
+  let operation;
+  try {
+    operation = await executeIdempotently({
+      userId: req.dbUser._id,
+      scope: 'vip0_claim',
+      key: req.get('Idempotency-Key'),
+      body: { planNumber: 0 },
+      execute: async session => {
+        const plan = await VipPlan.findOne({ planNumber: 0 }).session(session);
+        if (!plan || plan.policyVersion !== VIP0_POLICY_VERSION || plan.productGroup !== 'free'
+          || plan.enabled !== true || plan.comingSoon === true) {
+          throw vipError('VIP0_UNAVAILABLE', 'پلن رایگان VIP 0 در حال حاضر فعال نیست.', 409);
+        }
+        const durationDays = Number(plan.durationDays);
+        const dailyRatePoints = Number(plan.dailyMiningRatePoints);
+        const dailyRateCents = Math.round(dailyRatePoints * 100);
+        if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650
+          || !Number.isSafeInteger(dailyRateCents) || dailyRateCents < 1 || dailyRateCents > 100000) {
+          throw vipError('VIP0_CONFIG_INVALID', 'تنظیمات پلن رایگان VIP 0 معتبر نیست؛ با مدیریت تماس بگیرید.', 409);
+        }
+
+        const startAt = new Date();
+        const endAt = new Date(startAt.getTime() + durationDays * DAY_MS);
+        // This conditional write is the primary cross-request guard. A unique
+        // partial index on VIP0 subscriptions and a unique ledger source are
+        // independent backstops; all three writes commit or roll back together.
+        const user = await User.findOneAndUpdate(
+          { _id: req.dbUser._id, vip0Claimed: { $ne: true } },
+          { $set: { vip0Claimed: true, vip0ClaimedAt: startAt }, $inc: { vipClaimLockVersion: 1 } },
+          { new: true, session }
+        );
+        if (!user) {
+          const exists = await User.exists({ _id: req.dbUser._id }).session(session);
+          if (!exists) throw vipError('USER_NOT_FOUND', 'کاربر پیدا نشد.', 404);
+          throw vipError('VIP0_ALREADY_CLAIMED', 'پلن رایگان VIP 0 قبلاً برای این حساب دریافت شده است.', 409);
+        }
+        const existingSubscription = await VipSubscription.findOne({ user: user._id, planNumber: 0 }).session(session).lean();
+        if (existingSubscription) {
+          throw vipError('VIP0_ALREADY_CLAIMED', 'پلن رایگان VIP 0 قبلاً برای این حساب دریافت شده است.', 409);
+        }
+
+        const totalRewardCents = dailyRateCents * durationDays;
+        const totalRewardPoints = pointsFromCents(totalRewardCents);
+        if (!Number.isSafeInteger(totalRewardCents) || totalRewardPoints <= 0) {
+          throw vipError('VIP0_CONFIG_INVALID', 'تعهد استخراج پلن VIP 0 معتبر نیست؛ با مدیریت تماس بگیرید.', 409);
+        }
+        const subscription = await new VipSubscription({
+          user: user._id,
+          planNumber: 0,
+          pricePoints: 0,
+          monthlyRewardPercent: 0,
+          durationDays,
+          policyVersion: VIP0_POLICY_VERSION,
+          productGroup: 'free',
+          principalDailyBps: 0,
+          rewardDailyBps: 0,
+          reserveLiabilityCents: 0,
+          reservePaidCents: 0,
+          totalRewardCents,
+          totalRewardPoints,
+          dailyRewardAveragePoints: Number((totalRewardPoints / durationDays).toFixed(2)),
+          startAt,
+          endAt,
+          status: 'active'
+        }).save({ session });
+
+        const ledger = await recordLedgerRequired({
+          user: user._id,
+          type: 'vip_free_claim',
+          currency: 'points',
+          amount: 0,
+          description: 'VIP 0 free miner activation',
+          balanceAfter: user.points,
+          sourceId: `vip0:${user._id}:claim`,
+          transactionId: idempotencyTransactionId({ userId: user._id, scope: 'vip0_claim', key: req.get('Idempotency-Key'), leg: 'activation' }),
+          session
+        });
+        if (!ledger.created) throw vipError('VIP0_ALREADY_CLAIMED', 'پلن رایگان VIP 0 قبلاً برای این حساب دریافت شده است.', 409);
+
+        return { body: {
+          success: true,
+          planNumber: 0,
+          vip0Claimed: true,
+          points: user.points,
+          upBalance: Number(user.points) || 0,
+          subscription: publicVipSubscription(subscription, startAt)
+        }, resourceId: subscription._id };
+      }
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      return sendVipError(res, vipError('VIP0_ALREADY_CLAIMED', 'پلن رایگان VIP 0 قبلاً برای این حساب دریافت شده است.', 409));
+    }
+    return sendVipError(res, error);
+  }
+  return res.status(operation.status).json(operation.body);
 });
 
 router.post('/vip/purchase', auth, sensitiveRateLimit('claim'), async (req, res) => {
