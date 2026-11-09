@@ -31,6 +31,7 @@ assert.notStrictEqual(
 const idempotencyIndexes = IdempotencyOperation.schema.indexes();
 assert(idempotencyIndexes.some(([keys, options]) => keys.userId === 1 && keys.scope === 1 && keys.key === 1 && options.unique === true));
 assert(idempotencyIndexes.every(([, options]) => options.expireAfterSeconds == null), 'financial idempotency records must not expire');
+assert(IdempotencyOperation.schema.path('scope').enumValues.includes('vip0_claim'), 'VIP0 activation must be allowed by the durable idempotency scope enum');
 
 const withdrawalIndexes = Withdrawal.schema.indexes();
 assert(withdrawalIndexes.some(([keys, options]) => keys.txHashNormalized === 1 && options.unique === true && options.partialFilterExpression));

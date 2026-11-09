@@ -10,6 +10,7 @@ const idempotencyOperationSchema = new mongoose.Schema({
     'exchange_gram_to_points',
     'withdraw',
     'vip_purchase',
+    'vip0_claim',
     'vip_daily_claim',
     'vip_partial_claim',
     'vip_bulk_claim',
