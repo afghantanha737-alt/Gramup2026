@@ -1560,9 +1560,9 @@ function renderAdvertiserCard() {
       <label class="adLabel">${t("ad_languages")}</label><div class="adChips" data-ad-languages>${["FA","EN","AR","RU","TR","ALL"].map(x=>`<button type="button" data-ad-language="${x}">${x}</button>`).join("")}</div>
       <label class="adToggle"><input type="checkbox" data-ad-premium><span class="adSwitch"></span><span>${t("ad_premium_only")} <small>+${t("ad_premium_fee")}</small></span></label>
       <label class="adLabel">${t("ad_quantity")}</label><div class="adQuantity"><div class="adChips" data-ad-quantity>${q.map((x,i)=>`<button type="button" data-ad-quantity-value="${x}" class="${i===0?"active":""}">${x.toLocaleString()}</button>`).join("")}</div><input data-ad-count type="number" min="1" step="1" value="500" placeholder="${t("ad_custom_quantity")}"></div>
-      <div class="adSummary"><div><span>${t("ad_cost_per_action")}</span><b data-ad-cost>0.020 GRAM</b></div><div><span>${t("ad_player_reward")}</span><b data-ad-reward>10 UP</b></div><div><span>${t("ad_total_payable")}</span><b data-ad-total>10 GRAM</b></div><div><span>${t("ad_your_balance")}</span><b data-ad-balance>${Number(state.gramBalance || 0).toFixed(3)} GRAM</b></div></div>
+      <div class="adSummary"><div><span>${t("ad_cost_per_action")}</span><b data-ad-cost>—</b></div><div><span>${t("ad_player_reward")}</span><b data-ad-reward>—</b></div><div><span>${t("ad_total_payable")}</span><b data-ad-total>—</b></div><div><span>${t("ad_your_balance")}</span><b data-ad-balance>${Number(state.gramBalance || 0).toFixed(3)} GRAM</b></div></div>
       <div class="adPaymentChoices"><button type="button" class="adPayment active" data-ad-payment="gram_balance">${t("ad_pay_gram")}</button><button type="button" class="adPayment" data-ad-payment="ton_mainnet">${t("ad_pay_ton")}</button></div>
-      <p class="adNotice">${t("ad_review_notice")}</p><button type="button" class="primaryBtn adSubmit" data-ad-submit>${t("ad_submit")}</button><div class="adMessage" data-ad-message role="status"></div>
+      <p class="adNotice">${t("ad_review_notice")}</p><div class="adPaused" data-ad-paused hidden>${t("ad_marketplace_paused")}</div><button type="button" class="primaryBtn adSubmit" data-ad-submit>${t("ad_submit")}</button><div class="adMessage" data-ad-message role="status"></div>
     </div></div>
     <div class="adPanel" data-ad-panel="orders" hidden><div class="adOrdersList" data-ad-orders><div class="adEmpty">${t("ad_orders_loading")}</div></div></div>
   </section></div>`;
@@ -1572,11 +1572,30 @@ function calculateAdPreview(root) {
   const count = Math.max(1, Math.floor(Number(root?.querySelector("[data-ad-count]")?.value) || 500));
   const languageCount = root?.querySelectorAll("[data-ad-language].active")?.length || 0;
   const premium = root?.querySelector("[data-ad-premium]")?.checked;
-  const cost = 0.02 + languageCount * 0.002 + (premium ? 0.005 : 0);
-  const reward = Math.max(1, Math.round(cost * 500));
+  const type = root?.querySelector("[data-ad-type].active")?.dataset.adType;
+  const config = root?._adConfig || {};
+  const usd = Number(config.basePriceUsdPerUser || 0) + (type === "channel" ? Number(config.channelSurchargeUsdPerUser || 0) : 0) + (languageCount ? Number(config.languageSurchargeUsdPerUser || 0) : 0) + (premium ? Number(config.premiumSurchargeUsdPerUser || 0) : 0);
+  const gramUsdPrice = Number(config.gramUsdPrice || 0);
+  const cost = gramUsdPrice > 0 ? usd / gramUsdPrice : 0;
+  const reward = Number(config.playerRewardUp || 0);
   const set = (selector, text) => { const el = root?.querySelector(selector); if (el) el.textContent = text; };
-  set("[data-ad-cost]", `${cost.toFixed(3)} GRAM`); set("[data-ad-reward]", `${reward} UP`); set("[data-ad-total]", `${(cost * count).toFixed(3)} GRAM`);
+  set("[data-ad-cost]", cost > 0 ? `${cost.toFixed(3)} GRAM` : "—"); set("[data-ad-reward]", reward > 0 ? `${reward} UP` : "—"); set("[data-ad-total]", cost > 0 ? `${(cost * count).toFixed(3)} GRAM` : "—");
   return { count, cost, reward };
+}
+async function loadAdConfig(modal) {
+  try {
+    const result = await api("/api/ad-orders/config");
+    const config = result.config || {};
+    const sheet = modal?.querySelector(".adSheet");
+    if (!sheet) return;
+    sheet._adConfig = config;
+    const min = Number(config.minUsers || 50); const max = Number(config.maxUsers || 50000);
+    const count = sheet.querySelector("[data-ad-count]"); if (count) { count.min = String(min); count.max = String(max); if (Number(count.value) < min) count.value = String(min); }
+    sheet.querySelectorAll("[data-ad-quantity-value]").forEach(button => { const value = Number(button.dataset.adQuantityValue); button.disabled = value < min || value > max; });
+    const paused = sheet.querySelector("[data-ad-paused]"); const submit = sheet.querySelector("[data-ad-submit]");
+    if (paused) paused.hidden = config.enabled !== false; if (submit) submit.disabled = config.enabled === false;
+    calculateAdPreview(sheet);
+  } catch (error) { const message = modal?.querySelector("[data-ad-message]"); if (message) message.textContent = error.message || t("error_generic"); }
 }
 async function loadAdOrders(root) {
   const target = root?.querySelector("[data-ad-orders]"); if (!target) return;
@@ -1584,12 +1603,12 @@ async function loadAdOrders(root) {
 }
 async function submitAdCampaign(button) {
   const root = button.closest(".adSheet"); const value = selector => root?.querySelector(selector)?.value || ""; const message = root?.querySelector("[data-ad-message]"); button.disabled = true;
-  try { const preview = calculateAdPreview(root); const body = { title: value("[data-ad-title]"), description: value("[data-ad-description]"), destinationUrl: value("[data-ad-url]"), telegramChatId: value("[data-ad-chat]"), rewardUp: preview.reward, completionsRequested: preview.count, priceGramPerCompletion: preview.cost, verificationType: root.querySelector("[data-ad-type=channel].active") ? "telegram" : "latest_post" }; const payment = root.querySelector("[data-ad-payment].active")?.dataset.adPayment || "gram_balance"; if (payment === "ton_mainnet") { const created = await api("/api/ad-orders/ton-intents", { method: "POST", body }); if (!window.gramupWallet?.sendTonTransaction) throw new Error(t("ad_wallet_required")); await window.gramupWallet.sendTonTransaction(created.transaction); let verified; for (let attempt = 0; attempt < 12; attempt += 1) { await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000)); verified = await api(`/api/ad-orders/${encodeURIComponent(created.intent.id)}/ton-verify`, { method: "POST", body: {} }); if (verified.status === "confirmed") break; } if (verified?.status !== "confirmed") throw new Error(t("ad_payment_pending")); if (message) message.textContent = verified.message || t("ad_submitted"); } else { const result = await api("/api/ad-orders", { method: "POST", body }); if (message) message.textContent = result.message || t("ad_submitted"); } root.querySelectorAll("input,textarea").forEach(input => { if (input.type !== "checkbox") input.value = ""; }); } catch (error) { if (message) message.textContent = error.message || t("error_generic"); } finally { button.disabled = false; }
+  try { const preview = calculateAdPreview(root); if (!root._adConfig?.enabled) throw new Error(t("ad_marketplace_paused")); if (!(preview.cost > 0) || !(preview.reward > 0)) throw new Error(t("ad_pricing_unavailable")); const body = { title: value("[data-ad-title]"), description: value("[data-ad-description]"), destinationUrl: value("[data-ad-url]"), telegramChatId: value("[data-ad-chat]"), rewardUp: preview.reward, completionsRequested: preview.count, priceGramPerCompletion: preview.cost, targetLanguage: root.querySelector("[data-ad-language].active")?.dataset.adLanguage || "ALL", premiumOnly: root.querySelector("[data-ad-premium]")?.checked === true, verificationType: root.querySelector("[data-ad-type=channel].active") ? "telegram" : "latest_post" }; const payment = root.querySelector("[data-ad-payment].active")?.dataset.adPayment || "gram_balance"; if (payment === "ton_mainnet") { const created = await api("/api/ad-orders/ton-intents", { method: "POST", body }); if (!window.gramupWallet?.sendTonTransaction) throw new Error(t("ad_wallet_required")); await window.gramupWallet.sendTonTransaction(created.transaction); let verified; for (let attempt = 0; attempt < 12; attempt += 1) { await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000)); verified = await api(`/api/ad-orders/${encodeURIComponent(created.intent.id)}/ton-verify`, { method: "POST", body: {} }); if (verified.status === "confirmed") break; } if (verified?.status !== "confirmed") throw new Error(t("ad_payment_pending")); if (message) message.textContent = verified.message || t("ad_submitted"); } else { const result = await api("/api/ad-orders", { method: "POST", body }); if (message) message.textContent = result.message || t("ad_submitted"); } root.querySelectorAll("input,textarea").forEach(input => { if (input.type !== "checkbox") input.value = ""; }); } catch (error) { if (message) message.textContent = error.message || t("error_generic"); } finally { button.disabled = false; }
 }
 window.submitAdCampaign = submitAdCampaign;
 
 document.addEventListener("click", event => {
-  const open = event.target?.closest?.("[data-ad-open]"); if (open) { const modal = document.querySelector("[data-ad-modal]"); if (modal) modal.hidden = false; return; }
+  const open = event.target?.closest?.("[data-ad-open]"); if (open) { const modal = document.querySelector("[data-ad-modal]"); if (modal) { modal.hidden = false; void loadAdConfig(modal); } return; }
   if (event.target?.closest?.("[data-ad-close]")) { const modal = event.target.closest("[data-ad-modal]"); if (modal) modal.hidden = true; return; }
   const tab = event.target?.closest?.("[data-ad-tab]"); if (tab) { const modal = tab.closest("[data-ad-modal]"); modal?.querySelectorAll("[data-ad-tab]").forEach(x => x.classList.toggle("active", x === tab)); modal?.querySelectorAll("[data-ad-panel]").forEach(x => x.hidden = x.dataset.adPanel !== tab.dataset.adTab); if (tab.dataset.adTab === "orders") void loadAdOrders(modal); return; }
   const type = event.target?.closest?.("[data-ad-type]"); if (type) { const root = type.closest(".adSheet"); root.querySelectorAll("[data-ad-type]").forEach(x => x.classList.toggle("active", x === type)); root.querySelector(".adChannelFields").hidden = type.dataset.adType !== "channel"; return; }

@@ -696,6 +696,16 @@
           </div>
         </div>
         <div style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:14px 0;background:var(--surface2)">
+          <b>📣 Self-Serve Ad Marketplace — بازار تبلیغات</b>
+          <p class="small">قیمت هر کاربر از USD به GRAM با استفاده از نرخ GRAM/USD همین تنظیمات محاسبه می‌شود. تغییرات برای سفارش‌های جدید اعمال می‌شوند؛ کمپین‌های موجود تغییر نمی‌کنند.</p>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" id="setAdMarketplaceEnabled" style="width:auto"><b>بازار تبلیغات فعال باشد</b></label>
+          <div class="row"><div><label>قیمت پایه هر کاربر (USD)</label><input id="setAdBasePriceUsd" type="number" min="0" step="0.0001"></div><div><label>پاداش هر کاربر (UP)</label><input id="setAdPlayerRewardUp" type="number" min="1" step="1"></div></div>
+          <div class="row"><div><label>هزینه عضویت کانال برای هر کاربر (USD)</label><input id="setAdChannelSurchargeUsd" type="number" min="0" step="0.0001"></div><div><label>هزینه فیلتر زبان برای هر کاربر (USD)</label><input id="setAdLanguageSurchargeUsd" type="number" min="0" step="0.0001"></div></div>
+          <div class="row"><div><label>هزینه Premium برای هر کاربر (USD)</label><input id="setAdPremiumSurchargeUsd" type="number" min="0" step="0.0001"></div><div><label>حداقل کاربران کمپین</label><input id="setAdMinUsers" type="number" min="1" step="1"></div></div>
+          <label>حداکثر کاربران کمپین</label><input id="setAdMaxUsers" type="number" min="1" step="1">
+          <p class="small" id="adPricingPreview" style="margin-bottom:0"></p>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:14px 0;background:var(--surface2)">
           <b>💎 Native GRAM Deposit — TON Mainnet</b>
           <p class="small">این Deposit فقط ارز بومی GRAM شبکه TON را می‌پذیرد و از Jetton یا Jetton Master استفاده نمی‌کند. آدرس عمومی کیف‌پول پروژه را از منبع مورداعتماد وارد کنید؛ هر کاربر باید Reference اختصاصی را در comment تراکنش Native GRAM بنویسد. این برنامه seed یا private key نگهداری نمی‌کند. Deposit به‌صورت پیش‌فرض خاموش است.</p>
           <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
@@ -2769,6 +2779,15 @@ async function loadSettings() {
     renderReferralRates();
     document.getElementById("setWeeklyLeaderboardEnabled").checked = s.weeklyLeaderboardEnabled !== false;
     [0, 1, 2].forEach(i => { document.getElementById(`setWeeklyPrize${i + 1}`).value = s.weeklyLeaderboardPrizes?.[i] ?? [500, 250, 100][i]; });
+    document.getElementById("setAdMarketplaceEnabled").checked = s.adMarketplaceEnabled !== false;
+    document.getElementById("setAdBasePriceUsd").value = s.adBasePriceUsdPerUser ?? 0.01;
+    document.getElementById("setAdChannelSurchargeUsd").value = s.adChannelSurchargeUsdPerUser ?? 0;
+    document.getElementById("setAdLanguageSurchargeUsd").value = s.adLanguageSurchargeUsdPerUser ?? 0;
+    document.getElementById("setAdPremiumSurchargeUsd").value = s.adPremiumSurchargeUsdPerUser ?? 0;
+    document.getElementById("setAdPlayerRewardUp").value = s.adPlayerRewardUp ?? 10;
+    document.getElementById("setAdMinUsers").value = s.adMinUsers ?? 50;
+    document.getElementById("setAdMaxUsers").value = s.adMaxUsers ?? 50000;
+    updateAdPricingPreview();
     document.getElementById("setDepositEnabled").checked = !!s.depositEnabled;
     document.getElementById("setDepositNetwork").value = "TON Mainnet";
     document.getElementById("setDepositWalletAddress").value = s.depositWalletAddress || "";
@@ -2776,6 +2795,18 @@ async function loadSettings() {
   } catch (error) {
     showMsg(error.message, "error");
   }
+}
+
+function updateAdPricingPreview() {
+  const out = document.getElementById("adPricingPreview");
+  if (!out) return;
+  const base = Number(document.getElementById("setAdBasePriceUsd")?.value || 0);
+  const channel = Number(document.getElementById("setAdChannelSurchargeUsd")?.value || 0);
+  const language = Number(document.getElementById("setAdLanguageSurchargeUsd")?.value || 0);
+  const premium = Number(document.getElementById("setAdPremiumSurchargeUsd")?.value || 0);
+  const gramUsd = Number(document.getElementById("setGramUsd")?.value || 0);
+  const perUser = base + channel + language + premium;
+  out.textContent = gramUsd > 0 ? `نرخ مؤثر کانال با همه گزینه‌ها: $${perUser.toFixed(4)} = ${(perUser / gramUsd).toFixed(6)} GRAM برای هر کاربر؛ GRAM/USD فعلی: $${gramUsd}.` : "برای نمایش تبدیل به GRAM، ابتدا GRAM/USD را در بالا تنظیم کنید.";
 }
 
 async function saveSettings() {
@@ -2793,6 +2824,14 @@ async function saveSettings() {
     streakBonusPoints: Number(document.getElementById("setStreakBonus").value),
     weeklyLeaderboardEnabled: document.getElementById("setWeeklyLeaderboardEnabled").checked,
     weeklyLeaderboardPrizes: [1, 2, 3].map(i => Number(document.getElementById(`setWeeklyPrize${i}`).value) || 0),
+    adMarketplaceEnabled: document.getElementById("setAdMarketplaceEnabled").checked,
+    adBasePriceUsdPerUser: Number(document.getElementById("setAdBasePriceUsd").value),
+    adChannelSurchargeUsdPerUser: Number(document.getElementById("setAdChannelSurchargeUsd").value),
+    adLanguageSurchargeUsdPerUser: Number(document.getElementById("setAdLanguageSurchargeUsd").value),
+    adPremiumSurchargeUsdPerUser: Number(document.getElementById("setAdPremiumSurchargeUsd").value),
+    adPlayerRewardUp: Number(document.getElementById("setAdPlayerRewardUp").value),
+    adMinUsers: Number(document.getElementById("setAdMinUsers").value),
+    adMaxUsers: Number(document.getElementById("setAdMaxUsers").value),
     referralInitialRewardPoints: Number(document.getElementById("setReferralInitialReward").value),
     referralWelcomeRewardPoints: Number(document.getElementById("setReferralWelcomeReward").value),
     referralLevelRates: [10, 5, 3, 1, 1, 1, 1, 1, 1, 1],

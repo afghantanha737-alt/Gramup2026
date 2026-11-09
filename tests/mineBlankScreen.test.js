@@ -41,8 +41,8 @@ assert.equal((i18n.match(/vip_expired_plans_title:/g) || []).length, 3, 'expired
 assert.equal((i18n.match(/vip_mining_duration:/g) || []).length, 3, 'miner duration exists in all supported locales');
 assert.match(css, /\.vipExpiredPlans\s*\{/);
 assert.doesNotMatch(html, /data-tab="mine"/);
-assert.match(html, /style\.css\?v=ad_ui_v2_20261109/);
+assert.match(html, /style\.css\?v=ad_ui_v3_20261109/);
 assert.match(html, /theme-selector\.css\?v=up_v36_vip_signature_20261107/);
-assert.match(html, /i18n\.js\?v=ad_ui_v2_20261109/);
-assert.match(html, /app\.js\?v=ad_ui_v2_20261109/);
+assert.match(html, /i18n\.js\?v=ad_ui_v3_20261109/);
+assert.match(html, /app\.js\?v=ad_ui_v3_20261109/);
 console.log('PASS — VIP mining data loads with visible retry state, ticks every second, and localized cache-busted assets');

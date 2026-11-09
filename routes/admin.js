@@ -2560,6 +2560,13 @@ router.put('/settings', async (req, res) => {
     dailyCheckInPoints: v => v >= 0,
     streakBonusPoints: v => v >= 0,
     gramUsdPrice: v => v >= 0,
+    adBasePriceUsdPerUser: v => v >= 0,
+    adChannelSurchargeUsdPerUser: v => v >= 0,
+    adLanguageSurchargeUsdPerUser: v => v >= 0,
+    adPremiumSurchargeUsdPerUser: v => v >= 0,
+    adPlayerRewardUp: v => Number.isSafeInteger(v) && v >= 1 && v <= 1000000,
+    adMinUsers: v => Number.isSafeInteger(v) && v >= 1 && v <= 1000000,
+    adMaxUsers: v => Number.isSafeInteger(v) && v >= 1 && v <= 1000000,
     referralWelcomeRewardPoints: v => Number.isSafeInteger(v) && v >= 0 && v <= 1000000,
     dailyReminderLocalHour: v => Number.isInteger(v) && v >= 0 && v <= 23,
     dailyReminderLocalMinute: v => Number.isInteger(v) && v >= 0 && v <= 59
@@ -2574,6 +2581,14 @@ router.put('/settings', async (req, res) => {
     }
     changes[key] = value;
   }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'adMarketplaceEnabled')) {
+    changes.adMarketplaceEnabled = body.adMarketplaceEnabled === true || body.adMarketplaceEnabled === 'true';
+  }
+  const currentSettingsForAd = await Settings.getGlobal();
+  const finalAdMinUsers = changes.adMinUsers !== undefined ? changes.adMinUsers : Number(currentSettingsForAd.adMinUsers || 50);
+  const finalAdMaxUsers = changes.adMaxUsers !== undefined ? changes.adMaxUsers : Number(currentSettingsForAd.adMaxUsers || 50000);
+  if (finalAdMinUsers > finalAdMaxUsers) return res.status(400).json({ success: false, code: 'AD_USER_RANGE_INVALID', message: 'حداقل تعداد کاربران نباید از حداکثر بیشتر باشد.' });
 
   if (Object.prototype.hasOwnProperty.call(body, 'dailyAutoCheckinEnabled')) {
     if (typeof body.dailyAutoCheckinEnabled !== 'boolean') {

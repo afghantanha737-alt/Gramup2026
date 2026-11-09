@@ -61,6 +61,13 @@ const settingsSchema = new mongoose.Schema(
       default: defaultSpinPrizes
     },
     adMarketplaceEnabled: { type: Boolean, default: true },
+    adBasePriceUsdPerUser: { type: Number, default: 0.01, min: 0 },
+    adChannelSurchargeUsdPerUser: { type: Number, default: 0, min: 0 },
+    adLanguageSurchargeUsdPerUser: { type: Number, default: 0, min: 0 },
+    adPremiumSurchargeUsdPerUser: { type: Number, default: 0, min: 0 },
+    adPlayerRewardUp: { type: Number, default: 10, min: 0 },
+    adMinUsers: { type: Number, default: 50, min: 1 },
+    adMaxUsers: { type: Number, default: 50000, min: 1 },
     adCampaignMinBudgetGram: { type: Number, default: 0.1, min: 0 },
     adCampaignMaxBudgetGram: { type: Number, default: 100000, min: 0 }
   },

@@ -11,11 +11,31 @@ const User = require('../models/User');
 const AdOrder = require('../models/AdOrder');
 const Task = require('../models/Task');
 const Settings = require('../models/Settings');
-const { normalizeAdCampaign, publicOrder } = require('../utils/adCampaign');
+const { normalizeAdCampaign, calculateAdPricing, publicOrder } = require('../utils/adCampaign');
 const { comment } = require('@ton/ton');
 const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
 const { bot } = require('../utils/bot');
 const auth = requireUnifiedAuth(process.env.BOT_TOKEN);
+
+function publicAdConfig(settings) {
+  return {
+    enabled: settings.adMarketplaceEnabled !== false,
+    gramUsdPrice: Number(settings.gramUsdPrice || 0),
+    basePriceUsdPerUser: Number(settings.adBasePriceUsdPerUser || 0),
+    channelSurchargeUsdPerUser: Number(settings.adChannelSurchargeUsdPerUser || 0),
+    languageSurchargeUsdPerUser: Number(settings.adLanguageSurchargeUsdPerUser || 0),
+    premiumSurchargeUsdPerUser: Number(settings.adPremiumSurchargeUsdPerUser || 0),
+    playerRewardUp: Number(settings.adPlayerRewardUp || 0),
+    minUsers: Number(settings.adMinUsers || 50),
+    maxUsers: Number(settings.adMaxUsers || 50000)
+  };
+}
+
+router.get('/config', auth, async (req, res) => {
+  const settings = await Settings.getGlobal();
+  res.set('Cache-Control', 'no-store');
+  res.json({ success: true, config: publicAdConfig(settings) });
+});
 
 async function paymentConfig() {
   const settings = await Settings.getGlobal();
@@ -32,10 +52,14 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, sensitiveRateLimit('ad_order'), async (req, res) => {
   const normalized = normalizeAdCampaign(req.body);
   if (normalized.error) return res.status(400).json({ success: false, code: 'INVALID_AD_CAMPAIGN', message: normalized.error });
-  const input = normalized.value;
+  let input = normalized.value;
   try {
     const settings = await Settings.getGlobal();
     if (settings.adMarketplaceEnabled === false) return res.status(503).json({ success: false, code: 'AD_MARKETPLACE_DISABLED', message: 'بازار تبلیغات موقتاً غیرفعال است.' });
+    if (input.completionsRequested < Number(settings.adMinUsers || 50) || input.completionsRequested > Number(settings.adMaxUsers || 50000)) return res.status(400).json({ success: false, code: 'AD_USERS_OUT_OF_RANGE', message: 'تعداد کاربران خارج از محدوده تنظیم‌شده است.' });
+    const pricing = calculateAdPricing({ settings, ...input });
+    if (pricing.error) return res.status(503).json({ success: false, code: 'AD_PRICING_UNAVAILABLE', message: pricing.error });
+    input = { ...input, ...pricing };
     if (input.totalCostGram < Number(settings.adCampaignMinBudgetGram || 0.1) || input.totalCostGram > Number(settings.adCampaignMaxBudgetGram || 100000)) {
       return res.status(400).json({ success: false, code: 'AD_BUDGET_OUT_OF_RANGE', message: 'بودجه کمپین خارج از محدوده مجاز است.' });
     }
@@ -66,10 +90,14 @@ router.post('/', auth, sensitiveRateLimit('ad_order'), async (req, res) => {
 router.post('/ton-intents', auth, sensitiveRateLimit('ad_order_ton'), async (req, res) => {
   const normalized = normalizeAdCampaign(req.body);
   if (normalized.error) return res.status(400).json({ success: false, code: 'INVALID_AD_CAMPAIGN', message: normalized.error });
-  const input = normalized.value;
+  let input = normalized.value;
   try {
     const { settings, address } = await paymentConfig();
     if (settings.adMarketplaceEnabled === false) return res.status(503).json({ success: false, code: 'AD_MARKETPLACE_DISABLED', message: 'بازار تبلیغات موقتاً غیرفعال است.' });
+    if (input.completionsRequested < Number(settings.adMinUsers || 50) || input.completionsRequested > Number(settings.adMaxUsers || 50000)) return res.status(400).json({ success: false, code: 'AD_USERS_OUT_OF_RANGE', message: 'تعداد کاربران خارج از محدوده تنظیم‌شده است.' });
+    const pricing = calculateAdPricing({ settings, ...input });
+    if (pricing.error) return res.status(503).json({ success: false, code: 'AD_PRICING_UNAVAILABLE', message: pricing.error });
+    input = { ...input, ...pricing };
     if (input.totalCostGram < Number(settings.adCampaignMinBudgetGram || 0.1) || input.totalCostGram > Number(settings.adCampaignMaxBudgetGram || 100000)) return res.status(400).json({ success: false, code: 'AD_BUDGET_OUT_OF_RANGE', message: 'بودجه کمپین خارج از محدوده مجاز است.' });
     const amountRaw = amountToNanoGram(input.totalCostGram);
     if (!amountRaw) return res.status(400).json({ success: false, code: 'INVALID_TON_AMOUNT', message: 'مبلغ TON معتبر نیست.' });
