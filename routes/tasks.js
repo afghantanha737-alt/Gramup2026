@@ -688,10 +688,12 @@ router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) =>
       status: 'approved'
     });
   } catch (error) {
-    console.error(`POST /api/tasks/${req.params.id}/claim failed:`, error);
     if (error.code === 'ALREADY_DONE' || error.code === 'TASK_FULL' || error?.code === 11000) {
+      // Duplicate clicks/races are a normal idempotency outcome, not a server
+      // failure. Return the conflict response without creating error-log noise.
       return res.status(409).json({ success: false, message: error.message || 'این تسک قبلاً ثبت شده است؛ وضعیت را تازه کنید.', code: error.code === 11000 ? 'ALREADY_DONE' : error.code });
     }
+    console.error(`POST /api/tasks/${req.params.id}/claim failed:`, error);
     if (error.code === 'TASK_SETUP_INCOMPLETE') {
       return res.status(503).json({ success: false, code: error.code, message: 'تنظیمات پاداش این تسک معتبر نیست؛ پرداختی انجام نشد.' });
     }

@@ -49,7 +49,11 @@ async function runDailyCheckinNotificationSweep(now = new Date(), dependencies =
 
   const User = dependencies.User || require('../models/User');
   const notifyUser = dependencies.notifyUser || require('./bot').notifyUser;
-  const users = await User.find({}, '_id telegramId streak lastCheckIn lastReminderSentAt').lean();
+  const users = await User.find({
+    isBanned: { $ne: true },
+    telegramBlockedAt: null,
+    telegramId: { $exists: true, $nin: ['', null] }
+  }, '_id telegramId streak lastCheckIn lastReminderSentAt isBanned telegramBlockedAt').lean();
   const todayStart = utcDayStart(now);
   let sent = 0;
   let failed = 0;

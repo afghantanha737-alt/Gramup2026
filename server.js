@@ -206,12 +206,21 @@ app.use((err, req, res, next) => {
     return res.status(503).json({ success: false, message: 'Server is restarting. Please try again.' });
   }
 
-  console.error('Unhandled server error:', err);
-  if (res.headersSent) return next(err);
-
   if (err.message === 'CORS origin not allowed') {
+    // Rejected browser origins are expected boundary traffic, not an application
+    // failure. Keep the 403 response but avoid polluting production error logs.
+    console.warn(JSON.stringify({
+      event: 'cors_origin_rejected',
+      origin: req.get('origin') || null,
+      method: req.method,
+      path: req.originalUrl,
+      at: new Date().toISOString()
+    }));
     return res.status(403).json({ success: false, message: 'Origin not allowed' });
   }
+  if (res.headersSent) return next(err);
+
+  console.error('Unhandled server error:', err);
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     return res.status(400).json({ success: false, message: 'Invalid JSON payload' });
   }

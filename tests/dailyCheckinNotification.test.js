@@ -36,7 +36,12 @@ async function testSweep() {
   const User = {
     find(filter, projection) {
       query = { filter, projection };
-      return { lean: async () => users };
+      return {
+        lean: async () => users.filter(user => user.isBanned !== true
+          && user.telegramBlockedAt == null
+          && user.telegramId != null
+          && user.telegramId !== '')
+      };
     },
     async updateOne(filter) {
       const id = filter._id;
@@ -51,19 +56,21 @@ async function testSweep() {
   };
 
   const result = await runDailyCheckinNotificationSweep(now, { User, notifyUser, hourUtc: 4 });
-  assert.deepStrictEqual(query.filter, {}, 'the sweep queries all registered users without audience filters');
+  assert.deepStrictEqual(query.filter, {
+    isBanned: { $ne: true },
+    telegramBlockedAt: null,
+    telegramId: { $exists: true, $nin: ['', null] }
+  }, 'the sweep excludes banned and Telegram-blocked users');
   assert.match(query.projection, /telegramId/);
-  assert.strictEqual(sentMessages.length, 3, 'every registered Telegram user is attempted, including banned/blocked records');
+  assert.strictEqual(sentMessages.length, 1, 'only active Telegram recipients are attempted');
   assert.deepStrictEqual(sentMessages.map(message => message.text), [
-    'Today is your Day 2! Go to the daily check-in and claim your 7 UP for free.',
-    'Today is your Day 7! Go to the daily check-in and claim your 15 UP for free.',
-    'Today is your Day 1! Go to the daily check-in and claim your 5 UP for free.'
+    'Today is your Day 2! Go to the daily check-in and claim your 7 UP for free.'
   ]);
-  assert.deepStrictEqual(result, { sent: 2, failed: 1, alreadySent: 0, total: 3 });
+  assert.deepStrictEqual(result, { sent: 1, failed: 0, alreadySent: 0, total: 1 });
 
   const repeated = await runDailyCheckinNotificationSweep(now, { User, notifyUser, hourUtc: 4 });
-  assert.strictEqual(sentMessages.length, 3, 'the existing per-user reminder timestamp prevents same-day repeats');
-  assert.strictEqual(repeated.alreadySent, 3);
+  assert.strictEqual(sentMessages.length, 1, 'the existing per-user reminder timestamp prevents same-day repeats');
+  assert.strictEqual(repeated.alreadySent, 1);
   assert.strictEqual((await runDailyCheckinNotificationSweep(now, { User, notifyUser, hourUtc: 9 })).skipped, 'wrong_hour');
 }
 
