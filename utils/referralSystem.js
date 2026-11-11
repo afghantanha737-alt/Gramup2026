@@ -18,6 +18,16 @@ const {
 
 const DEFAULT_REFERRAL_WELCOME_REWARD_POINTS = 5;
 
+// Compatibility helper for the retired Growth Phase 2 contract. The live
+// referral ledger continues to use integer-point calculateReferralCommission;
+// this helper is intentionally not used by payment or commission flows.
+function calculateMiningCommissionAmount(claimAmount, ratePercent) {
+  const amount = Number(claimAmount);
+  const rate = Number(ratePercent);
+  if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(rate) || rate <= 0) return 0;
+  return Math.floor(amount * rate) / 100;
+}
+
 function sessionQuery(query, session) {
   return session ? query.session(session) : query;
 }
@@ -486,6 +496,7 @@ async function distributeReferralCommissions(earningEntry, session) {
 
 module.exports = {
   DEFAULT_REFERRAL_WELCOME_REWARD_POINTS,
+  calculateMiningCommissionAmount,
   linkReferral,
   findReferrerByIdentifier,
   linkReferralByIdentifier,
