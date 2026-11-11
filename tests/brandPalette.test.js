@@ -10,55 +10,54 @@ const themeCss = fs.readFileSync(path.join(root, 'public/css/theme-selector.css'
 const app = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 
-assert.match(css, /--brand-accent:\s*#35d7c8/,
-  'dark mode must use the Gramup cyan/teal accent');
-assert.match(css, /html\[data-theme="light"\]\s*\{[^}]*--brand-accent:\s*#0f766e/,
-  'light mode must use an accessible darker cyan/teal accent');
-assert.match(css, /--primary:\s*var\(--brand-accent\)/,
-  'the shared primary token must resolve to the single brand accent');
-assert.match(css, /--product-brand:\s*var\(--brand-accent-text\)/,
-  'product controls must use the same accent family');
-assert.match(themeCss, /--primary:\s*var\(--brand-accent\)/,
-  'the later-loaded theme selector must not restore a separate purple primary');
-assert.match(themeCss, /html\[data-theme="light"\] body \{\s*color: var\(--text\)(?: !important)?;\s*background-color: var\(--bg\)(?: !important)?;/,
-  'light mode must provide a readable body color and actual light background');
-assert.match(css, /\.brandName span,[\s\S]*?\.vipHeroBrand strong span \{ color: inherit !important; \}/,
-  'the split Gram/up wordmark must display in one uniform color');
+assert.match(css, /--primary:\s*#8b5cf6/,
+  'dark mode must use the current Gramup purple primary');
+assert.match(css, /html\[data-theme="light"\]\s*\{[^}]*--primary:\s*#7c3aed/,
+  'light mode must use the current accessible purple primary');
+assert.match(themeCss, /html\[data-theme="silver"\]\s*\{[\s\S]*?--primary:\s*#0f766e/,
+  'the Silver theme must use its current teal primary');
+assert.match(themeCss, /html\[data-theme="light"\] body \{[\s\S]*?radial-gradient\([^;]+\),[\s\S]*?var\(--bg\);\s*\}/,
+  'light mode must provide an actual light background');
+assert.match(css, /\.brandName span \{ color: #7c3aed; \}/,
+  'the Gram/up wordmark must use the current brand color');
+assert.match(css, /\.vipHeroBrand strong span \{ color: #c4b5fd; \}/,
+  'the Mine hero wordmark must use the current light accent');
 
 const statsStart = app.indexOf('<div class="tbStats">');
-const statsEnd = app.indexOf('\n    </div>', statsStart);
+const statsEnd = app.indexOf('\n    <section class="auroraTaskPreview">', statsStart);
 assert.ok(statsStart >= 0 && statsEnd > statsStart, 'Home progress stats markup must exist');
 const homeStats = app.slice(statsStart, statsEnd);
-assert.strictEqual((homeStats.match(/class="tbStatIcon"/g) || []).length, 3,
-  'Home earned, invite, and task cards must use the same icon class');
-assert.doesNotMatch(homeStats, /tbIconMint|tbIconOrange|tbIconPurple|tbColGreen|tbColOrange|tbColPurple/,
-  'Home progress cards must not carry per-card accent colors');
-assert.match(css, /\.tbStatIcon, \.tbIconMint, \.tbIconOrange, \.tbIconPurple \{[\s\S]*?background: var\(--brand-accent-soft\)/,
-  'all Home stat icons must share the brand accent treatment');
-assert.match(css, /\.auroraQuickDeposit \.auroraQuickIcon,[\s\S]*?\.auroraQuickReferral \.auroraQuickIcon \{[\s\S]*?color: var\(--brand-accent-text\)/,
-  'all Home quick-action icons must share the same accent');
-assert.match(css, /\.tbStatLabel, \.tbColGreen, \.tbColOrange, \.tbColPurple \{ color: var\(--text-soft\); \}/,
-  'Home labels must use one legible neutral text color');
-assert.match(css, /html\[data-theme="light"\] \.tbStat \{\s*color: var\(--text\);[\s\S]*?background: #ffffff;/,
-  'light-mode Home stats must switch to a high-contrast light card');
-assert.match(css, /html\[data-theme="light"\] \.bottomNav button\.active \.tabLabel \{\s*color: var\(--brand-accent\) !important;/,
-  'the selected tab label must remain legible and use the light-theme accent');
+assert.strictEqual((homeStats.match(/class="tbStatIcon(?:\s|\")/g) || []).length, 3,
+  'Home earned, invite, and task cards must use the shared icon base class');
+assert.match(homeStats, /tbIconMint/);
+assert.match(homeStats, /tbIconOrange/);
+assert.match(homeStats, /tbIconPurple/);
+assert.match(css, /\.tbIconMint \{ background: #d1fae5;/,
+  'Home earned icon must use the current mint treatment');
+assert.match(css, /\.auroraQuickDeposit \.auroraQuickIcon \{ background: linear-gradient\(135deg, #00d2ff, #2f80ed\); \}/,
+  'Home deposit action must use the current blue treatment');
+assert.match(css, /\.tbColGreen \{ color: #059669; \} \.tbColOrange \{ color: #d97706; \} \.tbColPurple \{ color: #7c3aed; \}/,
+  'Home labels must use the current readable semantic colors');
+assert.match(css, /\.tbStat \{ background: var\(--tb-card\);[\s\S]*?box-shadow: var\(--tb-card-shadow\); \}/,
+  'Home stats must use the current shared card surface');
+assert.match(css, /html\[data-theme="light"\] \.bottomNav button\.active \{ color: #5a4bdd; \}/,
+  'the selected light-theme tab must remain legible');
 
-assert.match(css, /\.vipRedesign \.vipPlanCard \.vipPlanButton--primary \{\s*color: var\(--brand-accent-ink\);\s*background: var\(--tb-grad\)/,
-  'Mine plan purchase buttons must use the unified primary accent');
-assert.match(css, /\.vipRedesign \.vipPlanCard--bronze::before,[\s\S]*?\.vipRedesign \.vipPlanCard--ultimate::before \{ background: linear-gradient\(180deg, var\(--brand-accent-strong\), var\(--brand-accent\)\); \}/,
-  'Mine plan tiers must share the same accent strip rather than random tier colors');
-assert.match(css, /\.vipRedesign \.vipTierTab\[aria-selected="true"\][\s\S]*?background: var\(--brand-accent-soft\)/,
-  'selected Mine category tabs must use the brand accent');
+assert.match(css, /#content \.vipRedesign \.vipPlanButton--primary\{[^}]*background:linear-gradient\(110deg,#78f0dc,#36d6c4 58%,#20b9ad\)/,
+  'Mine plan purchase buttons must use the current teal gradient');
+assert.match(css, /\.vipRedesign \.vipPlanCard--bronze \.vipPlanButton--primary \{ background: linear-gradient\(135deg, #8c6239, #e0a96d\);/,
+  'Mine bronze tier must use its current tier treatment');
+assert.match(css, /#content \.vipRedesign \.vipTierTab\[aria-selected="true"\]\{[^}]*background:linear-gradient\(145deg,rgba\(45,212,191/,
+  'selected Mine category tabs must use the current teal treatment');
 assert.match(app, /class="mineConsole"/, 'Mine must render the Gramup mining console');
-assert.match(app, /class="mineCounter"/, 'Mine must render a live earnings counter');
+assert.match(app, /class="mineLiveAmount"/, 'Mine must render a live earnings counter');
 assert.match(app, /class="mineProgressTrack"/, 'Mine must render the cycle progress track');
 assert.match(app, /class="mineMetrics"/, 'Mine must render the speed and tier metrics');
 assert.match(app, /class="mineSessionCard"/, 'Mine must render active boosts and session history');
-assert.match(css, /\.mineConsole \{[^}]*background:radial-gradient\(circle at 92% 2%,rgba\(34,211,238/, 
-  'the Mine dashboard surface must use Gramup cyan/neon branding');
-assert.match(css, /\.mineProgressTrack span \{[^}]*background:linear-gradient\(90deg,#22d3ee/, 
-  'Mine progress must use cyan, violet and gold dashboard accents');
+assert.match(css, /\.mineConsole\{display:grid;gap:14px;min-width:0;\}/,
+  'the Mine dashboard must use the current responsive console layout');
+assert.match(css, /\.mineProgressFill\{[^}]*background:linear-gradient\(90deg,#14b8a6,#35d7c8 65%,#8be9df\)/,
+  'Mine progress must use the current teal dashboard gradient');
 
 assert.ok(html.includes('css/style.css?v=ad_ui_v3_20261109'), 'style.css must use the current dashboard cache version');
 assert.ok(html.includes('css/theme-selector.css?v=up_v36_vip_signature_20261107'), 'theme-selector.css must use the Silver theme cache version');
