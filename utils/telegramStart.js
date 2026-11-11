@@ -132,6 +132,7 @@ async function handleTelegramStart({
   generateReferralCode,
   botText,
   welcomeImagePath = process.env.WELCOME_IMAGE_PATH || DEFAULT_WELCOME_IMAGE_PATH,
+  activateOfficialBotTask = null,
   logger = console
 }) {
   const command = parseTelegramStart(message?.text);
@@ -169,6 +170,16 @@ async function handleTelegramStart({
     if (typeof user.save === 'function') await user.save();
   }
 
+  let officialBotActivation = null;
+  if (payload === 'verify_chat' && typeof activateOfficialBotTask === 'function') {
+    try {
+      officialBotActivation = await activateOfficialBotTask(telegramId);
+    } catch (error) {
+      // Registration/welcome must remain available if the optional reward path is unavailable.
+      logger.error?.('Official bot activation failed:', error.message || error);
+    }
+  }
+
   const sentWelcome = await sendWelcomeMessage({
     message,
     user,
@@ -183,12 +194,14 @@ async function handleTelegramStart({
     logger
   });
 
-  return {
+  const result = {
     isNewUser,
     hadReferralPayload: Boolean(payload),
     welcomeSent: sentWelcome.sent,
     hasMiniAppButton: sentWelcome.hasMiniAppButton
   };
+  if (payload === 'verify_chat') result.officialBotActivation = officialBotActivation;
+  return result;
 }
 
 module.exports = {

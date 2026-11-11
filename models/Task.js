@@ -24,7 +24,7 @@ const taskSchema = new mongoose.Schema(
     // Latest Post Engagement: post IDs are observed from Telegram channel_post updates.
     requiredReaction: { type: String, default: '' },
     // System tasks are completed by a verified backend event, not by Telegram membership.
-    taskKind: { type: String, enum: ['standard', 'vip_activation', 'bio_link'], default: 'standard', index: true },
+    taskKind: { type: String, enum: ['standard', 'vip_activation', 'bio_link', 'official_bot'], default: 'standard', index: true },
     vipPlanNumber: { type: Number, min: 1, max: 10, default: null },
     cooldownHours: { type: Number, default: 3, min: 1, max: 720 },
     latestPostMessageId: { type: Number, default: null },

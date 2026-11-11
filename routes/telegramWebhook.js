@@ -15,6 +15,7 @@ const { isAdminTelegramId, createAdminSessionStore } = require('../utils/telegra
 const { claimWebhookUpdate, finishWebhookUpdate } = require('../utils/webhookDedup');
 const { extractReactionEmojis, extractAddedReactionEmojis } = require('../utils/latestPostEngagement');
 const { parseTelegramStart, handleTelegramStart } = require('../utils/telegramStart');
+const { activateOfficialBotTask } = require('../utils/officialBotTask');
 const { verifyMobileChallenge } = require('../utils/mobileAuth');
 const {
   recordWebhookUpdate,
@@ -270,8 +271,14 @@ router.post('/webhook', async (req, res) => {
         User,
         appUrl: APP_URL,
         generateReferralCode,
-        botText
+        botText,
+        activateOfficialBotTask
       });
+      if (startCommand?.payload === 'verify_chat' && result?.officialBotActivation?.status === 'credited') {
+        await sendMessage(update.message.chat.id, '✅ نوتیفیکیشن‌های Gramup فعال شد و ۵ UP پاداش به حساب شما اضافه شد.');
+      } else if (startCommand?.payload === 'verify_chat' && result?.officialBotActivation?.status === 'already_completed') {
+        await sendMessage(update.message.chat.id, '✅ نوتیفیکیشن‌های Gramup فعال است؛ پاداش این تسک قبلاً دریافت شده است.');
+      }
       if (result?.welcomeSent) recordStartWelcomeSent();
       console.info('Telegram /start handled', {
         updateId,
