@@ -4,6 +4,7 @@ const SECONDS_PER_DAY = 86400;
 const MICRO_UNITS_PER_POINT = 1000000;
 const MICRO_UNITS_PER_CENT = 10000;
 const ACTIVE_STATUSES = new Set(['active', 'completed']);
+const { getVipDisplayName } = require('./vipDisplayNames');
 
 function finiteNonNegative(value) {
   const number = Number(value);
@@ -177,6 +178,7 @@ function calculateVipMiningStatus(subscriptions, now = new Date()) {
     const miner = {
       id: String(subscription._id || subscription.id || ''),
       planNumber: Number(subscription.planNumber) || 0,
+      displayName: getVipDisplayName(subscription.planNumber),
       dailyRate: accrual.dailyRate,
       dailyRateCents: accrual.dailyRateCents,
       durationDays: Math.max(1, Number(subscription.durationDays) || 1),

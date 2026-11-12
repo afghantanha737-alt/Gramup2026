@@ -34,7 +34,7 @@ assert.match(css, /--bg: #d9dfe5/);
 assert.match(css, /--text: #0f172a/);
 assert.match(css, /background: linear-gradient\(145deg, rgba\(250,251,252/);
 assert.match(html, /theme-selector\.css\?v=up_v36_vip_signature_20261107/);
-assert.match(html, /i18n\.js\?v=vip0_free_miner_20261109/);
-assert.match(html, /app\.js\?v=vip0_free_miner_20261109/);
+assert.match(html, /i18n\.js\?v=miners_display_v1_20261112/);
+assert.match(html, /app\.js\?v=miners_display_v1_20261112/);
 
 console.log('PASS — Silver Metallic theme is selectable, persisted across reloads, localized, and styled across key app sections');

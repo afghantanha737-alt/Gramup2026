@@ -31,6 +31,7 @@ const {
 const { settleMaturedVipSubscriptions } = require('../utils/vipSettlement');
 const { LEGACY_VIP_POLICY_VERSION, NEW_VIP_POLICY_VERSION, VIP0_POLICY_VERSION, newVipPolicyForPlan, dailyPointsCentsFromBps } = require('../utils/vipPolicy');
 const { getVipMiningDailyRatePoints } = require('../utils/vipMining');
+const { getVipDisplayName } = require('../utils/vipDisplayNames');
 const { reserveForSubscription, pointsFromCents: reservePointsFromCents } = require('../utils/vipReserve');
 const {
   normalizeTonAddress,
@@ -78,6 +79,7 @@ function publicVipPlan(plan) {
     : Number((totalRewardPoints / Math.max(1, Number(plan.durationDays) || 1)).toFixed(6));
   return {
     planNumber: plan.planNumber,
+    displayName: getVipDisplayName(plan.planNumber),
     pricePoints: plan.pricePoints,
     monthlyRewardPercent: plan.monthlyRewardPercent,
     durationDays: isFreeVip0 ? durationDays : policy?.durationDays || plan.durationDays,
@@ -127,6 +129,7 @@ function publicVipSubscription(subscription, now = new Date()) {
   return {
     id: String(subscription._id),
     planNumber: subscription.planNumber,
+    displayName: getVipDisplayName(subscription.planNumber),
     pricePoints: subscription.pricePoints,
     monthlyRewardPercent: subscription.monthlyRewardPercent,
     durationDays: subscription.durationDays,

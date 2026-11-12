@@ -8,6 +8,26 @@
 /* ================= TELEGRAM WEB APP ================= */
 const tg = window.Telegram?.WebApp || null;
 
+// Display-only labels. Internal plan IDs and API routes remain VIP-compatible.
+const MINER_DISPLAY_NAMES = Object.freeze({
+  0: "Bronze Miner",
+  1: "Silver Miner",
+  2: "Gold Miner",
+  3: "Platinum Miner",
+  4: "Emerald Miner",
+  5: "Sapphire Miner",
+  6: "Ruby Miner",
+  7: "Diamond Miner",
+  8: "Obsidian Miner",
+  9: "Crown Miner",
+  10: "Imperial Miner"
+});
+
+function minerDisplayName(planNumber) {
+  const key = Number(planNumber);
+  return MINER_DISPLAY_NAMES[key] || `Miner ${Number.isFinite(key) ? key : ""}`.trim();
+}
+
 if (tg) {
   try {
     tg.ready();
@@ -2053,7 +2073,7 @@ function renderTasks() {
         if (task.taskKind === "vip_activation") {
           actionHtml = status === "approved"
             ? `<button class="taskAction done" disabled>${t("task_btn_done")}</button>`
-            : `<button class="taskAction pending" disabled>🔒 VIP ${formatPoints(task.vipPlanNumber)}</button>`;
+            : `<button class="taskAction pending" disabled>🔒 Mining ${formatPoints(task.vipPlanNumber)}</button>`;
         } else if (task.taskKind === "bio_link") {
           const completion = completionRecord(task._id);
           const nextAvailableAt = completion?.nextAvailableAt ? new Date(completion.nextAvailableAt) : null;
@@ -3869,13 +3889,13 @@ function startVipCountdown() {
 function renderVipMiningConsole() {
   if (!state.vipMining) {
     const message = state.vipMiningLoading ? t("vip_mining_loading") : escapeHTML(state.vipMiningError || t("vip_mining_error"));
-    return `<section class="vipMiningConsole vipMiningConsole--empty" role="status" aria-live="polite"><div class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div><span class="vipMiningKicker">GRAMUP VIP</span><h2>${t("vip_mining_title")}</h2></div></div><p>${message}</p>${state.vipMiningLoading ? "" : `<button class="vipMiningRetry" type="button" onclick="retryVipMiningStatus()">${t("vip_mining_retry")}</button>`}</section>`;
+    return `<section class="vipMiningConsole vipMiningConsole--empty" role="status" aria-live="polite"><div class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div><span class="vipMiningKicker">GRAMUP MINERS</span><h2>${t("vip_mining_title")}</h2></div></div><p>${message}</p>${state.vipMiningLoading ? "" : `<button class="vipMiningRetry" type="button" onclick="retryVipMiningStatus()">${t("vip_mining_retry")}</button>`}</section>`;
   }
   const mining = state.vipMining;
   const live = vipMiningLiveValues();
   const miners = (mining.activeMiners || []).map(miner => {
     const remaining = vipMinerRemainingValues(miner);
-    const minerName = t("vip_mining_miner", { n: formatPoints(miner.planNumber) });
+    const minerName = miner.displayName || minerDisplayName(miner.planNumber);
     const remainingText = t("vip_mining_remaining_accessible", {
       percent: formatNumber(remaining.remainingPercent),
       days: formatNumber(remaining.daysRemaining)
@@ -3890,7 +3910,7 @@ function renderVipMiningConsole() {
   }).join("");
   const noMiners = live.activeMinerCount === 0;
   return `<section class="vipMiningConsole" aria-label="${escapeHTML(t("vip_mining_title"))}">
-    <header class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div class="vipMiningHeading"><span class="vipMiningKicker">GRAMUP VIP</span><h2>${t("vip_mining_title")}</h2><p>${t("vip_mining_subtitle")}</p></div><span class="vipMiningLiveBadge"><i aria-hidden="true"></i>${t("vip_mining_live")}</span></header>
+    <header class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div class="vipMiningHeading"><span class="vipMiningKicker">GRAMUP MINERS</span><h2>${t("vip_mining_title")}</h2><p>${t("vip_mining_subtitle")}</p></div><span class="vipMiningLiveBadge"><i aria-hidden="true"></i>${t("vip_mining_live")}</span></header>
     <div class="vipMiningCounter"><div class="vipMiningCounterLabel">${t("vip_mining_accrued")}</div><div class="vipMiningCounterValue"><strong data-vip-mining-earned>${formatNumber(live.accrued, 6)}</strong><span>UP</span><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div></div>
     <div class="vipMiningMetrics">
       <article class="vipMiningMetric"><span>${t("vip_mining_active_miners")}</span><b data-vip-miner-count>${formatNumber(live.activeMinerCount)}</b></article>
@@ -3941,7 +3961,7 @@ function renderVipExpiredPlans(subscriptions = []) {
       ? new Date(purchasedAtMs).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
       : t("vip_date_unavailable");
     const purchasedIso = Number.isFinite(purchasedAtMs) ? new Date(purchasedAtMs).toISOString() : "";
-    const planTitle = t("vip_plan_title", { n: formatPoints(subscription.planNumber) });
+    const planTitle = subscription.displayName || minerDisplayName(subscription.planNumber);
     const durationDays = Math.max(0, Number(subscription.durationDays) || 0);
     return `<article class="vipExpiredPlan" data-vip-expired-plan="${escapeHTML(subscription.id || "")}">
       <div class="vipExpiredPlanTop"><h4>${escapeHTML(planTitle)}</h4><span class="vipExpiredPlanBadge ${archiveState === "review" ? "vipExpiredPlanBadge--review" : ""}">${t(archiveState === "review" ? "vip_plan_needs_review" : "vip_plan_ended")}</span></div>
@@ -4012,7 +4032,7 @@ function renderProfileVip() {
       <article class="vipPlanCard vipPlanCard--${theme}${spotlightClass}" data-vip-plan="${planNumber}">
         <div class="vipPlanGlow" aria-hidden="true"></div>
         <div class="vipPlanTopline">
-          <div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">${iconByPlan[planNumber] || "✦"}</span><div class="vipPlanTitle">${t("vip_plan_title", { n: formatPoints(plan.planNumber) })}</div></div>
+          <div class="vipPlanTitleWrap"><span class="vipPlanMark" aria-hidden="true">${iconByPlan[planNumber] || "✦"}</span><div class="vipPlanTitle">${escapeHTML(plan.displayName || minerDisplayName(plan.planNumber))}</div></div>
           ${statusKey ? `<span class="vipPlanBadge ${statusClass}">${statusLabel}</span>` : ""}
         </div>
         <div class="vipPlanStats">
@@ -4089,7 +4109,7 @@ async function purchaseVipPlan(planNumber) {
   }
   const scope = `vip_purchase_${plan.planNumber}`;
   try {
-    const confirmed = await confirmVipPurchase(t("vip_buy_confirm", { n: formatPoints(plan.planNumber), price: formatPoints(plan.pricePoints) }));
+    const confirmed = await confirmVipPurchase(t("vip_buy_confirm", { name: plan.displayName || minerDisplayName(plan.planNumber), price: formatPoints(plan.pricePoints) }));
     if (!confirmed) return;
     const result = await api("/api/points/vip/purchase", {
       method: "POST",
