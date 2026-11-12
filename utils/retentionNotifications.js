@@ -13,8 +13,7 @@ const { botText } = require('./botMessages');
 const REFERRAL_COMMISSION_NOTIFICATION_TYPE = 'referral_commission';
 const DAILY_STREAK_WARNING_NOTIFICATION_TYPE = 'daily_streak_warning';
 const RETENTION_NOTIFICATION_TYPES = Object.freeze([
-  DAILY_STREAK_WARNING_NOTIFICATION_TYPE,
-  REFERRAL_COMMISSION_NOTIFICATION_TYPE
+  DAILY_STREAK_WARNING_NOTIFICATION_TYPE
 ]);
 const RETENTION_NOTIFICATION_MAX_ATTEMPTS = 5;
 const RETENTION_NOTIFICATION_RETRY_INTERVAL_MS = 60 * 1000;
@@ -51,47 +50,15 @@ function notificationGate(user) {
   );
 }
 
-function commissionEventKey(sourceId, transactionId) {
-  const stable = String(sourceId || transactionId || '').trim();
-  return stable ? `referral-commission-notification:${stable}` : '';
-}
-
-function referralCommissionText(user, amount, level, rate) {
-  return botText('referralCommissionEarned', safeLanguage(user), amount, level, rate);
-}
-
 /**
- * Queue exactly one immutable notification for one positive commission ledger row.
- * The caller supplies the same Mongo session used for the balance and ledger write.
- * Consent, ban, Telegram-block and numeric chat-id gates are checked
- * before the outbox write; a gate failure never changes balances or consumes retries.
+ * Compatibility entry point retained for integrations that still call the old
+ * helper. Continuous commissions are intentionally notification-free.
  */
 async function enqueueReferralCommissionNotification(payload = {}, dependencies = {}) {
-  const entry = payload.entry || {};
-  const recipient = payload.user || payload.recipient || null;
-  const amount = Number(payload.amount ?? entry.amount);
-  const sourceId = payload.sourceId || entry.sourceId;
-  const type = REFERRAL_COMMISSION_NOTIFICATION_TYPE;
-  if (!Number.isFinite(amount) || amount <= 0 || entry.currency && entry.currency !== 'points') {
-    return { status: 'skipped', reason: 'non_positive_or_non_points' };
-  }
-  const eventKey = commissionEventKey(sourceId, entry.transactionId || payload.transactionId);
-  if (!eventKey || !notificationGate(recipient)) {
-    return { status: 'skipped', reason: eventKey ? 'notification_gate' : 'missing_source_id' };
-  }
-
-  const enqueue = dependencies.enqueuePendingNotification || defaultEnqueuePendingNotification;
-  const level = Number(payload.referralLevel ?? entry.referralLevel) || 1;
-  const rate = Number(payload.commissionRatePercent ?? entry.commissionRatePercent);
-  const text = referralCommissionText(recipient, amount, level, Number.isFinite(rate) ? rate : 0);
-  return enqueue({
-    eventKey,
-    type,
-    user: recipient._id || entry.user,
-    telegramId: String(recipient.telegramId),
-    text,
-    session: payload.session || dependencies.session || null
-  }, { NotificationDelivery: dependencies.NotificationDelivery });
+  // Continuous commissions remain financial events only. Keep this exported
+  // compatibility entry point fail-closed so no caller can create an outbox
+  // row or send a Telegram message for a small recurring commission.
+  return { status: 'skipped', reason: 'continuous_commission_notifications_disabled' };
 }
 
 function dailyStreakWarningEventKey(userId, dayKey) {
@@ -369,8 +336,6 @@ module.exports = {
   FINAL_WARNING_HOUR_UTC,
   isFinalUtcHour,
   notificationGate,
-  commissionEventKey,
-  referralCommissionText,
   enqueueReferralCommissionNotification,
   dailyStreakWarningEventKey,
   dailyStreakWarningDayKey,

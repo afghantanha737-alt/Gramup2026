@@ -1,7 +1,6 @@
 'use strict';
 
 const assert = require('assert');
-const { sendNotificationOnce: realSendNotificationOnce } = require('../utils/notificationDelivery');
 const retentionNotifications = require('../utils/retentionNotifications');
 
 function query(value) {
@@ -174,11 +173,7 @@ async function testWarningTiming() {
 }
 
 async function testCommissionDedupAndFailure() {
-  const {
-    enqueueReferralCommissionNotification,
-    sweepNotificationType,
-    REFERRAL_COMMISSION_NOTIFICATION_TYPE
-  } = require('../utils/retentionNotifications');
+  const { enqueueReferralCommissionNotification } = require('../utils/retentionNotifications');
   const recipient = {
     _id: 'commission-user', telegramId: '400', language: 'en', isBanned: false,
     telegramBlockedAt: null,
@@ -186,57 +181,15 @@ async function testCommissionDedupAndFailure() {
   };
   const rows = new Map();
   const enqueue = async payload => {
-    const existing = rows.get(payload.eventKey);
-    if (existing) return existing;
-    const row = { _id: 'delivery-1', status: 'pending', attempts: 0, nextAttemptAt: null, sendingAt: null, ...payload };
-    rows.set(payload.eventKey, row);
-    return row;
+    rows.set(payload.eventKey, payload);
+    return payload;
   };
   const entry = { user: recipient._id, amount: 10, currency: 'points', sourceId: 'referral-commission:earn-1:recipient:commission-user:level:1', referralLevel: 1, commissionRatePercent: 10 };
-  await enqueueReferralCommissionNotification({ entry, user: recipient }, { enqueuePendingNotification: enqueue });
-  await enqueueReferralCommissionNotification({ entry, user: recipient }, { enqueuePendingNotification: enqueue });
-  assert.strictEqual(rows.size, 1, 'same positive commission source queues once');
-  assert.strictEqual([...rows.values()][0].type, REFERRAL_COMMISSION_NOTIFICATION_TYPE);
-  const consentDenied = await enqueueReferralCommissionNotification({
-    entry: { ...entry, sourceId: 'referral-commission:denied' },
-    user: { ...recipient, referralMessageConsent: 'denied' }
-  }, { enqueuePendingNotification: enqueue });
-  assert.deepStrictEqual(consentDenied, { status: 'skipped', reason: 'notification_gate' });
-  assert.strictEqual(rows.size, 1, 'consent denial does not create an outbox row');
-
-  const Model = {
-    find(query) {
-      const selected = [...rows.values()].filter(row => row.status === 'pending' || row.status === 'unknown');
-      return { sort() { return this; }, limit() { return this; }, lean: async () => selected };
-    },
-    async findOneAndUpdate(filter, update) {
-      const row = [...rows.values()].find(candidate => candidate.eventKey === filter.eventKey && (candidate.status === 'pending' || candidate.status === 'unknown'));
-      if (!row) return null;
-      Object.assign(row, update.$set || {});
-      row.attempts += Number(update.$inc?.attempts || 0);
-      return row;
-    },
-    async updateOne(filter, update) {
-      const row = [...rows.values()].find(candidate => candidate._id === filter._id);
-      if (row) Object.assign(row, update.$set || {});
-      return { matchedCount: row ? 1 : 0 };
-    },
-    async updateMany() { return { modifiedCount: 0 }; }
-  };
-  const User = { findById() { return query(recipient); } };
-  const first = await sweepNotificationType(REFERRAL_COMMISSION_NOTIFICATION_TYPE, {
-    NotificationDelivery: Model, User, now: new Date('2026-10-30T10:00:00Z'), maxAttempts: 2,
-    notifyUser: async () => false, sendNotificationOnce: realSendNotificationOnce
-  });
-  assert.strictEqual(first.unknown, 1);
-  assert.strictEqual([...rows.values()][0].attempts, 1);
-  const retryAt = new Date([...rows.values()][0].nextAttemptAt);
-  const second = await sweepNotificationType(REFERRAL_COMMISSION_NOTIFICATION_TYPE, {
-    NotificationDelivery: Model, User, now: new Date(retryAt.getTime() + 1), maxAttempts: 2,
-    notifyUser: async () => false, sendNotificationOnce: realSendNotificationOnce
-  });
-  assert.strictEqual(second.exhausted, 1);
-  assert.strictEqual([...rows.values()][0].status, 'exhausted');
+  const first = await enqueueReferralCommissionNotification({ entry, user: recipient }, { enqueuePendingNotification: enqueue });
+  const second = await enqueueReferralCommissionNotification({ entry, user: recipient }, { enqueuePendingNotification: enqueue });
+  assert.deepStrictEqual(first, { status: 'skipped', reason: 'continuous_commission_notifications_disabled' });
+  assert.deepStrictEqual(second, first);
+  assert.strictEqual(rows.size, 0, 'continuous commissions never create Telegram outbox rows');
 }
 
 async function testWarningDeliveryClearsStaleAndClaimed() {

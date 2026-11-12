@@ -472,20 +472,9 @@ async function distributeReferralCommissions(earningEntry, session) {
           error.code = 'REFERRAL_COMMISSION_DUPLICATE_RACE';
           throw error;
         }
-        const { enqueueReferralCommissionNotification } = require('./retentionNotifications');
-        await enqueueReferralCommissionNotification({
-          entry: ledgerResult.entry || {
-            user: ancestor._id,
-            amount: points,
-            currency: 'points',
-            sourceId,
-            transactionId,
-            referralLevel: level,
-            commissionRatePercent: rates[level - 1]
-          },
-          user: updatedReferrer,
-          session
-        });
+        // Continuous commissions remain fully credited and journaled, but do
+        // not create Telegram notifications. Only the one-time referral
+        // signup notification in linkReferral() is user-facing.
         paid.push({ level, recipientId: ancestor._id, amount: points, transactionId });
       }
     }

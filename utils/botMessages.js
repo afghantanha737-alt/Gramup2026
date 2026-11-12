@@ -62,6 +62,10 @@ const MESSAGES = {
     en: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
       const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
       return `🎉 New invitation confirmed! ${name} joined Gramup and exactly ${points} UP were added to your account.\nReferral level: ${level} (Level ${level}) — this relationship's rate: ${commission}%\nEffective commission rates: L1 ${l1}%, L2 ${l2}%, L3 ${l3}%, L4 and deeper ${l4}%.\nEligible-income scope: only original earnings from approved tasks, daily check-ins, and leaderboard rewards; referral rewards/commissions, spins, conversions, withdrawals, and admin adjustments are excluded.\nRegistered: ${formatKabulDateTime(registeredAt, 'en')}`;
+    },
+    ar: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
+      const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
+      return `🎉 تم تسجيل دعوة جديدة! انضم ${name} إلى Gramup وتمت إضافة ${points} UP إلى حسابك.\nمستوى الإحالة: ${level} (Level ${level}) — نسبة هذه العلاقة: ${commission}%\nنسب العمولات الفعلية: L1 ${l1}%، L2 ${l2}%، L3 ${l3}%، وL4 والمستويات الأعمق ${l4}%.\nمصدر الدخل المؤهل: الأرباح الأصلية من المهام المعتمدة وتسجيل الدخول اليومي ومكافآت لوحة المتصدرين فقط؛ مكافآت وعمولات الإحالة والدوران والتحويلات والسحوبات وتعديلات الإدارة مستثناة.\nتاريخ التسجيل: ${formatKabulDateTime(registeredAt, 'en')}`;
     }
   },
   referralCommissionEarned: {

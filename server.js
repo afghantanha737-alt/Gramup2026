@@ -298,14 +298,12 @@ async function startServer() {
       void runJob(REFERRAL_NOTIFICATION_RETRY_LOCK_KEY, 'Referral notification retry', runReferralNotificationRetrySweep);
     }, 60 * 1000);
 
-    const { runRetentionNotificationSweep, RETENTION_NOTIFICATION_TYPES,
-      REFERRAL_COMMISSION_NOTIFICATION_TYPE } = require('./utils/retentionNotifications');
+    const { runRetentionNotificationSweep, RETENTION_NOTIFICATION_TYPES } = require('./utils/retentionNotifications');
     const runRetentionNotifications = async () => {
       const preferences = await Settings.getGlobal();
       return runRetentionNotificationSweep({ settings: preferences,
         enqueueWarnings: preferences.dailyReminderEnabled !== false,
-        types: preferences.dailyReminderEnabled === false
-          ? [REFERRAL_COMMISSION_NOTIFICATION_TYPE] : RETENTION_NOTIFICATION_TYPES });
+        types: RETENTION_NOTIFICATION_TYPES });
     };
     void runJob('retention-notification-sweep', 'Initial retention notification sweep', runRetentionNotifications);
     setInterval(() => {
