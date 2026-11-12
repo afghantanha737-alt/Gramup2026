@@ -2655,6 +2655,8 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 .vipMiningCounterValue strong{min-width:0;overflow:hidden;font-size:clamp(23px,7vw,34px);font-weight:1000;letter-spacing:-.04em;text-overflow:ellipsis}
 .vipMiningCounterValue span{color:var(--primary);font-size:12px;font-weight:900}
 .vipMiningCounterValue img{width:19px;height:19px;object-fit:contain}
+.vipMiningCycleClock{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:5px;padding-top:7px;border-top:1px solid var(--line);color:var(--text-muted);font-size:9px;font-weight:800}
+.vipMiningCycleClock strong{color:var(--primary);font-size:18px;letter-spacing:.06em;font-variant-numeric:tabular-nums;direction:ltr}
 .vipMiningMetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
 .vipMiningMetric{display:grid;align-content:center;gap:5px;min-width:0;min-height:60px;padding:8px 6px;border:1px solid var(--line);border-radius:13px;background:var(--surface)}
 .vipMiningMetric span{color:var(--text-muted);font-size:8px;font-weight:750;line-height:1.35}

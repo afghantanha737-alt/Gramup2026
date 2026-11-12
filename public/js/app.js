@@ -3741,6 +3741,21 @@ async function loadVipMiningStatus({ force = false } = {}) {
 
 function vipMiningLiveValues(nowMs = Date.now() + Number(state.vipServerOffsetMs || 0)) {
   const mining = state.vipMining || {};
+  const cycle = mining.cycle || {};
+  if (cycle.status === 'idle' || cycle.status === 'active' || cycle.status === 'ready') {
+    const dailyRate = Math.max(0, Number(cycle.dailyRate) || 0);
+    return {
+      accrued: Math.max(0, Number(cycle.accruedPoints) || 0),
+      activeMinerCount: Number(cycle.activeMinerCount) || 0,
+      dailyRate,
+      hourlyRate: dailyRate / 24,
+      perSecondRate: Number(cycle.perSecondRate) || dailyRate * 0.25 / 21600,
+      cycleStatus: cycle.status,
+      remainingSeconds: Number(cycle.remainingSeconds) || 0,
+      cycleProgressPercent: Number(cycle.cycleProgressPercent) || 0,
+      cycleEndsAt: cycle.cycleEndsAt || null
+    };
+  }
   const serverNow = Date.parse(mining.serverNow || "");
   const statusTime = Number.isFinite(serverNow) ? serverNow : nowMs;
   const activeMiners = Array.isArray(mining.activeMiners) ? mining.activeMiners : [];
@@ -3792,6 +3807,8 @@ function tickVipMiningConsole() {
   const daily = document.querySelector("[data-vip-mining-daily]");
   const hourly = document.querySelector("[data-vip-mining-hourly]");
   const perSecond = document.querySelector("[data-vip-mining-second]");
+  const cycleCountdown = document.querySelector("[data-vip-mining-cycle-countdown]");
+  const cycleStatus = document.querySelector("[data-vip-mining-cycle-status]");
   const claimAmount = document.querySelector("[data-vip-mining-claim-amount]");
   const claimButton = document.querySelector("[data-vip-mining-claim]");
   if (earned) earned.textContent = formatNumber(live.accrued, 6);
@@ -3799,8 +3816,11 @@ function tickVipMiningConsole() {
   if (daily) daily.textContent = `+${formatNumber(live.dailyRate, 2)} UP/day`;
   if (hourly) hourly.textContent = `+${formatNumber(live.hourlyRate, 4)} UP/hr`;
   if (perSecond) perSecond.textContent = `+${formatNumber(live.perSecondRate, 6)} UP/s`;
+  if (cycleCountdown) cycleCountdown.textContent = live.cycleStatus === "idle" ? "--:--:--" : formatMiningDuration(live.remainingSeconds);
+  if (cycleStatus) cycleStatus.textContent = live.cycleStatus === "ready" ? t("vip_mining_cycle_ready", {}, "Ready to claim") : live.cycleStatus === "active" ? t("vip_mining_cycle_active", {}, "Mining in progress") : t("vip_mining_cycle_idle", {}, "Start a new cycle");
   if (claimAmount) claimAmount.textContent = `${formatNumber(live.accrued, 6)} UP`;
-  if (claimButton) claimButton.disabled = vipMiningClaimBusy || live.accrued <= 0 || !state.financialDataConfirmed || !state.membershipDataConfirmed;
+  if (claimButton) claimButton.disabled = vipMiningClaimBusy || live.cycleStatus !== "ready" || live.accrued <= 0 || state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed;
+
   document.querySelectorAll("[data-vip-miner-progress]").forEach(fill => {
     const row = fill.closest("[data-vip-miner-row]");
     if (!row) return;
@@ -3893,6 +3913,7 @@ function renderVipMiningConsole() {
   }
   const mining = state.vipMining;
   const live = vipMiningLiveValues();
+  const cycle = mining.cycle || {};
   const miners = (mining.activeMiners || []).map(miner => {
     const remaining = vipMinerRemainingValues(miner);
     const minerName = miner.displayName || minerDisplayName(miner.planNumber);
@@ -3910,8 +3931,9 @@ function renderVipMiningConsole() {
   }).join("");
   const noMiners = live.activeMinerCount === 0;
   return `<section class="vipMiningConsole" aria-label="${escapeHTML(t("vip_mining_title"))}">
-    <header class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div class="vipMiningHeading"><span class="vipMiningKicker">GRAMUP MINERS</span><h2>${t("vip_mining_title")}</h2><p>${t("vip_mining_subtitle")}</p></div><span class="vipMiningLiveBadge"><i aria-hidden="true"></i>${t("vip_mining_live")}</span></header>
-    <div class="vipMiningCounter"><div class="vipMiningCounterLabel">${t("vip_mining_accrued")}</div><div class="vipMiningCounterValue"><strong data-vip-mining-earned>${formatNumber(live.accrued, 6)}</strong><span>UP</span><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div></div>
+    <header class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div class="vipMiningHeading"><span class="vipMiningKicker">GRAMUP VIP</span><h2>${t("vip_mining_title")}</h2><p>${t("vip_mining_subtitle")}</p></div><span class="vipMiningLiveBadge"><i aria-hidden="true"></i>${t("vip_mining_live")}</span></header>
+    <div class="vipMiningCounter"><div class="vipMiningCounterLabel">${t("vip_mining_accrued")}</div><div class="vipMiningCounterValue"><strong data-vip-mining-earned>${formatNumber(live.accrued, 6)}</strong><span>UP</span><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div><div class="vipMiningCycleClock"><span data-vip-mining-cycle-status>${live.cycleStatus === "ready" ? t("vip_mining_cycle_ready", {}, "Ready to claim") : live.cycleStatus === "active" ? t("vip_mining_cycle_active", {}, "Mining in progress") : t("vip_mining_cycle_idle", {}, "Start a new cycle")}</span><strong data-vip-mining-cycle-countdown>${live.cycleStatus === "idle" ? "--:--:--" : formatMiningDuration(live.remainingSeconds)}</strong></div></div>
+
     <div class="vipMiningMetrics">
       <article class="vipMiningMetric"><span>${t("vip_mining_active_miners")}</span><b data-vip-miner-count>${formatNumber(live.activeMinerCount)}</b></article>
       <article class="vipMiningMetric"><span>${t("vip_mining_daily_rate")}</span><b data-vip-mining-daily>+${formatNumber(live.dailyRate, 2)} UP/day</b></article>
@@ -3920,7 +3942,8 @@ function renderVipMiningConsole() {
     <div class="vipMiningSecondRate"><span>${t("vip_mining_per_second_rate")}</span><b data-vip-mining-second>+${formatNumber(live.perSecondRate, 6)} UP/s</b></div>
     <h3 class="vipMiningSectionTitle">${t("vip_mining_active_miners")}</h3>
     ${noMiners ? `<div class="vipMiningEmpty">${t("vip_mining_empty")}</div>` : `<div class="vipMiningMinerList">${miners}</div>`}
-    <button class="vipMiningClaim" type="button" data-vip-mining-claim onclick="claimVipMining()" ${vipMiningClaimBusy || live.accrued <= 0 || !state.financialDataConfirmed || !state.membershipDataConfirmed ? "disabled" : ""}><span>${vipMiningClaimBusy ? t("vip_mining_claiming") : t("vip_mining_claim")}</span><b data-vip-mining-claim-amount>${formatNumber(live.accrued, 6)} UP</b></button>
+    ${live.cycleStatus === "idle" ? `<button class="vipMiningClaim" type="button" data-vip-mining-start onclick="startVipMining()" ${state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed ? "disabled" : ""}><span>${t("vip_mining_start", {}, "Start Mining")}</span><b>06:00:00</b></button>` : `<button class="vipMiningClaim" type="button" data-vip-mining-claim onclick="claimVipMining()" ${vipMiningClaimBusy || live.cycleStatus !== "ready" || live.accrued <= 0 || state.readModelStale || !state.financialDataConfirmed || !state.membershipDataConfirmed ? "disabled" : ""}><span>${vipMiningClaimBusy ? t("vip_mining_claiming") : live.cycleStatus === "ready" ? t("vip_mining_claim_restart", {}, "Claim & Restart Mining") : t("vip_mining_in_progress", {}, "Mining in progress")}</span><b data-vip-mining-claim-amount>${formatNumber(live.accrued, 6)} UP</b></button>`}
+
     <p class="vipMiningFootnote">${t("vip_mining_precision_note")}</p>
   </section>`;
 }
@@ -4171,9 +4194,32 @@ async function activateVip0FreePlan() {
 }
 window.activateVip0FreePlan = activateVip0FreePlan;
 
+async function startVipMining() {
+  if (!readModelActionAllowed() || vipMiningClaimBusy) return;
+  const button = document.querySelector('[data-vip-mining-start]');
+  if (button) { button.disabled = true; button.textContent = t("vip_mining_starting", {}, "Starting..."); }
+  try {
+    const result = await api("/api/mining/start", { method: "POST", body: {} });
+    state.vipMining = { ...(state.vipMining || {}), ...(result.mining || {}), cycle: result.cycle || result.mining?.cycle };
+    await loadVipMiningStatus({ force: true });
+    if (isVipMiningHubVisible()) {
+      const content = $("#content");
+      if (content) content.innerHTML = renderProfileVip();
+      startVipCountdown();
+      startVipMiningTicker();
+    }
+    toast(t("vip_mining_started", {}, "6-hour mining cycle started."), "success");
+  } catch (error) {
+    toast(translateServerMessage(error.code, error.message), "error");
+    if (button) button.disabled = false;
+  }
+}
+window.startVipMining = startVipMining;
+
 async function claimVipMining() {
-  if (!miningClaimActionAllowed() || vipMiningClaimBusy) return;
-  if (vipMiningLiveValues().accrued <= 0) return;
+  if (!readModelActionAllowed() || vipMiningClaimBusy) return;
+  if (vipMiningLiveValues().cycleStatus !== "ready" || vipMiningLiveValues().accrued <= 0) return;
+
   vipMiningClaimBusy = true;
   tickVipMiningConsole();
   const scope = "vip_mining_claim";

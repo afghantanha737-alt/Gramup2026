@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema(
     miningLastClaimAt: { type: Date, default: null },
     miningBoostExpiresAt: { type: Date, default: null },
     miningStorageFullNotifiedAt: { type: Date, default: null },
+    // VIP mining runs in explicit six-hour cycles; legacy miner levels/rates remain on subscriptions.
+    vipMiningCycleStartedAt: { type: Date, default: null, index: true },
+    vipMiningCycleEndsAt: { type: Date, default: null, index: true },
+    vipMiningCycleNotifiedAt: { type: Date, default: null },
     streakFreezeCredits: { type: Number, default: 0, min: 0 },
     vipGoldUntil: { type: Date, default: null },
     // Permanent account-level guard for the one-time free VIP 0 miner.

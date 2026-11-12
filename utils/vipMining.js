@@ -1,6 +1,8 @@
 'use strict';
 
 const SECONDS_PER_DAY = 86400;
+const MINING_CYCLE_SECONDS = 6 * 60 * 60;
+const MINING_CYCLE_DAILY_FRACTION = 0.25;
 const MICRO_UNITS_PER_POINT = 1000000;
 const MICRO_UNITS_PER_CENT = 10000;
 const ACTIVE_STATUSES = new Set(['active', 'completed']);
@@ -210,8 +212,79 @@ function calculateVipMiningStatus(subscriptions, now = new Date()) {
   };
 }
 
+function calculateVipMiningCycleStatus(subscriptions, cycleStartedAt, cycleEndsAt, now = new Date()) {
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const startMs = new Date(cycleStartedAt || 0).getTime();
+  const endMs = new Date(cycleEndsAt || 0).getTime();
+  const validCycle = Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs;
+  if (!validCycle) {
+    return {
+      status: 'idle', cycleStartedAt: null, cycleEndsAt: null, remainingSeconds: 0,
+      elapsedSeconds: 0, cycleProgressPercent: 0, accruedPoints: 0, cycleTargetPoints: 0,
+      activeMinerCount: 0, dailyRate: 0, perSecondRate: 0, serverNow: nowDate.toISOString()
+    };
+  }
+  const elapsedSeconds = Math.max(0, Math.min(MINING_CYCLE_SECONDS, Math.floor((nowDate.getTime() - startMs) / 1000)));
+  const remainingSeconds = Math.max(0, Math.ceil((endMs - nowDate.getTime()) / 1000));
+  const cycleEndNow = Math.min(nowDate.getTime(), endMs);
+  let accruedPoints = 0;
+  let cycleTargetPoints = 0;
+  let dailyRate = 0;
+  let activeMinerCount = 0;
+  for (const subscription of Array.isArray(subscriptions) ? subscriptions : []) {
+    if (!isVipMiningEligible(subscription)) continue;
+    const subStartMs = new Date(subscription.startAt || 0).getTime();
+    const subEndMs = new Date(subscription.endAt || 0).getTime();
+    const rate = getVipMiningDailyRatePoints(subscription);
+    const minerCycle = calculateVipSubscriptionCycleAccrual(subscription, cycleStartedAt, cycleEndsAt, nowDate);
+    cycleTargetPoints += minerCycle.cycleTargetPoints;
+    accruedPoints += minerCycle.accruedPoints;
+    if (subStartMs <= nowDate.getTime() && subEndMs > nowDate.getTime() && subscription.status === 'active') {
+      activeMinerCount += 1;
+      dailyRate += rate;
+    }
+  }
+  const completed = nowDate.getTime() >= endMs;
+  return {
+    status: completed ? 'ready' : 'active',
+    cycleStartedAt: new Date(startMs).toISOString(),
+    cycleEndsAt: new Date(endMs).toISOString(),
+    remainingSeconds,
+    elapsedSeconds,
+    cycleProgressPercent: Math.min(100, Math.max(0, elapsedSeconds / MINING_CYCLE_SECONDS * 100)),
+    accruedPoints: Number(accruedPoints.toFixed(6)),
+    cycleTargetPoints: Number(cycleTargetPoints.toFixed(6)),
+    activeMinerCount,
+    dailyRate,
+    perSecondRate: dailyRate * MINING_CYCLE_DAILY_FRACTION / MINING_CYCLE_SECONDS,
+    serverNow: nowDate.toISOString()
+  };
+}
+
+function calculateVipSubscriptionCycleAccrual(subscription, cycleStartedAt, cycleEndsAt, now = new Date()) {
+  const startMs = new Date(cycleStartedAt || 0).getTime();
+  const endMs = new Date(cycleEndsAt || 0).getTime();
+  const subStartMs = new Date(subscription?.startAt || 0).getTime();
+  const subEndMs = new Date(subscription?.endAt || 0).getTime();
+  if (![startMs, endMs, subStartMs, subEndMs].every(Number.isFinite) || endMs <= startMs || subEndMs <= subStartMs) {
+    return { accruedPoints: 0, cycleTargetPoints: 0, earnedMicros: 0 };
+  }
+  const earningStartMs = Math.max(startMs, subStartMs);
+  const earningEndMs = Math.min(endMs, subEndMs);
+  if (earningEndMs <= earningStartMs) return { accruedPoints: 0, cycleTargetPoints: 0, earnedMicros: 0 };
+  const cycleEndNow = Math.min(new Date(now).getTime(), endMs);
+  const rate = getVipMiningDailyRatePoints(subscription);
+  const targetSeconds = (earningEndMs - earningStartMs) / 1000;
+  const earnedSeconds = Math.max(0, Math.min(earningEndMs, cycleEndNow) - earningStartMs) / 1000;
+  const cycleTargetPoints = rate * MINING_CYCLE_DAILY_FRACTION * targetSeconds / MINING_CYCLE_SECONDS;
+  const accruedPoints = rate * MINING_CYCLE_DAILY_FRACTION * earnedSeconds / MINING_CYCLE_SECONDS;
+  return { accruedPoints, cycleTargetPoints, earnedMicros: safeMicros(accruedPoints) };
+}
+
 module.exports = {
   SECONDS_PER_DAY,
+  MINING_CYCLE_SECONDS,
+  MINING_CYCLE_DAILY_FRACTION,
   MICRO_UNITS_PER_POINT,
   MICRO_UNITS_PER_CENT,
   ACTIVE_STATUSES,
@@ -220,4 +293,6 @@ module.exports = {
   getVipMiningDailyRateCents,
   calculateVipSubscriptionAccrual,
   calculateVipMiningStatus
+  ,calculateVipMiningCycleStatus
+  ,calculateVipSubscriptionCycleAccrual
 };

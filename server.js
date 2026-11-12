@@ -339,6 +339,11 @@ async function startServer() {
     void runJob('vip-principal-settlement', 'Initial VIP principal settlement', () => settleMaturedVipSubscriptions());
     setInterval(() => { void runJob('vip-principal-settlement', 'Scheduled VIP principal settlement', () => settleMaturedVipSubscriptions()); }, 60 * 1000);
 
+    // vip-mining-cycle-notification is a distributed job and must run once per cycle.
+    const { runVipMiningCycleNotificationSweep, VIP_MINING_CYCLE_NOTIFICATION_LOCK_KEY } = require('./utils/vipMiningCycleNotification');
+    void runJob(VIP_MINING_CYCLE_NOTIFICATION_LOCK_KEY, 'Initial VIP mining cycle notification sweep', () => runVipMiningCycleNotificationSweep(new Date()));
+    setInterval(() => { void runJob(VIP_MINING_CYCLE_NOTIFICATION_LOCK_KEY, 'Scheduled VIP mining cycle notification sweep', () => runVipMiningCycleNotificationSweep(new Date())); }, 60 * 1000);
+
     server = app.listen(PORT, () => {
       server.requestTimeout = 120000;
       server.headersTimeout = 125000;
