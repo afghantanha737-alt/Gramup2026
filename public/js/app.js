@@ -3744,15 +3744,28 @@ function vipMiningLiveValues(nowMs = Date.now() + Number(state.vipServerOffsetMs
   const cycle = mining.cycle || {};
   if (cycle.status === 'idle' || cycle.status === 'active' || cycle.status === 'ready') {
     const dailyRate = Math.max(0, Number(cycle.dailyRate) || 0);
+    const serverNowMs = Date.parse(cycle.serverNow || mining.serverNow || '') || nowMs;
+    const cycleStartMs = Date.parse(cycle.cycleStartedAt || '') || serverNowMs;
+    const cycleEndMs = Date.parse(cycle.cycleEndsAt || '') || serverNowMs;
+    const cycleDurationSeconds = Math.max(1, (cycleEndMs - cycleStartMs) / 1000);
+    const elapsedSeconds = Math.max(0, Math.min(cycleDurationSeconds, (nowMs - cycleStartMs) / 1000));
+    const serverElapsedSeconds = Math.max(0, Math.min(cycleDurationSeconds, (serverNowMs - cycleStartMs) / 1000));
+    const perSecondRate = Number(cycle.perSecondRate) || dailyRate * 0.25 / cycleDurationSeconds;
+    const targetPoints = Math.max(0, Number(cycle.cycleTargetPoints) || dailyRate * 0.25);
+    const baseAccrued = Math.max(0, Number(cycle.accruedPoints) || 0);
+    const serverAccrued = Math.min(targetPoints, baseAccrued);
+    const accrued = Math.min(targetPoints, Math.max(0, serverAccrued + perSecondRate * (elapsedSeconds - serverElapsedSeconds)));
+    const remainingSeconds = Math.max(0, (cycleEndMs - nowMs) / 1000);
+    const cycleStatus = cycle.status === 'idle' ? 'idle' : remainingSeconds <= 0 ? 'ready' : 'active';
     return {
-      accrued: Math.max(0, Number(cycle.accruedPoints) || 0),
+      accrued: Number(accrued.toFixed(6)),
       activeMinerCount: Number(cycle.activeMinerCount) || 0,
       dailyRate,
       hourlyRate: dailyRate / 24,
-      perSecondRate: Number(cycle.perSecondRate) || dailyRate * 0.25 / 21600,
-      cycleStatus: cycle.status,
-      remainingSeconds: Number(cycle.remainingSeconds) || 0,
-      cycleProgressPercent: Number(cycle.cycleProgressPercent) || 0,
+      perSecondRate,
+      cycleStatus,
+      remainingSeconds,
+      cycleProgressPercent: Math.min(100, Math.max(0, elapsedSeconds / cycleDurationSeconds * 100)),
       cycleEndsAt: cycle.cycleEndsAt || null
     };
   }
@@ -3842,7 +3855,10 @@ function tickVipMiningConsole() {
 }
 
 function stopVipMiningTicker() {
-  if (vipMiningTickerTimer) clearInterval(vipMiningTickerTimer);
+  if (vipMiningTickerTimer) {
+    if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(vipMiningTickerTimer);
+    else clearTimeout(vipMiningTickerTimer);
+  }
   if (vipMiningSyncTimer) clearInterval(vipMiningSyncTimer);
   vipMiningTickerTimer = null;
   vipMiningSyncTimer = null;
@@ -3851,8 +3867,17 @@ function stopVipMiningTicker() {
 function startVipMiningTicker() {
   stopVipMiningTicker();
   if (!isVipMiningHubVisible()) return;
-  tickVipMiningConsole();
-  vipMiningTickerTimer = setInterval(tickVipMiningConsole, 1000);
+  const animate = () => {
+    if (!isVipMiningHubVisible() || !state.vipMining) {
+      vipMiningTickerTimer = null;
+      return;
+    }
+    tickVipMiningConsole();
+    vipMiningTickerTimer = typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame(animate)
+      : setTimeout(animate, 250);
+  };
+  animate();
   vipMiningSyncTimer = setInterval(() => {
     void loadVipMiningStatus({ force: true }).then(tickVipMiningConsole);
   }, 60000);
