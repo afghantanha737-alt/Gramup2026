@@ -103,7 +103,8 @@ assert.match(ledgerModel, /'vip_purchase'/);
 assert.match(ledgerModel, /'vip_daily_reward'/);
 assert.match(ledgerModel, /'vip_principal_return'/);
 assert.match(server, /VipPlan\.ensureDefaults\(\)/);
-assert.match(server, /settleMaturedVipSubscriptions\(\)/);
+assert.doesNotMatch(server, /runJob\(['"]vip-principal-settlement|settleMaturedVipSubscriptions\(\)/,
+  'legacy VIP settlement must not run from startup or a scheduler');
 assert.match(app, /\/api\/points\/vip\/purchase/);
 assert.match(app, /getPendingIdempotencyKey\(scope\)/);
 assert.match(app, /vip_need_more_points/);

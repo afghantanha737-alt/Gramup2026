@@ -29,4 +29,6 @@ assert.ok(app.includes('formatNumber(miner.dailyRate, 2)} UP/day'));
 assert.match(app, /data-vip-miner-days/);
 assert.match(app, /data-vip-miner-percent/);
 assert.match(app, /data-vip-miner-progress/);
+assert.match(app, /tickVipMiningConsole\(\)/);
+assert.match(app, /setInterval\(\(\) => \{\s*void loadVipMiningStatus\(\{ force: true \}\)\.then\(tickVipMiningConsole\);\s*\}, 60000\)/);
 console.log('PASS — VIP miner progress counts down days and remaining percentage from full term to expiry');

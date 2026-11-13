@@ -335,9 +335,8 @@ async function startServer() {
       void runJob('weekly-campaign-notification', 'Scheduled weekly campaign notification', runWeeklyCampaignNotification);
     }, 60 * 1000);
 
-    const { settleMaturedVipSubscriptions } = require('./utils/vipSettlement');
-    void runJob('vip-principal-settlement', 'Initial VIP principal settlement', () => settleMaturedVipSubscriptions());
-    setInterval(() => { void runJob('vip-principal-settlement', 'Scheduled VIP principal settlement', () => settleMaturedVipSubscriptions()); }, 60 * 1000);
+    // VIP principal settlement is manual-only. The audited admin reconciliation
+    // path remains available, but startup and schedulers must never move funds.
 
     // vip-mining-cycle-notification is a distributed job and must run once per cycle.
     const { runVipMiningCycleNotificationSweep, VIP_MINING_CYCLE_NOTIFICATION_LOCK_KEY } = require('./utils/vipMiningCycleNotification');

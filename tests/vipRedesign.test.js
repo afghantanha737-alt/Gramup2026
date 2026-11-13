@@ -33,7 +33,7 @@ assert.match(app, /plan\.miningDailyRate/);
 assert.match(app, /\$\{renderVipMiningConsole\(\)\}[\s\S]*\$\{vipCatalogMarkup\}/);
 assert.match(app, /if \(tab === "mine"\) tab = "vip"/);
 assert.match(miningRoute, /calculateVipMiningStatus\(subscriptions, now\)/);
-assert.match(miningRoute, /calculateVipSubscriptionAccrual\(subscription, now\)/);
+assert.match(miningRoute, /calculateVipSubscriptionCycleAccrual\(subscription, cycleStartedAt, cycleEndsAt, new Date\(cycleEndsAt\)\)/);
 assert.doesNotMatch(miningRoute, /startAt:\s*\{\s*\$lte:\s*now\s*\}/, 'parseable legacy string timestamps must not be excluded by BSON Date comparison');
 assert.match(miningRoute, /VIP_MINING_PURCHASE_REQUIRED/);
 assert.match(miningRoute, /VIP_MINING_PACKAGES_ONLY/);
