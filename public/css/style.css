@@ -2272,6 +2272,25 @@ html[data-theme="light"] .appContent .vipRedesign > h3.sectionTitle { color: var
 .profileSettingsPanel .profileItem:nth-child(2) .profileIcon { color: #c4b5fd; background: rgba(196,181,253,.10); }
 .profileSettingsPanel .profileItem:nth-child(3) .profileIcon { color: #fda4af; background: rgba(253,164,175,.10); }
 .profileSettingsPanel .profileItem:nth-child(4) .profileIcon { color: #67e8f9; background: rgba(103,232,249,.10); }
+.profilePreferencesPanel { padding: 15px; }
+.profilePreferencesPanel .profileMenuLabel { margin-bottom: 13px; padding-bottom: 0; }
+.profileSettingGroup + .profileSettingGroup { margin-top: 18px; }
+.profileSettingTitle { margin-bottom: 9px; color: var(--text); font-size: 12px; font-weight: 800; }
+.profileSettingOptions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.profileOptionButton {
+  min-height: 46px; display: flex; align-items: center; gap: 8px; padding: 9px 11px;
+  border: 1px solid var(--product-border); border-radius: 13px; color: var(--text-soft);
+  background: var(--product-surface-raised); font-size: 11px; font-weight: 800;
+  text-align: start; transition: border-color .2s ease, background .2s ease, color .2s ease, transform .2s ease;
+}
+.profileOptionButton:active { transform: scale(.98); }
+.profileOptionButton.is-active { border-color: var(--product-cyan); color: var(--text); background: rgba(103,232,249,.10); box-shadow: 0 0 0 3px rgba(103,232,249,.08); }
+.profileOptionIcon { font-size: 17px; line-height: 1; }
+.profileOptionCheck { margin-inline-start: auto; color: var(--product-cyan); opacity: 0; font-size: 15px; }
+.profileOptionButton.is-active .profileOptionCheck { opacity: 1; }
+.profileSettingDescription { margin: 8px 0 0; color: var(--text-muted); font-size: 10px; line-height: 1.7; }
+html[data-theme="light"] .profileOptionButton.is-active { border-color: #0f766e; background: rgba(15,118,110,.08); box-shadow: 0 0 0 3px rgba(15,118,110,.08); }
+html[data-theme="light"] .profileOptionCheck { color: #0f766e; }
 
 .profileAboutView .sectionHeader, .profileLeaderboardView .sectionHeader, .profileHistoryView .sectionHeader { margin-bottom: 13px; }
 .profileAboutView .card { position: relative; overflow: hidden; border: 1px solid var(--product-border); border-radius: 18px; box-shadow: 0 8px 20px rgba(0,0,0,.10); }

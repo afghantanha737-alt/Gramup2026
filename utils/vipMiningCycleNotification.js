@@ -14,6 +14,7 @@ function cycleMessage(language) {
 async function runVipMiningCycleNotificationSweep(now = new Date()) {
   const candidates = await User.find({
     isBanned: { $ne: true },
+    botReminderEnabled: { $ne: false },
     telegramBlockedAt: null,
     telegramId: { $exists: true, $nin: ['', null] },
     vipMiningCycleEndsAt: { $lte: now },

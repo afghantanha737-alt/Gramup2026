@@ -93,6 +93,7 @@ const userSchema = new mongoose.Schema(
     referralMessageConsent: { type: String, enum: ['unset', 'granted', 'denied'], default: 'unset' },
     referralMessageConsentAt: { type: Date, default: null },
     referralMessageConsentVersion: { type: String, default: '' },
+    botReminderEnabled: { type: Boolean, default: true },
     language: { type: String, enum: ['fa', 'ps', 'en'], default: 'fa' },
     isBanned: { type: Boolean, default: false },
     // اگر تلگرام 403 بدهد (ربات بلاک شده یا حساب غیرفعال است)، از ارسال‌های بعدی حذف می‌شود.

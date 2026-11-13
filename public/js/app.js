@@ -47,6 +47,8 @@ const state = {
   language: "fa",
   user: null,
   referralMessageConsent: "unset",
+  botReminderEnabled: true,
+  soundEnabled: true,
   points: 0,
   gramBalance: 0,
   chainGramBalance: 0,
@@ -282,6 +284,58 @@ function updateThemeUI() {
 applyTheme(getTheme());
 window.toggleTheme = toggleTheme;
 window.selectTheme = selectTheme;
+
+function isSoundEnabled() {
+  try { return localStorage.getItem("gramup_sound") !== "false"; }
+  catch { return state.soundEnabled !== false; }
+}
+
+function setProfileTheme(mode) {
+  selectTheme(mode === "light" ? "pearl" : "midnight");
+  renderProfile();
+}
+
+async function setBotReminder(enabled) {
+  const next = Boolean(enabled);
+  const previous = state.botReminderEnabled !== false;
+  state.botReminderEnabled = next;
+  updateProfileSettingsUI();
+  try {
+    await api("/api/auth/settings", { method: "PATCH", body: { botReminderEnabled: next } });
+    toast(t("profile_settings_saved"), "success");
+  } catch (error) {
+    state.botReminderEnabled = previous;
+    updateProfileSettingsUI();
+    toast(translateServerMessage(error.code, error.message), "error");
+  }
+}
+
+function setSound(enabled) {
+  state.soundEnabled = Boolean(enabled);
+  try { localStorage.setItem("gramup_sound", String(state.soundEnabled)); } catch { /* optional local preference */ }
+  updateProfileSettingsUI();
+}
+
+function updateProfileSettingsUI() {
+  const theme = getTheme();
+  const active = {
+    "profile-theme-dark": theme === "midnight" || theme === "aurora",
+    "profile-theme-light": theme === "pearl" || theme === "silver",
+    "profile-reminder-on": state.botReminderEnabled !== false,
+    "profile-reminder-off": state.botReminderEnabled === false,
+    "profile-sound-on": isSoundEnabled(),
+    "profile-sound-off": !isSoundEnabled()
+  };
+  Object.entries(active).forEach(([id, selected]) => {
+    const button = document.getElementById(id);
+    if (!button) return;
+    button.classList.toggle("is-active", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+}
+window.setProfileTheme = setProfileTheme;
+window.setBotReminder = setBotReminder;
+window.setSound = setSound;
 
 /* ================= HAPTIC ================= */
 function haptic(type = "light") {
@@ -1083,6 +1137,8 @@ async function bootstrapAuth() {
     state.language = localStorage.getItem("appLanguage") || data.language || "fa";
     state.referralMessageConsent = ["granted", "denied", "unset"].includes(data.referralMessageConsent)
       ? data.referralMessageConsent : "unset";
+    state.botReminderEnabled = data.botReminderEnabled !== false;
+    state.soundEnabled = isSoundEnabled();
     state.user = { ...(state.user || {}), id: data.telegramId, telegramId: data.telegramId };
     if (data.firstName) state.user.first_name = data.firstName;
     if (!data.telegramId) throw Object.assign(new Error("Verified identity missing"), { authFailure: true, status: 401 });
@@ -3145,6 +3201,44 @@ function renderProfileMenu() {
       </div>
     </div>
 
+    <section class="card profileSettingsPanel profilePreferencesPanel" aria-labelledby="profilePreferencesTitle" dir="rtl">
+      <div class="profileMenuLabel" id="profilePreferencesTitle">${t("profile_settings_title")}</div>
+      <div class="profileSettingGroup">
+        <div class="profileSettingTitle">${t("profile_settings_appearance")}</div>
+        <div class="profileSettingOptions">
+          <button type="button" class="profileOptionButton" id="profile-theme-dark" onclick="setProfileTheme('dark')" aria-pressed="false">
+            <span class="profileOptionIcon">🌙</span><span>${t("theme_dark")}</span><span class="profileOptionCheck">✓</span>
+          </button>
+          <button type="button" class="profileOptionButton" id="profile-theme-light" onclick="setProfileTheme('light')" aria-pressed="false">
+            <span class="profileOptionIcon">☀️</span><span>${t("theme_light")}</span><span class="profileOptionCheck">✓</span>
+          </button>
+        </div>
+      </div>
+      <div class="profileSettingGroup">
+        <div class="profileSettingTitle">${t("profile_settings_reminders")}</div>
+        <div class="profileSettingOptions">
+          <button type="button" class="profileOptionButton" id="profile-reminder-on" onclick="setBotReminder(true)" aria-pressed="false">
+            <span class="profileOptionIcon">🔔</span><span>${t("profile_settings_on")}</span><span class="profileOptionCheck">✓</span>
+          </button>
+          <button type="button" class="profileOptionButton" id="profile-reminder-off" onclick="setBotReminder(false)" aria-pressed="false">
+            <span class="profileOptionIcon">🔕</span><span>${t("profile_settings_off")}</span><span class="profileOptionCheck">✓</span>
+          </button>
+        </div>
+        <p class="profileSettingDescription">${t("profile_settings_reminders_desc")}</p>
+      </div>
+      <div class="profileSettingGroup">
+        <div class="profileSettingTitle">${t("profile_settings_sound")}</div>
+        <div class="profileSettingOptions">
+          <button type="button" class="profileOptionButton" id="profile-sound-on" onclick="setSound(true)" aria-pressed="false">
+            <span class="profileOptionIcon">🔊</span><span>${t("profile_settings_on")}</span><span class="profileOptionCheck">✓</span>
+          </button>
+          <button type="button" class="profileOptionButton" id="profile-sound-off" onclick="setSound(false)" aria-pressed="false">
+            <span class="profileOptionIcon">🔇</span><span>${t("profile_settings_off")}</span><span class="profileOptionCheck">✓</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
   `;
 }
 
@@ -4324,6 +4418,7 @@ async function renderProfile() {
     startVipMiningTicker();
   } else {
     content.innerHTML = renderProfileMenu();
+    updateProfileSettingsUI();
   }
 }
 

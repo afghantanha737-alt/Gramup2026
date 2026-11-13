@@ -70,6 +70,7 @@ router.get('/me', auth, async (req, res) => {
     referralCode: u.referralCode,
     language: u.language,
     referralMessageConsent: u.referralMessageConsent || 'unset',
+    botReminderEnabled: u.botReminderEnabled !== false,
     maintenance: {
       enabled: maintenanceState.enabled,
       allowed: maintenanceAllowed,
@@ -100,6 +101,16 @@ router.patch('/language', auth, async (req, res) => {
   req.dbUser.language = language;
   await req.dbUser.save();
   res.json({ success: true, language });
+});
+
+// PATCH /api/auth/settings — user-owned notification preferences.
+router.patch('/settings', auth, async (req, res) => {
+  if (typeof req.body?.botReminderEnabled !== 'boolean') {
+    return res.status(400).json({ success: false, code: 'INVALID_SETTINGS', message: 'تنظیمات نامعتبر است.' });
+  }
+  req.dbUser.botReminderEnabled = req.body.botReminderEnabled;
+  await req.dbUser.save();
+  res.json({ success: true, botReminderEnabled: req.dbUser.botReminderEnabled !== false });
 });
 
 module.exports = router;
