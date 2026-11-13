@@ -316,6 +316,43 @@ function setSound(enabled) {
   updateProfileSettingsUI();
 }
 
+let appAudioContext = null;
+function playSound(type = "click") {
+  if (!isSoundEnabled()) return;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  try {
+    appAudioContext ||= new AudioContextClass();
+    if (appAudioContext.state === "suspended") void appAudioContext.resume();
+    const osc = appAudioContext.createOscillator();
+    const gain = appAudioContext.createGain();
+    osc.connect(gain);
+    gain.connect(appAudioContext.destination);
+    const now = appAudioContext.currentTime;
+    const isClaim = type === "claim";
+    osc.type = isClaim ? "sine" : "triangle";
+    if (isClaim) {
+      osc.frequency.setValueAtTime(587.33, now);
+      osc.frequency.setValueAtTime(880, now + 0.09);
+    } else {
+      osc.frequency.setValueAtTime(600, now);
+    }
+    const duration = isClaim ? 0.28 : 0.06;
+    gain.gain.setValueAtTime(isClaim ? 0.15 : 0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.start(now);
+    osc.stop(now + duration);
+  } catch (error) {
+    // Audio is optional; an unsupported or blocked context must never affect the app.
+    console.debug("App sound unavailable:", error?.message || error);
+  }
+}
+window.playSound = playSound;
+document.addEventListener("click", event => {
+  const button = event.target.closest?.("button, [role='button']");
+  if (button && !button.disabled) playSound("click");
+}, { passive: true });
+
 function updateProfileSettingsUI() {
   const theme = getTheme();
   const active = {
@@ -4342,6 +4379,7 @@ async function claimVipMining() {
     state.points = upBalanceFromResponse(result);
     if (result.vipMining || result.mining) state.vipMining = result.vipMining || result.mining;
     updateHeader();
+    playSound("claim");
     toast(t("vip_mining_claim_success", { n: formatNumber(result.claimedPoints, 6) }), "success");
     try {
       await Promise.all([loadUserData({ force: true }), loadVipMiningStatus({ force: true })]);
