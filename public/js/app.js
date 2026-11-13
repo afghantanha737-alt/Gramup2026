@@ -3202,38 +3202,38 @@ function renderProfileMenu() {
     </div>
 
     <section class="card profileSettingsPanel profilePreferencesPanel" aria-labelledby="profilePreferencesTitle" dir="rtl">
-      <div class="profileMenuLabel" id="profilePreferencesTitle">${t("profile_settings_title")}</div>
+      <div class="profileMenuLabel" id="profilePreferencesTitle">${t("appSettings")}</div>
       <div class="profileSettingGroup">
-        <div class="profileSettingTitle">${t("profile_settings_appearance")}</div>
+        <div class="profileSettingTitle">${t("appearance")}</div>
         <div class="profileSettingOptions">
           <button type="button" class="profileOptionButton" id="profile-theme-dark" onclick="setProfileTheme('dark')" aria-pressed="false">
-            <span class="profileOptionIcon">🌙</span><span>${t("theme_dark")}</span><span class="profileOptionCheck">✓</span>
+            <span class="profileOptionIcon">🌙</span><span>${t("darkMode")}</span><span class="profileOptionCheck">✓</span>
           </button>
           <button type="button" class="profileOptionButton" id="profile-theme-light" onclick="setProfileTheme('light')" aria-pressed="false">
-            <span class="profileOptionIcon">☀️</span><span>${t("theme_light")}</span><span class="profileOptionCheck">✓</span>
+            <span class="profileOptionIcon">☀️</span><span>${t("lightMode")}</span><span class="profileOptionCheck">✓</span>
           </button>
         </div>
       </div>
       <div class="profileSettingGroup">
-        <div class="profileSettingTitle">${t("profile_settings_reminders")}</div>
+        <div class="profileSettingTitle">${t("botReminders")}</div>
         <div class="profileSettingOptions">
           <button type="button" class="profileOptionButton" id="profile-reminder-on" onclick="setBotReminder(true)" aria-pressed="false">
-            <span class="profileOptionIcon">🔔</span><span>${t("profile_settings_on")}</span><span class="profileOptionCheck">✓</span>
+            <span class="profileOptionIcon">🔔</span><span>${t("reminderOn")}</span><span class="profileOptionCheck">✓</span>
           </button>
           <button type="button" class="profileOptionButton" id="profile-reminder-off" onclick="setBotReminder(false)" aria-pressed="false">
-            <span class="profileOptionIcon">🔕</span><span>${t("profile_settings_off")}</span><span class="profileOptionCheck">✓</span>
+            <span class="profileOptionIcon">🔕</span><span>${t("reminderOff")}</span><span class="profileOptionCheck">✓</span>
           </button>
         </div>
-        <p class="profileSettingDescription">${t("profile_settings_reminders_desc")}</p>
+        <p class="profileSettingDescription">${t("botReminderDesc")}</p>
       </div>
       <div class="profileSettingGroup">
-        <div class="profileSettingTitle">${t("profile_settings_sound")}</div>
+        <div class="profileSettingTitle">${t("sounds")}</div>
         <div class="profileSettingOptions">
           <button type="button" class="profileOptionButton" id="profile-sound-on" onclick="setSound(true)" aria-pressed="false">
-            <span class="profileOptionIcon">🔊</span><span>${t("profile_settings_on")}</span><span class="profileOptionCheck">✓</span>
+            <span class="profileOptionIcon">🔊</span><span>${t("soundOn")}</span><span class="profileOptionCheck">✓</span>
           </button>
           <button type="button" class="profileOptionButton" id="profile-sound-off" onclick="setSound(false)" aria-pressed="false">
-            <span class="profileOptionIcon">🔇</span><span>${t("profile_settings_off")}</span><span class="profileOptionCheck">✓</span>
+            <span class="profileOptionIcon">🔇</span><span>${t("soundOff")}</span><span class="profileOptionCheck">✓</span>
           </button>
         </div>
       </div>
