@@ -79,6 +79,31 @@ html[data-theme="light"] .secondaryBtn { color: var(--text); background: #fff; b
 html[data-theme="light"] .disabled,
 html[data-theme="light"] button:disabled { color: #64748b; }
 
+/* Final contrast pass for the product-polish layer.  These rules must come
+   after style.css so the late dark-surface defaults cannot win in Pearl Light. */
+html[data-theme="light"] {
+  --product-bg: #f4f6fb;
+  --product-surface: #ffffff;
+  --product-surface-raised: #f8fafc;
+  --product-border: rgba(17, 24, 39, .10);
+}
+html[data-theme="light"] .tbCard.tbBalance {
+  background: radial-gradient(circle at 100% 0%, rgba(90, 75, 221, .09), transparent 38%), #fff;
+  border-color: rgba(90, 75, 221, .18);
+  box-shadow: 0 18px 45px rgba(91, 33, 182, .10);
+}
+html[data-theme="light"] .tbAmountNum,
+html[data-theme="light"] .tbStatValue {
+  color: #0f172a;
+}
+html[data-theme="light"] .tbAmountUnit { color: #475569; }
+html[data-theme="light"] .tbStat {
+  background: #fff;
+  border-color: rgba(17, 24, 39, .10);
+  box-shadow: 0 8px 24px rgba(91, 33, 182, .08);
+}
+html[data-theme="light"] .tbStatLabel { color: #334155; }
+
 /* Metallic Silver — full-app palette, shared by Home, Mine, Tasks, Wallet, Referral and overlays. */
 html[data-theme="silver"] {
   color-scheme: light;

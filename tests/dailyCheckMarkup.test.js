@@ -27,8 +27,8 @@ assert.match(css, /\.dailyCheckGrid\{display:grid;grid-template-columns:repeat\(
 assert.match(css, /\.dailyCheckDay\{[^}]*border-radius:16px/);
 assert.match(css, /\.dailyCheckDay\.is-complete\{/);
 assert.match(css, /\.dailyCheckDay\.is-current\{/);
-assert.match(index, /style\.css\?v=miners_display_v1_20261112/);
-assert.match(index, /i18n\.js\?v=miners_display_v1_20261112/);
-assert.match(index, /app\.js\?v=miners_display_v1_20261112/);
+assert.match(index, /style\.css\?v=light_contrast_20261113_1/);
+assert.match(index, /i18n\.js\?v=mining_6h_20261112_1/);
+assert.match(index, /app\.js\?v=mining_6h_live_20261112_2/);
 
 console.log('PASS — Daily Check rewards use plain +N UP labels, safe markup, seven-card layout, and fresh asset versions');

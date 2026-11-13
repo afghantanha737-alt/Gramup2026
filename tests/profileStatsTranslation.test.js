@@ -125,11 +125,11 @@ async function main() {
   })) {
     assert.ok(indexHtml.includes(`js/${asset}.js?v=${version}`), `${asset} must keep its current cache identifier`);
   }
-  assert.ok(indexHtml.includes('js/i18n.js?v=miners_display_v1_20261112'), 'i18n.js must use the VIP0 locale cache-busting version');
-  assert.ok(indexHtml.includes('js/app.js?v=miners_display_v1_20261112'), 'app.js must use the VIP0 UI cache-busting version');
+  assert.ok(indexHtml.includes('js/i18n.js?v=mining_6h_20261112_1'), 'i18n.js must use the VIP0 locale cache-busting version');
+  assert.ok(indexHtml.includes('js/app.js?v=mining_6h_live_20261112_2'), 'app.js must use the VIP0 UI cache-busting version');
   assert.doesNotMatch(indexHtml, /spinCelebration|luckySpinPage|spinWheel/i, 'Lucky Spin must not be loaded before its feature is built');
-  assert.ok(indexHtml.includes('css/style.css?v=miners_display_v1_20261112'), 'main CSS must use the UP/Mine cache-busting version');
-  assert.ok(indexHtml.includes('css/theme-selector.css?v=up_v36_vip_signature_20261107'), 'theme CSS must use the Silver theme cache-busting version');
+  assert.ok(indexHtml.includes('css/style.css?v=light_contrast_20261113_1'), 'main CSS must use the UP/Mine cache-busting version');
+  assert.ok(indexHtml.includes('css/theme-selector.css?v=light_contrast_20261113_1'), 'theme CSS must use the Silver theme cache-busting version');
 
   const referralRoute = fs.readFileSync(path.join(root, 'routes/referral.js'), 'utf8');
   assert.match(referralRoute, /User\.countDocuments\(\{ referredBy: u\._id \}\)/,
