@@ -59,8 +59,8 @@ assert.match(css, /\.mineConsole\{display:grid;gap:14px;min-width:0;\}/,
 assert.match(css, /\.mineProgressFill\{[^}]*background:linear-gradient\(90deg,#14b8a6,#35d7c8 65%,#8be9df\)/,
   'Mine progress must use the current teal dashboard gradient');
 
-assert.ok(html.includes('css/style.css?v=miners_display_v1_20261112'), 'style.css must use the current dashboard cache version');
-assert.ok(html.includes('css/theme-selector.css?v=up_v36_vip_signature_20261107'), 'theme-selector.css must use the Silver theme cache version');
+assert.ok(html.includes('css/style.css?v=light_contrast_20261113_1'), 'style.css must use the current light contrast cache version');
+assert.ok(html.includes('css/theme-selector.css?v=light_contrast_20261113_1'), 'theme-selector.css must use the current light contrast cache version');
 for (const [asset, version] of Object.entries({
   maintenanceGate: '20261006-maintenance',
   readModelCache: '20261030-read-model-1',
@@ -68,8 +68,8 @@ for (const [asset, version] of Object.entries({
 })) {
   assert.ok(html.includes(`js/${asset}.js?v=${version}`), `${asset} must use its current cache version`);
 }
-assert.ok(html.includes('js/i18n.js?v=miners_display_v1_20261112'), 'i18n.js must use the VIP0 locale cache version');
-assert.ok(html.includes('js/app.js?v=miners_display_v1_20261112'), 'app.js must use the VIP0 UI cache version');
+assert.ok(html.includes('js/i18n.js?v=mining_6h_20261112_1'), 'i18n.js must use the current locale cache version');
+assert.ok(html.includes('js/app.js?v=mining_6h_live_20261112_2'), 'app.js must use the current UI cache version');
 assert.doesNotMatch(html, /gamification\.js|spinCelebration\.js/, 'unbuilt Lucky Spin scripts must remain unloaded');
 
 console.log('PASS — unified cyan/teal brand palette covers shared controls, Home stats, Mine plan tiers, and cache-busted assets');

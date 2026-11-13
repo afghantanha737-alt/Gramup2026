@@ -305,3 +305,88 @@ html[data-theme="silver"] #content .vipRedesign .vipPlanCard--spotlight-10 .vipP
 html[data-theme="silver"] #content .vipRedesign .vipPlanCard--ultimate{border-color:rgba(138,90,180,.62);background:radial-gradient(ellipse at 100% 0%,rgba(255,218,120,.2),transparent 32%),radial-gradient(ellipse at 90% 4%,rgba(214,175,255,.28),transparent 46%),linear-gradient(145deg,#fffbff,#eee6f3 64%,#e5dce9)}
 html[data-theme="silver"] #content .vipRedesign .vipPlanCard--ultimate .vipPlanButton--primary{color:#271434;background:linear-gradient(110deg,#f8df90,#d6b2fa 52%,#c3b5f9)}
 @media(hover:hover){html[data-theme="silver"] #content .vipRedesign .vipPlanCard:hover{box-shadow:0 18px 38px rgba(15,23,42,.13),0 0 22px rgba(var(--vip-tier-rgb),.18),inset 0 1px #fff}}
+
+/* Gramup Light Mode accessibility pass — keep all primary text readable on light surfaces. */
+html[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-soft: #eef2f7;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --surface-3: #f8fafc;
+  --text: #0f172a;
+  --text-soft: #334155;
+  --text-muted: #475569;
+  --line: rgba(15,23,42,.14);
+  --line-strong: rgba(15,23,42,.24);
+  --primary: #6d28d9;
+  --primary-2: #5b21b6;
+  --primary-soft: rgba(109,40,217,.12);
+  --success: #047857;
+  --success-soft: rgba(4,120,87,.12);
+  --warning: #b45309;
+  --warning-soft: rgba(180,83,9,.12);
+  --danger: #b91c1c;
+  --danger-soft: rgba(185,28,28,.12);
+}
+html[data-theme="light"] body { color: #0f172a; }
+html[data-theme="light"] :is(h1,h2,h3,h4,strong,b,.cardTitle,.sectionTitle,.profileText,.profileSettingTitle) { color: #0f172a; }
+html[data-theme="light"] :is(p,.cardSubtitle,.taskDesc,.historyMeta,.profileSettingDescription,.mineSubtitle,.vipMiningFootnote) { color: #334155; }
+html[data-theme="light"] :is(label,.fieldLabel,.balanceLabel,.statLabel,.progressMeta,.profilePulseLabel,.profilePulseUnit,.vipMiningCounterLabel,.vipMiningCycleClock,.vipMiningMetric span,.vipPlanDaily,.vipPlanMiningRate small) { color: #475569; }
+html[data-theme="light"] :is(input,textarea,select,.referralLinkField) { color: #0f172a; background: #fff; border-color: rgba(15,23,42,.24); }
+html[data-theme="light"] :is(input,textarea,select)::placeholder { color: #64748b; opacity: 1; }
+html[data-theme="light"] :is(.card,.tbCard,.taskItem,.profileMenuPanel,.profilePreferencesPanel,.mineHeader,.mineSessionCard,.mineStorageCard,.mineMetricCard,.minerTrainCard,.vipMiningConsole,.vipMiningMetric,.vipMiningMinerRow) {
+  border-color: rgba(15,23,42,.14);
+  box-shadow: 0 8px 24px rgba(15,23,42,.07);
+}
+html[data-theme="light"] .taskCategoryTabs,
+html[data-theme="light"] .vipRedesign .vipPlanTabs,
+html[data-theme="light"] .vipRedesign .vipStatusTabs {
+  border-color: rgba(15,23,42,.16);
+  background: #eef2f7;
+  box-shadow: inset 0 1px rgba(255,255,255,.9), 0 5px 16px rgba(15,23,42,.06);
+}
+html[data-theme="light"] .taskCategoryTab,
+html[data-theme="light"] .vipRedesign .vipTierTab,
+html[data-theme="light"] .vipRedesign .vipStatusTab { color: #475569; }
+html[data-theme="light"] .taskCategoryTab[aria-selected="true"],
+html[data-theme="light"] .vipRedesign .vipTierTab[aria-selected="true"],
+html[data-theme="light"] .vipRedesign .vipStatusTab.is-selected {
+  color: #4c1d95;
+  border-color: rgba(109,40,217,.34);
+  background: rgba(109,40,217,.12);
+}
+html[data-theme="light"] #content .vipRedesign .vipPlanCard,
+html[data-theme="light"] #content .vipRedesign .vipSubscriptionCard {
+  color: #0f172a;
+  border-color: rgba(var(--vip-tier-rgb, 20,184,166),.34);
+  background: radial-gradient(ellipse at 96% 3%, rgba(var(--vip-tier-rgb,20,184,166),.13), transparent 40%), linear-gradient(145deg,#ffffff,#f1f5f9 70%,#e8edf3);
+  box-shadow: 0 12px 28px rgba(15,23,42,.10), inset 0 1px #fff;
+}
+html[data-theme="light"] #content .vipRedesign .vipPlanTitle,
+html[data-theme="light"] #content .vipRedesign .vipSubscriptionHeading { color: #0f172a; text-shadow: none; }
+html[data-theme="light"] #content .vipRedesign .vipPlanTopline { border-bottom-color: rgba(15,23,42,.14); }
+html[data-theme="light"] #content .vipRedesign .vipPlanStat,
+html[data-theme="light"] #content .vipRedesign .vipPlanMiningRate,
+html[data-theme="light"] #content .vipRedesign .vipSubscriptionGrid > div {
+  color: #334155;
+  border-color: rgba(15,23,42,.14);
+  background: linear-gradient(145deg,#fff,#f1f5f9);
+}
+html[data-theme="light"] #content .vipRedesign .vipPlanStat span,
+html[data-theme="light"] #content .vipRedesign .vipPlanMiningRate small { color: #475569; }
+html[data-theme="light"] #content .vipRedesign .vipPlanStat b { color: #0f172a; }
+html[data-theme="light"] #content .vipRedesign .vipPlanReward { color: #334155; background: rgba(13,148,136,.10); border-color: rgba(13,148,136,.24); }
+html[data-theme="light"] #content .vipRedesign .vipPlanButton--insufficient,
+html[data-theme="light"] #content .vipRedesign .vipPlanButton--secondary { color: #334155; border-color: rgba(15,23,42,.2); background: #f1f5f9; }
+html[data-theme="light"] #content .vipRedesign .vipHero { color: #0f172a; background: linear-gradient(120deg,rgba(13,148,136,.10),#fff 58%,#eef2f7); border-color: rgba(13,148,136,.24); }
+html[data-theme="light"] #content .vipRedesign .vipHeroKicker,
+html[data-theme="light"] #content .vipRedesign .vipBalanceLabel { color: #475569; }
+html[data-theme="light"] #content .vipRedesign .vipBalanceValue strong { color: #0f172a; }
+html[data-theme="light"] #content .vipRedesign .vipHeroButton { color: #0f766e; background: rgba(13,148,136,.10); border-color: rgba(13,148,136,.24); }
+html[data-theme="light"] .dailyCheckCard { color: #0f172a; background: linear-gradient(145deg,#ffffff,#eef2f7); border-color: rgba(15,23,42,.16); }
+html[data-theme="light"] .dailyCheckDay { color: #334155; background: #f8fafc; border-color: rgba(15,23,42,.14); }
+html[data-theme="light"] .dailyCheckDayNumber,
+html[data-theme="light"] .dailyCheckDay strong { color: #475569; }
+html[data-theme="light"] .dailyCheckCountdown { color: #0f766e; background: #ecfeff; border-color: rgba(13,148,136,.24); }
+html[data-theme="light"] .adSheet { color: #0f172a; background: linear-gradient(145deg,#fff,#f1f5f9); }
+html[data-theme="light"] .adSheet :is(.adLabel,.adNotice,.adCheckMessage,.adOrder small,.adEmpty) { color: #475569; }

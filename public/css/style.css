@@ -1642,7 +1642,7 @@ html[data-theme="light"] .tbCard.tbBalance {
 }
 html[data-theme="light"] .tbBtnPrimary,
 html[data-theme="light"] .primaryBtn,
-html[data-theme="light"] .taskAction,
+html[data-theme="light"] .taskAction {
   color: #fff;
   background: linear-gradient(135deg, #5a4bdd, #6c5ce7);
   box-shadow: 0 7px 18px rgba(90, 75, 221, .18);
