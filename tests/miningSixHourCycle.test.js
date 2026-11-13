@@ -11,6 +11,7 @@ const {
 const route = fs.readFileSync('routes/mining.js', 'utf8');
 const user = fs.readFileSync('models/User.js', 'utf8');
 const server = fs.readFileSync('server.js', 'utf8');
+const reminder = fs.readFileSync('utils/vipMiningCycleNotification.js', 'utf8');
 const start = new Date('2026-11-12T00:00:00.000Z');
 const end = new Date(start.getTime() + MINING_CYCLE_SECONDS * 1000);
 const subscription = {
@@ -37,4 +38,6 @@ assert.match(route, /findOneAndUpdate\([\s\S]*vipMiningCycleStartedAt: cycleStar
 assert.match(user, /vipMiningCycleStartedAt:/);
 assert.match(user, /vipMiningCycleEndsAt:/);
 assert.match(server, /vip-mining-cycle-notification/);
+assert.match(reminder, /MINER_REMINDER_MUTE_CALLBACK_DATA/);
+assert.match(reminder, /reply_markup: cycleReplyMarkup\(candidate\.language, process\.env\.APP_URL\)/);
 console.log('PASS — six-hour cycle timing, 25% daily payout, atomic restart, persistence, and notification wiring');

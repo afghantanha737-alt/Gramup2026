@@ -17,6 +17,7 @@ const { extractReactionEmojis, extractAddedReactionEmojis } = require('../utils/
 const { parseTelegramStart, handleTelegramStart } = require('../utils/telegramStart');
 const { activateOfficialBotTask } = require('../utils/officialBotTask');
 const { verifyMobileChallenge } = require('../utils/mobileAuth');
+const { MINER_REMINDER_MUTE_CALLBACK_DATA } = require('../utils/vipMiningCycleNotification');
 const {
   recordWebhookUpdate,
   recordStartWelcomeSent,
@@ -112,16 +113,47 @@ async function handleBroadcastConfirm(telegramId, chatId) {
   await sendMessage(chatId, `✅ پیام برای ${sent} کاربر ارسال شد.`);
 }
 
+function reminderMutedText(language) {
+  if (language === 'ps') return '🔕 یادونې بندې شوې. هر وخت یې د Gramup پروفایل څخه بېرته فعالولی شئ.';
+  if (language === 'en') return '🔕 Reminders are muted. You can turn them on again anytime from your Gramup profile.';
+  return '🔕 یادآوری‌ها خاموش شد. هر زمان می‌توانید از پروفایل Gramup دوباره آن‌ها را روشن کنید.';
+}
+
+async function handleMinerReminderMute(callbackQuery) {
+  const telegramId = String(callbackQuery.from?.id || '');
+  const callbackChat = callbackQuery.message?.chat;
+  const chatId = callbackChat?.id;
+  if (!telegramId || !chatId || callbackChat.type !== 'private' || String(chatId) !== telegramId) return;
+
+  const user = await User.findOneAndUpdate(
+    { telegramId },
+    { $set: { botReminderEnabled: false } },
+    { new: true }
+  ).select('language').lean();
+  const language = user?.language || 'fa';
+  const answerOptions = { text: reminderMutedText(language), show_alert: false };
+  await safelySendTelegram(() => bot.answerCallbackQuery(callbackQuery.id, answerOptions), { context: 'miner_reminder_muted_ack' });
+  if (typeof bot.editMessageReplyMarkup === 'function' && callbackQuery.message?.message_id) {
+    await safelySendTelegram(
+      () => bot.editMessageReplyMarkup(chatId, callbackQuery.message.message_id, { inline_keyboard: [] }),
+      { context: 'miner_reminder_remove_buttons' }
+    );
+  }
+}
+
 async function handleCallbackQuery(callbackQuery) {
   const telegramId = String(callbackQuery.from.id);
   const callbackChat = callbackQuery.message && callbackQuery.message.chat;
   const chatId = callbackChat && callbackChat.id;
+  const data = callbackQuery.data;
+  if (data === MINER_REMINDER_MUTE_CALLBACK_DATA) {
+    return handleMinerReminderMute(callbackQuery);
+  }
   if (bot.answerCallbackQuery) {
     void safelySendTelegram(() => bot.answerCallbackQuery(callbackQuery.id), { context: 'callback_ack' });
   }
   if (!isAdminTelegramId(telegramId) || !chatId || callbackChat.type !== 'private') return;
 
-  const data = callbackQuery.data;
   if (data === 'admin_stats') return handleAdminStats(chatId);
   if (data === 'admin_pending') return handleAdminPending(chatId);
   if (data === 'admin_broadcast') return handleAdminBroadcastPrompt(telegramId, chatId);

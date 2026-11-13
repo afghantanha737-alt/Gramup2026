@@ -2,7 +2,7 @@
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_DELIVERY_TIMEOUT_MS = 8000;
-const DELIVERY_METHODS = new Set(['sendMessage', 'sendPhoto', 'copyMessage', 'answerCallbackQuery']);
+const DELIVERY_METHODS = new Set(['sendMessage', 'sendPhoto', 'copyMessage', 'answerCallbackQuery', 'editMessageReplyMarkup']);
 
 class TelegramApiError extends Error {
   constructor(message, statusCode, body) {
@@ -179,6 +179,14 @@ class TelegramBotClient {
 
   answerCallbackQuery(callbackQueryId, options = {}) {
     return this.call('answerCallbackQuery', { callback_query_id: callbackQueryId, ...options });
+  }
+
+  editMessageReplyMarkup(chatId, messageId, replyMarkup) {
+    return this.call('editMessageReplyMarkup', {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: replyMarkup
+    });
   }
 
   setWebHook(url, options = {}) {
