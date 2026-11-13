@@ -277,11 +277,7 @@ function updateThemeUI() {
   if (icon) icon.textContent = definition.icon;
   if (label) label.textContent = t(definition.labelKey);
   if (toggle) toggle.setAttribute("aria-checked", theme === "pearl" || theme === "silver" ? "true" : "false");
-  $$("[data-theme-choice]").forEach(button => {
-    const active = button.dataset.themeChoice === theme;
-    button.classList.toggle("is-active", active);
-    button.setAttribute("aria-checked", active ? "true" : "false");
-  });
+  // Theme picker UI removed; saved theme preferences remain backward-compatible.
 }
 applyTheme(getTheme());
 window.toggleTheme = toggleTheme;
@@ -3145,12 +3141,6 @@ function renderProfileMenu() {
           <div class="profileIcon">🌐</div>
           <div class="profileText">${t("menu_language")} — ${langNames[state.language]}</div>
           <div class="profileChevron">‹</div>
-        </div>
-        <div class="profileThemePicker" role="group" aria-label="${escapeHTML(t("theme_title"))}">
-          <div class="profileThemeHeading"><span class="profileIcon">🎨</span><strong>${t("theme_title")}</strong></div>
-          <div class="profileThemeChoices">
-            ${Object.entries(THEME_REGISTRY).map(([id, definition]) => `<button type="button" class="themeChoice" data-theme-choice="${id}" aria-checked="false" onclick="selectTheme('${id}')"><span>${definition.icon}</span>${t(definition.labelKey)}</button>`).join("")}
-          </div>
         </div>
       </div>
     </div>
