@@ -31,6 +31,9 @@ assert.match(app, /loadVipPlans\(\) : Promise\.resolve\(true\),[\s\S]*loadVipMin
 const page = app.slice(app.indexOf('function renderProfileVip()'), app.indexOf('\nfunction retryVipPlans()', app.indexOf('function renderProfileVip()')));
 assert.ok(page.indexOf('${renderVipMiningConsole()}') >= 0, 'VIP page embeds live console');
 assert.ok(page.indexOf('${renderVipMiningConsole()}') < page.indexOf('${vipCatalogMarkup}'), 'packages follow the mining console');
+assert.doesNotMatch(page, /class="sectionHeader"/, 'Miners page no longer renders the redundant top header');
+assert.doesNotMatch(page, /class="sectionMore"[^>]*referral_back/, 'Miners page no longer renders the redundant back button');
+assert.match(page, /\.vipRedesign\{[^}]*padding:10px 0 26px/, 'Miners content keeps a compact top offset after header removal');
 assert.match(css, /\.vipMiningConsole\s*\{/);
 assert.match(css, /\.vipMiningClaim\s*\{/);
 assert.match(css, /\.vipMiningProgressTrack\s*\{/);
