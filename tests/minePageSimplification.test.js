@@ -13,6 +13,11 @@ assert.ok(vipConsoleStart >= 0 && vipConsoleEnd > vipConsoleStart, 'VIP mining c
 const consoleMarkup = app.slice(vipConsoleStart, vipConsoleEnd);
 for (const pattern of [
   /vipMiningConsole/,
+  /vipMiningBalance/,
+  /data-vip-mining-ring/,
+  /vipMiningOrb/,
+  /vipMiningEarned/,
+  /vipMiningClaimWrap/,
   /data-vip-miner-count/,
   /data-vip-mining-earned/,
   /data-vip-mining-second/,
@@ -26,6 +31,9 @@ assert.match(app, /vipCatalogMarkup/);
 assert.match(app, /if \(tab === "mine"\) tab = "vip"/);
 assert.doesNotMatch(html, /data-tab="mine"/);
 assert.match(css, /\.vipMiningConsole\s*\{/);
+assert.match(css, /\.vipMiningRing\s*\{/);
+assert.match(css, /\.vipMiningOrb\s*\{/);
+assert.match(css, /\.vipMiningClaimWrap\s*\{/);
 assert.match(css, /\.vipPlanMiningRate\s*\{/);
 assert.match(miningRoute, /VIP_MINING_PURCHASE_REQUIRED/);
 assert.match(miningRoute, /VIP_MINING_PACKAGES_ONLY/);
