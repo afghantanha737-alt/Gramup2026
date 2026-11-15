@@ -5,11 +5,13 @@ const fs = require('fs');
 const path = require('path');
 
 const app = fs.readFileSync(path.join(__dirname, '..', 'public/js/app.js'), 'utf8');
+const referralCore = fs.readFileSync(path.join(__dirname, '..', 'utils/referralCore.js'), 'utf8');
 assert.match(app, /function getReferralStartParam\(\)/);
 assert.match(app, /initDataUnsafe\?\.start_param/);
 assert.match(app, /params\.get\("startapp"\)/);
 assert.match(app, /params\.get\("start"\)/, 'legacy query payload remains readable');
 assert.match(app, /const ref = getReferralStartParam\(\)/);
+assert.match(referralCore, /return `https:\/\/t\.me\/\$\{bot\}\?startapp=\$\{id\}`/);
 
 const userPath = require.resolve('../models/User');
 const created = [];
