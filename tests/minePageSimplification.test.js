@@ -11,6 +11,7 @@ const vipConsoleStart = app.indexOf('function renderVipMiningConsole()');
 const vipConsoleEnd = app.indexOf('\nfunction renderProfileVip()', vipConsoleStart);
 assert.ok(vipConsoleStart >= 0 && vipConsoleEnd > vipConsoleStart, 'VIP mining console renderer exists');
 const consoleMarkup = app.slice(vipConsoleStart, vipConsoleEnd);
+const profilePage = app.slice(app.indexOf('function renderProfileVip()'), app.indexOf('\nfunction retryVipPlans()', app.indexOf('function renderProfileVip()')));
 for (const pattern of [
   /vipMiningConsole/,
   /vipMiningBalance/,
@@ -34,6 +35,7 @@ assert.match(css, /\.vipMiningConsole\s*\{/);
 assert.match(css, /\.vipMiningRing\s*\{/);
 assert.match(css, /\.vipMiningOrb\s*\{/);
 assert.match(css, /\.vipMiningClaimWrap\s*\{/);
+assert.doesNotMatch(profilePage, /<div class="vipPlanReward"/, 'Miner cards must not render Total Yield');
 assert.match(css, /\.vipPlanMiningRate\s*\{/);
 assert.match(miningRoute, /VIP_MINING_PURCHASE_REQUIRED/);
 assert.match(miningRoute, /VIP_MINING_PACKAGES_ONLY/);

@@ -4211,9 +4211,6 @@ function renderProfileVip() {
       : plan.comingSoon ? t("vip_status_coming_soon")
         : available ? (canAfford ? t("vip_buy") : t("vip_need_more_points", { n: formatPoints(neededPoints) }))
           : t("vip_status_inactive");
-    const totalRewardPoints = isFreeVip0
-      ? Number(freeSubscription?.totalRewardPoints ?? plan.totalRewardPoints ?? 0)
-      : plan.totalRewardPoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100);
     const dailyAveragePoints = isFreeVip0
       ? Number(freeSubscription?.miningDailyRate ?? freeSubscription?.dailyRewardAveragePoints ?? plan.dailyMiningRatePoints ?? plan.miningDailyRate ?? 0)
       : plan.dailyRewardAveragePoints || (Number(plan.pricePoints) * Number(plan.monthlyRewardPercent) / 100 / Number(plan.durationDays));
@@ -4221,7 +4218,6 @@ function renderProfileVip() {
     const isNewVipPolicy = plan.policyVersion === "v2_100d";
     const dailyTotalPayoutPoints = Number(plan.dailyTotalPayoutPoints || 0);
     const miningDailyRate = isFreeVip0 ? dailyAveragePoints : Number(plan.miningDailyRate ?? plan.dailyTotalPayoutPoints ?? dailyAveragePoints) || 0;
-    const totalReceivedPoints = Number(plan.totalReceivedPoints || 0);
     const isPurchasing = vipPurchasingPlanNumbers.has(planNumber);
     return `
       <article class="vipPlanCard vipPlanCard--${theme}${spotlightClass}" data-vip-plan="${planNumber}">
@@ -4235,7 +4231,6 @@ function renderProfileVip() {
           <div class="vipPlanStat"><span>${isFreeVip0 ? t("vip0_daily_rate_label") : t(isNewVipPolicy ? "vip_daily_total_label" : "vip_plan_profit_label")}</span><b>${isFreeVip0 ? upRewardMarkup(miningDailyRate, false) : isNewVipPolicy ? upRewardMarkup(dailyTotalPayoutPoints, false) : `${formatNumber(plan.monthlyRewardPercent, 2)}%`}</b></div>
           <div class="vipPlanStat"><span>${t("vip_plan_duration_label")}</span><b>${t("vip_plan_duration_value", { n: formatPoints(displayedDurationDays) })}</b></div>
         </div>
-        <div class="vipPlanReward"><span>${t(isFreeVip0 ? "vip0_total_mining_label" : isNewVipPolicy ? "vip_total_received_label" : "vip_total_reward_label")}</span><b>${upRewardMarkup(isFreeVip0 ? totalRewardPoints : isNewVipPolicy ? totalReceivedPoints : totalRewardPoints, false)}</b></div>
         ${isFreeVip0 ? "" : `<div class="vipPlanMiningRate"><span>${t("vip_mining_package_rate")}</span><b>+${formatNumber(miningDailyRate, 2)} UP/day <small>+${formatNumber(miningDailyRate / 86400, 6)} UP/s</small></b></div>`}
         ${isNewVipPolicy || isFreeVip0 ? "" : `<div class="vipPlanDaily">${t("vip_daily_average", { n: formatPoints(dailyAveragePoints) })}</div>`}
         <button type="button" class="vipPlanButton ${available ? (canAfford ? "vipPlanButton--primary" : "vipPlanButton--insufficient") : "vipPlanButton--secondary"}" ${available && canAfford && !isPurchasing ? "" : "disabled"} onclick="${isFreeVip0 ? "activateVip0FreePlan()" : `purchaseVipPlan(${planNumber})`}">${isPurchasing ? (isFreeVip0 ? t("vip0_activating") : t("vip_buying")) : buttonLabel}</button>
