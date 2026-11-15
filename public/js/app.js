@@ -220,6 +220,17 @@ function getTelegramUser() {
   return tg?.initDataUnsafe?.user || null;
 }
 
+function getReferralStartParam() {
+  const initDataStartParam = tg?.initDataUnsafe?.start_param;
+  if (typeof initDataStartParam === "string" && initDataStartParam.trim()) return initDataStartParam.trim();
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return String(params.get("startapp") || params.get("start_param") || params.get("ref") || params.get("start") || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 /* ================= LOCAL STORAGE / THEME ================= */
 const THEME_KEY = "miniAppTheme";
 const THEME_PERSIST_KEY = "gramup_theme";
@@ -1162,8 +1173,7 @@ async function refreshReadModelInBackground() {
 window.refreshReadModelInBackground = refreshReadModelInBackground;
 
 async function bootstrapAuth() {
-  const params = new URLSearchParams(location.search);
-  const ref = params.get("ref") || "";
+  const ref = getReferralStartParam();
   const url = ref ? `/api/auth/me?ref=${encodeURIComponent(ref)}` : "/api/auth/me";
 
   try {

@@ -130,6 +130,9 @@ async function getOrCreateUser(tgUser, startParam, requestIp = '', requestUserAg
         lastName: tgUser.last_name || '',
         photoUrl: tgUser.photo_url || '',
         referralCode: generateReferralCode(telegramId),
+        // Direct Mini App referrals must start with bot reminders enabled;
+        // users can disable them later from Profile settings.
+        botReminderEnabled: true,
         signupIpHash,
         signupDeviceHash,
         referralRiskScore: 0,
@@ -162,6 +165,10 @@ async function getOrCreateUser(tgUser, startParam, requestIp = '', requestUserAg
     }
     if (dbUser.telegramBlockedAt) {
       dbUser.telegramBlockedAt = null;
+      changed = true;
+    }
+    if (dbUser.botReminderEnabled == null) {
+      dbUser.botReminderEnabled = true;
       changed = true;
     }
     if (changed) await dbUser.save();

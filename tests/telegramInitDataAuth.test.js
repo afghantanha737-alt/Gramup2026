@@ -7,17 +7,23 @@ const botToken = 'test-bot-token';
 const user = {
   _id: 'user-42', telegramId: '42', createdAt: new Date(now * 1000 - 60_000),
   username: '', firstName: 'Test', lastName: '', photoUrl: '', isBanned: false,
-  referralMessageConsent: 'unset'
+  referralMessageConsent: 'unset', botReminderEnabled: null,
+  save: async () => user
 };
+const userQuery = { select: async () => null };
 require.cache[userPath] = {
   id: userPath,
   filename: userPath,
   loaded: true,
-  exports: { findOne: async () => user, findById: async () => user }
+  exports: { findOne: async filter => filter?.telegramId ? user : userQuery, findById: async () => user }
 };
 
-function signedInitData() {
-  const params = new URLSearchParams({ auth_date: String(now), user: JSON.stringify({ id: 42, first_name: 'Test' }) });
+function signedInitData(extra = {}) {
+  const params = new URLSearchParams({
+    auth_date: String(now),
+    user: JSON.stringify({ id: 42, first_name: 'Test', allows_write_to_pm: true }),
+    ...extra
+  });
   const dataCheckString = [...params.entries()].map(([key, value]) => `${key}=${value}`).sort().join('\n');
   const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
   const hash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
@@ -26,6 +32,7 @@ function signedInitData() {
 }
 
 const initData = signedInitData();
+const referralInitData = signedInitData({ start_param: 'ref_signed_inviter' });
 const { requireTelegramAuth } = require('../utils/telegramAuth');
 const middleware = requireTelegramAuth(botToken);
 function callMiddleware({ header = '', query = {} } = {}) {
@@ -57,5 +64,8 @@ function callMiddleware({ header = '', query = {} } = {}) {
   const headerResult = await callMiddleware({ header: initData });
   assert.strictEqual(headerResult.passed, true, 'the signed Telegram header still authenticates');
   assert.strictEqual(headerResult.req.dbUser.telegramId, '42');
+  const referralResult = await callMiddleware({ header: referralInitData });
+  assert.strictEqual(referralResult.passed, true, 'start_param remains inside the signed initData contract');
+  assert.strictEqual(referralResult.req.telegramStartParam, 'ref_signed_inviter');
   console.log('PASS — Telegram initData uses the signed header, not a replayable URL query parameter');
 })().catch(error => { console.error(error); process.exitCode = 1; });
