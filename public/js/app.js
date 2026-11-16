@@ -463,6 +463,21 @@ function formatExactDateTime(dateString) {
     hour: "2-digit", minute: "2-digit", second: "2-digit"
   }).format(date);
 }
+function transactionTimeLabel(dateString) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "—";
+  const diffMs = Date.now() - date.getTime();
+  const locale = state.language === "en" ? "en-US" : state.language === "ps" ? "ps-AF" : "fa-IR";
+  const count = value => new Intl.NumberFormat(locale).format(value);
+  if (diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000) {
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return t("history_time_just_now");
+    if (minutes < 60) return t("history_time_minutes_ago", { n: count(minutes) });
+    return t("history_time_hours_ago", { n: count(Math.floor(minutes / 60)) });
+  }
+  return formatExactDateTime(dateString);
+}
+
 function pad2(n) { return String(n).padStart(2, "0"); }
 
 /* ================= API ================= */
@@ -2882,7 +2897,7 @@ function renderWallet() {
         <div class="loading" style="height:60px"></div>
       </div>
       <div class="payoutBoardActions">
-        <button type="button" class="payoutBoardCta" onclick="openProofPage()"><svg class="payoutBoardCtaLeading" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M9 5h10v10"/></svg><span>${t("wallet_proof_button")}</span><i class="payoutBoardCtaTrailing" aria-hidden="true"></i></button>
+        <button type="button" class="payoutBoardCta" onclick="openHistory()"><svg class="payoutBoardCtaLeading" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M9 5h10v10"/></svg><span>${t("wallet_view_all_button")}</span><i class="payoutBoardCtaTrailing" aria-hidden="true"></i></button>
         <button type="button" class="payoutBoardCta" onclick="openPayoutChannel()"><svg class="payoutBoardCtaLeading" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M9 5h10v10"/></svg><span>${t("wallet_proof_channel_button")}</span><svg class="payoutBoardCtaTrailing payoutBoardMegaphone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11v2a2 2 0 0 0 2 2h2l8 5V4l-8 5H5a2 2 0 0 0-2 2Zm4 4 1 5h3l-1.5-4.5M18 9.5a4 4 0 0 1 0 5M20.5 7a7.5 7.5 0 0 1 0 10"/></svg></button>
       </div>
     </div>
@@ -2909,7 +2924,7 @@ function renderWallet() {
         <button type="button" class="historyItem historyItemBtn" data-withdrawal-id="${escapeHTML(item._id)}">
           <div>
             <div class="historyAmount">${formatNumber(item.cryptoAmount, 6)} ${escapeHTML(item.token || "GRAM")}</div>
-            <div class="historyMeta">${timeAgo(item.createdAt)}</div>
+            <div class="historyMeta">${transactionTimeLabel(item.createdAt)}</div>
             ${item.status === "paid" && item.txHash ? `
               <div class="historyTxRow">
                 <span class="verifiedTick">${item.verified ? "✅" : "⚠️"}</span>
@@ -2938,7 +2953,7 @@ function renderWallet() {
         <article class="publicTxCard">
           <div class="publicTxIdentity">
             <div class="publicTxUser"><span class="publicTxAvatar" aria-hidden="true">${escapeHTML(String(item.userName || "User***").charAt(0).toUpperCase())}</span><strong>${escapeHTML(item.userName || "User***")}</strong></div>
-            <div class="publicTxMeta"><span class="publicTxStatus">${item.status === "paid" ? "✓" : "•"} ${t("history_status_completed")}</span><time class="publicTxDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDateTime(item.date))}</time></div>
+            <div class="publicTxMeta"><span class="publicTxStatus">${item.status === "paid" ? "✓" : "•"} ${t("history_status_completed")}</span><time class="publicTxDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time></div>
           </div>
           <div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>
           ${explorer}
