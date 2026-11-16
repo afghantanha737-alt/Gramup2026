@@ -30,11 +30,11 @@ assert.match(proofPage, /formatExactDate/);
 assert.match(proofPage, /gram-logo\.svg/);
 assert.match(appJs, /payoutBoardCta/);
 assert.match(appJs, /payoutBoardActions/);
-assert.match(appJs, /payoutBoardCtaFrame/);
 assert.match(appJs, /payoutBoardMegaphone/);
+assert.doesNotMatch(appJs, /payoutBoardCtaFrame/);
 assert.match(styleCss, /\.payoutBoardCta\s*\{/);
 assert.match(styleCss, /linear-gradient\(135deg, #a2f7ff/);
 assert.match(styleCss, /\.payoutBoardList \.publicTxCard/);
-assert.match(styleCss, /border: 5px solid #ff4052/);
+assert.doesNotMatch(styleCss, /payoutBoardCtaFrame|border: 5px solid #ff4052/);
 
 console.log('PASS — public payouts show five masked cards with compact layout and bright CTA actions');

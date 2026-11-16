@@ -2881,11 +2881,9 @@ function renderWallet() {
       <div class="payoutBoardList" id="publicHistoryList">
         <div class="loading" style="height:60px"></div>
       </div>
-      <div class="payoutBoardCtaFrame">
-        <div class="payoutBoardActions">
-          <button type="button" class="payoutBoardCta" onclick="openProofPage()"><svg class="payoutBoardCtaLeading" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M9 5h10v10"/></svg><span>${t("wallet_proof_button")}</span><i class="payoutBoardCtaTrailing" aria-hidden="true"></i></button>
-          <button type="button" class="payoutBoardCta" onclick="openPayoutChannel()"><svg class="payoutBoardCtaLeading" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M9 5h10v10"/></svg><span>${t("wallet_proof_channel_button")}</span><svg class="payoutBoardCtaTrailing payoutBoardMegaphone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11v2a2 2 0 0 0 2 2h2l8 5V4l-8 5H5a2 2 0 0 0-2 2Zm4 4 1 5h3l-1.5-4.5M18 9.5a4 4 0 0 1 0 5M20.5 7a7.5 7.5 0 0 1 0 10"/></svg></button>
-        </div>
+      <div class="payoutBoardActions">
+        <button type="button" class="payoutBoardCta" onclick="openProofPage()"><svg class="payoutBoardCtaLeading" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M9 5h10v10"/></svg><span>${t("wallet_proof_button")}</span><i class="payoutBoardCtaTrailing" aria-hidden="true"></i></button>
+        <button type="button" class="payoutBoardCta" onclick="openPayoutChannel()"><svg class="payoutBoardCtaLeading" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M9 5h10v10"/></svg><span>${t("wallet_proof_channel_button")}</span><svg class="payoutBoardCtaTrailing payoutBoardMegaphone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11v2a2 2 0 0 0 2 2h2l8 5V4l-8 5H5a2 2 0 0 0-2 2Zm4 4 1 5h3l-1.5-4.5M18 9.5a4 4 0 0 1 0 5M20.5 7a7.5 7.5 0 0 1 0 10"/></svg></button>
       </div>
     </div>
   `;

@@ -3027,16 +3027,8 @@ html[data-theme="light"] .payoutBoardList .publicTxCard .publicTxUser strong { c
   .payoutBoardCta svg { width: 21px; height: 21px; flex-basis: 21px; }
 }
 
-/* Reference-style CTA frame: red outline, cyan pill buttons and fixed icon columns. */
-.payoutBoardCtaFrame {
-  margin-top: 14px;
-  padding: 8px;
-  border: 5px solid #ff4052;
-  border-radius: 24px;
-  background: rgba(8, 12, 25, .72);
-  box-shadow: 0 0 0 2px rgba(255, 64, 82, .14), 0 8px 18px rgba(255, 64, 82, .12);
-}
-.payoutBoardCtaFrame .payoutBoardActions { margin-top: 0; gap: 10px; }
+/* Compact CTA controls with fixed icon columns. */
+.payoutBoardActions { margin-top: 14px; }
 .payoutBoardCta {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) 30px;
@@ -3057,7 +3049,6 @@ html[data-theme="light"] .payoutBoardList .publicTxCard .publicTxUser strong { c
 .payoutBoardCtaTrailing:not(svg) { display: block; }
 .payoutBoardMegaphone { fill: currentColor; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 @media (max-width: 390px) {
-  .payoutBoardCtaFrame { padding: 7px; border-width: 4px; border-radius: 21px; }
   .payoutBoardCta { grid-template-columns: 26px minmax(0, 1fr) 26px; min-height: 53px; gap: 5px; padding-inline: 8px; font-size: 10.5px; }
   .payoutBoardCtaLeading, .payoutBoardCtaTrailing { width: 21px; height: 21px; }
 }
