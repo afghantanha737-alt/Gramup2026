@@ -179,7 +179,7 @@ function renderList(history) {
     return `
       <div class="proofCard">
         <div class="proofIdentity">
-          <div class="proofUser"><span class="proofAvatar" aria-hidden="true">${escapeHTML(String(item.userName || "User***").charAt(0).toUpperCase())}</span><strong>${escapeHTML(item.userName || "User***")}</strong></div>
+          <div class="proofUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")}</strong></div>
           <div class="proofMeta"><span class="proofBadgeOk">✓ ${escapeHTML(dict.statusPaid)}</span><time class="proofDate" dir="${lang === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDate(item.date))}</time></div>
         </div>
         <div class="proofPayment"><div class="proofAmount"><img src="img/gramup-official-logo.jpg" alt="GRAM" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorerLink}</div>
