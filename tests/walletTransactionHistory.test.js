@@ -13,7 +13,8 @@ assert.match(app, /return formatExactDateTime\(dateString\)/);
 assert.match(app, /const WALLET_HISTORY_FALLBACKS/);
 assert.match(app, /function walletHistoryText\(key, vars = \{\}\)/);
 assert.match(app, /translation unavailable\|ترجمهٔ\? این متن در دسترس نیست\|ژباړه شتون نه لري/);
-assert.match(app, /onclick="openHistory\(\)"[\s\S]*?wallet_view_all_button/);
+assert.match(app, /onclick="openPublicPayments\(\)"[\s\S]*?wallet_view_all_button/);
+assert.match(app, /async function openPublicPayments\(\)/);
 assert.match(app, /transactionTimeLabel\(item\.createdAt\)/);
 assert.match(app, /transactionTimeLabel\(item\.date\)/);
 for (const key of ['wallet_view_all_button', 'history_time_just_now', 'history_time_minutes_ago', 'history_time_hours_ago']) {
