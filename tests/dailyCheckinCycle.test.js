@@ -31,7 +31,7 @@ assert.match(app, /checkin_next_available_in/);
 assert.match(app, /const todayReward = Number\(state\.dailyCheckinReward\)/);
 assert.match(app, /dailyCheckinCycleDay = Math\.min\(7/);
 assert.match(app, /dailyCheckDay \$\{claimed \? "is-complete is-claimed"/);
-assert.match(app, /dailyCheckReward[\s\S]*gramup-logo-cube-transparent\.png/);
+assert.match(app, /dailyCheckReward[\s\S]*gramup-official-logo\.jpg/);
 assert.match(css, /\.dailyCheckGrid\{display:grid;grid-template-columns:repeat\(7,/);
 assert.match(css, /\.dailyCheckCountdown/);
 

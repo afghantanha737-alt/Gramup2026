@@ -43,13 +43,13 @@ async function main() {
   const iconEnd = app.indexOf('\nfunction tokenAmount(', iconStart);
   assert.ok(iconStart >= 0 && iconEnd > iconStart, 'actual UP token icon helper must be present');
   vm.runInContext(app.slice(iconStart, iconEnd), context);
-  const tokenLogo = '<img class="upTokenIcon" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
+  const tokenLogo = '<img class="upTokenIcon" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true">';
   assert.strictEqual(vm.runInContext('tokenIconMarkup()', context), tokenLogo,
     'Profile token icon must use the Gramup cube token mark with an accessible decorative treatment');
-  const logoPath = path.join(root, 'public/img/gramup-logo-cube-transparent.png');
+  const logoPath = path.join(root, 'public/img/gramup-official-logo.jpg');
   assert.ok(fs.existsSync(logoPath), 'the Profile UP token logo asset must exist');
-  assert.strictEqual(fs.readFileSync(logoPath).subarray(0, 8).toString('hex'), '89504e470d0a1a0a',
-    'the Profile UP logo must be a valid PNG, not a broken or misnamed asset');
+assert.strictEqual(fs.readFileSync(logoPath).subarray(0, 3).toString('hex'), 'ffd8ff',
+    'the Profile UP logo must be a valid JPEG, not a broken or misnamed asset');
 
   const renderStart = app.indexOf('function renderProfileMenu() {');
   const renderEnd = app.indexOf('\nfunction renderProfileAbout()', renderStart);
@@ -125,11 +125,11 @@ async function main() {
   })) {
     assert.ok(indexHtml.includes(`js/${asset}.js?v=${version}`), `${asset} must keep its current cache identifier`);
   }
-  assert.ok(indexHtml.includes('js/i18n.js?v=payout_board_20261116_3'), 'i18n.js must use the VIP0 locale cache-busting version');
-  assert.ok(indexHtml.includes('js/app.js?v=payout_board_20261116_3'), 'app.js must use the VIP0 UI cache-busting version');
+  assert.ok(indexHtml.includes('js/i18n.js?v=payout_board_20261116_10'), 'i18n.js must use the current locale cache-busting version');
+  assert.ok(indexHtml.includes('js/app.js?v=payout_board_20261116_10'), 'app.js must use the current UI cache-busting version');
   assert.doesNotMatch(indexHtml, /spinCelebration|luckySpinPage|spinWheel/i, 'Lucky Spin must not be loaded before its feature is built');
-  assert.ok(indexHtml.includes('css/style.css?v=payout_board_20261116_3'), 'main CSS must use the UP/Mine cache-busting version');
-  assert.ok(indexHtml.includes('css/theme-selector.css?v=payout_board_20261116_3'), 'theme CSS must use the Silver theme cache-busting version');
+  assert.ok(indexHtml.includes('css/style.css?v=payout_board_20261116_10'), 'main CSS must use the current cache-busting version');
+  assert.ok(indexHtml.includes('css/theme-selector.css?v=payout_board_20261116_10'), 'theme CSS must use the current cache-busting version');
 
   const referralRoute = fs.readFileSync(path.join(root, 'routes/referral.js'), 'utf8');
   assert.match(referralRoute, /User\.countDocuments\(\{ referredBy: u\._id \}\)/,
