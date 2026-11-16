@@ -2991,3 +2991,38 @@ html[data-theme="light"] .payoutBoardList .publicTxCard { background: transparen
   .payoutBoardDesc { font-size: 10px; }
   .payoutBoardLive { padding: 6px 8px; }
 }
+
+/* Public payout board: separate dark cards and bright rounded CTA actions. */
+.payoutBoardList { display: grid; gap: 8px; overflow: visible; border: 0; border-radius: 0; background: transparent; }
+.payoutBoardList .publicTxCard {
+  margin: 0;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(24, 29, 42, .98), rgba(14, 18, 29, .98));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .18);
+}
+.payoutBoardList .publicTxCard:last-child { border-bottom: 1px solid rgba(148, 163, 184, .16); }
+.payoutBoardActions { display: grid; gap: 10px; margin-top: 14px; }
+.payoutBoardCta {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 55px; padding: 13px 18px;
+  border: 1px solid rgba(125, 246, 255, .65); border-radius: 999px;
+  color: #05233b;
+  background: linear-gradient(135deg, #a2f7ff 0%, #4de3f2 48%, #15c6eb 100%);
+  box-shadow: 0 5px 0 rgba(5, 128, 169, .55), 0 12px 22px rgba(21, 198, 235, .2);
+  font-size: 12px; font-weight: 900; line-height: 1.35; text-align: center;
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+.payoutBoardCta svg { width: 23px; height: 23px; flex: 0 0 23px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.payoutBoardCta:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(5, 128, 169, .55), 0 7px 14px rgba(21, 198, 235, .16); }
+.payoutBoardCta:hover { filter: brightness(1.04); }
+html[data-theme="light"] .payoutBoardList .publicTxCard {
+  border-color: rgba(71, 85, 105, .18);
+  background: linear-gradient(145deg, #172033, #0e1624);
+  color: #f8fafc;
+}
+html[data-theme="light"] .payoutBoardList .publicTxCard .publicTxUser strong { color: #f8fafc; }
+@media (max-width: 390px) {
+  .payoutBoardCta { min-height: 52px; padding-inline: 12px; font-size: 11px; }
+  .payoutBoardCta svg { width: 21px; height: 21px; flex-basis: 21px; }
+}

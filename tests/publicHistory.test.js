@@ -7,6 +7,8 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const pointsRoute = fs.readFileSync(path.join(root, 'routes/points.js'), 'utf8');
 const proofPage = fs.readFileSync(path.join(root, 'public/proof.html'), 'utf8');
+const appJs = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
+const styleCss = fs.readFileSync(path.join(root, 'public/css/style.css'), 'utf8');
 
 const routeStart = pointsRoute.indexOf("router.get('/public-history'");
 assert.notStrictEqual(routeStart, -1, 'public history route exists');
@@ -26,5 +28,10 @@ assert.match(proofPage, /5 most recent payments/);
 assert.match(proofPage, /proofUser/);
 assert.match(proofPage, /formatExactDate/);
 assert.match(proofPage, /gram-logo\.svg/);
+assert.match(appJs, /payoutBoardCta/);
+assert.match(appJs, /payoutBoardActions/);
+assert.match(styleCss, /\.payoutBoardCta\s*\{/);
+assert.match(styleCss, /linear-gradient\(135deg, #a2f7ff/);
+assert.match(styleCss, /\.payoutBoardList \.publicTxCard/);
 
-console.log('PASS — public payouts show five masked, compact recent cards and report all-time totals by token');
+console.log('PASS — public payouts show five masked cards with compact layout and bright CTA actions');
