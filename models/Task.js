@@ -26,7 +26,7 @@ const taskSchema = new mongoose.Schema(
     // System tasks are completed by a verified backend event, not by Telegram membership.
     taskKind: { type: String, enum: ['standard', 'vip_activation', 'bio_link', 'official_bot'], default: 'standard', index: true },
     vipPlanNumber: { type: Number, min: 1, max: 10, default: null },
-    cooldownHours: { type: Number, default: 3, min: 1, max: 720 },
+    cooldownHours: { type: Number, default: 24, min: 1, max: 720 },
     latestPostMessageId: { type: Number, default: null },
     latestPostDate: { type: Date, default: null },
     latestPostUpdateId: { type: Number, default: null },

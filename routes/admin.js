@@ -407,7 +407,7 @@ router.post('/tasks', async (req, res) => {
     return res.status(400).json({ success: false, message: 'chatId (آیدی/یوزرنیم کانال یا گروه) الزامی است.' });
   }
   const finalCooldownHours = taskVerifyType === 'latest_post'
-    ? Number(cooldownHours === undefined || cooldownHours === null || cooldownHours === '' ? 3 : cooldownHours)
+    ? Number(cooldownHours === undefined || cooldownHours === null || cooldownHours === '' ? 24 : cooldownHours)
     : 3;
   if (taskVerifyType === 'latest_post') {
     const configError = validateLatestPostConfig({ chatId, url, requiredReaction, cooldownHours: finalCooldownHours });
@@ -520,7 +520,7 @@ router.put('/tasks/:id', async (req, res) => {
           chatId,
           url: String(update.url ?? currentVerification.url ?? '').trim(),
           requiredReaction: String(update.requiredReaction ?? currentVerification.requiredReaction ?? '').trim(),
-          cooldownHours: Number(update.cooldownHours ?? currentVerification.cooldownHours ?? 3)
+          cooldownHours: Number(update.cooldownHours ?? currentVerification.cooldownHours ?? 24)
         };
         const configError = validateLatestPostConfig(latestConfig);
         if (configError) return res.status(400).json({ success: false, code: 'INVALID_LATEST_POST_TASK', message: configError });

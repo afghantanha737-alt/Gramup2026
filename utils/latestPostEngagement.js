@@ -1,7 +1,9 @@
 'use strict';
 
 const MAX_TELEGRAM_CHAT_ID = (1n << 52n) - 1n;
-const LATEST_POST_COOLDOWN_HOURS = 3;
+// React on Latest Post is a once-per-day reward. Keep the policy centralized
+// so both the claim guard and the API response use the same 24-hour interval.
+const LATEST_POST_COOLDOWN_HOURS = 24;
 const LATEST_POST_COOLDOWN_MS = LATEST_POST_COOLDOWN_HOURS * 60 * 60 * 1000;
 const LATEST_POST_OPEN_WAIT_SECONDS = 10;
 const LATEST_POST_OPEN_WAIT_MS = LATEST_POST_OPEN_WAIT_SECONDS * 1000;

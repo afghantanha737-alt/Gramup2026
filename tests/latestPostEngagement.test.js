@@ -106,11 +106,11 @@ assert.strictEqual(isFreshRequiredReaction({ reactionState: { ...reactionState, 
 assert.strictEqual(buildRecurringTaskSourceId('task1', 'user1', 1), 'task:task1:user:user1:cycle:1');
 assert.notStrictEqual(buildRecurringTaskSourceId('task1', 'user1', 1), buildRecurringTaskSourceId('task1', 'user1', 2));
 assert.throws(() => buildRecurringTaskSourceId('task1', 'user1', 0), TypeError);
-assert.strictEqual(LATEST_POST_COOLDOWN_HOURS, 3);
+assert.strictEqual(LATEST_POST_COOLDOWN_HOURS, 24);
 assert.strictEqual(LATEST_POST_OPEN_WAIT_SECONDS, 10);
 const completedAt = new Date('2026-10-03T10:15:00.000Z');
 const nextAt = nextLatestPostAvailableAt(completedAt);
-assert.strictEqual(nextAt.toISOString(), '2026-10-03T13:15:00.000Z');
+assert.strictEqual(nextAt.toISOString(), '2026-10-04T10:15:00.000Z');
 assert.strictEqual(isLatestPostCooldownActive(nextAt, completedAt), true);
 assert.strictEqual(isLatestPostCooldownActive(nextAt, nextAt), false);
 assert.strictEqual(isLatestPostOpenValid({ openedAt: completedAt, lastCompletedAt: null, now: completedAt }), false);
@@ -122,7 +122,7 @@ assert.strictEqual(isLatestPostOpenValid({ openedAt: null, lastCompletedAt: null
 
 assert.ok(Task.schema.path('verifyType').enumValues.includes('latest_post'));
 assert.strictEqual(Task.schema.path('chatId').instance, 'String');
-assert.strictEqual(Task.schema.path('cooldownHours').defaultValue, 3);
+assert.strictEqual(Task.schema.path('cooldownHours').defaultValue, 24);
 assert.ok(Task.schema.path('latestPostMessageId'));
 assert.ok(Task.schema.path('requiredReaction'));
 assert.ok(TaskCompletion.schema.path('nextAvailableAt'));
