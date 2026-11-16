@@ -43,6 +43,8 @@ assert.match(styleCss, /\.publicTxPayment, \.proofPayment/);
 assert.match(appJs, /class="publicTxPayment"/);
 assert.match(proofPage, /class="proofPayment"/);
 assert.match(appJs, /history_time_hours_ago: "\{n\} ساعت پیش"/);
+assert.match(appJs, /class="publicTxFlow"[\s\S]*history_received/);
+assert.match(proofPage, /class="publicTxFlow"[\s\S]*receivedPayout/);
 assert.doesNotMatch(styleCss, /payoutBoardCtaFrame|border: 5px solid #ff4052/);
 
 console.log('PASS — public payouts show all verified masked payments with compact layout and bright CTA actions');
