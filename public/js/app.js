@@ -2976,7 +2976,7 @@ function renderWallet() {
       list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("wallet_public_history_empty")}</div></div>`;
       return;
     }
-    list.innerHTML = publicHistory.map(item => {
+    list.innerHTML = publicHistory.slice(0, 5).map(item => {
       const explorer = item.txHash
         ? `<a class="publicTxExplorer" href="https://tonviewer.com/transaction/${encodeURIComponent(item.txHash)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHTML(t("history_view_explorer"))}" title="${escapeHTML(t("history_view_explorer"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>`
         : `<span class="publicTxExplorer is-unavailable" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></span>`;
