@@ -24,7 +24,7 @@ for (const pattern of [
   /data-vip-mining-second/,
   /vip_mining_claim/,
   /claimVipMining\(\)/,
-  /gramup-official-logo\.jpg/,
+  /gramup-logo-cube-transparent\.png/,
   /vip_mining_empty/
 ]) assert.match(consoleMarkup, pattern);
 assert.match(app, /vipMiningDailyRate|plan\.miningDailyRate/);

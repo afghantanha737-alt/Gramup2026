@@ -27,7 +27,7 @@ assert.match(proofPage, /history\.map\(item =>/);
 assert.match(proofPage, /All verified payments/);
 assert.match(proofPage, /proofUser/);
 assert.match(proofPage, /formatExactDate/);
-assert.match(proofPage, /gramup-official-logo\.jpg/);
+assert.match(proofPage, /gramup-logo-cube-transparent\.png/);
 assert.match(appJs, /payoutBoardCta/);
 assert.match(appJs, /payoutBoardActions/);
 assert.match(appJs, /payoutBoardMegaphone/);

@@ -43,13 +43,13 @@ async function main() {
   const iconEnd = app.indexOf('\nfunction tokenAmount(', iconStart);
   assert.ok(iconStart >= 0 && iconEnd > iconStart, 'actual UP token icon helper must be present');
   vm.runInContext(app.slice(iconStart, iconEnd), context);
-  const tokenLogo = '<img class="upTokenIcon" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true">';
+  const tokenLogo = '<img class="upTokenIcon" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
   assert.strictEqual(vm.runInContext('tokenIconMarkup()', context), tokenLogo,
     'Profile token icon must use the Gramup cube token mark with an accessible decorative treatment');
-  const logoPath = path.join(root, 'public/img/gramup-official-logo.jpg');
+  const logoPath = path.join(root, 'public/img/gramup-logo-cube-transparent.png');
   assert.ok(fs.existsSync(logoPath), 'the Profile UP token logo asset must exist');
-assert.strictEqual(fs.readFileSync(logoPath).subarray(0, 3).toString('hex'), 'ffd8ff',
-    'the Profile UP logo must be a valid JPEG, not a broken or misnamed asset');
+assert.strictEqual(fs.readFileSync(logoPath).subarray(0, 4).toString('hex'), '89504e47',
+    'the Profile UP logo must be a valid PNG, not a broken or misnamed asset');
 
   const renderStart = app.indexOf('function renderProfileMenu() {');
   const renderEnd = app.indexOf('\nfunction renderProfileAbout()', renderStart);

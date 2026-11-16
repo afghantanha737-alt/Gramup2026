@@ -808,7 +808,7 @@ function renderMembershipGate(override) {
   el.innerHTML = `
     <div class="gateInner">
       <div class="gateBrand">
-        <img src="img/gramup-official-logo.jpg" alt="Gramup">
+        <img src="img/gramup-logo-cube-transparent.png" alt="Gramup">
         <div class="brandName">Gram<span>up</span></div>
       </div>
       <div class="gateHero">${GATE_PLANE}</div>
@@ -1565,13 +1565,13 @@ function renderHome() {
       <div class="tbBalanceTop">
         <div class="tbBalanceInfo">
           <div class="tbLabel">${t("wallet_points_card_title")}</div>
-          <div class="tbAmount"><img class="upTokenMark" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"><span class="tbAmountNum">${formatPoints(state.points)}</span><span class="tbAmountUnit">UP</span></div>
+          <div class="tbAmount"><img class="upTokenMark" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><span class="tbAmountNum">${formatPoints(state.points)}</span><span class="tbAmountUnit">UP</span></div>
           <div class="tbPills">
             <span class="tbPill tbPillPurple">${formatNumber(state.gramBalance, 6)} GRAM</span>
             <span class="tbPill tbPillOrange">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
           </div>
         </div>
-        <div class="tbGemRing upTokenEmblem" aria-label="UP"><img src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"></div>
+        <div class="tbGemRing upTokenEmblem" aria-label="UP"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div>
       </div>
       <div class="tbActions">
         <button class="tbBtnPrimary" type="button" onclick="showWithdraw()"><span class="tbBtnIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></span>${t("tb_withdraw")}</button>
@@ -2090,7 +2090,7 @@ function renderDailyCheckinCard() {
     return `<div class="dailyCheckDay ${claimed ? "is-complete is-claimed" : ""} ${today ? "is-current is-today" : ""} ${locked ? "is-locked" : ""}" aria-label="${escapeHTML(`${dayLabel}: ${stateLabel}, ${rewardLabel}`)}">
       <span class="dailyCheckDayNumber">${claimed ? "✓" : day === 7 ? "7+" : day}</span>
       <strong>${escapeHTML(dayLabel)}</strong>
-      <span class="dailyCheckReward" aria-label="${rewardLabel}"><span>${rewardLabel}</span><img src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"></span>
+      <span class="dailyCheckReward" aria-label="${rewardLabel}"><span>${rewardLabel}</span><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span>
       <small class="dailyCheckState">${escapeHTML(stateLabel)}</small>
     </div>`;
   }).join("");
@@ -2871,7 +2871,7 @@ function renderWallet() {
   content.innerHTML = `
     <section class="walletOverview">
       <div class="walletOverviewTop"><div><span class="walletOverline">${t("wallet_title")}</span><h1>${t("wallet_balance_title")}</h1></div><span class="walletLivePill">● ${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })}</span></div>
-      <div class="walletOverviewValue"><img class="upTokenMark upTokenMarkWallet" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"><strong>${formatPoints(state.points)}</strong><span>UP</span></div>
+      <div class="walletOverviewValue"><img class="upTokenMark upTokenMarkWallet" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><strong>${formatPoints(state.points)}</strong><span>UP</span></div>
       <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.gramUsdPrice > 0 ? `≈ $${formatFixed(state.points * state.rate * state.gramUsdPrice, 3)}` : "—"}</b></div>
     </section>
     <div id="tonWalletConnection" aria-live="polite"></div>
@@ -2882,7 +2882,7 @@ function renderWallet() {
 
     <div class="tbWalletGrid">
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconOrange"><img class="upTokenMark upTokenMarkWallet" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"></div>
+        <div class="tbWalletIcon tbIconOrange"><img class="upTokenMark upTokenMarkWallet" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div>
         <div class="tbStatLabel tbColOrange">${t("wallet_points_card_title")}</div>
         <div class="tbWalletValue">${formatPoints(state.points)}</div>
       </div>
@@ -3208,7 +3208,7 @@ function openWeeklyCompetition() {
 window.openWeeklyCompetition = openWeeklyCompetition;
 
 function tokenIconMarkup() {
-  return '<img class="upTokenIcon" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true">';
+  return '<img class="upTokenIcon" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
 }
 function gramTokenIconMarkup() {
   return '<img class="gramTokenIcon" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true">';
@@ -3586,7 +3586,7 @@ function renderProfileReferral() {
         <div class="rf-hero-orbit" aria-hidden="true"></div>
         <div class="rf-hero-top"><span class="rf-overline">${t("referral_hero_eyebrow")}</span><span class="rf-hero-badge">${t("referral_reward_direct_badge", { n: rewardDisplay })}</span></div>
         <h2 class="rf-hero-title" id="rfHeroTitle">${t("referral_total_earnings_title")}</h2>
-        <div class="rf-hero-total"><img class="rf-hero-coin" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"><strong>${formatPoints(totalEarnings)}</strong><span>UP</span></div>
+        <div class="rf-hero-total"><img class="rf-hero-coin" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><strong>${formatPoints(totalEarnings)}</strong><span>UP</span></div>
         <div class="rf-hero-bottom"><span>${t("referral_this_month")}</span><strong>${upRewardMarkup(monthlyEarnings)}</strong></div>
       </section>
 
@@ -4136,7 +4136,7 @@ function startVipCountdown() {
 function renderVipMiningConsole() {
   if (!state.vipMining) {
     const message = state.vipMiningLoading ? t("vip_mining_loading") : escapeHTML(state.vipMiningError || t("vip_mining_error"));
-    return `<section class="vipMiningConsole vipMiningConsole--empty" role="status" aria-live="polite"><div class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-official-logo.jpg" alt="Gramup UP"><div><span class="vipMiningKicker">GRAMUP MINERS</span><h2>${t("vip_mining_title")}</h2></div></div><p>${message}</p>${state.vipMiningLoading ? "" : `<button class="vipMiningRetry" type="button" onclick="retryVipMiningStatus()">${t("vip_mining_retry")}</button>`}</section>`;
+    return `<section class="vipMiningConsole vipMiningConsole--empty" role="status" aria-live="polite"><div class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div><span class="vipMiningKicker">GRAMUP MINERS</span><h2>${t("vip_mining_title")}</h2></div></div><p>${message}</p>${state.vipMiningLoading ? "" : `<button class="vipMiningRetry" type="button" onclick="retryVipMiningStatus()">${t("vip_mining_retry")}</button>`}</section>`;
   }
   const mining = state.vipMining;
   const live = vipMiningLiveValues();
@@ -4150,7 +4150,7 @@ function renderVipMiningConsole() {
     });
     return `
     <article class="vipMiningMinerRow" data-vip-miner-row data-start-at="${escapeHTML(miner.startAt || "")}" data-end-at="${escapeHTML(miner.endAt || "")}" data-days-remaining="${remaining.daysRemaining}" data-remaining-percent="${remaining.remainingPercent}">
-      <div class="vipMiningMinerTop"><span class="vipMiningMinerMark"><img src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"></span><span class="vipMiningMinerName">${minerName}</span></div>
+      <div class="vipMiningMinerTop"><span class="vipMiningMinerMark"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span><span class="vipMiningMinerName">${minerName}</span></div>
       <div class="vipMiningMinerRates"><span>+${formatNumber(miner.dailyRate, 2)} UP/day</span><span>+${formatNumber((Number(miner.dailyRate) || 0) / 86400, 6)} UP/s</span></div>
       <div class="vipMiningProgressMeta"><span data-vip-miner-percent>${t("vip_mining_remaining_percent", { n: formatNumber(remaining.remainingPercent) })}</span><span>${t("vip_mining_duration", { n: formatPoints(miner.durationDays) })}</span><span data-vip-miner-days>${t("vip_mining_remaining_days", { n: formatNumber(remaining.daysRemaining) })}</span></div>
       <div class="vipMiningProgressTrack" role="progressbar" aria-label="${escapeHTML(remainingText)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${remaining.remainingPercent}" aria-valuetext="${escapeHTML(remainingText)}"><span class="vipMiningProgressFill" data-vip-miner-progress style="width:${remaining.remainingPercent}%"></span></div>
@@ -4170,7 +4170,7 @@ function renderVipMiningConsole() {
     <div class="vipMiningBalance"><span>${t("vip_mining_balance", {}, "Balance")}</span><strong>${formatNumber(state.points, 2)} <em>UP</em></strong><b>⚡ ${formatNumber(live.hourlyRate, 2)} UP ${t("vip_mining_per_hour", {}, "per hour")}</b></div>
     <div class="vipMiningCore">
       <div class="vipMiningRing" data-vip-mining-ring role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(live.cycleProgressPercent)}" aria-valuetext="${escapeHTML(t("vip_mining_progress_accessible", { n: formatNumber(live.cycleProgressPercent) }))}" style="--vip-progress:${live.cycleProgressPercent}%">
-        <div class="vipMiningOrb"><img src="img/gramup-official-logo.jpg" alt="Gramup UP"></div>
+        <div class="vipMiningOrb"><img src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"></div>
         <div class="vipMiningCoreStatus"><i aria-hidden="true"></i><span data-vip-mining-cycle-status>${cycleLabel}</span></div>
       </div>
     </div>
@@ -4601,7 +4601,7 @@ function renderMiningHistory() {
   if (!history.length) return `<div class="mineHistoryEmpty">${t("mining_history_empty")}</div>`;
   return `<div class="mineHistoryList">${history.map(item => {
     const amount = Math.max(0, Number(item.amount) || 0);
-    return `<div class="mineHistoryRow"><span class="mineHistoryIcon"><img src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"></span><span class="mineHistoryCopy"><strong>${escapeHTML(item.description || t("mining_claim_success"))}</strong><small>${escapeHTML(timeAgo(item.createdAt))}</small></span><b>+${formatPoints(amount)} UP</b></div>`;
+    return `<div class="mineHistoryRow"><span class="mineHistoryIcon"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span><span class="mineHistoryCopy"><strong>${escapeHTML(item.description || t("mining_claim_success"))}</strong><small>${escapeHTML(timeAgo(item.createdAt))}</small></span><b>+${formatPoints(amount)} UP</b></div>`;
   }).join("")}</div>`;
 }
 
@@ -4628,7 +4628,7 @@ function renderMiningPanel() {
     const rate = Number(rig.ratePerHour) || 0;
     const cost = Number(rig.upgradeCost ?? rig.cost) || 0;
     const canUpgrade = next && mining.nextRigUpgrade && Number(state.points) >= Number(mining.nextRigUpgrade.cost || 0);
-    return `<article class="minerTrainCard ${current ? "is-current" : owned ? "is-owned" : "is-locked"}"><div class="minerTrainIcon"><img src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"></div><div class="minerTrainCopy"><strong class="minerTrainTitle">${escapeHTML(rig.name || `${t("mining_tier")} ${level}`)}</strong><span class="minerTrainMeta">+${formatPoints(rate)} UP/hr</span></div><span class="minerTrainState">${t(statusKey)}</span>${next && mining.nextRigUpgrade ? `<button class="mineCardUpgrade" type="button" data-mining-upgrade="rig" ${canUpgrade ? "" : "disabled"} onclick="upgradeMining('rig')">${t("mining_upgrade_btn", { cost: formatPoints(cost) })}</button>` : ""}</article>`;
+    return `<article class="minerTrainCard ${current ? "is-current" : owned ? "is-owned" : "is-locked"}"><div class="minerTrainIcon"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div><div class="minerTrainCopy"><strong class="minerTrainTitle">${escapeHTML(rig.name || `${t("mining_tier")} ${level}`)}</strong><span class="minerTrainMeta">+${formatPoints(rate)} UP/hr</span></div><span class="minerTrainState">${t(statusKey)}</span>${next && mining.nextRigUpgrade ? `<button class="mineCardUpgrade" type="button" data-mining-upgrade="rig" ${canUpgrade ? "" : "disabled"} onclick="upgradeMining('rig')">${t("mining_upgrade_btn", { cost: formatPoints(cost) })}</button>` : ""}</article>`;
   }).join("");
   const nextRigCost = Number(mining.nextRigUpgrade?.cost) || 0;
   const canBoost = Boolean(mining.nextRigUpgrade && Number(state.points) >= nextRigCost);
@@ -4637,9 +4637,9 @@ function renderMiningPanel() {
   const progress = Math.min(100, Math.max(0, Number(live.percent) || 0));
 
   return `<div class="mineConsole">
-    <header class="mineHeader"><div class="mineEmblem"><img src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"><span aria-hidden="true">⛏</span></div><div class="mineHeading"><span class="mineEyebrow">GRAMUP MINER</span><h1 class="mineTitle">${t("mining_title")}</h1><p class="mineSubtitle">${t("mining_subtitle")}</p></div><span class="mineActiveBadge ${isStarted ? "is-active" : "is-idle"}"><i aria-hidden="true"></i>${isStarted ? t("mining_status_active") : t("mining_status_idle")}</span></header>
+    <header class="mineHeader"><div class="mineEmblem"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><span aria-hidden="true">⛏</span></div><div class="mineHeading"><span class="mineEyebrow">GRAMUP MINER</span><h1 class="mineTitle">${t("mining_title")}</h1><p class="mineSubtitle">${t("mining_subtitle")}</p></div><span class="mineActiveBadge ${isStarted ? "is-active" : "is-idle"}"><i aria-hidden="true"></i>${isStarted ? t("mining_status_active") : t("mining_status_idle")}</span></header>
     <section class="mineSessionCard">
-      <div class="mineBalanceLine"><span>${t("mining_accumulated")}</span><span class="mineLiveAmount"><strong data-mine-earned>${formatNumber(live.points, 1)}</strong><span>UP</span><img src="img/gramup-official-logo.jpg" alt="" aria-hidden="true"></span></div>
+      <div class="mineBalanceLine"><span>${t("mining_accumulated")}</span><span class="mineLiveAmount"><strong data-mine-earned>${formatNumber(live.points, 1)}</strong><span>UP</span><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span></div>
       <div class="mineProgressMeta"><span>${t("mining_progress")}</span><strong data-mine-progress-label>${progress.toFixed(1)}%</strong></div>
       <div class="mineProgressTrack" role="progressbar" aria-label="${escapeHTML(t("mining_progress"))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.toFixed(1)}"><span class="mineProgressFill" data-mine-progress style="width:${progress.toFixed(2)}%"></span></div>
       <div class="mineTimerRow"><span>${t("mining_ready_in")}</span><strong data-mine-countdown>${isStarted ? formatMiningDuration(live.remainingSeconds) : t("mining_timer_unstarted")}</strong></div>

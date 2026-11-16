@@ -8,12 +8,12 @@
       return '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 23c13-13 35-13 48 0L44 35c-7-7-17-7-24 0L8 23Z"/><path d="m25 39 26 24M17 47l-8 8"/></svg>';
     }
     if (prizeId === 'gram_005') {
-      return '<img src="/img/gramup-official-logo.jpg" alt="GRAM" aria-hidden="true">';
+      return '<img src="/img/gramup-logo-cube-transparent.png" alt="Gramup" aria-hidden="true">';
     }
     if (prizeId === 'try_again' || Number(amount) <= 0) {
       return '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M52 22V9L41 20M12 31a21 21 0 0 1 36-13l4 4M12 42v13l11-11m29-1a21 21 0 0 1-36 13l-4-4"/></svg>';
     }
-    return '<img src="/img/gramup-official-logo.jpg" alt="" aria-hidden="true">';
+    return '<img src="/img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
   }
 
   function fireConfetti() {
