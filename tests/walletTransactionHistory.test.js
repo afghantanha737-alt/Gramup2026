@@ -12,7 +12,7 @@ assert.match(app, /history_time_hours_ago/);
 assert.match(app, /return formatExactDateTime\(dateString\)/);
 assert.match(app, /const WALLET_HISTORY_FALLBACKS/);
 assert.match(app, /function walletHistoryText\(key, vars = \{\}\)/);
-assert.match(app, /translated !== unavailable/);
+assert.match(app, /translation unavailable\|ترجمهٔ\? این متن در دسترس نیست\|ژباړه شتون نه لري/);
 assert.match(app, /onclick="openHistory\(\)"[\s\S]*?wallet_view_all_button/);
 assert.match(app, /transactionTimeLabel\(item\.createdAt\)/);
 assert.match(app, /transactionTimeLabel\(item\.date\)/);

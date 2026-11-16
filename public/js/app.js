@@ -486,9 +486,12 @@ const WALLET_HISTORY_FALLBACKS = {
 function walletHistoryText(key, vars = {}) {
   const translated = t(key, vars);
   const unavailable = t("translation_unavailable");
-  if (translated !== unavailable) return translated;
   let fallback = WALLET_HISTORY_FALLBACKS[state.language]?.[key] || WALLET_HISTORY_FALLBACKS.fa[key] || key;
   Object.keys(vars).forEach(name => { fallback = fallback.replaceAll(`{${name}}`, vars[name]); });
+  const isUnavailable = !translated
+    || translated === unavailable
+    || /translation unavailable|ترجمهٔ? این متن در دسترس نیست|ژباړه شتون نه لري/i.test(String(translated));
+  if (!isUnavailable) return translated;
   return fallback;
 }
 function transactionTimeLabel(dateString) {
