@@ -2873,12 +2873,12 @@ function renderWallet() {
       </div>
     </div>
 
-    <div class="card" id="publicHistoryCard">
-      <div class="cardHeader">
-        <div class="cardTitle">${t("wallet_public_history_title")}</div>
+    <div class="card payoutBoardCard" id="publicHistoryCard">
+      <div class="payoutBoardHeader">
+        <div><h2 class="payoutBoardTitle">${t("wallet_public_history_board_title")}</h2><p class="payoutBoardDesc">${t("wallet_public_history_board_desc")}</p></div>
+        <span class="payoutBoardLive"><i aria-hidden="true"></i>${t("wallet_public_history_live")}</span>
       </div>
-      <p class="cardSubtitle" style="margin-bottom:10px">${t("wallet_public_history_desc")}</p>
-      <div id="publicHistoryList">
+      <div class="payoutBoardList" id="publicHistoryList">
         <div class="loading" style="height:60px"></div>
       </div>
       <button type="button" class="secondaryBtn" style="width:100%;margin-top:12px" onclick="openProofPage()">${t("wallet_proof_button")}</button>
