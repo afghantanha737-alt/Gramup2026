@@ -1449,14 +1449,23 @@ router.get('/history', auth, async (req, res) => {
 
 /**
  * GET /api/points/public-history — فید عمومیِ پرداخت‌های واقعاً انجام‌شده (وضعیت paid)،
- * برای شفافیت و اعتمادسازی. عمداً بدون اطلاعات هویتی کاربر (نه نام، نه یوزرنیم)؛
- * فقط آدرس‌ها (کوتاه‌شده)، مبلغ، هش تراکنش و تاریخ. نیازی به لاگین ندارد.
+ * برای شفافیت و اعتمادسازی. نام کاربر فقط به‌صورت ماسک‌شده و محدود برگردانده می‌شود؛
+ * آدرس‌ها کوتاه‌شده‌اند و endpoint نیازی به لاگین ندارد.
  */
+function maskPublicPayoutName(user) {
+  const source = String(user?.firstName || user?.username || '').trim();
+  if (!source) return 'User***';
+  const visible = Array.from(source).slice(0, 3).join('');
+  return `${visible}***`;
+}
+
 router.get('/public-history', async (req, res) => {
   const [list, totals] = await Promise.all([
     Withdrawal.find({ status: 'paid' })
       .sort({ paidAt: -1 })
-      .select('cryptoAmount token network address fromAddress txHash verified paidAt'),
+      .limit(5)
+      .select('cryptoAmount token network address fromAddress txHash verified paidAt user')
+      .populate('user', 'firstName username'),
     Withdrawal.aggregate([
       { $match: { status: 'paid' } },
       {
@@ -1478,6 +1487,8 @@ router.get('/public-history', async (req, res) => {
       amount: w.cryptoAmount,
       token: w.token,
       network: w.network,
+      userName: maskPublicPayoutName(w.user),
+      status: 'paid',
       // فقط آدرس کوتاه‌شده به بیرون داده می‌شود (مطابق سیاست حریم خصوصی)؛ آدرس کامل کیف‌پول کاربر عمومی نمی‌شود
       toAddress: truncateAddress(w.address),
       fromAddress: truncateAddress(w.fromAddress),

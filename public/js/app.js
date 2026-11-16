@@ -454,6 +454,15 @@ function timeAgo(dateString) {
   const days = Math.floor(hours / 24);
   return `${formatPoints(days)}d`;
 }
+function formatExactDateTime(dateString) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "—";
+  const locale = state.language === "en" ? "en-US" : state.language === "ps" ? "ps-AF" : "fa-IR";
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit"
+  }).format(date);
+}
 function pad2(n) { return String(n).padStart(2, "0"); }
 
 /* ================= API ================= */
@@ -2919,19 +2928,23 @@ function renderWallet() {
       list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("wallet_public_history_empty")}</div></div>`;
       return;
     }
-    list.innerHTML = publicHistory.map(item => `
-      <div class="publicTxCard">
-        <div class="publicTxTop">
-          <span class="publicTxAmount">${formatNumber(item.amount, 6)} ${escapeHTML(item.token)}</span>
-          <span class="publicTxStatus">${item.verified ? "✅" : "⚠️"} ${t("history_status_completed")}</span>
-        </div>
-        <div class="publicTxRow"><span>${t("history_to_label")}</span><span>${escapeHTML(truncateMiddle(item.toAddress))}</span></div>
-        ${item.fromAddress ? `<div class="publicTxRow"><span>${t("history_from_label")}</span><span>${escapeHTML(truncateMiddle(item.fromAddress))}</span></div>` : ""}
-        ${item.txHash ? `<div class="publicTxRow"><span>${t("history_txid_label")}</span><span>${escapeHTML(truncateMiddle(item.txHash))}</span></div>` : ""}
-        <div class="publicTxRow"><span>${t("history_date_label")}</span><span style="font-family:inherit">${timeAgo(item.date)}</span></div>
-        ${item.txHash ? `<a class="explorerLink" href="#" onclick="openTaskLinkOnly('https://tonviewer.com/transaction/${encodeURIComponent(item.txHash)}');return false;">🔗 ${t("history_view_explorer")}</a>` : ""}
-      </div>
-    `).join("");
+    list.innerHTML = publicHistory.map(item => {
+      const explorer = item.txHash
+        ? `<a class="publicTxExplorer" href="https://tonviewer.com/transaction/${encodeURIComponent(item.txHash)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHTML(t("history_view_explorer"))}" title="${escapeHTML(t("history_view_explorer"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>`
+        : `<span class="publicTxExplorer is-unavailable" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></span>`;
+      return `
+        <article class="publicTxCard">
+          <div class="publicTxHeader">
+            <div class="publicTxUser"><span class="publicTxAvatar" aria-hidden="true">${escapeHTML(String(item.userName || "User***").charAt(0).toUpperCase())}</span><strong>${escapeHTML(item.userName || "User***")}</strong></div>
+            <span class="publicTxStatus">${item.status === "paid" ? "✓" : "•"} ${t("history_status_completed")}</span>
+          </div>
+          <div class="publicTxDetails">
+            <div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>
+            <time class="publicTxDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDateTime(item.date))}</time>
+            ${explorer}
+          </div>
+        </article>`;
+    }).join("");
   });
 }
 

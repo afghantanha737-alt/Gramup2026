@@ -2905,3 +2905,40 @@ html[data-theme="light"] #content .vipMiningConsole--focused .vipMiningClaim:dis
 html[data-theme="silver"] #content .vipMiningConsole--focused .vipMiningClaim:disabled { color: #64748b; background: linear-gradient(145deg, #f8fafc, #e2e8f0); }
 @media (max-width: 380px) { #content .vipMiningConsole--focused { padding-inline: 3px; } #content .vipMiningRing { width: min(78vw, 252px); } #content .vipMiningBalance strong { font-size: 43px; } #content .vipMiningEarned strong { font-size: 34px; } #content .vipMiningClaim span { font-size: 14px; } }
 @media (prefers-reduced-motion: reduce) { #content .vipMiningOrb, #content .vipMiningCoreStatus i { animation: none; } }
+
+/* Compact public payout cards: masked identity, exact time, token mark and explorer action. */
+.publicTxCard {
+  padding: 11px 12px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(79, 140, 255, .16);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(79, 140, 255, .08), rgba(0, 210, 255, .035));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .12);
+}
+.publicTxCard:last-child { margin-bottom: 0; }
+.publicTxHeader, .proofCardTop { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.publicTxUser, .proofUser { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); }
+.publicTxUser strong, .proofUser strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.publicTxAvatar, .proofAvatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 27px; height: 27px; flex: 0 0 27px; border-radius: 50%;
+  color: #fff; background: linear-gradient(135deg, #00d2ff, #4f8cff); font-size: 11px; font-weight: 800;
+}
+.publicTxStatus, .proofBadgeOk { padding: 4px 8px; border-radius: 999px; color: #059669; background: rgba(16, 185, 129, .13); font-size: 10px; font-weight: 800; white-space: nowrap; }
+.publicTxDetails, .proofCardDetails { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; margin-top: 9px; }
+.publicTxAmount, .proofAmount { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: var(--text); direction: ltr; }
+.publicTxAmount img, .proofAmount img { width: 21px; height: 21px; object-fit: contain; flex: 0 0 21px; }
+.publicTxAmount strong, .proofAmount strong { font-size: 15px; font-weight: 850; letter-spacing: -.2px; }
+.publicTxAmount span, .proofAmount span { color: var(--text-muted); font-size: 10px; font-weight: 800; }
+.publicTxDate, .proofDate { color: var(--text-muted); direction: ltr; font-size: 10px; line-height: 1.35; text-align: end; white-space: nowrap; }
+.publicTxExplorer, .proofExplorerIcon { display: inline-flex; align-items: center; justify-content: center; width: 29px; height: 29px; border-radius: 9px; color: #4f8cff; background: rgba(79, 140, 255, .12); }
+.publicTxExplorer svg, .proofExplorerIcon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.publicTxExplorer.is-unavailable, .proofExplorerIcon.is-unavailable { opacity: .35; }
+.proofCardDetails { margin-top: 9px; }
+.proofCardDetails .proofAmount { justify-self: start; }
+html[data-theme="dark"] .publicTxStatus, html[data-theme="dark"] .proofBadgeOk { color: #6ee7b7; }
+@media (max-width: 390px) {
+  .publicTxDetails, .proofCardDetails { gap: 6px; }
+  .publicTxDate, .proofDate { font-size: 9px; }
+  .publicTxAmount strong, .proofAmount strong { font-size: 13px; }
+}

@@ -14,12 +14,17 @@ const routeEnd = pointsRoute.indexOf('\n});', routeStart);
 const publicHistoryRoute = pointsRoute.slice(routeStart, routeEnd);
 
 assert.match(publicHistoryRoute, /Withdrawal\.find\(\{ status: 'paid' \}\)/);
-assert.doesNotMatch(publicHistoryRoute, /\.limit\s*\(/, 'public payout history must not be capped');
+assert.match(publicHistoryRoute, /\.limit\(5\)/, 'public payout history is capped to five recent records');
+assert.match(publicHistoryRoute, /\.populate\('user', 'firstName username'\)/, 'public payout cards use limited user fields');
+assert.match(publicHistoryRoute, /maskPublicPayoutName/);
 assert.match(publicHistoryRoute, /Withdrawal\.aggregate\(/, 'all-time totals are calculated by MongoDB');
 assert.match(publicHistoryRoute, /total: \{ \$sum: \{ \$ifNull: \['\$cryptoAmount', 0\] \} \}/);
 assert.match(publicHistoryRoute, /totalByToken/);
 assert.match(proofPage, /data\.totalByToken/);
 assert.match(proofPage, /history\.map\(item =>/);
-assert.match(proofPage, /All completed payments/);
+assert.match(proofPage, /5 most recent payments/);
+assert.match(proofPage, /proofUser/);
+assert.match(proofPage, /formatExactDate/);
+assert.match(proofPage, /gram-logo\.svg/);
 
-console.log('PASS — public payouts list all paid withdrawals and reports all-time totals by token');
+console.log('PASS — public payouts show five masked, compact recent cards and report all-time totals by token');

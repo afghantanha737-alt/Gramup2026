@@ -59,7 +59,7 @@
       <div class="proofStat"><div class="proofStatValue proofSkeleton" id="statVerified">—</div><div class="proofStatLabel" data-i18n="statVerified">On-chain verified</div></div>
     </div>
 
-    <h2 class="proofListTitle" data-i18n="listTitle">Recent payments</h2>
+    <h2 class="proofListTitle" data-i18n="listTitle">5 most recent payments</h2>
     <div id="proofList">
       <div class="proofEmpty" data-i18n="loading">Loading…</div>
     </div>
@@ -80,12 +80,12 @@ const I18N = {
     channelBannerTitle: "Official Payout Channel",
     channelBannerDesc: "All real user withdrawals and TON transaction proofs are posted live in our verified channel.",
     channelBtn: "Join @GramUpPayouts ↗",
-    statTotal: "Total in records", statCount: "Records shown", statVerified: "With transaction hash",
-    listTitle: "All completed payments", loading: "Loading…", cta: "Open Gramup",
-    note: "Full wallet addresses are withheld to protect users' privacy. When a transaction hash is available, it links directly to a public TON explorer for independent review.",
+    statTotal: "Total in records", statCount: "Recent payments", statVerified: "With transaction hash",
+    listTitle: "5 most recent payments", loading: "Loading…", cta: "Open Gramup",
+    note: "Full wallet addresses and transaction hashes are withheld to protect users' privacy. When a transaction is available, the Tonviewer icon links directly to it for independent review.",
     empty: "No completed payment records yet. Records will appear here after a payment is completed and recorded.",
-    to: "To", from: "From", txid: "Tx hash", view: "View on Tonviewer ↗",
-    verified: "Transaction hash available", pending: "Payment record — hash unavailable",
+    to: "To", from: "From", txid: "Tx hash", view: "View on Tonviewer",
+    verified: "Transaction hash available", pending: "Payment record — hash unavailable", statusPaid: "Completed",
     langBtn: "فارسی"
   },
   fa: {
@@ -94,12 +94,12 @@ const I18N = {
     channelBannerTitle: "کانال رسمی پرداخت‌ها",
     channelBannerDesc: "تمام برداشت‌های کاربران و لینک‌های تراکنش بلاک‌چین TON در کانال عمومی منتشر می‌شوند.",
     channelBtn: "عضویت در @GramUpPayouts ↗",
-    statTotal: "مجموع ثبت‌شده", statCount: "سوابق نمایش‌داده‌شده", statVerified: "دارای هش تراکنش",
-    listTitle: "همه پرداخت‌های تکمیل‌شده", loading: "در حال بارگذاری...", cta: "باز کردن Gramup",
-    note: "آدرس کامل کیف‌پول‌ها برای حفظ حریم خصوصی نمایش داده نمی‌شود. وقتی هش تراکنش در دسترس باشد، لینک مستقیم explorer برای بررسی عمومی نشان داده می‌شود.",
+    statTotal: "مجموع ثبت‌شده", statCount: "۵ پرداخت اخیر", statVerified: "دارای هش تراکنش",
+    listTitle: "۵ پرداخت اخیر", loading: "در حال بارگذاری...", cta: "باز کردن Gramup",
+    note: "آدرس کامل کیف‌پول‌ها و هش تراکنش‌ها برای حفظ حریم خصوصی نمایش داده نمی‌شود. در صورت وجود تراکنش، آیکون Tonviewer برای بررسی عمومی به آن لینک می‌دهد.",
     empty: "هنوز سابقه پرداخت تکمیل‌شده‌ای وجود ندارد. پس از تکمیل و ثبت پرداخت، سابقه در اینجا نمایش داده می‌شود.",
-    to: "به آدرس", from: "از آدرس", txid: "هش تراکنش", view: "مشاهده در Tonviewer ↗",
-    verified: "هش تراکنش موجود است", pending: "رکورد پرداخت — هش موجود نیست",
+    to: "به آدرس", from: "از آدرس", txid: "هش تراکنش", view: "مشاهده در Tonviewer",
+    verified: "هش تراکنش موجود است", pending: "رکورد پرداخت — هش موجود نیست", statusPaid: "تکمیل‌شده",
     langBtn: "English"
   }
 };
@@ -133,6 +133,15 @@ function formatAmount(amount, token) {
   return `${text} ${escapeHTML(token || "")}`;
 }
 
+function formatExactDate(dateStr) {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat(lang === "fa" ? "fa-IR" : "en-US", {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit"
+  }).format(date);
+}
+
 function timeAgo(dateStr) {
   const dict = I18N[lang];
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -164,22 +173,20 @@ function renderList(history) {
   }
 
   list.innerHTML = history.map(item => {
-    const badge = item.txHash
-      ? `<span class="proofBadgeOk">✓ ${escapeHTML(dict.verified)}</span>`
-      : `<span class="proofBadgeWarn">${escapeHTML(dict.pending)}</span>`;
     const explorerLink = item.txHash
-      ? `<a class="proofExplorerLink" href="${explorerUrl(item.txHash)}" target="_blank" rel="noopener">🔗 ${escapeHTML(dict.view)}</a>`
-      : "";
+      ? `<a class="proofExplorerIcon" href="${explorerUrl(item.txHash)}" target="_blank" rel="noopener" aria-label="${escapeHTML(dict.view)}" title="${escapeHTML(dict.view)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>`
+      : `<span class="proofExplorerIcon is-unavailable" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></span>`;
     return `
       <div class="proofCard">
         <div class="proofCardTop">
-          <span class="proofAmount">${formatAmount(item.amount, item.token)} <span class="proofTimeAgo">· ${escapeHTML(timeAgo(item.date))}</span></span>
-          ${badge}
+          <div class="proofUser"><span class="proofAvatar" aria-hidden="true">${escapeHTML(String(item.userName || "User***").charAt(0).toUpperCase())}</span><strong>${escapeHTML(item.userName || "User***")}</strong></div>
+          <span class="proofBadgeOk">✓ ${escapeHTML(dict.statusPaid)}</span>
         </div>
-        <div class="proofRow"><span>${escapeHTML(dict.to)}</span><span>${escapeHTML(item.toAddress || "—")}</span></div>
-        ${item.fromAddress ? `<div class="proofRow"><span>${escapeHTML(dict.from)}</span><span>${escapeHTML(item.fromAddress)}</span></div>` : ""}
-        ${item.txHash ? `<div class="proofRow"><span>${escapeHTML(dict.txid)}</span><span>${escapeHTML(item.txHash.slice(0, 10))}…${escapeHTML(item.txHash.slice(-8))}</span></div>` : ""}
-        ${explorerLink}
+        <div class="proofCardDetails">
+          <div class="proofAmount"><img src="img/gram-logo.svg" alt="GRAM" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>
+          <time class="proofDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDate(item.date))}</time>
+          ${explorerLink}
+        </div>
       </div>`;
   }).join("");
 }
