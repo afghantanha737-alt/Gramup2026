@@ -3170,9 +3170,8 @@ function openHistory() {
 }
 window.openHistory = openHistory;
 
-async function openPublicPayments() {
-  await navigate("wallet");
-  document.getElementById("publicHistoryCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+function openPublicPayments() {
+  window.location.assign(`${location.origin}/proof.html`);
 }
 window.openPublicPayments = openPublicPayments;
 

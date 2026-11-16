@@ -15,7 +15,7 @@ assert.match(app, /const WALLET_HISTORY_FALLBACKS/);
 assert.match(app, /function walletHistoryText\(key, vars = \{\}\)/);
 assert.match(app, /translation unavailable\|ترجمهٔ\? این متن در دسترس نیست\|ژباړه شتون نه لري/);
 assert.match(app, /onclick="openPublicPayments\(\)"[\s\S]*?wallet_view_all_button/);
-assert.match(app, /async function openPublicPayments\(\)/);
+assert.match(app, /function openPublicPayments\(\)[\s\S]*?location\.origin\}\/proof\.html/);
 assert.match(app, /transactionTimeLabel\(item\.createdAt\)/);
 assert.match(app, /transactionTimeLabel\(item\.date\)/);
 const privateHistoryRoute = points.slice(points.indexOf("router.get('/withdrawals'"), points.indexOf("// Native GRAM deposits", points.indexOf("router.get('/withdrawals'")));
