@@ -3,6 +3,7 @@
 const LEGACY_VIP_POLICY_VERSION = 'legacy_v1';
 const NEW_VIP_POLICY_VERSION = 'v2_100d';
 const VIP0_POLICY_VERSION = 'vip0_free_v1';
+const FREE_VIP0_DAILY_RATE_POINTS = 20;
 const NEW_VIP_DURATION_DAYS = 100;
 const NEW_VIP_GROUPS = Object.freeze({
   start: Object.freeze({ minPlan: 1, maxPlan: 3, rewardDailyBps: 10, principalDailyBps: 100 }),
@@ -67,6 +68,7 @@ module.exports = {
   LEGACY_VIP_POLICY_VERSION,
   NEW_VIP_POLICY_VERSION,
   VIP0_POLICY_VERSION,
+  FREE_VIP0_DAILY_RATE_POINTS,
   NEW_VIP_DURATION_DAYS,
   NEW_VIP_GROUPS,
   groupForPlan,

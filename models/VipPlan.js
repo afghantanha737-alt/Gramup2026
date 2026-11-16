@@ -1,7 +1,7 @@
 'use strict';
 
 const mongoose = require('mongoose');
-const { VIP0_POLICY_VERSION, NEW_VIP_POLICY_VERSION, periodRewardPercentForPlan } = require('../utils/vipPolicy');
+const { VIP0_POLICY_VERSION, FREE_VIP0_DAILY_RATE_POINTS, NEW_VIP_POLICY_VERSION, periodRewardPercentForPlan } = require('../utils/vipPolicy');
 const { pricePointsForVipPlan } = require('../utils/vipPricing');
 
 const vipPlanSchema = new mongoose.Schema({
@@ -21,7 +21,7 @@ const vipPlanSchema = new mongoose.Schema({
 vipPlanSchema.index({ enabled: 1, comingSoon: 1, planNumber: 1 });
 
 const DEFAULT_VIP_PLANS = [
-  { planNumber: 0, pricePoints: 0, monthlyRewardPercent: 0, durationDays: 100, policyVersion: VIP0_POLICY_VERSION, productGroup: 'free', dailyMiningRatePoints: 10, enabled: true, comingSoon: false },
+  { planNumber: 0, pricePoints: 0, monthlyRewardPercent: 0, durationDays: 100, policyVersion: VIP0_POLICY_VERSION, productGroup: 'free', dailyMiningRatePoints: FREE_VIP0_DAILY_RATE_POINTS, enabled: true, comingSoon: false },
   { planNumber: 1, pricePoints: pricePointsForVipPlan(1), monthlyRewardPercent: 10, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
   { planNumber: 2, pricePoints: pricePointsForVipPlan(2), monthlyRewardPercent: 10, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
   { planNumber: 3, pricePoints: pricePointsForVipPlan(3), monthlyRewardPercent: 10, durationDays: 100, policyVersion: 'v2_100d', productGroup: 'start', principalDailyBps: 100, rewardDailyBps: 10, enabled: true, comingSoon: false },
@@ -47,8 +47,13 @@ vipPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
         upsert: true
       }
     })), { ordered: true, session });
-    // VIP 0's duration and daily rate are admin-managed settings. Only seed it
-    // on insert; unlike paid-plan policy constants, never reset it at startup.
+    // VIP 0's duration is admin-managed. Its daily rate is a published system
+    // policy and is reconciled so existing catalog data also uses 20 UP/day.
+    await this.updateOne(
+      { planNumber: 0, policyVersion: VIP0_POLICY_VERSION },
+      { $set: { dailyMiningRatePoints: FREE_VIP0_DAILY_RATE_POINTS } },
+      { session }
+    );
     await this.bulkWrite(DEFAULT_VIP_PLANS.filter(plan => plan.planNumber >= 1).map(plan => {
       const { planNumber, pricePoints, monthlyRewardPercent, durationDays, policyVersion, productGroup, principalDailyBps, rewardDailyBps } = plan;
       return {

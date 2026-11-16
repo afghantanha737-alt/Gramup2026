@@ -7,6 +7,7 @@ const MICRO_UNITS_PER_POINT = 1000000;
 const MICRO_UNITS_PER_CENT = 10000;
 const ACTIVE_STATUSES = new Set(['active', 'completed']);
 const { getVipDisplayName } = require('./vipDisplayNames');
+const { VIP0_POLICY_VERSION, FREE_VIP0_DAILY_RATE_POINTS } = require('./vipPolicy');
 
 function finiteNonNegative(value) {
   const number = Number(value);
@@ -36,6 +37,7 @@ function isVipMiningEligible(subscription) {
 }
 
 function getVipMiningDailyRatePoints(subscription) {
+  if (String(subscription?.policyVersion || '') === VIP0_POLICY_VERSION) return FREE_VIP0_DAILY_RATE_POINTS;
   const pricePoints = finiteNonNegative(subscription?.pricePoints);
   const principalBps = finiteNonNegative(subscription?.principalDailyBps);
   const rewardBps = finiteNonNegative(subscription?.rewardDailyBps);
@@ -73,7 +75,11 @@ function calculateVipSubscriptionAccrual(subscription, now = new Date()) {
     ? Math.max(0, Math.floor((accrualNowMs - startMs) / 1000))
     : 0;
   const liabilityCents = Math.max(0, Number(subscription?.reserveLiabilityCents) || 0);
-  const totalRewardCents = Math.max(0, Number(subscription?.totalRewardCents) || 0);
+  const storedTotalRewardCents = Math.max(0, Number(subscription?.totalRewardCents) || 0);
+  const isFreeVip0 = String(subscription?.policyVersion || '') === VIP0_POLICY_VERSION;
+  const totalRewardCents = isFreeVip0
+    ? dailyRateCents * durationDays
+    : storedTotalRewardCents;
   let targetNumerator;
   let targetDenominator;
   let totalLiabilityMicros;

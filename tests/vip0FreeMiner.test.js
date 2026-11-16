@@ -25,9 +25,9 @@ const settlement = read('utils/vipSettlement.js');
 
 assert.equal(VIP0_POLICY_VERSION, 'vip0_free_v1');
 assert.match(planModel, /planNumber: 0, pricePoints: 0, monthlyRewardPercent: 0, durationDays: 100/);
-assert.match(planModel, /dailyMiningRatePoints: 10, enabled: true, comingSoon: false/);
+assert.match(planModel, /dailyMiningRatePoints: FREE_VIP0_DAILY_RATE_POINTS, enabled: true, comingSoon: false/);
 assert.match(planModel, /filter\(plan => plan\.planNumber >= 1\)/,
-  'startup reconciliation must not overwrite admin-managed VIP0 duration/rate settings');
+  'startup reconciliation must preserve VIP0 duration while applying the published daily rate');
 
 const plan = new VipPlan({
   planNumber: 0,
@@ -36,7 +36,7 @@ const plan = new VipPlan({
   durationDays: 100,
   policyVersion: VIP0_POLICY_VERSION,
   productGroup: 'free',
-  dailyMiningRatePoints: 10,
+  dailyMiningRatePoints: 20,
   enabled: true,
   comingSoon: false
 });
@@ -65,14 +65,14 @@ const subscriptionData = {
 };
 const subscription = new VipSubscription(subscriptionData);
 assert.equal(subscription.validateSync(), undefined, 'VIP0 subscription is valid with a zero price');
-assert.equal(getVipMiningDailyRatePoints(subscriptionData), 10);
+assert.equal(getVipMiningDailyRatePoints(subscriptionData), 20);
 const firstDay = calculateVipSubscriptionAccrual(subscriptionData, new Date(startAt.getTime() + 86_400_000));
-assert.equal(firstDay.earnedPoints, 10, 'VIP0 accrues 10 UP for the first full day');
+assert.equal(firstDay.earnedPoints, 20, 'VIP0 accrues 20 UP for the first full day');
 const liveMining = calculateVipMiningStatus([subscriptionData], new Date(startAt.getTime() + 86_400_000));
 assert.equal(liveMining.activeMinerCount, 1);
-assert.equal(liveMining.dailyRate, 10);
+assert.equal(liveMining.dailyRate, 20);
 const matured = calculateVipSubscriptionAccrual(subscriptionData, new Date(endAt.getTime() + 86_400_000));
-assert.equal(matured.earnedPoints, 1000, 'the full fixed liability remains claimable at maturity');
+assert.equal(matured.earnedPoints, 2000, 'the updated 20 UP/day liability remains claimable at maturity');
 
 assert.equal(User.schema.path('vip0Claimed').instance, 'Boolean');
 assert.equal(User.schema.path('vip0ClaimedAt').instance, 'Date');
@@ -140,4 +140,4 @@ assert.match(i18n, /vip0_activate: "Activate Free"/);
 assert.match(index, /i18n\.js\?v=miners_central_20261115_1/);
 assert.match(index, /app\.js\?v=miners_central_20261115_1/);
 
-console.log('PASS — VIP0 free miner has validated terms, atomic one-time claim protections, 10 UP/day accrual, localized UI/admin controls, and expiry handling');
+console.log('PASS — VIP0 free miner has validated terms, atomic one-time claim protections, 20 UP/day accrual, localized UI/admin controls, and expiry handling');
