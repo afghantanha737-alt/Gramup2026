@@ -2934,15 +2934,12 @@ function renderWallet() {
         : `<span class="publicTxExplorer is-unavailable" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></span>`;
       return `
         <article class="publicTxCard">
-          <div class="publicTxHeader">
+          <div class="publicTxIdentity">
             <div class="publicTxUser"><span class="publicTxAvatar" aria-hidden="true">${escapeHTML(String(item.userName || "User***").charAt(0).toUpperCase())}</span><strong>${escapeHTML(item.userName || "User***")}</strong></div>
-            <span class="publicTxStatus">${item.status === "paid" ? "✓" : "•"} ${t("history_status_completed")}</span>
+            <div class="publicTxMeta"><span class="publicTxStatus">${item.status === "paid" ? "✓" : "•"} ${t("history_status_completed")}</span><time class="publicTxDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDateTime(item.date))}</time></div>
           </div>
-          <div class="publicTxDetails">
-            <div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>
-            <time class="publicTxDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDateTime(item.date))}</time>
-            ${explorer}
-          </div>
+          <div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>
+          ${explorer}
         </article>`;
     }).join("");
   });

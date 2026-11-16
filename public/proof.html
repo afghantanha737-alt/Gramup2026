@@ -178,15 +178,12 @@ function renderList(history) {
       : `<span class="proofExplorerIcon is-unavailable" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></span>`;
     return `
       <div class="proofCard">
-        <div class="proofCardTop">
+        <div class="proofIdentity">
           <div class="proofUser"><span class="proofAvatar" aria-hidden="true">${escapeHTML(String(item.userName || "User***").charAt(0).toUpperCase())}</span><strong>${escapeHTML(item.userName || "User***")}</strong></div>
-          <span class="proofBadgeOk">✓ ${escapeHTML(dict.statusPaid)}</span>
+          <div class="proofMeta"><span class="proofBadgeOk">✓ ${escapeHTML(dict.statusPaid)}</span><time class="proofDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDate(item.date))}</time></div>
         </div>
-        <div class="proofCardDetails">
-          <div class="proofAmount"><img src="img/gram-logo.svg" alt="GRAM" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>
-          <time class="proofDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDate(item.date))}</time>
-          ${explorerLink}
-        </div>
+        <div class="proofAmount"><img src="img/gram-logo.svg" alt="GRAM" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>
+        ${explorerLink}
       </div>`;
   }).join("");
 }
