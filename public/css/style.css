@@ -2945,8 +2945,9 @@ html[data-theme="dark"] .publicTxStatus, html[data-theme="dark"] .proofBadgeOk {
 
 /* Dense one-row payout layout, matching the compact leaderboard pattern. */
 .publicTxCard, .proofCard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
+  direction: rtl;
+  justify-content: space-between;
   align-items: center;
   gap: 10px;
   min-height: 60px;
@@ -2954,12 +2955,13 @@ html[data-theme="dark"] .publicTxStatus, html[data-theme="dark"] .proofBadgeOk {
   margin-bottom: 5px;
   border-radius: 14px;
 }
-.publicTxIdentity, .proofIdentity { min-width: 0; text-align: end; }
+.publicTxIdentity, .proofIdentity { min-width: 0; flex: 1 1 auto; text-align: end; }
 .publicTxUser, .proofUser { justify-content: flex-end; }
 .publicTxUser strong, .proofUser strong { font-size: 12px; }
 .publicTxMeta, .proofMeta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; margin-top: 2px; }
 .publicTxStatus, .proofBadgeOk { padding: 0; background: transparent; font-size: 10px; font-weight: 700; }
-.publicTxDate, .proofDate { overflow: hidden; text-overflow: ellipsis; font-size: 9.5px; }
+.publicTxDate, .proofDate { overflow: hidden; text-overflow: ellipsis; font-size: 9.5px; direction: inherit; unicode-bidi: isolate; }
+.publicTxPayment, .proofPayment { display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px; flex: 0 0 auto; direction: ltr; margin-inline-start: auto; }
 .publicTxAmount, .proofAmount { gap: 4px; white-space: nowrap; }
 .publicTxAmount img, .proofAmount img { width: 20px; height: 20px; flex-basis: 20px; }
 .publicTxAmount strong, .proofAmount strong { font-size: 14px; }
@@ -2967,7 +2969,7 @@ html[data-theme="dark"] .publicTxStatus, html[data-theme="dark"] .proofBadgeOk {
 .publicTxExplorer, .proofExplorerIcon { width: 32px; height: 32px; border-radius: 10px; }
 .publicTxDetails, .proofCardDetails { display: contents; margin: 0; }
 @media (max-width: 390px) {
-  .publicTxCard, .proofCard { grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; min-height: 56px; padding: 8px; }
+  .publicTxCard, .proofCard { gap: 6px; min-height: 56px; padding: 8px; }
   .publicTxDate, .proofDate { max-width: 102px; font-size: 8.5px; }
   .publicTxAmount strong, .proofAmount strong { font-size: 12px; }
 }

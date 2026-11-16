@@ -180,10 +180,9 @@ function renderList(history) {
       <div class="proofCard">
         <div class="proofIdentity">
           <div class="proofUser"><span class="proofAvatar" aria-hidden="true">${escapeHTML(String(item.userName || "User***").charAt(0).toUpperCase())}</span><strong>${escapeHTML(item.userName || "User***")}</strong></div>
-          <div class="proofMeta"><span class="proofBadgeOk">✓ ${escapeHTML(dict.statusPaid)}</span><time class="proofDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDate(item.date))}</time></div>
+          <div class="proofMeta"><span class="proofBadgeOk">✓ ${escapeHTML(dict.statusPaid)}</span><time class="proofDate" dir="${lang === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDate(item.date))}</time></div>
         </div>
-        <div class="proofAmount"><img src="img/gramup-official-logo.jpg" alt="GRAM" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>
-        ${explorerLink}
+        <div class="proofPayment"><div class="proofAmount"><img src="img/gramup-official-logo.jpg" alt="GRAM" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorerLink}</div>
       </div>`;
   }).join("");
 }

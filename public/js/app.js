@@ -2984,10 +2984,9 @@ function renderWallet() {
         <article class="publicTxCard">
           <div class="publicTxIdentity">
             <div class="publicTxUser"><span class="publicTxAvatar" aria-hidden="true">${escapeHTML(String(item.userName || "User***").charAt(0).toUpperCase())}</span><strong>${escapeHTML(item.userName || "User***")}</strong></div>
-            <div class="publicTxMeta"><span class="publicTxStatus">${item.status === "paid" ? "✓" : "•"} ${t("history_status_completed")}</span><time class="publicTxDate" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time></div>
+            <div class="publicTxMeta"><span class="publicTxStatus">${item.status === "paid" ? "✓" : "•"} ${t("history_status_completed")}</span><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time></div>
           </div>
-          <div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>
-          ${explorer}
+          <div class="publicTxPayment"><div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorer}</div>
         </article>`;
     }).join("");
   });

@@ -38,6 +38,11 @@ assert.doesNotMatch(appJs, /payoutBoardCtaFrame/);
 assert.match(styleCss, /\.payoutBoardCta\s*\{/);
 assert.match(styleCss, /linear-gradient\(135deg, #a2f7ff/);
 assert.match(styleCss, /\.payoutBoardList \.publicTxCard/);
+assert.match(styleCss, /\.publicTxCard, \.proofCard \{[\s\S]*display: flex;[\s\S]*direction: rtl;[\s\S]*justify-content: space-between;/);
+assert.match(styleCss, /\.publicTxPayment, \.proofPayment/);
+assert.match(appJs, /class="publicTxPayment"/);
+assert.match(proofPage, /class="proofPayment"/);
+assert.match(appJs, /history_time_hours_ago: "\{n\} ساعت پیش"/);
 assert.doesNotMatch(styleCss, /payoutBoardCtaFrame|border: 5px solid #ff4052/);
 
 console.log('PASS — public payouts show all verified masked payments with compact layout and bright CTA actions');
