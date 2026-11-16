@@ -1463,7 +1463,6 @@ router.get('/public-history', async (req, res) => {
   const [list, totals] = await Promise.all([
     Withdrawal.find({ status: 'paid' })
       .sort({ paidAt: -1 })
-      .limit(5)
       .select('cryptoAmount token network address fromAddress txHash verified paidAt user')
       .populate('user', 'firstName username'),
     Withdrawal.aggregate([

@@ -16,7 +16,7 @@ const routeEnd = pointsRoute.indexOf('\n});', routeStart);
 const publicHistoryRoute = pointsRoute.slice(routeStart, routeEnd);
 
 assert.match(publicHistoryRoute, /Withdrawal\.find\(\{ status: 'paid' \}\)/);
-assert.match(publicHistoryRoute, /\.limit\(5\)/, 'public payout history is capped to five recent records');
+assert.doesNotMatch(publicHistoryRoute, /\.limit\(\s*5\s*\)/, 'public payout history must not be capped to five records');
 assert.match(publicHistoryRoute, /\.populate\('user', 'firstName username'\)/, 'public payout cards use limited user fields');
 assert.match(publicHistoryRoute, /maskPublicPayoutName/);
 assert.match(publicHistoryRoute, /Withdrawal\.aggregate\(/, 'all-time totals are calculated by MongoDB');
@@ -24,7 +24,7 @@ assert.match(publicHistoryRoute, /total: \{ \$sum: \{ \$ifNull: \['\$cryptoAmoun
 assert.match(publicHistoryRoute, /totalByToken/);
 assert.match(proofPage, /data\.totalByToken/);
 assert.match(proofPage, /history\.map\(item =>/);
-assert.match(proofPage, /5 most recent payments/);
+assert.match(proofPage, /All verified payments/);
 assert.match(proofPage, /proofUser/);
 assert.match(proofPage, /formatExactDate/);
 assert.match(proofPage, /gram-logo\.svg/);
@@ -37,4 +37,4 @@ assert.match(styleCss, /linear-gradient\(135deg, #a2f7ff/);
 assert.match(styleCss, /\.payoutBoardList \.publicTxCard/);
 assert.doesNotMatch(styleCss, /payoutBoardCtaFrame|border: 5px solid #ff4052/);
 
-console.log('PASS — public payouts show five masked cards with compact layout and bright CTA actions');
+console.log('PASS — public payouts show all verified masked payments with compact layout and bright CTA actions');
