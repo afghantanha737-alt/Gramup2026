@@ -2983,9 +2983,10 @@ function renderWallet() {
       return `
         <article class="publicTxCard">
           <div class="publicTxIdentity">
-            <div class="publicTxUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(t("history_received"))}</em></strong></div>
+            <div class="publicTxUser"><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(t("history_received"))}</em></strong></div>
             <div class="publicTxMeta" dir="ltr"><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time><span class="publicTxSeparator" aria-hidden="true">•</span><span class="publicTxStatus" dir="${state.language === "en" ? "ltr" : "rtl"}">${t("transaction_status_on_chain")}</span></div>
           </div>
+          <span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span>
           <div class="publicTxPayment"><div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorer}</div>
         </article>`;
     }).join("");
