@@ -3062,3 +3062,16 @@ html[data-theme="light"] .payoutBoardList .publicTxCard .publicTxUser strong { c
   .payoutBoardCta { grid-template-columns: 26px minmax(0, 1fr) 26px; min-height: 53px; gap: 5px; padding-inline: 8px; font-size: 10.5px; }
   .payoutBoardCtaLeading, .payoutBoardCtaTrailing { width: 21px; height: 21px; }
 }
+
+/* LTR payout cards: keep identity/status content inside the card on English screens. */
+.publicTxCard, .publicTxIdentity, .publicTxUser, .publicTxMeta { min-width: 0; }
+.publicTxIdentity { overflow: hidden; }
+.publicTxUser, .publicTxMeta { max-width: 100%; overflow: hidden; }
+.publicTxUser strong, .publicTxStatus, .publicTxDate { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.publicTxMeta { white-space: nowrap; }
+html[dir="ltr"] .publicTxIdentity { text-align: left; }
+html[dir="ltr"] .publicTxUser, html[dir="ltr"] .publicTxMeta { justify-content: flex-start; }
+
+html[dir="ltr"] .publicTxCard { direction: ltr; }
+html[dir="ltr"] .publicTxUser { justify-content: flex-start; }
+html[dir="ltr"] .publicTxPayment { direction: ltr; margin-inline-start: 0; margin-inline-end: auto; }

@@ -47,5 +47,9 @@ assert.match(appJs, /class="publicTxFlow"[\s\S]*history_received/);
 assert.match(appJs, /transaction_status_on_chain/);
 assert.match(proofPage, /class="publicTxFlow"[\s\S]*receivedPayout/);
 assert.doesNotMatch(styleCss, /payoutBoardCtaFrame|border: 5px solid #ff4052/);
+assert.match(styleCss, /html\[dir="ltr"\] \.publicTxIdentity/);
+assert.match(styleCss, /html\[dir="ltr"\] \.publicTxCard \{ direction: ltr; \}/);
+assert.match(styleCss, /html\[dir="ltr"\] \.publicTxPayment \{ direction: ltr;/);
+assert.match(styleCss, /text-overflow: ellipsis/);
 
 console.log('PASS — public payouts show all verified masked payments with compact layout and bright CTA actions');
