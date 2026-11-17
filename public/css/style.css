@@ -2945,10 +2945,9 @@ html[data-theme="dark"] .publicTxStatus, html[data-theme="dark"] .proofBadgeOk {
 
 /* Dense one-row payout layout, matching the compact leaderboard pattern. */
 .publicTxCard, .proofCard {
-  display: grid;
-  direction: ltr;
-  grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr);
-  grid-template-areas: "payment flow identity";
+  display: flex;
+  direction: rtl;
+  justify-content: space-between;
   align-items: center;
   gap: 10px;
   min-height: 60px;
@@ -2959,17 +2958,17 @@ html[data-theme="dark"] .publicTxStatus, html[data-theme="dark"] .proofBadgeOk {
   background: linear-gradient(120deg, rgba(34, 30, 67, .96), rgba(25, 23, 54, .98));
   box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
 }
-.publicTxIdentity, .proofIdentity { grid-area: identity; min-width: 0; text-align: end; direction: rtl; }
+.publicTxIdentity, .proofIdentity { min-width: 0; flex: 1 1 auto; text-align: end; }
 .publicTxUser, .proofUser { width: 100%; justify-content: flex-start; }
 .publicTxUser strong, .proofUser strong { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 850; }
 .publicTxUser strong em, .proofUser strong em { color: var(--text); font-style: normal; font-weight: 850; }
-.publicTxFlow { grid-area: flow; justify-self: center; display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 16px; color: #45e6ad; background: rgba(23, 111, 104, .42); }
+.publicTxFlow { display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; flex: 0 0 46px; border-radius: 16px; color: #45e6ad; background: rgba(23, 111, 104, .42); }
 .publicTxFlow svg { width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .publicTxMeta, .proofMeta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; margin-top: 2px; direction: ltr; }
 .publicTxSeparator { color: var(--text-muted); font-size: 10px; line-height: 1; }
 .publicTxStatus, .proofBadgeOk { padding: 0; background: transparent; color: #46e5ad; font-size: 10px; font-weight: 800; }
 .publicTxDate, .proofDate { overflow: hidden; text-overflow: ellipsis; font-size: 9.5px; direction: inherit; unicode-bidi: isolate; }
-.publicTxPayment, .proofPayment { grid-area: payment; display: inline-flex; align-items: center; justify-content: flex-start; gap: 12px; direction: rtl; }
+.publicTxPayment, .proofPayment { display: inline-flex; align-items: center; justify-content: flex-start; gap: 12px; flex: 0 0 auto; direction: rtl; margin-inline-start: auto; }
 .publicTxAmount, .proofAmount { gap: 4px; white-space: nowrap; }
 .publicTxAmount img, .proofAmount img { width: 20px; height: 20px; flex-basis: 20px; }
 .publicTxAmount strong, .proofAmount strong { font-size: 14px; }

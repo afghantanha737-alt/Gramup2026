@@ -184,10 +184,9 @@ function renderList(history) {
     return `
       <div class="proofCard">
         <div class="proofIdentity">
-          <div class="proofUser"><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(dict.receivedPayout)}</em></strong></div>
+          <div class="proofUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(dict.receivedPayout)}</em></strong></div>
           <div class="proofMeta" dir="ltr"><time class="proofDate" dir="${lang === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(timeAgo(item.date))}</time><span class="publicTxSeparator" aria-hidden="true">•</span><span class="proofBadgeOk" dir="${lang === "en" ? "ltr" : "rtl"}">${escapeHTML(dict.onChainConfirmed)}</span></div>
         </div>
-        <span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span>
         <div class="proofPayment"><div class="proofAmount"><img src="img/gramup-official-logo.jpg" alt="GRAM" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorerLink}</div>
       </div>`;
   }).join("");
