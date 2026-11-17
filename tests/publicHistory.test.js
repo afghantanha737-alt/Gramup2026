@@ -44,6 +44,7 @@ assert.match(appJs, /class="publicTxPayment"/);
 assert.match(proofPage, /class="proofPayment"/);
 assert.match(appJs, /history_time_hours_ago: "\{n\} ساعت پیش"/);
 assert.match(appJs, /class="publicTxFlow"[\s\S]*history_received/);
+assert.match(appJs, /transaction_status_on_chain/);
 assert.match(proofPage, /class="publicTxFlow"[\s\S]*receivedPayout/);
 assert.doesNotMatch(styleCss, /payoutBoardCtaFrame|border: 5px solid #ff4052/);
 
