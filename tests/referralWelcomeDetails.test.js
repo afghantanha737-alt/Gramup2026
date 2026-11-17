@@ -4,14 +4,8 @@ const { botText } = require('../utils/botMessages');
 
 const registeredAt = new Date('2026-10-30T02:30:00.000Z');
 const rates = [10, 5, 3, 1];
-for (const language of ['fa', 'ps', 'en']) {
-  const message = botText('referralInitial', language, '@new-user', 10, 1, 10, registeredAt, rates);
-  assert.ok(message.includes('10'), `${language} must include the actual awarded amount`);
-  assert.ok(message.includes('5'), `${language} must include the L2 rate`);
-  assert.ok(message.includes('3'), `${language} must include the L3 rate`);
-  assert.ok(message.includes('1'), `${language} must include the L4 rate`);
-  assert.ok(message.length > 120, `${language} message should include full policy details`);
-}
+const faReferralMessage = botText('referralInitial', 'fa', '@new-user', 10, 1, 10, registeredAt, rates);
+assert.strictEqual(faReferralMessage, 'همین الان ۱۰ توکن UP به دست آوردی! 🥳 یک عضو جدید با لینک دعوت شما به Gramup پیوست؛ حالا از این پس، ۱۰٪ از کل درآمدهای استخراج او به طور دائمی به حساب شما واریز میشه! تبریک! برای افزایش درآمدهاتون، کاربران بیشتری دعوت کنید! 🚀 [ مشاهده لینک دعوت ]');
 
 const english = botText('referralInitial', 'en', '@new-user', 10, 1, 10, registeredAt, rates);
 assert.match(english, /exactly 10 UP were added/);

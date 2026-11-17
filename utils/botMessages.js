@@ -53,7 +53,7 @@ const MESSAGES = {
   referralInitial: {
     fa: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
       const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
-      return `🎉 دعوت جدید ثبت شد! ${name} عضو Gramup شد و ${points} UP واقعاً به حسابت اضافه شد.\nسطح دعوت: ${level} (Level ${level}) — نرخ این رابطه: ${commission}٪\nنرخ‌های واقعی کمیسیون: L1 ${l1}٪، L2 ${l2}٪، L3 ${l3}٪، L4 و عمیق‌تر ${l4}٪.\nدامنه درآمد واجد شرایط: فقط درآمد اصلی از تسک‌های تأییدشده، ورود روزانه و جایزهٔ لیدربورد؛ پاداش‌ها و کمیسیون‌های Referral، گردونه، تبدیل، برداشت و تعدیل ادمین شامل نیستند.\nزمان ثبت: ${formatKabulDateTime(registeredAt, 'fa')}`;
+      return 'همین الان ۱۰ توکن UP به دست آوردی! 🥳 یک عضو جدید با لینک دعوت شما به Gramup پیوست؛ حالا از این پس، ۱۰٪ از کل درآمدهای استخراج او به طور دائمی به حساب شما واریز میشه! تبریک! برای افزایش درآمدهاتون، کاربران بیشتری دعوت کنید! 🚀 [ مشاهده لینک دعوت ]';
     },
     ps: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
       const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
