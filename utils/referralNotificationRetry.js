@@ -128,7 +128,8 @@ async function runReferralNotificationRetrySweep(options = {}) {
           type: row.type,
           user: row.user,
           telegramId: row.telegramId,
-          text: row.text
+          text: row.text,
+          replyMarkup: row.replyMarkup
         },
         {
           NotificationDelivery: Model,

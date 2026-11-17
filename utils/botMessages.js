@@ -53,15 +53,27 @@ const MESSAGES = {
   referralInitial: {
     fa: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
       const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
-      return 'همین الان ۱۰ توکن UP به دست آوردی! 🥳 یک عضو جدید با لینک دعوت شما به Gramup پیوست؛ حالا از این پس، ۱۰٪ از کل درآمدهای استخراج او به طور دائمی به حساب شما واریز میشه! تبریک! برای افزایش درآمدهاتون، کاربران بیشتری دعوت کنید! 🚀 [ مشاهده لینک دعوت ]';
+      return `🎉 تبریک! همین حالا ${points} UP پاداش دعوت دریافت کردی.
+
+یک عضو جدید، ${name}، با لینک دعوت شما به Gramup پیوست.
+از این پس ${commission}٪ از درآمدهای واجد شرایط استخراج او به‌صورت دائمی به حساب شما واریز می‌شود.
+
+برای افزایش درآمد، دوستان بیشتری را دعوت کنید! 🚀`;
     },
     ps: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
       const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
-      return `🎉 نوې بلنه ثبت شوه! ${name} د Gramup غړی شو او ${points} UP واقعاً ستاسو حساب ته زیات شول.\nد بلنې کچه: ${level} (Level ${level}) — د دې اړیکې نرخ: ${commission}٪\nد کمېسیون واقعي نرخونه: L1 ${l1}٪، L2 ${l2}٪، L3 ${l3}٪، L4 او ژورې کچې ${l4}٪.\nد وړ عاید ساحه: یوازې د تایید شویو دندو، ورځني ننوتلو او غوره‌لیست اصلي عاید؛ د بلنې انعامونه او کمېسیونونه، چرخ، بدلون، ایستل او د اډمین تعدیل نه شاملېږي.\nد ثبت وخت: ${formatKabulDateTime(registeredAt, 'ps')}`;
+      return `🎉 نوې بلنه ثبت شوه! تاسو ${points} UP د بلنې انعام ترلاسه کړ.
+
+نوی غړی، ${name}، ستاسو د بلنې له لارې Gramup ته راغی.
+له دې وروسته به تاسو د هغه د وړ کان‌کیندنې له عاید څخه تل ${commission}٪ ترلاسه کوئ.
+
+د کمېسیون نرخونه: L1 ${l1}٪، L2 ${l2}٪، L3 ${l3}٪ او L4+ ${l4}٪.
+
+د خپل عاید د زیاتولو لپاره نور ملګري راوبلئ! 🚀`;
     },
     en: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
       const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];
-      return `🎉 New invitation confirmed! ${name} joined Gramup and exactly ${points} UP were added to your account.\nReferral level: ${level} (Level ${level}) — this relationship's rate: ${commission}%\nEffective commission rates: L1 ${l1}%, L2 ${l2}%, L3 ${l3}%, L4 and deeper ${l4}%.\nEligible-income scope: only original earnings from approved tasks, daily check-ins, and leaderboard rewards; referral rewards/commissions, spins, conversions, withdrawals, and admin adjustments are excluded.\nRegistered: ${formatKabulDateTime(registeredAt, 'en')}`;
+      return `🎉 Congratulations! You just received ${points} UP as a referral reward.\n\nA new member, ${name}, joined Gramup through your referral link.\nFrom now on, you will permanently receive ${commission}% of their eligible mining income.\n\nEffective rates: L1 ${l1}%, L2 ${l2}%, L3 ${l3}%, and L4+ ${l4}%.\n\nInvite more friends to grow your income! 🚀`;
     },
     ar: (name, points, level = 1, commission = 10, registeredAt = new Date(), rates = [10, 5, 3, 1]) => {
       const [l1 = 10, l2 = 5, l3 = 3, l4 = 1] = Array.isArray(rates) ? rates : [];

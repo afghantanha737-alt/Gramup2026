@@ -12,6 +12,7 @@ const notificationDeliverySchema = new mongoose.Schema({
   sendingAt: { type: Date, default: null, index: true },
   sentAt: { type: Date, default: null },
   text: { type: String, default: '', maxlength: 4096 },
+  replyMarkup: { type: mongoose.Schema.Types.Mixed, default: null },
   nextAttemptAt: { type: Date, default: null, index: true },
   exhaustedAt: { type: Date, default: null },
   error: { type: String, default: '' }

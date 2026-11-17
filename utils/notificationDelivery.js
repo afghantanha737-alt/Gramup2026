@@ -33,7 +33,7 @@ function dueAt(now) {
  * business event. The unique eventKey makes concurrent callers converge on one
  * outbox row without changing an already-persisted message.
  */
-async function enqueuePendingNotification({ eventKey, type, user, telegramId, text, session }, dependencies = {}) {
+async function enqueuePendingNotification({ eventKey, type, user, telegramId, text, replyMarkup = null, session }, dependencies = {}) {
   if (!eventKey || !type || !user || !telegramId || !text) return { status: 'skipped' };
 
   const Model = dependencies.NotificationDelivery || dependencies.notificationDeliveryModel || NotificationDelivery;
@@ -44,6 +44,7 @@ async function enqueuePendingNotification({ eventKey, type, user, telegramId, te
       user,
       telegramId,
       text,
+      replyMarkup,
       status: 'pending',
       attempts: 0,
       sendingAt: null,
@@ -65,7 +66,7 @@ async function enqueuePendingNotification({ eventKey, type, user, telegramId, te
  * into claimable unknown rows with retryUnknown: true.
  */
 async function sendNotificationOnce(payload = {}, dependencies = {}) {
-  const { eventKey, type, user, telegramId, text } = payload;
+  const { eventKey, type, user, telegramId, text, replyMarkup = null } = payload;
   if (!eventKey || !type || !user || !telegramId || !text) return { status: 'skipped' };
 
   const Model = dependencies.NotificationDelivery || dependencies.notificationDeliveryModel || NotificationDelivery;
@@ -92,6 +93,7 @@ async function sendNotificationOnce(payload = {}, dependencies = {}) {
       user,
       telegramId,
       text,
+      replyMarkup,
       sendingAt: now,
       nextAttemptAt: null,
       error: ''
@@ -109,6 +111,7 @@ async function sendNotificationOnce(payload = {}, dependencies = {}) {
         user,
         telegramId,
         text,
+        replyMarkup,
         status: 'sending',
         attempts: 1,
         sendingAt: now,
@@ -124,7 +127,7 @@ async function sendNotificationOnce(payload = {}, dependencies = {}) {
   let delivered = false;
   let deliveryError = '';
   try {
-    delivered = await notifyUser(telegramId, text);
+    delivered = await notifyUser(telegramId, text, replyMarkup ? { reply_markup: replyMarkup } : {});
     if (!delivered) deliveryError = 'Telegram delivery did not confirm success.';
   } catch (error) {
     deliveryError = String(error?.message || error).slice(0, 500);

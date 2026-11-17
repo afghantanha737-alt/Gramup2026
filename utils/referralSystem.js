@@ -11,6 +11,7 @@ const {
   DEFAULT_REFERRAL_INITIAL_REWARD_POINTS,
   ELIGIBLE_ORIGINAL_EARN_TYPES,
   normalizeReferralRates,
+  createMiniAppReferralLink,
   referralIdentifierQuery,
   calculateReferralCommission,
   reviewStatusOf
@@ -337,6 +338,11 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
         commissionRatePercent: rates[0] || 10,
         referralLevelRates: rates.slice(0, 4),
         eligibleIncomeTypes: [...ELIGIBLE_ORIGINAL_EARN_TYPES],
+        replyMarkup: (() => {
+          const link = createMiniAppReferralLink(process.env.BOT_USERNAME, referrer.telegramId);
+          const language = String(referrer.language || 'fa');
+          return link ? { inline_keyboard: [[{ text: language === 'en' ? 'Invite friends' : language === 'ps' ? 'ملګري راوبلئ' : 'دعوت دوستان', url: link }]] } : null;
+        })(),
         registeredAt: new Date()
       } : null
     };
@@ -351,6 +357,7 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
           user: result.notification.user,
           telegramId: result.notification.telegramId,
           text: result.notification.text,
+          replyMarkup: result.notification.replyMarkup,
           session
         });
       }
@@ -369,7 +376,8 @@ async function linkReferral({ referredUserId, referrerId, riskScore = 0, riskFla
         type: notification.type,
         user: notification.user,
         telegramId: notification.telegramId,
-        text: notification.text
+        text: notification.text,
+        replyMarkup: notification.replyMarkup
       });
       referralDiagnostic('notification_delivery', {
         status: delivery?.status || 'unknown',
