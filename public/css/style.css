@@ -2964,7 +2964,8 @@ html[data-theme="dark"] .publicTxStatus, html[data-theme="dark"] .proofBadgeOk {
 .publicTxUser strong em, .proofUser strong em { color: var(--text); font-style: normal; font-weight: 850; }
 .publicTxFlow { display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; flex: 0 0 46px; border-radius: 16px; color: #45e6ad; background: rgba(23, 111, 104, .42); }
 .publicTxFlow svg { width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-.publicTxMeta, .proofMeta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; margin-top: 2px; }
+.publicTxMeta, .proofMeta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; margin-top: 2px; direction: ltr; }
+.publicTxSeparator { color: var(--text-muted); font-size: 10px; line-height: 1; }
 .publicTxStatus, .proofBadgeOk { padding: 0; background: transparent; color: #46e5ad; font-size: 10px; font-weight: 800; }
 .publicTxDate, .proofDate { overflow: hidden; text-overflow: ellipsis; font-size: 9.5px; direction: inherit; unicode-bidi: isolate; }
 .publicTxPayment, .proofPayment { display: inline-flex; align-items: center; justify-content: flex-start; gap: 12px; flex: 0 0 auto; direction: rtl; margin-inline-start: auto; }

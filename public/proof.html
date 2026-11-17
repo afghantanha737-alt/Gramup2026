@@ -85,7 +85,7 @@ const I18N = {
     note: "Full wallet addresses and transaction hashes are withheld to protect users' privacy. When a transaction is available, the Tonviewer icon links directly to it for independent review.",
     empty: "No completed payment records yet. Records will appear here after a payment is completed and recorded.",
     to: "To", from: "From", txid: "Tx hash", view: "View on Tonviewer",
-    verified: "Transaction hash available", pending: "Payment record — hash unavailable", statusPaid: "Completed", receivedPayout: "Received payout", minutesAgo: "{n} minute(s) ago", hoursAgo: "{n} hour(s) ago",
+    verified: "Transaction hash available", pending: "Payment record — hash unavailable", statusPaid: "Completed", onChainConfirmed: "Confirmed on-chain", receivedPayout: "Received payout", minutesAgo: "{n} minute(s) ago", hoursAgo: "{n} hour(s) ago",
     langBtn: "فارسی"
   },
   fa: {
@@ -99,7 +99,7 @@ const I18N = {
     note: "آدرس کامل کیف‌پول‌ها و هش تراکنش‌ها برای حفظ حریم خصوصی نمایش داده نمی‌شود. در صورت وجود تراکنش، آیکون Tonviewer برای بررسی عمومی به آن لینک می‌دهد.",
     empty: "هنوز سابقه پرداخت تکمیل‌شده‌ای وجود ندارد. پس از تکمیل و ثبت پرداخت، سابقه در اینجا نمایش داده می‌شود.",
     to: "به آدرس", from: "از آدرس", txid: "هش تراکنش", view: "مشاهده در Tonviewer",
-    verified: "هش تراکنش موجود است", pending: "رکورد پرداخت — هش موجود نیست", statusPaid: "تکمیل‌شده", receivedPayout: "حقوق گرفت", minutesAgo: "{n} دقیقه پیش", hoursAgo: "{n} ساعت پیش",
+    verified: "هش تراکنش موجود است", pending: "رکورد پرداخت — هش موجود نیست", statusPaid: "تکمیل‌شده", onChainConfirmed: "تأییدشده روی زنجیره", receivedPayout: "حقوق گرفت", minutesAgo: "{n} دقیقه پیش", hoursAgo: "{n} ساعت پیش",
     langBtn: "English"
   }
 };
@@ -185,7 +185,7 @@ function renderList(history) {
       <div class="proofCard">
         <div class="proofIdentity">
           <div class="proofUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(dict.receivedPayout)}</em></strong></div>
-          <div class="proofMeta"><span class="proofBadgeOk">✓ ${escapeHTML(dict.statusPaid)}</span><time class="proofDate" dir="${lang === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(formatExactDate(item.date))}</time></div>
+          <div class="proofMeta" dir="ltr"><time class="proofDate" dir="${lang === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(timeAgo(item.date))}</time><span class="publicTxSeparator" aria-hidden="true">•</span><span class="proofBadgeOk" dir="${lang === "en" ? "ltr" : "rtl"}">${escapeHTML(dict.onChainConfirmed)}</span></div>
         </div>
         <div class="proofPayment"><div class="proofAmount"><img src="img/gramup-official-logo.jpg" alt="GRAM" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorerLink}</div>
       </div>`;
