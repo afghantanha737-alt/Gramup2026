@@ -3063,15 +3063,37 @@ html[data-theme="light"] .payoutBoardList .publicTxCard .publicTxUser strong { c
   .payoutBoardCtaLeading, .payoutBoardCtaTrailing { width: 21px; height: 21px; }
 }
 
-/* LTR payout cards: keep identity/status content inside the card on English screens. */
-.publicTxCard, .publicTxIdentity, .publicTxUser, .publicTxMeta { min-width: 0; }
-.publicTxIdentity { overflow: hidden; }
-.publicTxUser, .publicTxMeta { max-width: 100%; overflow: hidden; }
-.publicTxUser strong, .publicTxStatus, .publicTxDate { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Stable payout rows: keep the payment group on the physical left and the
+   identity/status group on the physical right in every supported language. */
+.publicTxCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  direction: rtl;
+  align-items: center;
+}
+.publicTxIdentity {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-align: end;
+}
+.publicTxPayment {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: max-content;
+  margin: 0;
+  direction: rtl;
+}
+.publicTxUser, .publicTxMeta { min-width: 0; max-width: 100%; overflow: hidden; }
+.publicTxUser strong, .publicTxStatus, .publicTxDate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.publicTxUser strong { white-space: nowrap; }
 .publicTxMeta { white-space: nowrap; }
+html[dir="ltr"] .publicTxCard { direction: rtl; }
 html[dir="ltr"] .publicTxIdentity { text-align: left; }
-html[dir="ltr"] .publicTxUser, html[dir="ltr"] .publicTxMeta { justify-content: flex-start; }
-
-html[dir="ltr"] .publicTxCard { direction: ltr; }
-html[dir="ltr"] .publicTxUser { justify-content: flex-start; }
-html[dir="ltr"] .publicTxPayment { direction: ltr; margin-inline-start: 0; margin-inline-end: auto; }
+html[dir="ltr"] .publicTxMeta { justify-content: flex-start; }

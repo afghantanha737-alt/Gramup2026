@@ -465,19 +465,40 @@ function formatExactDateTime(dateString) {
 }
 const WALLET_HISTORY_FALLBACKS = {
   fa: {
+    wallet_public_history_board_title: "تابلوی پرداخت‌ها",
+    wallet_public_history_board_desc: "۵ برداشت اخیر کاربران که روی بلاک‌چین پرداخت شده‌اند. برای مشاهده در Tonviewer روی هر ردیف بزنید.",
+    wallet_public_history_live: "زنده",
+    wallet_public_history_empty: "هنوز پرداختی ثبت نشده است",
     wallet_view_all_button: "مشاهده صفحه عمومی پرداخت‌ها",
+    wallet_proof_channel_button: "کانال عمومی تأیید پرداخت‌ها",
+    history_received: "حقوق گرفت",
+    transaction_status_on_chain: "تأییدشده روی زنجیره",
     history_time_just_now: "همین حالا",
     history_time_minutes_ago: "{n} دقیقه پیش",
     history_time_hours_ago: "{n} ساعت پیش"
   },
   ps: {
+    wallet_public_history_board_title: "د تادیاتو تابلو",
+    wallet_public_history_board_desc: "د کاروونکو ۵ وروستي برداشتونه چې په بلاکچین کې تادیه شوي دي. د Tonviewer لیدلو لپاره پر هره کرښه کلیک وکړئ.",
+    wallet_public_history_live: "ژوندی",
+    wallet_public_history_empty: "تر اوسه هېڅ تادیه نشته.",
     wallet_view_all_button: "د عامه تادیاتو پاڼه وګورئ",
+    wallet_proof_channel_button: "د عامه تادیاتو د تایید کانال",
+    history_received: "حقونه ترلاسه کړل",
+    transaction_status_on_chain: "پر زنځیر تایید شوی",
     history_time_just_now: "همدا اوس",
     history_time_minutes_ago: "{n} دقیقې مخکې",
     history_time_hours_ago: "{n} ساعتونه مخکې"
   },
   en: {
+    wallet_public_history_board_title: "Payout Board",
+    wallet_public_history_board_desc: "The 5 latest user withdrawals paid on-chain. Tap any row to view it in Tonviewer.",
+    wallet_public_history_live: "Live",
+    wallet_public_history_empty: "No payments yet.",
     wallet_view_all_button: "View public payments page",
+    wallet_proof_channel_button: "Public payment confirmation channel",
+    history_received: "Received payout",
+    transaction_status_on_chain: "Confirmed on-chain",
     history_time_just_now: "Just now",
     history_time_minutes_ago: "{n} minute(s) ago",
     history_time_hours_ago: "{n} hour(s) ago"
@@ -2983,8 +3004,8 @@ function renderWallet() {
       return `
         <article class="publicTxCard">
           <div class="publicTxIdentity">
-            <div class="publicTxUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(t("history_received"))}</em></strong></div>
-            <div class="publicTxMeta" dir="ltr"><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time><span class="publicTxSeparator" aria-hidden="true">•</span><span class="publicTxStatus" dir="${state.language === "en" ? "ltr" : "rtl"}">${t("transaction_status_on_chain")}</span></div>
+            <div class="publicTxUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(walletHistoryText("history_received"))}</em></strong></div>
+            <div class="publicTxMeta" dir="ltr"><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time><span class="publicTxSeparator" aria-hidden="true">•</span><span class="publicTxStatus" dir="${state.language === "en" ? "ltr" : "rtl"}">${escapeHTML(walletHistoryText("transaction_status_on_chain"))}</span></div>
           </div>
           <div class="publicTxPayment"><div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorer}</div>
         </article>`;

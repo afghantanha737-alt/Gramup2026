@@ -19,7 +19,7 @@ assert.match(app, /gramTokenIconMarkup\(\)[\s\S]*gramup-official-logo\.jpg/);
 assert.ok(gramLogo.size > 0, 'official GRAM token logo asset must exist');
 assert.match(css, /\.gramTokenIcon/);
 assert.match(css, /\.upTokenIcon/);
-assert.match(index, /payout_board_20261116_10/);
+assert.match(index, /payout_board_20261117_2/);
 assert.ok(logo.size > 0, 'official logo asset must exist');
 
 console.log('PASS — native GRAM logo is used for GRAM balances and remains distinct from the Gramup UP logo');

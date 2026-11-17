@@ -45,11 +45,13 @@ assert.match(proofPage, /class="proofPayment"/);
 assert.match(appJs, /history_time_hours_ago: "\{n\} ساعت پیش"/);
 assert.match(appJs, /class="publicTxFlow"[\s\S]*history_received/);
 assert.match(appJs, /transaction_status_on_chain/);
+assert.match(appJs, /WALLET_HISTORY_FALLBACKS[\s\S]*transaction_status_on_chain/);
+assert.match(appJs, /walletHistoryText\("history_received"\)/);
+assert.match(appJs, /walletHistoryText\("transaction_status_on_chain"\)/);
 assert.match(proofPage, /class="publicTxFlow"[\s\S]*receivedPayout/);
 assert.doesNotMatch(styleCss, /payoutBoardCtaFrame|border: 5px solid #ff4052/);
+assert.match(styleCss, /\.publicTxCard \{[\s\S]*display: grid;[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto;[\s\S]*direction: rtl;/);
 assert.match(styleCss, /html\[dir="ltr"\] \.publicTxIdentity/);
-assert.match(styleCss, /html\[dir="ltr"\] \.publicTxCard \{ direction: ltr; \}/);
-assert.match(styleCss, /html\[dir="ltr"\] \.publicTxPayment \{ direction: ltr;/);
 assert.match(styleCss, /text-overflow: ellipsis/);
 
 console.log('PASS — public payouts show all verified masked payments with compact layout and bright CTA actions');
