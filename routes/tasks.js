@@ -103,7 +103,11 @@ async function maybeAwardReferralBonus(userId) {
 // GET /api/tasks
 router.get('/', auth, async (req, res) => {
   try {
-    const completions = await TaskCompletion.find({ user: req.dbUser._id });
+    const completions = await TaskCompletion.find({ user: req.dbUser._id })
+      .select('task reward status proofMimeType submittedAt reviewedAt createdAt recurringClaimCount lastCompletedAt nextAvailableAt')
+      .sort({ createdAt: -1 })
+      .limit(5000)
+      .lean();
     const pendingScreenshotTaskIds = completions
       .filter(item => item.status === 'pending' && ['image/jpeg', 'image/png', 'image/webp'].includes(item.proofMimeType))
       .map(item => item.task);
@@ -116,7 +120,8 @@ router.get('/', auth, async (req, res) => {
       ]
     })
       .select('-sponsorPriceUsd -sponsorBudgetUsd')
-      .sort({ isSpecialOfDay: -1, isSponsored: -1, createdAt: -1 });
+      .sort({ isSpecialOfDay: -1, isSponsored: -1, createdAt: -1 })
+      .limit(500);
     const latestPostTaskIds = tasks.filter(task => task.verifyType === 'latest_post').map(task => task._id);
     const latestPostStates = latestPostTaskIds.length
       ? await LatestPostEngagementState.find({ user: req.dbUser._id, task: { $in: latestPostTaskIds } })

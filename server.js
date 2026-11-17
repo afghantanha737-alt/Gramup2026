@@ -139,6 +139,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
    API ROUTES
 ========================================================= */
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/onboarding', require('./routes/onboarding'));
 app.use('/api/required-channels', require('./routes/membership'));
 app.use('/api/app-info', require('./routes/appInfo'));
 app.use('/api/tasks', require('./routes/tasks'));
@@ -146,6 +147,7 @@ app.use('/api/ad-orders', require('./routes/adOrders'));
 app.use('/api/ton-proof', require('./routes/tonProof'));
 app.use('/api/points', require('./routes/points'));
 app.use('/api/referral', require('./routes/referral'));
+app.use('/api/squads', require('./routes/squads'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/mining', require('./routes/mining'));
 app.use('/api/mobile-auth', require('./routes/mobileAuth'));
@@ -193,6 +195,9 @@ app.use('/api', (req, res) => {
    FRONTEND FALLBACK
 ========================================================= */
 app.get('*', (req, res) => {
+  // Missing assets must not receive the SPA HTML fallback. A successful HTML
+  // response for a typo in a JS/CSS/image URL masks deployment defects.
+  if (path.extname(req.path)) return res.status(404).json({ success: false, message: 'Asset not found' });
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

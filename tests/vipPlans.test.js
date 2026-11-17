@@ -69,6 +69,8 @@ const vipCatalogRoute = pointsRoute.slice(
 );
 
 assert.match(pointsRoute, /router\.get\('\/vip\/plans'/);
+assert.doesNotMatch(vipCatalogRoute, /settleMaturedVipSubscriptions/,
+  'reading the VIP catalog must never settle subscriptions or mutate balances');
 assert.match(pointsRoute, /VipSubscription\.find\(\{ user: req\.dbUser\._id \}\)\.sort\(\{ createdAt: -1 \}\)\.lean\(\)/, 'the plan API returns all historical subscriptions without a fixed cap');
 assert.doesNotMatch(vipCatalogRoute, /VipSubscription\.find\(\{ user: req\.dbUser\._id \}\)[\s\S]*\.limit\(/,
   'the user VIP catalog must not cap subscriptions before they reach the dashboard');

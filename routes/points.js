@@ -28,7 +28,6 @@ const {
   calculateDaysRemaining,
   calculateDaysCompleted
 } = require('../utils/vipRewards');
-const { settleMaturedVipSubscriptions } = require('../utils/vipSettlement');
 const { LEGACY_VIP_POLICY_VERSION, NEW_VIP_POLICY_VERSION, VIP0_POLICY_VERSION, newVipPolicyForPlan, dailyPointsCentsFromBps } = require('../utils/vipPolicy');
 const { getVipMiningDailyRatePoints } = require('../utils/vipMining');
 const { getVipDisplayName } = require('../utils/vipDisplayNames');
@@ -1066,7 +1065,6 @@ router.post('/swap/gram-to-points/intents/:id/verify', auth, sensitiveRateLimit(
 router.get('/vip/plans', auth, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const now = new Date();
-  await settleMaturedVipSubscriptions({ userId: req.dbUser._id, now });
   const [plans, subscriptions, user] = await Promise.all([
     VipPlan.find({}).sort({ planNumber: 1 }).lean(),
     // Do not cap this list: every purchased package contributes to the VIP
