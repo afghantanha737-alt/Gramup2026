@@ -69,6 +69,7 @@ const state = {
   referralTeam: [],
   referralLoading: false,
   referralDataLoaded: false,
+  referralCacheUpdatedAt: 0,
   referralError: "",
   referralFilter: "all",
   invitedCount: 0,
@@ -229,6 +230,49 @@ function getReferralStartParam() {
   } catch {
     return "";
   }
+}
+
+const REFERRAL_CLIENT_CACHE_TTL_MS = 45 * 1000;
+const REFERRAL_CLIENT_CACHE_KEY = "gramup_referral_cache_v1";
+const REFERRAL_DEFAULT_BOT_USERNAME = "Gram_up_bot";
+
+function getClientTelegramId() {
+  const telegramId = getTelegramUser()?.id || state.user?.telegramId || state.user?.id;
+  return String(telegramId || "").trim();
+}
+
+function buildInstantReferralLink() {
+  const telegramId = getClientTelegramId();
+  if (!/^\d{3,32}$/.test(telegramId)) return "";
+  return `https://t.me/${REFERRAL_DEFAULT_BOT_USERNAME}?startapp=${encodeURIComponent(telegramId)}`;
+}
+
+function primeReferralLink() {
+  const link = buildInstantReferralLink();
+  if (!state.shareLink && link) {
+    state.shareLink = link;
+    state.referralTelegramId = getClientTelegramId();
+    state.referralMiniAppConfigured = true;
+  }
+}
+
+function readReferralClientCache() {
+  try {
+    const cacheKey = `${REFERRAL_CLIENT_CACHE_KEY}:${getClientTelegramId() || "anonymous"}`;
+    const raw = localStorage.getItem(cacheKey);
+    const cached = raw ? JSON.parse(raw) : null;
+    if (!cached || typeof cached !== "object" || !cached.payload || Date.now() - Number(cached.savedAt) > REFERRAL_CLIENT_CACHE_TTL_MS) return null;
+    return cached.payload;
+  } catch {
+    return null;
+  }
+}
+
+function writeReferralClientCache(payload) {
+  try {
+    const cacheKey = `${REFERRAL_CLIENT_CACHE_KEY}:${getClientTelegramId() || "anonymous"}`;
+    localStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), payload }));
+  } catch { /* optional cache */ }
 }
 
 /* ================= LOCAL STORAGE / THEME ================= */
@@ -1348,30 +1392,47 @@ window.addEventListener("focus", () => { void refreshUserDataOnReturn(); });
 window.addEventListener("pageshow", () => { void refreshUserDataOnReturn(); });
 
 let referralDataRequestSequence = 0;
+function applyReferralPayload(data) {
+  state.referralCode = data?.referralCode || state.referralCode || "";
+  state.shareLink = data?.shareLink || state.shareLink || buildInstantReferralLink();
+  state.referralTelegramId = getClientTelegramId();
+  state.referralMiniAppConfigured = Boolean(data?.miniAppConfigured || state.shareLink);
+  state.referralLevelRates = Array.isArray(data?.referralLevelRates) ? data.referralLevelRates.map(Number).filter(Number.isFinite) : [];
+  state.referralStats = data?.referralStats && typeof data.referralStats === "object" ? data.referralStats : null;
+  state.referralHistory = Array.isArray(data?.referralHistory) ? data.referralHistory : [];
+  state.referralNetworkLevels = Array.isArray(data?.networkLevels) ? data.networkLevels : [];
+  state.referralTeam = Array.isArray(data?.team) ? data.team : [];
+  state.invitedCount = Number(data?.invitedCount) || 0;
+  state.activeInvitedCount = Number(data?.activeInvitedCount) || 0;
+  state.invited = Array.isArray(data?.invited) ? data.invited : [];
+  state.referralMinTasks = Number(data?.referralMinTasks) || 2;
+  state.referralInitialRewardPoints = Number(data?.referralInitialRewardPoints ?? data?.referralBonusPoints) || 0;
+  state.referralTasks = Array.isArray(data?.referralTasks) ? data.referralTasks : [];
+  state.referralDataLoaded = true;
+}
+
 async function loadReferralData({ force = false } = {}) {
   const requestId = ++referralDataRequestSequence;
-  if (!force && state.referralDataLoaded) return;
-  state.referralLoading = !state.referralDataLoaded;
+  primeReferralLink();
+  const cached = !force ? readReferralClientCache() : null;
+  if (cached) {
+    applyReferralPayload(cached);
+    state.referralCacheUpdatedAt = Date.now();
+  }
+  if (!force && state.referralDataLoaded && cached) {
+    state.referralLoading = false;
+    if (state.activeTab === "profile" && profileView === "referral") renderProfile();
+    return;
+  }
+  state.referralLoading = false;
   state.referralError = "";
+  if (state.activeTab === "profile" && profileView === "referral") renderProfile();
   try {
     const data = await api("/api/referral/me");
     if (requestId !== referralDataRequestSequence) return;
-    state.referralCode = data?.referralCode || "";
-    state.shareLink = data?.shareLink || "";
-    state.referralTelegramId = "";
-    state.referralMiniAppConfigured = Boolean(data?.miniAppConfigured);
-    state.referralLevelRates = Array.isArray(data?.referralLevelRates) ? data.referralLevelRates.map(Number).filter(Number.isFinite) : [];
-    state.referralStats = data?.referralStats && typeof data.referralStats === "object" ? data.referralStats : null;
-    state.referralHistory = Array.isArray(data?.referralHistory) ? data.referralHistory : [];
-    state.referralNetworkLevels = Array.isArray(data?.networkLevels) ? data.networkLevels : [];
-    state.referralTeam = Array.isArray(data?.team) ? data.team : [];
-    state.invitedCount = Number(data?.invitedCount) || 0;
-    state.activeInvitedCount = Number(data?.activeInvitedCount) || 0;
-    state.invited = Array.isArray(data?.invited) ? data.invited : [];
-    state.referralMinTasks = Number(data?.referralMinTasks) || 2;
-    state.referralInitialRewardPoints = Number(data?.referralInitialRewardPoints ?? data?.referralBonusPoints) || 0;
-    state.referralTasks = Array.isArray(data?.referralTasks) ? data.referralTasks : [];
-    state.referralDataLoaded = true;
+    applyReferralPayload(data);
+    state.referralCacheUpdatedAt = Date.now();
+    writeReferralClientCache(data);
   } catch (error) {
     console.warn("Referral data failed:", error);
     if (requestId !== referralDataRequestSequence) return;

@@ -23,6 +23,24 @@ const { withMembership } = require('../utils/membership');
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
 const REFERRAL_LEDGER_TYPES = ['referral_initial', 'referral_bonus', 'referral_commission', 'referral_welcome'];
 const HISTORY_LIMIT = 40;
+const REFERRAL_CACHE_TTL_MS = 45 * 1000;
+const referralResponseCache = new Map();
+
+function getCachedReferralResponse(userId) {
+  const key = String(userId || '');
+  const entry = referralResponseCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    referralResponseCache.delete(key);
+    return null;
+  }
+  return entry.payload;
+}
+
+function setCachedReferralResponse(userId, payload) {
+  referralResponseCache.set(String(userId || ''), { expiresAt: Date.now() + REFERRAL_CACHE_TTL_MS, payload });
+  return payload;
+}
 
 function utcMonthStart(date = new Date()) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -38,6 +56,8 @@ router.get('/me', auth, async (req, res) => {
   const botUsername = String(process.env.BOT_USERNAME || '').replace(/^@/, '');
   const shareLink = createMiniAppReferralLink(botUsername, u.telegramId);
   const miniAppConfigured = Boolean(shareLink);
+  const cached = getCachedReferralResponse(u._id);
+  if (cached) return res.json(cached);
   const referralSettings = await Settings.getGlobal();
   let referralLevelRates;
   try { referralLevelRates = normalizeReferralRates(referralSettings.referralLevelRates); }
@@ -161,7 +181,7 @@ router.get('/me', auth, async (req, res) => {
   });
 
   const monthlyTotal = Number(monthlyRows[0]?.total) || 0;
-  res.json({
+  const response = {
     success: true,
     upBalance: Number(u.points) || 0,
     referralCode: u.referralCode,
@@ -201,7 +221,8 @@ router.get('/me', auth, async (req, res) => {
     // Per-person identities, Telegram IDs, and earnings are deliberately omitted.
     invited: [],
     team: []
-  });
+  };
+  return res.json(setCachedReferralResponse(u._id, response));
 });
 
 // POST /api/referral/claim — اتمیک و تکرارنشدنی؛ سوابق milestone قبلی حفظ می‌شوند.
@@ -255,6 +276,7 @@ router.post('/claim', auth, sensitiveRateLimit('claim'), async (req, res) => {
     return res.status(409).json({ success: false, message: 'این پاداش قبلاً دریافت شده است.', code: 'REFERRAL_TASK_ALREADY_CLAIMED' });
   }
 
+  referralResponseCache.delete(String(req.dbUser._id));
   res.json({
     success: true,
     taskId,
