@@ -34,5 +34,7 @@ withdrawalSchema.index(
   { txHashNormalized: 1 },
   { unique: true, partialFilterExpression: { txHashNormalized: { $type: 'string' } } }
 );
+// Private withdrawal history is always read by owner, newest first.
+withdrawalSchema.index({ user: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Withdrawal', withdrawalSchema);

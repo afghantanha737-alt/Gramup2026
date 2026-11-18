@@ -2879,7 +2879,10 @@ window.hideDeposit = hideDeposit;
 let walletHistory = [];
 let walletHistoryError = null;
 let walletHistorySequence = 0;
-async function loadWalletHistory() {
+let walletHistoryLoaded = false;
+let walletHistoryFetchedAt = 0;
+async function loadWalletHistory({ force = false } = {}) {
+  if (!force && walletHistoryLoaded && Date.now() - walletHistoryFetchedAt < CLIENT_DATA_TTL_MS) return walletHistory;
   const requestId = ++walletHistorySequence;
   try {
     const data = await api("/api/points/withdrawals");
@@ -2887,9 +2890,11 @@ async function loadWalletHistory() {
     if (!Array.isArray(data?.withdrawals)) throw new Error("Invalid withdrawals response");
     walletHistory = data.withdrawals;
     walletHistoryError = null;
+    walletHistoryLoaded = true;
+    walletHistoryFetchedAt = Date.now();
   } catch (error) {
     console.warn("Withdrawals failed:", error);
-    if (requestId === walletHistorySequence) walletHistoryError = error;
+    if (requestId === walletHistorySequence && !walletHistoryLoaded) walletHistoryError = error;
   }
 }
 
@@ -2901,7 +2906,10 @@ const WITHDRAW_STATUS_UI = {
 let publicHistory = [];
 let publicHistoryError = null;
 let publicHistorySequence = 0;
-async function loadPublicHistory() {
+let publicHistoryLoaded = false;
+let publicHistoryFetchedAt = 0;
+async function loadPublicHistory({ force = false } = {}) {
+  if (!force && publicHistoryLoaded && Date.now() - publicHistoryFetchedAt < CLIENT_DATA_TTL_MS) return publicHistory;
   const requestId = ++publicHistorySequence;
   try {
     const data = await api("/api/points/public-history");
@@ -2909,10 +2917,75 @@ async function loadPublicHistory() {
     if (!Array.isArray(data?.history)) throw new Error("Invalid public history response");
     publicHistory = data.history;
     publicHistoryError = null;
+    publicHistoryLoaded = true;
+    publicHistoryFetchedAt = Date.now();
   } catch (error) {
     console.warn("Public history failed:", error);
-    if (requestId === publicHistorySequence) publicHistoryError = error;
+    if (requestId === publicHistorySequence && !publicHistoryLoaded) publicHistoryError = error;
   }
+}
+
+function renderWalletHistoryList() {
+  const list = $("#withdrawHistoryList");
+  if (!list) return;
+  if (walletHistoryError && !walletHistoryLoaded) {
+    list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("history_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryWalletHistory()">${t("retry_button")}</button></div>`;
+    return;
+  }
+  if (!walletHistoryLoaded) {
+    list.innerHTML = `<div class="loading" style="height:60px"></div>`;
+    return;
+  }
+  if (walletHistory.length === 0) {
+    list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("wallet_history_empty")}</div></div>`;
+    return;
+  }
+  list.innerHTML = walletHistory.map(item => {
+    const statusInfo = WITHDRAW_STATUS_UI[item.status] || { cls: "" };
+    return `
+      <button type="button" class="historyItem historyItemBtn" data-withdrawal-id="${escapeHTML(item._id)}">
+        <div>
+          <div class="historyAmount">${formatNumber(item.cryptoAmount, 6)} ${escapeHTML(item.token || "GRAM")}</div>
+          <div class="historyMeta">${transactionTimeLabel(item.createdAt)}</div>
+          ${item.status === "paid" && item.txHash ? `
+            <div class="historyTxRow">
+              <span class="verifiedTick">${item.verified ? "✅" : "⚠️"}</span>
+              <span>${escapeHTML(truncateMiddle(item.txHash))}</span>
+            </div>` : ""}
+        </div>
+        <div class="badge ${statusInfo.cls}">${t(`withdraw_status_${item.status}`)}</div>
+      </button>`;
+  }).join("");
+}
+
+function renderPublicHistoryList() {
+  const list = $("#publicHistoryList");
+  if (!list) return;
+  if (publicHistoryError && !publicHistoryLoaded) {
+    list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("history_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryWalletHistory()">${t("retry_button")}</button></div>`;
+    return;
+  }
+  if (!publicHistoryLoaded) {
+    list.innerHTML = `<div class="loading" style="height:60px"></div>`;
+    return;
+  }
+  if (publicHistory.length === 0) {
+    list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("wallet_public_history_empty")}</div></div>`;
+    return;
+  }
+  list.innerHTML = publicHistory.slice(0, 5).map(item => {
+    const explorer = item.txHash
+      ? `<a class="publicTxExplorer" href="https://tonviewer.com/transaction/${encodeURIComponent(item.txHash)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHTML(t("history_view_explorer"))}" title="${escapeHTML(t("history_view_explorer"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>`
+      : `<span class="publicTxExplorer is-unavailable" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></span>`;
+    return `
+      <article class="publicTxCard">
+        <div class="publicTxIdentity">
+          <div class="publicTxUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(walletHistoryText("history_received"))}</em></strong></div>
+          <div class="publicTxMeta" dir="ltr"><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time><span class="publicTxSeparator" aria-hidden="true">•</span><span class="publicTxStatus" dir="${state.language === "en" ? "ltr" : "rtl"}">${escapeHTML(walletHistoryText("transaction_status_on_chain"))}</span></div>
+        </div>
+        <div class="publicTxPayment"><div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorer}</div>
+      </article>`;
+  }).join("");
 }
 
 const TB_ICONS = {
@@ -3022,59 +3095,22 @@ function renderWallet() {
   }
   void loadWalletChainBalance(renderRequestId);
 
-  loadWalletHistory().then(() => {
-    if (renderRequestId !== walletRenderSequence || state.activeTab !== "wallet") return;
-    const list = $("#withdrawHistoryList");
-    if (!list) return;
-    if (walletHistoryError) { list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("history_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryWalletHistory()">${t("retry_button")}</button></div>`; return; }
-    if (walletHistory.length === 0) {
-      list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("wallet_history_empty")}</div></div>`;
-      return;
-    }
-    list.innerHTML = walletHistory.map(item => {
-      const statusInfo = WITHDRAW_STATUS_UI[item.status] || { cls: "" };
-      return `
-        <button type="button" class="historyItem historyItemBtn" data-withdrawal-id="${escapeHTML(item._id)}">
-          <div>
-            <div class="historyAmount">${formatNumber(item.cryptoAmount, 6)} ${escapeHTML(item.token || "GRAM")}</div>
-            <div class="historyMeta">${transactionTimeLabel(item.createdAt)}</div>
-            ${item.status === "paid" && item.txHash ? `
-              <div class="historyTxRow">
-                <span class="verifiedTick">${item.verified ? "✅" : "⚠️"}</span>
-                <span>${escapeHTML(truncateMiddle(item.txHash))}</span>
-              </div>` : ""}
-          </div>
-          <div class="badge ${statusInfo.cls}">${t(`withdraw_status_${item.status}`)}</div>
-        </button>`;
-    }).join("");
+  // Keep the previous result visible on tab switches; both requests revalidate in the background.
+  renderWalletHistoryList();
+  renderPublicHistoryList();
+  void loadWalletHistory().then(() => {
+    if (renderRequestId === walletRenderSequence && state.activeTab === "wallet") renderWalletHistoryList();
   });
-
-  loadPublicHistory().then(() => {
-    if (renderRequestId !== walletRenderSequence || state.activeTab !== "wallet") return;
-    const list = $("#publicHistoryList");
-    if (!list) return;
-    if (publicHistoryError) { list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("history_load_error")}</div><button class="secondaryBtn" type="button" onclick="retryWalletHistory()">${t("retry_button")}</button></div>`; return; }
-    if (publicHistory.length === 0) {
-      list.innerHTML = `<div class="emptyState" style="padding:20px 0"><div class="emptyDesc">${t("wallet_public_history_empty")}</div></div>`;
-      return;
-    }
-    list.innerHTML = publicHistory.slice(0, 5).map(item => {
-      const explorer = item.txHash
-        ? `<a class="publicTxExplorer" href="https://tonviewer.com/transaction/${encodeURIComponent(item.txHash)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHTML(t("history_view_explorer"))}" title="${escapeHTML(t("history_view_explorer"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>`
-        : `<span class="publicTxExplorer is-unavailable" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></span>`;
-      return `
-        <article class="publicTxCard">
-          <div class="publicTxIdentity">
-            <div class="publicTxUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(walletHistoryText("history_received"))}</em></strong></div>
-            <div class="publicTxMeta" dir="ltr"><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time><span class="publicTxSeparator" aria-hidden="true">•</span><span class="publicTxStatus" dir="${state.language === "en" ? "ltr" : "rtl"}">${escapeHTML(walletHistoryText("transaction_status_on_chain"))}</span></div>
-          </div>
-          <div class="publicTxPayment"><div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorer}</div>
-        </article>`;
-    }).join("");
+  void loadPublicHistory().then(() => {
+    if (renderRequestId === walletRenderSequence && state.activeTab === "wallet") renderPublicHistoryList();
   });
 }
 
-async function retryWalletHistory() { renderWallet(); }
+async function retryWalletHistory() {
+  walletHistoryFetchedAt = 0;
+  publicHistoryFetchedAt = 0;
+  renderWallet();
+}
 window.retryWalletHistory = retryWalletHistory;
 
 /* ================= WITHDRAWAL DETAIL (Timeline) =================
@@ -4890,14 +4926,23 @@ async function renderVipTab() {
 }
 
 /* ================= TAB DISPATCH ================= */
+function hasWarmTabCache(tab) {
+  if (tab === "home" || tab === "tasks") return Boolean(state.userDataLoadedAt && state.tasksLoadedAt);
+  if (tab === "wallet") return Boolean(state.userDataLoadedAt || walletHistoryLoaded || publicHistoryLoaded);
+  if (tab === "profile") return Boolean(state.userDataLoadedAt);
+  if (tab === "vip") return Boolean(state.vipDataLoaded || state.vipMining);
+  return false;
+}
+
 async function renderCurrentTab(requestId = navigationSequence) {
   const tab = state.activeTab;
   const isCurrentRender = () => requestId === navigationSequence && state.activeTab === tab;
-  showLoading();
+  const warmTab = hasWarmTabCache(tab);
+  if (!warmTab) showLoading();
   const cachedReadModelAvailable = state.readModelCacheHydrated && state.readModelStale;
   try {
     if (tab === "home") {
-      if (cachedReadModelAvailable) {
+      if (cachedReadModelAvailable || warmTab) {
         renderHome();
         void refreshReadModelInBackground();
       } else {
@@ -4911,7 +4956,7 @@ async function renderCurrentTab(requestId = navigationSequence) {
         }, 2500);
       }
     } else if (tab === "tasks") {
-      if (cachedReadModelAvailable) {
+      if (cachedReadModelAvailable || warmTab) {
         renderTasks();
         void refreshReadModelInBackground();
       } else {
@@ -4920,7 +4965,7 @@ async function renderCurrentTab(requestId = navigationSequence) {
         renderTasks();
       }
     } else if (tab === "vip") {
-      if (cachedReadModelAvailable) {
+      if (cachedReadModelAvailable || warmTab) {
         void renderVipTab();
         void refreshReadModelInBackground();
       } else {
@@ -4929,7 +4974,7 @@ async function renderCurrentTab(requestId = navigationSequence) {
         await renderVipTab();
       }
     } else if (tab === "wallet") {
-      if (cachedReadModelAvailable) {
+      if (cachedReadModelAvailable || warmTab) {
         renderWallet();
         void refreshReadModelInBackground();
       } else {
@@ -4940,7 +4985,7 @@ async function renderCurrentTab(requestId = navigationSequence) {
     } else if (tab === "profile") {
       profileView = pendingProfileView || "menu";
       pendingProfileView = null;
-      if (cachedReadModelAvailable) {
+      if (cachedReadModelAvailable || warmTab) {
         await renderProfile();
         void refreshReadModelInBackground();
       } else {

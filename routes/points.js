@@ -1457,7 +1457,16 @@ function maskPublicPayoutName(user) {
   return `${visible}***`;
 }
 
+const PUBLIC_PAYOUT_CACHE_TTL_MS = 45 * 1000;
+let publicPayoutCache = null;
+
 router.get('/public-history', async (req, res) => {
+  if (publicPayoutCache && publicPayoutCache.expiresAt > Date.now()) {
+    res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=15');
+    return res.json(publicPayoutCache.payload);
+  }
+  if (publicPayoutCache) publicPayoutCache = null;
+
   const [list, totals] = await Promise.all([
     Withdrawal.find({ status: 'paid' })
       .sort({ paidAt: -1 })
@@ -1476,7 +1485,7 @@ router.get('/public-history', async (req, res) => {
 
   const totalByToken = Object.fromEntries(totals.map(item => [item._id, item.total]));
 
-  res.json({
+  const payload = {
     success: true,
     totalByToken,
     history: list.map(w => ({
@@ -1493,7 +1502,10 @@ router.get('/public-history', async (req, res) => {
       verified: w.verified,
       date: w.paidAt
     }))
-  });
+  };
+  publicPayoutCache = { expiresAt: Date.now() + PUBLIC_PAYOUT_CACHE_TTL_MS, payload };
+  res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=15');
+  return res.json(payload);
 });
 
 module.exports = router;
