@@ -2711,7 +2711,7 @@ function renderDepositHistory(deposits) {
   container.innerHTML = `
     <div class="small" style="font-weight:700;margin-bottom:6px">${escapeHTML(t("deposit_history_title"))}</div>
     ${list.map(item => {
-      const statusKey = item.status === "confirmed" ? "deposit_status_confirmed" : item.status === "rejected" ? "deposit_status_rejected" : "deposit_status_pending";
+      const statusKey = item.status === "confirmed" ? "deposit_status_confirmed" : item.status === "rejected" || item.status === "cancelled" ? "deposit_status_rejected" : item.status === "verifying" ? "deposit_status_verifying" : "deposit_status_pending";
       const amount = item.amount == null ? t("deposit_pending_amount") : `${formatNumber(item.amount, 9)} GRAM`;
       return `<div style="padding:8px 0;border-top:1px solid var(--line);font-size:12px">
         <div style="display:flex;justify-content:space-between;gap:8px"><b>${escapeHTML(amount)}</b><span>${escapeHTML(t(statusKey))}</span></div>
@@ -2790,13 +2790,13 @@ async function loadDepositPanel() {
     // The form is visible now; finish optional history lookup and restore an
     // existing invoice before enabling submission.
     const deposits = await historyPromise;
-    const pending = deposits?.find(item => item.status === "pending");
+    const pending = deposits?.find(item => item.status === "pending" || item.status === "verifying");
     currentDeposit = pending || null;
     if (address) address.value = currentDeposit?.depositWalletAddress || configData?.depositWalletAddress || "";
     if (reference) reference.textContent = currentDeposit?.reference || t("deposit_reference_auto");
     if (amount && currentDeposit?.requestedAmount != null) amount.value = currentDeposit.requestedAmount;
     if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(currentDeposit?.minimumDepositGram ?? configData?.minimumDepositGram ?? 0, 9) });
-    if (button) button.disabled = currentDeposit?.status === "confirmed";
+    if (button) button.disabled = currentDeposit?.status === "confirmed" || currentDeposit?.status === "verifying";
   } catch (error) {
     if (panel) panel.style.display = "none";
     if (disabled) disabled.style.display = "block";
@@ -2829,10 +2829,12 @@ async function submitGramDeposit() {
     if (!currentDeposit?._id || !created?.transaction) throw new Error(t("deposit_transaction_unavailable"));
     setDepositActionMessage(t("deposit_sent_waiting"), "normal");
     let result = null;
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000));
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 5000));
       try {
-        result = await window.gramupWallet.verifyDeposit(currentDeposit._id);
+        result = created?.boc
+          ? await window.gramupWallet.verifyDeposit(currentDeposit._id, { boc: created.boc })
+          : await window.gramupWallet.verifyDeposit(currentDeposit._id);
         if (result?.status === "confirmed") break;
       } catch (error) {
         if (error.code !== "TON_TRANSACTION_NOT_INDEXED" && error.status !== 202) throw error;

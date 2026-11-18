@@ -14,18 +14,19 @@ const depositSchema = new mongoose.Schema({
   requestedAmountRaw: { type: String, default: '' },
   amount: { type: Number, default: null, min: 0 },
   amountRaw: { type: String, default: '' },
+  submittedBoc: { type: String, default: '', maxlength: 20000 },
   submittedTxHash: { type: String, default: '' },
   txHash: { type: String, default: '' },
   txHashNormalized: { type: String, default: undefined, select: false },
   sourceAddress: { type: String, default: '' },
-  status: { type: String, enum: ['pending', 'confirmed', 'rejected'], default: 'pending', index: true },
+  status: { type: String, enum: ['pending', 'verifying', 'confirmed', 'rejected', 'cancelled'], default: 'pending', index: true },
   verificationNote: { type: String, default: '' },
   verifiedAt: { type: Date, default: null },
   creditedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 depositSchema.index({ user: 1, status: 1, createdAt: -1 });
-depositSchema.index({ user: 1 }, { unique: true, partialFilterExpression: { status: 'pending' } });
+depositSchema.index({ user: 1 }, { unique: true, partialFilterExpression: { status: { $in: ['pending', 'verifying'] } } });
 depositSchema.index({ txHashNormalized: 1 }, {
   unique: true,
   partialFilterExpression: { txHashNormalized: { $type: 'string' } }

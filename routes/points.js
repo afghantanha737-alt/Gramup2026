@@ -676,6 +676,7 @@ function publicDepositRecord(deposit) {
     minimumDepositGram: deposit.minimumDepositSnapshot,
     amount: deposit.amount,
     txHash: deposit.txHash || deposit.submittedTxHash || '',
+    hasSubmittedBoc: Boolean(deposit.submittedBoc),
     status: deposit.status,
     createdAt: deposit.createdAt,
     verifiedAt: deposit.verifiedAt,
@@ -717,16 +718,22 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
     { user: req.dbUser._id, status: 'pending', assetType: { $ne: 'native_gram' } },
     { $set: { status: 'rejected', verificationNote: 'legacy_jetton_deposit_disabled', verifiedAt: new Date() } }
   );
-  let existing = await Deposit.findOne({ user: req.dbUser._id, assetType: 'native_gram', status: 'pending' }).sort({ createdAt: -1 });
-  if (existing && !existing.requestedAmountRaw) {
-    existing = await Deposit.findOneAndUpdate(
-      { _id: existing._id, user: req.dbUser._id, status: 'pending' },
-      { $set: { status: 'rejected', verificationNote: 'replaced_by_wallet_deposit_intent', verifiedAt: new Date() } },
-      { new: false }
-    );
-    existing = null;
-  }
+  // Cancel unsigned intents left behind by a rejected wallet prompt or closed app.
+  await Deposit.updateMany(
+    { user: req.dbUser._id, assetType: 'native_gram', status: { $in: ['pending', 'verifying'] },
+      $and: [{ submittedBoc: { $in: ['', null] } }, { submittedTxHash: { $in: ['', null] } }] },
+    { $set: { status: 'cancelled', verificationNote: 'replaced_unsigned_deposit_intent', verifiedAt: new Date() } }
+  );
+  // Expire old unsigned requests even if the user does not open the form again.
+  await Deposit.updateMany(
+    { user: req.dbUser._id, assetType: 'native_gram', status: 'pending', createdAt: { $lt: new Date(Date.now() - 2 * 60 * 1000) } },
+    { $set: { status: 'cancelled', verificationNote: 'unsigned_deposit_intent_expired', verifiedAt: new Date() } }
+  );
+  let existing = await Deposit.findOne({ user: req.dbUser._id, assetType: 'native_gram', status: { $in: ['pending', 'verifying'] } }).sort({ createdAt: -1 });
   if (existing) {
+    if (existing.status === 'verifying' || existing.submittedBoc || existing.submittedTxHash) {
+      return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_VERIFYING', deposit: publicDepositRecord(existing), message: 'واریز قبلی امضا شده و در حال بررسی شبکه است.' });
+    }
     if (existing.requestedAmountRaw && existing.requestedAmountRaw !== requestedAmountRaw.toString()) {
       return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_PENDING', message: 'یک واریز قبلی هنوز در حال تأیید است.' });
     }
@@ -769,6 +776,23 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
   } });
 });
 
+router.post('/deposits/:id/cancel', auth, sensitiveRateLimit('general'), async (req, res) => {
+  if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) {
+    return res.status(404).json({ success: false, code: 'DEPOSIT_NOT_FOUND' });
+  }
+  const cancelled = await Deposit.findOneAndUpdate(
+    { _id: req.params.id, user: req.dbUser._id, assetType: 'native_gram', status: { $in: ['pending', 'verifying'] }, submittedBoc: { $in: ['', null] }, submittedTxHash: { $in: ['', null] } },
+    { $set: { status: 'cancelled', verificationNote: 'wallet_rejected_or_closed', verifiedAt: new Date() } },
+    { new: true }
+  );
+  if (!cancelled) {
+    const current = await Deposit.findOne({ _id: req.params.id, user: req.dbUser._id, assetType: 'native_gram' });
+    if (!current) return res.status(404).json({ success: false, code: 'DEPOSIT_NOT_FOUND' });
+    return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_SUBMITTED', status: current.status, deposit: publicDepositRecord(current) });
+  }
+  return res.json({ success: true, status: 'cancelled', deposit: publicDepositRecord(cancelled), message: 'واریز لغو شد؛ می‌توانید دوباره تلاش کنید.' });
+});
+
 router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) {
     return res.status(404).json({ success: false, message: 'درخواست Deposit پیدا نشد.' });
@@ -779,11 +803,12 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
     const user = await User.findById(req.dbUser._id).select('gramBalance');
     return res.json({ success: true, alreadyConfirmed: true, status: 'confirmed', amount: deposit.amount, gramBalance: user?.gramBalance ?? 0, deposit: publicDepositRecord(deposit) });
   }
-  if (deposit.status === 'rejected') {
-    return res.status(409).json({ success: false, code: 'DEPOSIT_REJECTED', status: 'rejected', deposit: publicDepositRecord(deposit), message: 'این واریز با حداقل مبلغ لازم مطابقت ندارد و اعتباری اضافه نشده است.' });
+  if (deposit.status === 'rejected' || deposit.status === 'cancelled') {
+    return res.status(409).json({ success: false, code: 'DEPOSIT_CANCELLED', status: deposit.status, deposit: publicDepositRecord(deposit), message: 'این واریز لغو شده است؛ لطفاً درخواست جدید بسازید.' });
   }
 
   const submittedHash = normalizeTonTxHash(req.body?.txHash);
+  const submittedBoc = typeof req.body?.boc === 'string' && req.body.boc.length <= 20000 ? req.body.boc.trim() : '';
 
   let verification;
   try {
@@ -796,12 +821,12 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
 
   if (verification.status === 'pending') {
     await Deposit.updateOne(
-      { _id: deposit._id, user: req.dbUser._id, status: 'pending' },
-          { $set: { ...(submittedHash ? { submittedTxHash: submittedHash } : {}), verificationNote: verification.code || 'pending' } }
+      { _id: deposit._id, user: req.dbUser._id, status: { $in: ['pending', 'verifying'] } },
+      { $set: { ...(submittedHash ? { submittedTxHash: submittedHash } : {}), ...(submittedBoc ? { submittedBoc } : {}), status: (submittedHash || submittedBoc) ? 'verifying' : 'pending', verificationNote: verification.code || 'pending' } }
     );
     return res.status(202).json({
       success: true,
-      status: 'pending',
+      status: (submittedHash || submittedBoc) ? 'verifying' : 'pending',
       code: verification.code,
       message: 'تراکنش هنوز در TON Mainnet قابل تأیید نیست. چند لحظه بعد دوباره Check کنید؛ تا تأیید واقعی موجودی اضافه نمی‌شود.'
     });
@@ -834,10 +859,10 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
   if (actualRaw < minimumRaw) {
     try {
       const rejected = await Deposit.findOneAndUpdate(
-        { _id: deposit._id, user: req.dbUser._id, status: 'pending', txHashNormalized: { $exists: false } },
+        { _id: deposit._id, user: req.dbUser._id, status: { $in: ['pending', 'verifying'] }, txHashNormalized: { $exists: false } },
         { $set: {
           status: 'rejected', amount: verification.amount, amountRaw: verification.amountRaw,
-          submittedTxHash: submittedHash, txHash: verification.txHash, txHashNormalized: verification.txHash,
+          submittedTxHash: submittedHash || deposit.submittedTxHash, submittedBoc: submittedBoc || deposit.submittedBoc, txHash: verification.txHash, txHashNormalized: verification.txHash,
           sourceAddress: verification.sourceAddress, verificationNote: 'below_minimum', verifiedAt: verification.confirmedAt
         } },
         { new: true }
@@ -855,10 +880,10 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
     await withMongoTransaction(async session => {
       const now = new Date();
       const claimed = await Deposit.findOneAndUpdate(
-        { _id: deposit._id, user: req.dbUser._id, status: 'pending', txHashNormalized: { $exists: false } },
+        { _id: deposit._id, user: req.dbUser._id, status: { $in: ['pending', 'verifying'] }, txHashNormalized: { $exists: false } },
         { $set: {
           status: 'confirmed', amount: verification.amount, amountRaw: verification.amountRaw,
-          submittedTxHash: submittedHash, txHash: verification.txHash, txHashNormalized: verification.txHash,
+          submittedTxHash: submittedHash || deposit.submittedTxHash, submittedBoc: submittedBoc || deposit.submittedBoc, txHash: verification.txHash, txHashNormalized: verification.txHash,
           sourceAddress: verification.sourceAddress, verificationNote: 'confirmed_native_gram_by_toncenter_v3_mainnet',
           verifiedAt: verification.confirmedAt, creditedAt: now
         } },

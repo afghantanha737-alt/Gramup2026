@@ -173,9 +173,11 @@ async function run() {
   const adminUi = fs.readFileSync(path.join(project, 'public/admin.html'), 'utf8');
   const miniAppUi = fs.readFileSync(path.join(project, 'public/index.html'), 'utf8');
   const app = fs.readFileSync(path.join(project, 'public/js/app.js'), 'utf8');
+  const walletConnect = fs.readFileSync(path.join(project, 'public/js/walletConnect.js'), 'utf8');
   const styles = fs.readFileSync(path.join(project, 'public/css/style.css'), 'utf8');
   const i18n = fs.readFileSync(path.join(project, 'public/js/i18n.js'), 'utf8');
   assert.ok(route.includes("router.post('/deposits/:id/verify'"));
+  assert.ok(route.includes("router.post('/deposits/:id/cancel'"));
   assert.ok(route.includes("router.post('/deposits'"));
   assert.ok(route.includes('hasRecentWalletProof(req.dbUser)'));
   assert.ok(route.includes('requestedAmountRaw'));
@@ -188,7 +190,8 @@ async function run() {
   assert.ok(route.includes('sourceId: `deposit:${verification.txHash}`'), 'ledger source uses canonical transaction hash');
   assert.ok(route.includes("type: 'deposit'"));
   assert.ok(route.includes("assetType: 'native_gram'"));
-  assert.ok(model.includes("unique: true, partialFilterExpression: { status: 'pending' }"));
+  assert.ok(model.includes("unique: true, partialFilterExpression: { status: { $in: ['pending', 'verifying'] } }"), 'only one active native deposit intent per user');
+  assert.ok(model.includes("'cancelled'"), 'cancelled deposit status is persisted');
   assert.ok(model.includes("partialFilterExpression: { txHashNormalized: { $type: 'string' } }"));
   assert.ok(model.includes("enum: ['native_gram']"));
   assert.ok(!model.includes('jettonMasterSnapshot'));
@@ -207,7 +210,10 @@ async function run() {
   assert.ok(miniAppUi.includes('class="depositMemoCode"') && !miniAppUi.includes('copyAddress('));
   assert.ok(app.includes('reference.textContent = currentDeposit?.reference || t("deposit_reference_auto")'));
   assert.ok(app.includes('window.gramupWallet.requestDeposit(amount)'));
-  assert.ok(app.includes('window.gramupWallet.verifyDeposit(currentDeposit._id)'));
+  assert.ok(app.includes('window.gramupWallet.verifyDeposit(currentDeposit._id, { boc: created.boc })'));
+  assert.ok(app.includes('deposit_status_verifying'));
+  assert.ok(walletConnect.includes('sendTransaction(created.transaction)'));
+  assert.ok(walletConnect.includes('/api/points/deposits/${encodeURIComponent(created.deposit._id)}/cancel'));
   assert.ok(miniAppUi.includes('id="depositAmount"'));
   assert.ok(app.includes('async function copyDepositValue(targetId)'));
   assert.ok(app.includes('navigator.clipboard?.writeText)') && app.includes('await navigator.clipboard.writeText(value)'));

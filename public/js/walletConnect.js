@@ -463,11 +463,21 @@
       }
       if (!isCurrentProof()) throw Object.assign(new Error(labels().proofRequired), { code: 'WALLET_PROOF_REQUIRED' });
       setOperation('deposit', 'sending');
-      await state.ui.sendTransaction(created.transaction);
+      const sent = await state.ui.sendTransaction(created.transaction);
+      const boc = typeof sent?.boc === 'string' ? sent.boc.trim() : '';
+      if (!boc) throw Object.assign(new Error('Wallet did not return a signed transaction.'), { code: 'DEPOSIT_SIGNATURE_UNAVAILABLE' });
       setOperation('deposit', 'pending');
-      return created;
+      return { ...created, boc };
     } catch (error) {
       if (created?.deposit) error.deposit = created.deposit;
+      if (created?.deposit?._id) {
+        try {
+          await apiClient()(`/api/points/deposits/${encodeURIComponent(created.deposit._id)}/cancel`, { method: 'POST', body: {} });
+        } catch (cancelError) {
+          // A signed BOC may already be stored; never hide the original wallet error.
+          if (cancelError?.status !== 409) console.warn('Deposit cancellation failed:', cancelError);
+        }
+      }
       operationError('deposit', error);
       throw error;
     }
@@ -475,7 +485,8 @@
 
   async function verifyDeposit(depositId) {
     if (!depositId) throw new Error('Deposit reference is missing.');
-    return apiClient()(`/api/points/deposits/${encodeURIComponent(depositId)}/verify`, { method: 'POST', body: {} });
+    const proof = arguments[1] || {};
+    return apiClient()(`/api/points/deposits/${encodeURIComponent(depositId)}/verify`, { method: 'POST', body: { boc: proof?.boc || '', txHash: proof?.txHash || '' } });
   }
 
   async function requestWithdrawal(gram, idempotencyKey) {

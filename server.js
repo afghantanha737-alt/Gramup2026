@@ -348,6 +348,12 @@ async function startServer() {
     void runJob(VIP_MINING_CYCLE_NOTIFICATION_LOCK_KEY, 'Initial VIP mining cycle notification sweep', () => runVipMiningCycleNotificationSweep(new Date()));
     setInterval(() => { void runJob(VIP_MINING_CYCLE_NOTIFICATION_LOCK_KEY, 'Scheduled VIP mining cycle notification sweep', () => runVipMiningCycleNotificationSweep(new Date())); }, 60 * 1000);
 
+    // Deposit expiry is status-only cleanup: it never changes balances, ledgers,
+    // subscriptions, or any other financial record.
+    const { expireUnsignedNativeDeposits } = require('./utils/depositExpiry');
+    void runJob('native-deposit-expiry', 'Initial unsigned deposit expiry', () => expireUnsignedNativeDeposits(new Date()));
+    setInterval(() => { void runJob('native-deposit-expiry', 'Scheduled unsigned deposit expiry', () => expireUnsignedNativeDeposits(new Date())); }, 30 * 1000);
+
     server = app.listen(PORT, () => {
       server.requestTimeout = 120000;
       server.headersTimeout = 125000;
