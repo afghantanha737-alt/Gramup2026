@@ -190,7 +190,8 @@ async function run() {
   assert.ok(route.includes('sourceId: `deposit:${verification.txHash}`'), 'ledger source uses canonical transaction hash');
   assert.ok(route.includes("type: 'deposit'"));
   assert.ok(route.includes("assetType: 'native_gram'"));
-  assert.ok(model.includes("unique: true, partialFilterExpression: { status: { $in: ['pending', 'verifying'] } }"), 'only one active native deposit intent per user');
+  assert.ok(model.includes("name: 'active_deposit_per_user'"), 'active deposit index has a stable non-legacy name');
+  assert.ok(model.includes("unique: true") && model.includes("partialFilterExpression: { status: { $in: ['pending', 'verifying'] } }"), 'only one active native deposit intent per user');
   assert.ok(model.includes("'cancelled'"), 'cancelled deposit status is persisted');
   assert.ok(model.includes("partialFilterExpression: { txHashNormalized: { $type: 'string' } }"));
   assert.ok(model.includes("enum: ['native_gram']"));

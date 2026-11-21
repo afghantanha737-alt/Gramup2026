@@ -26,7 +26,13 @@ const depositSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 depositSchema.index({ user: 1, status: 1, createdAt: -1 });
-depositSchema.index({ user: 1 }, { unique: true, partialFilterExpression: { status: { $in: ['pending', 'verifying'] } } });
+// Keep this index name distinct from the legacy `user_1` index already present
+// in some deployments with a narrower `status: 'pending'` filter.
+depositSchema.index({ user: 1 }, {
+  name: 'active_deposit_per_user',
+  unique: true,
+  partialFilterExpression: { status: { $in: ['pending', 'verifying'] } }
+});
 depositSchema.index({ txHashNormalized: 1 }, {
   unique: true,
   partialFilterExpression: { txHashNormalized: { $type: 'string' } }
