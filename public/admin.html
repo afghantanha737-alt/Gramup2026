@@ -313,6 +313,7 @@
         <div id="screenshotBulkToolbar" class="screenshotBulkToolbar" hidden>
           <label class="screenshotSelectAll"><input id="screenshotSelectAll" type="checkbox" onchange="toggleAllScreenshotCards(this.checked)"> انتخاب همه</label>
           <span id="screenshotSelectionCount" class="small">۰ انتخاب</span>
+          <span id="screenshotBulkProgress" class="small" aria-live="polite"></span>
           <div class="row screenshotBulkActions">
             <button type="button" class="danger" onclick="rejectSelectedScreenshots()">رد موارد انتخاب‌شده</button>
             <button type="button" class="success" onclick="approveAllScreenshots()">تأیید نهایی همه</button>
@@ -1325,30 +1326,67 @@ async function rejectScreenshotSubmission(id) {
   } catch (error) { showMsg(error.message, "error"); }
 }
 
-async function rejectSelectedScreenshots() {
-  const ids = [...screenshotSelectedIds].filter(id => screenshotVisibleSubmissions.some(item => String(item._id) === id && item.status === "pending"));
-  if (!ids.length) return showMsg("حداقل یک Screenshot در انتظار بررسی را انتخاب کنید.", "error");
-  const note = prompt("دلیل رد موارد انتخاب‌شده را وارد کنید (اختیاری):", "");
-  if (note === null) return;
+let screenshotBulkJobPoller = null;
+
+function setScreenshotBulkButtonsDisabled(disabled) {
+  document.querySelectorAll('#screenshotBulkToolbar button').forEach(button => { button.disabled = disabled; });
+}
+
+async function monitorScreenshotBulkJob(jobId) {
+  if (screenshotBulkJobPoller) clearTimeout(screenshotBulkJobPoller);
+  const progress = document.getElementById('screenshotBulkProgress');
+  const poll = async () => {
+    try {
+      const data = await api(`/api/admin/task-submissions/bulk-action/${encodeURIComponent(jobId)}`);
+      const job = data.job || {};
+      if (progress) progress.textContent = `پردازش: ${job.processed || 0}/${job.total || 0}؛ تأیید/انجام موفق: ${job.succeeded || 0}؛ ناموفق: ${job.failed || 0}`;
+      if (job.status === 'completed' || job.status === 'failed') {
+        setScreenshotBulkButtonsDisabled(false);
+        const failedText = Number(job.failed) ? `؛ ${job.failed} مورد ناموفق بود` : '';
+        showMsg(`${Number(job.succeeded) || 0} مورد با موفقیت پردازش شد${failedText}`, Number(job.failed) ? 'error' : 'success');
+        await Promise.all([loadScreenshotSubmissions(), loadTasks()]);
+        return;
+      }
+      screenshotBulkJobPoller = setTimeout(poll, 800);
+    } catch (error) {
+      if (progress) progress.textContent = `پیگیری وضعیت موقتاً ناموفق است؛ تلاش مجدد...`;
+      screenshotBulkJobPoller = setTimeout(poll, 1500);
+    }
+  };
+  await poll();
+}
+
+async function startScreenshotBulkAction(action, ids, note = '') {
+  if (!ids.length) return showMsg('حداقل یک Screenshot در انتظار بررسی را انتخاب کنید.', 'error');
+  setScreenshotBulkButtonsDisabled(true);
+  const progress = document.getElementById('screenshotBulkProgress');
+  if (progress) progress.textContent = `در حال ثبت ${ids.length} مورد...`;
   try {
-    const results = await Promise.allSettled(ids.map(id => api(`/api/admin/task-submissions/${encodeURIComponent(id)}/reject`, { method: "POST", body: JSON.stringify({ note }) })));
-    const succeeded = results.filter(result => result.status === "fulfilled").length;
-    showMsg(`${succeeded} مورد رد شد.`, "success");
-    await loadScreenshotSubmissions();
-  } catch (error) { showMsg(error.message, "error"); }
+    const result = await api('/api/admin/task-submissions/bulk-action', {
+      method: 'POST',
+      body: JSON.stringify({ action, submissionIds: ids, note })
+    });
+    await monitorScreenshotBulkJob(result.job.id);
+  } catch (error) {
+    setScreenshotBulkButtonsDisabled(false);
+    if (progress) progress.textContent = '';
+    showMsg(error.message, 'error');
+  }
+}
+
+async function rejectSelectedScreenshots() {
+  const ids = [...screenshotSelectedIds].filter(id => screenshotVisibleSubmissions.some(item => String(item._id) === id && item.status === 'pending'));
+  if (!ids.length) return showMsg('حداقل یک Screenshot در انتظار بررسی را انتخاب کنید.', 'error');
+  const note = prompt('دلیل رد موارد انتخاب‌شده را وارد کنید (اختیاری):', '');
+  if (note === null) return;
+  await startScreenshotBulkAction('reject', ids, note);
 }
 
 async function approveAllScreenshots() {
-  const ids = screenshotVisibleSubmissions.filter(item => item.status === "pending").map(item => String(item._id));
-  if (!ids.length) return showMsg("هیچ Screenshot در انتظاری برای تأیید وجود ندارد.", "error");
-  if (!confirm(`تأیید نهایی و پرداخت پاداش ${ids.length} Screenshot انجام شود؟`)) return;
-  try {
-    const results = await Promise.allSettled(ids.map(id => api(`/api/admin/task-submissions/${encodeURIComponent(id)}/approve`, { method: "POST", body: JSON.stringify({}) })));
-    const succeeded = results.filter(result => result.status === "fulfilled").length;
-    const failed = results.length - succeeded;
-    showMsg(`${succeeded} مورد تأیید و پرداخت شد${failed ? `؛ ${failed} مورد ناموفق بود` : ""}.`, failed ? "error" : "success");
-    await Promise.all([loadScreenshotSubmissions(), loadTasks()]);
-  } catch (error) { showMsg(error.message, "error"); }
+  const ids = screenshotVisibleSubmissions.filter(item => item.status === 'pending').map(item => String(item._id));
+  if (!ids.length) return showMsg('هیچ Screenshot در انتظاری برای تأیید وجود ندارد.', 'error');
+  if (!confirm(`تأیید نهایی و پرداخت پاداش ${ids.length} Screenshot به‌صورت ترتیبی انجام شود؟`)) return;
+  await startScreenshotBulkAction('approve', ids);
 }
 
 async function testChatId() {

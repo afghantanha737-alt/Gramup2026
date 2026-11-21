@@ -28,6 +28,7 @@ const LatestPostEngagementState = require('../models/LatestPostEngagementState')
 const Deposit = require('../models/Deposit');
 const NotificationDelivery = require('../models/NotificationDelivery');
 const BroadcastJob = require('../models/BroadcastJob');
+const TaskSubmissionBulkJob = require('../models/TaskSubmissionBulkJob');
 const IdempotencyOperation = require('../models/IdempotencyOperation');
 const VipPlan = require('../models/VipPlan');
 const VipSubscription = require('../models/VipSubscription');
@@ -58,6 +59,7 @@ const { creditVerifiedDeposit, rejectPendingDeposit } = require('../utils/deposi
 const { buildVipReserveReport, buildVipReserveWorkbook } = require('../utils/vipReserveReport');
 const { pricingForVipPlan, pricePointsForVipPlan } = require('../utils/vipPricing');
 const { VIP0_POLICY_VERSION, newVipPolicyForPlan, dailyPointsCentsFromBps, periodRewardPercentForPlan } = require('../utils/vipPolicy');
+const { approveTaskSubmission, rejectTaskSubmission, publicJob, startTaskSubmissionBulkJob } = require('../utils/taskSubmissionBulk');
 
 const MAX_REQUIRED_CHANNELS = 5;
 
@@ -728,116 +730,12 @@ router.post('/task-submissions/:id/approve', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(404).json({ success: false, message: 'Submission پیدا نشد.' });
   }
-  const settings = await Settings.getGlobal();
-  const reviewedAt = new Date();
   try {
-    const payment = await withMongoTransaction(async session => {
-      const submission = await TaskCompletion.findById(req.params.id).session(session);
-      if (!submission) {
-        const error = new Error('Submission پیدا نشد.');
-        error.code = 'SUBMISSION_NOT_FOUND';
-        throw error;
-      }
-      if (submission.status !== 'pending') {
-        const error = new Error('این submission دیگر در انتظار بررسی نیست.');
-        error.code = 'SUBMISSION_NOT_PENDING';
-        throw error;
-      }
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(submission.proofMimeType)) {
-        const error = new Error('تصویر معتبر برای این submission ثبت نشده است.');
-        error.code = 'SUBMISSION_IMAGE_MISSING';
-        throw error;
-      }
-
-      const task = await Task.findById(submission.task).session(session);
-      if (!task) {
-        const error = new Error('Task Screenshot Verification پیدا نشد.');
-        error.code = 'TASK_NOT_FOUND';
-        throw error;
-      }
-      const reward = Number(submission.reward);
-      if (!Number.isFinite(reward) || reward <= 0) {
-        const error = new Error('پاداش ثبت‌شده برای submission نامعتبر است.');
-        error.code = 'INVALID_REWARD';
-        throw error;
-      }
-
-      const sourceId = `task:${task._id}:user:${submission.user}`;
-      const existingLedger = await PointsLedger.findOne({ sourceId }).select('_id').session(session);
-      if (existingLedger) {
-        const error = new Error('پاداش این task قبلاً در تاریخچه ثبت شده است.');
-        error.code = 'TASK_REWARD_ALREADY_PAID';
-        throw error;
-      }
-
-      const reservedTask = await Task.findOneAndUpdate(
-        {
-          _id: task._id,
-          $or: [
-            { maxCompletions: null },
-            { $expr: { $lt: ['$completedCount', '$maxCompletions'] } }
-          ]
-        },
-        { $inc: { completedCount: 1 } },
-        { new: true, session }
-      );
-      if (!reservedTask) {
-        const error = new Error('ظرفیت task تکمیل شده است.');
-        error.code = 'TASK_FULL';
-        throw error;
-      }
-
-      const approved = await TaskCompletion.findOneAndUpdate(
-        { _id: submission._id, status: 'pending' },
-        { $set: { status: 'approved', reviewedAt, reviewedBy: req.adminActor } },
-        { new: true, session }
-      );
-      if (!approved) {
-        const error = new Error('این submission هم‌زمان توسط ادمین دیگری بررسی شد.');
-        error.code = 'SUBMISSION_NOT_PENDING';
-        throw error;
-      }
-
-      if (reservedTask.maxCompletions != null && reservedTask.completedCount >= reservedTask.maxCompletions) {
-        await Task.updateOne({ _id: reservedTask._id }, { $set: { isActive: false } }, { session });
-      }
-
-      const user = await User.findByIdAndUpdate(
-        submission.user,
-        { $inc: { points: reward } },
-        { new: true, session }
-      );
-      if (!user) {
-        const error = new Error('کاربر submission پیدا نشد.');
-        error.code = 'SUBMISSION_USER_NOT_FOUND';
-        throw error;
-      }
-
-      const ledger = await recordLedgerRequired({
-        user: user._id,
-        type: 'task',
-        amount: reward,
-        description: `Task Reward — ${task.title}`,
-        balanceAfter: user.points,
-        sourceId,
-        session
-      });
-      if (!ledger.created) {
-        const error = new Error('پاداش task قبلاً ثبت شده است؛ پرداخت دوباره انجام نشد.');
-        error.code = 'TASK_REWARD_ALREADY_PAID';
-        throw error;
-      }
-
-      const revenueUsd = reservedTask.isSponsored ? Number(reservedTask.sponsorPriceUsd) || 0 : 0;
-      const costUsd = rewardCostUsd(reward, settings.rate, settings.gramUsdPrice);
-      await TaskCompletion.updateOne(
-        { _id: approved._id, status: 'approved' },
-        { $set: { revenueUsd, costUsd } },
-        { session }
-      );
-      return { reward, points: user.points, taskTitle: task.title, userId: user._id };
+    const payment = await approveTaskSubmission({
+      submissionId: req.params.id,
+      adminActor: req.adminActor,
+      settings: await Settings.getGlobal()
     });
-
     res.json({ success: true, status: 'approved', reward: payment.reward, points: payment.points, upBalance: Number(payment.points) || 0 });
     recordAdminLog({
       actor: req.adminActor,
@@ -863,28 +761,37 @@ router.post('/task-submissions/:id/reject', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(404).json({ success: false, message: 'Submission پیدا نشد.' });
   }
-  const note = String(req.body?.note || '').trim().slice(0, 500);
-  const submission = await TaskCompletion.findOneAndUpdate(
-    { _id: req.params.id, status: 'pending', proofMimeType: { $in: ['image/jpeg', 'image/png', 'image/webp'] } },
-    { $set: { status: 'rejected', adminNote: note, reviewedAt: new Date(), reviewedBy: req.adminActor } },
-    { new: true }
-  );
-  if (!submission) {
-    const exists = await TaskCompletion.exists({ _id: req.params.id });
-    return res.status(exists ? 409 : 404).json({
-      success: false,
-      message: exists ? 'این submission دیگر در انتظار بررسی نیست.' : 'Submission پیدا نشد.',
-      code: exists ? 'SUBMISSION_NOT_PENDING' : 'SUBMISSION_NOT_FOUND'
-    });
+  try {
+    const note = String(req.body?.note || '').trim().slice(0, 500);
+    await rejectTaskSubmission({ submissionId: req.params.id, adminActor: req.adminActor, note });
+    res.json({ success: true, status: 'rejected' });
+    recordAdminLog({ actor: req.adminActor, action: 'task_submission_reject', targetType: 'task_completion', targetId: req.params.id, details: note || 'Screenshot task submission رد شد.' });
+  } catch (error) {
+    const status = error.code === 'SUBMISSION_NOT_FOUND' ? 404 : error.code === 'SUBMISSION_NOT_PENDING' ? 409 : 500;
+    if (status === 500) console.error('Screenshot task rejection failed:', error);
+    return res.status(status).json({ success: false, message: error.message || 'رد submission انجام نشد.', code: error.code || 'SERVER_ERROR' });
   }
-  res.json({ success: true, status: 'rejected' });
-  recordAdminLog({
-    actor: req.adminActor,
-    action: 'task_submission_reject',
-    targetType: 'task_completion',
-    targetId: submission._id,
-    details: note || 'Screenshot task submission رد شد.'
-  });
+});
+
+router.post('/task-submissions/bulk-action', async (req, res) => {
+  const action = String(req.body?.action || '').trim();
+  const rawIds = Array.isArray(req.body?.submissionIds) ? req.body.submissionIds : [];
+  const submissionIds = [...new Set(rawIds.map(id => String(id).trim()).filter(id => mongoose.isValidObjectId(id)))];
+  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ success: false, message: 'عملیات دسته‌جمعی نامعتبر است.' });
+  if (!submissionIds.length || submissionIds.length > 500 || submissionIds.length !== rawIds.length) {
+    return res.status(400).json({ success: false, message: 'تعداد یا شناسه submissionها نامعتبر است.' });
+  }
+  const note = String(req.body?.note || '').trim().slice(0, 500);
+  const job = await TaskSubmissionBulkJob.create({ action, submissionIds, note, adminActor: req.adminActor, total: submissionIds.length });
+  startTaskSubmissionBulkJob(job);
+  return res.status(202).json({ success: true, job: publicJob(job), message: 'عملیات دسته‌جمعی در صف پردازش ترتیبی قرار گرفت.' });
+});
+
+router.get('/task-submissions/bulk-action/:id', async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ success: false, message: 'Job پیدا نشد.' });
+  const job = await TaskSubmissionBulkJob.findById(req.params.id).lean();
+  if (!job) return res.status(404).json({ success: false, message: 'Job پیدا نشد.' });
+  return res.json({ success: true, job: publicJob(job) });
 });
 
 /* -------------------- WITHDRAWALS -------------------- */

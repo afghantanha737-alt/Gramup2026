@@ -258,7 +258,7 @@ async function startServer() {
       './models/Settings', './models/PointsLedger', './models/Transaction', './models/Withdrawal', './models/TaskCompletion',
       './models/IdempotencyOperation', './models/TelegramWebhookUpdate', './models/RateLimitBucket',
       './models/AdminSession', './models/TelegramAdminConversation', './models/AdminLog', './models/DistributedJobLock',
-      './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit',
+      './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit', './models/TaskSubmissionBulkJob',
       './models/VipPlan', './models/VipSubscription', './models/VipReserve', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent'
     ]) await require(modelPath).init();
 
@@ -279,6 +279,9 @@ async function startServer() {
     await VipPlan.init();
     await require('./models/VipSubscription').init();
     await require('./models/VipReserve').init();
+    void require('./utils/taskSubmissionBulk').resumePendingTaskSubmissionBulkJobs()
+      .then(count => { if (count) console.log(`↻ Resumed ${count} task submission bulk job(s)`); })
+      .catch(error => console.error('Task submission bulk resume failed:', error.message || error));
     await VipPlan.ensureDefaults();
     await require('./utils/bioLinkTask').ensureBioLinkTask();
     await require('./utils/officialBotTask').ensureOfficialBotTask();
