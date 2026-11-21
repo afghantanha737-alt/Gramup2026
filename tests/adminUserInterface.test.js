@@ -31,5 +31,15 @@ assert.match(adminHtml, /changeUserPage\(-1\)/);
 assert.match(adminHtml, /changeUserPage\(1\)/);
 assert.match(adminHtml, /انتخاب همه کاربران این صفحه/,
   'selection text must accurately describe the visible page');
+assert.match(adminHtml, /class="screenshotGrid"/,
+  'screenshot submissions must render as a card grid');
+assert.match(adminHtml, /loading="lazy"/,
+  'screenshot cards must lazy-load authenticated images');
+assert.match(adminHtml, /رد موارد انتخاب‌شده/,
+  'screenshot toolbar must expose bulk rejection');
+assert.match(adminHtml, /تأیید نهایی همه/,
+  'screenshot toolbar must expose final bulk approval');
+assert.match(adminHtml, /function toggleAllScreenshotCards/,
+  'screenshot cards must support select-all');
 
 console.log('PASS — admin user-delete UI contract and user-list pagination');
