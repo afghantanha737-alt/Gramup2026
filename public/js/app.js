@@ -1636,6 +1636,16 @@ function completionRecord(taskId) {
   return state.completions.find(c => String(c.task) === String(taskId)) || null;
 }
 
+function buildCompletionLookup(completions) {
+  const lookup = new Map();
+  for (const completion of Array.isArray(completions) ? completions : []) {
+    if (!completion) continue;
+    const key = String(completion.task);
+    if (!lookup.has(key)) lookup.set(key, completion);
+  }
+  return lookup;
+}
+
 function renderHome() {
   const approvedTasks = state.completions.filter(c => c.status === "approved").length;
   const level = state.level || { badge: "🥉", name: "Bronze" };
@@ -2283,7 +2293,13 @@ function renderTasks() {
     return;
   }
 
-  const doneCount = visibleTasks.filter(task => completionStatus(task._id) === "approved").length;
+  const completionByTask = buildCompletionLookup(state.completions);
+  const taskCompletionRecord = taskId => completionByTask.get(String(taskId)) || null;
+  const taskCompletionStatus = taskId => {
+    const completion = taskCompletionRecord(taskId);
+    return completion ? completion.status : null;
+  };
+  const doneCount = visibleTasks.filter(task => taskCompletionStatus(task._id) === "approved").length;
   const taskProgress = visibleTasks.length ? Math.round((doneCount / visibleTasks.length) * 100) : 0;
 
   content.innerHTML = `
@@ -2299,7 +2315,7 @@ function renderTasks() {
     ${referralHtml}
     <div class="taskList">
       ${visibleTasks.map(task => {
-        const status = completionStatus(task._id);
+        const status = taskCompletionStatus(task._id);
         const icon = taskIconMarkup(task);
         const taskTitle = task.taskKind === "bio_link" ? t("bio_link_task_title") : task.title;
         const taskDescription = task.taskKind === "bio_link" ? t("bio_link_task_desc") : task.description;
@@ -2311,7 +2327,7 @@ function renderTasks() {
             ? `<button class="taskAction done" disabled>${t("task_btn_done")}</button>`
             : `<button class="taskAction pending" disabled>🔒 Mining ${formatPoints(task.vipPlanNumber)}</button>`;
         } else if (task.taskKind === "bio_link") {
-          const completion = completionRecord(task._id);
+          const completion = taskCompletionRecord(task._id);
           const nextAvailableAt = completion?.nextAvailableAt ? new Date(completion.nextAvailableAt) : null;
           const remaining = nextAvailableAt && Number.isFinite(nextAvailableAt.getTime())
             ? nextAvailableAt.getTime() - (Date.now() + state.tasksServerOffsetMs)
@@ -2320,7 +2336,7 @@ function renderTasks() {
             ? `<button class="taskAction pending" data-task-state="COOLDOWN" data-bio-link-cooldown="true" data-until="${escapeHTML(nextAvailableAt.toISOString())}" disabled>${t("task_latest_post_available_in", { time: formatCountdown(remaining) })}</button>`
             : `<button type="button" class="taskAction" data-verify="${escapeHTML(task._id)}">${t("bio_link_task_verify")}</button>`;
         } else if (task.verifyType === "latest_post") {
-          const completion = completionRecord(task._id);
+          const completion = taskCompletionRecord(task._id);
           const nextAvailableAt = completion?.nextAvailableAt ? new Date(completion.nextAvailableAt) : null;
           const remaining = nextAvailableAt && Number.isFinite(nextAvailableAt.getTime())
             ? nextAvailableAt.getTime() - (Date.now() + state.tasksServerOffsetMs)
@@ -2349,7 +2365,7 @@ function renderTasks() {
         } else if (status === "pending") {
           actionHtml = `<button class="taskAction pending" disabled>${t("task_btn_pending")}</button>`;
         } else if (task.verifyType === "manual") {
-          const rejectedRecord = status === "rejected" ? completionRecord(task._id) : null;
+          const rejectedRecord = status === "rejected" ? taskCompletionRecord(task._id) : null;
           const rejectedNote = rejectedRecord?.adminNote
             ? `<div class="taskHint error" style="flex-basis:100%">${escapeHTML(rejectedRecord.adminNote)}</div>`
             : status === "rejected" ? `<div class="taskHint error" style="flex-basis:100%">${t("task_submission_rejected")}</div>` : "";

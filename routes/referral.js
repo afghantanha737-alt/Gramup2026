@@ -18,28 +18,25 @@ const {
   reviewStatusOf
 } = require('../utils/referralCore');
 const { buildReferralViewData, calculateReferralEarningsTotal } = require('../utils/referralView');
+const { createBoundedTtlCache } = require('../utils/boundedTtlCache');
 
 const { withMembership } = require('../utils/membership');
 const auth = withMembership(requireUnifiedAuth(process.env.BOT_TOKEN));
 const REFERRAL_LEDGER_TYPES = ['referral_initial', 'referral_bonus', 'referral_commission', 'referral_welcome'];
 const HISTORY_LIMIT = 40;
 const REFERRAL_CACHE_TTL_MS = 45 * 1000;
-const referralResponseCache = new Map();
+const REFERRAL_CACHE_MAX_ENTRIES = 1000;
+const referralResponseCache = createBoundedTtlCache({
+  maxEntries: REFERRAL_CACHE_MAX_ENTRIES,
+  ttlMs: REFERRAL_CACHE_TTL_MS
+});
 
 function getCachedReferralResponse(userId) {
-  const key = String(userId || '');
-  const entry = referralResponseCache.get(key);
-  if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
-    referralResponseCache.delete(key);
-    return null;
-  }
-  return entry.payload;
+  return referralResponseCache.get(String(userId || ''));
 }
 
 function setCachedReferralResponse(userId, payload) {
-  referralResponseCache.set(String(userId || ''), { expiresAt: Date.now() + REFERRAL_CACHE_TTL_MS, payload });
-  return payload;
+  return referralResponseCache.set(String(userId || ''), payload);
 }
 
 function utcMonthStart(date = new Date()) {

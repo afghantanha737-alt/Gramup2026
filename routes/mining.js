@@ -137,21 +137,23 @@ function sendOperationResult(res, result) {
 }
 
 router.get('/status', auth, async (req, res) => {
-  const user = await User.findById(req.dbUser._id).select('+vipMiningCycleStartedAt +vipMiningCycleEndsAt +vipMiningCycleNotifiedAt');
-  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
   const now = new Date();
+  const [user, subscriptions, history] = await Promise.all([
+    User.findById(req.dbUser._id).select('+vipMiningCycleStartedAt +vipMiningCycleEndsAt +vipMiningCycleNotifiedAt'),
+    VipSubscription.find({
+      user: req.dbUser._id,
+      status: { $in: ['active', 'completed'] }
+    }).select('_id user planNumber pricePoints monthlyRewardPercent durationDays principalDailyBps rewardDailyBps dailyRewardAveragePoints totalRewardCents totalRewardPoints claimedRewardPoints startAt endAt status policyVersion claimsCompleted reserveLiabilityCents reservePaidCents lastClaimAt vipMiningLastClaimAt vipMiningRemainder vipMiningPaidMicros vipMiningReserveRemainderMicros').lean(),
+    PointsLedger.find({
+      user: req.dbUser._id,
+      type: { $in: ['mining_claim', 'mining_upgrade'] },
+      currency: 'points'
+    }).sort({ createdAt: -1, _id: -1 }).limit(MINING_HISTORY_LIMIT)
+      .select('type amount currency description balanceAfter sourceId transactionId createdAt').lean()
+  ]);
+  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
   // Do not filter startAt in Mongo: legacy BSON strings compare differently
   // from Date values. The accrual helper normalizes parseable dates in JS.
-  const subscriptions = await VipSubscription.find({
-    user: user._id,
-    status: { $in: ['active', 'completed'] }
-  }).select('_id user planNumber pricePoints monthlyRewardPercent durationDays principalDailyBps rewardDailyBps dailyRewardAveragePoints totalRewardCents totalRewardPoints claimedRewardPoints startAt endAt status policyVersion claimsCompleted reserveLiabilityCents reservePaidCents lastClaimAt vipMiningLastClaimAt vipMiningRemainder vipMiningPaidMicros vipMiningReserveRemainderMicros').lean();
-  const history = await PointsLedger.find({
-    user: user._id,
-    type: { $in: ['mining_claim', 'mining_upgrade'] },
-    currency: 'points'
-  }).sort({ createdAt: -1, _id: -1 }).limit(MINING_HISTORY_LIMIT)
-    .select('type amount currency description balanceAfter sourceId transactionId createdAt').lean();
   const mining = calculateVipMiningStatus(subscriptions, now);
   const cycle = calculateVipMiningCycleStatus(subscriptions, user.vipMiningCycleStartedAt, user.vipMiningCycleEndsAt, now);
   mining.cycle = cycle;
