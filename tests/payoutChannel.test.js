@@ -26,11 +26,7 @@ const receipt = buildPayoutReceipt({
   },
   totalPaidOut: 142.5
 });
-assert.match(receipt, /Payout #186/);
-assert.match(receipt, /User: ‎nas\*\*\*‎/);
-assert.match(receipt, /Amount: 0\.5 Gram/);
-assert.match(receipt, /Time: 2026\/11\/23 - 16:45/);
-assert.match(receipt, /Total Paid Out: 142\.5 Gram/);
+assert.match(receipt, /✅ Payout Complete\n💸 Payout #186\n\n👤 User: ‎nas\*\*\*‎\n\n💰 Amount: 0\.5 Gram\n\n🕒 Time: 2026\/11\/23 - 16:45\n\n📊 Total Paid Out: 142\.5 Gram\n\n/);
 assert.match(receipt, /Transaction on TON blockchain/);
 assert.match(receipt, /href="https:\/\/tonviewer\.com\/transaction\//);
 
@@ -44,7 +40,7 @@ assert.match(noTxReceipt, /✊ Transaction on TON blockchain/);
 assert.doesNotMatch(noTxReceipt, /tonviewer\.com/);
 
 const keyboard = payoutKeyboard();
-assert.deepStrictEqual(keyboard.inline_keyboard[0].map(button => button.text), ['🚀 Start Gramup', '📢 کانال رسمی']);
+assert.deepStrictEqual(keyboard.inline_keyboard[0].map(button => button.text), ['🚀 Start Gramup', '🌐 Community']);
 assert.strictEqual(keyboard.inline_keyboard[0][0].url, 'https://t.me/Gram_up_bot/app');
 assert.strictEqual(keyboard.inline_keyboard[0][1].url, 'https://t.me/GramupOfficialChannel');
 
