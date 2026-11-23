@@ -102,16 +102,26 @@ async function post(text) {
 }
 
 function postWithdrawalRequested(user, withdrawal) {
+  return post(buildWithdrawalRequest(user, withdrawal));
+}
+
+function buildWithdrawalRequest(user, withdrawal) {
   const date = new Date(withdrawal.createdAt || Date.now()).toISOString().slice(0, 16).replace('T', ' ');
-  return post(
-    `🕓 <b>New withdrawal request</b>\n\n` +
-    `👤 User: ${esc(maskName(user))}\n` +
-    `💰 Amount: <b>${esc(withdrawal.cryptoAmount)} ${esc(withdrawal.token || 'GRAM')}</b>\n` +
-    `👛 Wallet: <code>${esc(maskAddress(withdrawal.address))}</code>\n` +
-    `🆔 Request: #${esc(String(withdrawal._id).slice(-6))}\n` +
-    `📅 ${date} UTC\n` +
-    `⏳ Status: Pending review`
-  );
+  return [
+    '🕓 <b>New withdrawal request</b>',
+    '',
+    `👤 User: ${esc(maskName(user))}`,
+    '',
+    `💰 Amount: <b>${esc(withdrawal.cryptoAmount)} ${esc(withdrawal.token || 'GRAM')}</b>`,
+    '',
+    `👛 Wallet: <code>${esc(maskAddress(withdrawal.address))}</code>`,
+    '',
+    `🆔 Request: #${esc(String(withdrawal._id).slice(-6))}`,
+    '',
+    `📅 ${date} UTC`,
+    '',
+    '⏳ Status: Pending review'
+  ].join('\n');
 }
 
 function buildPayoutReceipt({ payoutNumber, user, withdrawal, totalPaidOut }) {
@@ -208,6 +218,7 @@ async function postWithdrawalPaid(user, withdrawal) {
 
 module.exports = {
   postWithdrawalRequested,
+  buildWithdrawalRequest,
   postWithdrawalPaid,
   buildPayoutReceipt,
   formatAfghanistanDateTime,
