@@ -22,6 +22,12 @@ const withdrawalSchema = new mongoose.Schema(
     },
     adminNote: { type: String, default: '' },
     paidAt: { type: Date, default: null },
+    // Channel payout receipt state is separate from the financial state. The
+    // claim timestamp prevents concurrent approval handlers from posting twice.
+    payoutNumber: { type: Number, default: null, min: 1 },
+    payoutNotificationSent: { type: Boolean, default: false, index: true },
+    payoutNotificationSentAt: { type: Date, default: null },
+    payoutNotificationClaimedAt: { type: Date, default: null },
     statusHistory: {
       type: [{ status: String, at: { type: Date, default: Date.now }, note: { type: String, default: '' } }],
       default: []
