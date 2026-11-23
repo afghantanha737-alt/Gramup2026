@@ -26,11 +26,12 @@ const receipt = buildPayoutReceipt({
   },
   totalPaidOut: 142.5
 });
-assert.match(receipt, /پرداخت شمارهٔ #186 انجام شد/);
-assert.match(receipt, /کاربر: ‎nas\*\*\*‎/);
-assert.match(receipt, /مبلغ: 0\.5 Gram/);
-assert.match(receipt, /زمان: 2026\/11\/23 - 16:45/);
-assert.match(receipt, /مجموع پرداختی‌ها تا امروز: 142\.5 Gram/);
+assert.match(receipt, /Payout #186/);
+assert.match(receipt, /User: ‎nas\*\*\*‎/);
+assert.match(receipt, /Amount: 0\.5 Gram/);
+assert.match(receipt, /Time: 2026\/11\/23 - 16:45/);
+assert.match(receipt, /Total Paid Out: 142\.5 Gram/);
+assert.match(receipt, /Transaction on TON blockchain/);
 assert.match(receipt, /href="https:\/\/tonviewer\.com\/transaction\//);
 
 const noTxReceipt = buildPayoutReceipt({
@@ -39,12 +40,12 @@ const noTxReceipt = buildPayoutReceipt({
   withdrawal: { cryptoAmount: 2, paidAt: new Date('2026-11-23T12:15:00.000Z') },
   totalPaidOut: 144.5
 });
-assert.match(noTxReceipt, /✊ تراکنش پرداخت روی بلاکچین تون/);
+assert.match(noTxReceipt, /✊ Transaction on TON blockchain/);
 assert.doesNotMatch(noTxReceipt, /tonviewer\.com/);
 
 const keyboard = payoutKeyboard();
-assert.deepStrictEqual(keyboard.inline_keyboard[0].map(button => button.text), ['🚀 باز کردن گرام اپ', '📢 کانال رسمی']);
+assert.deepStrictEqual(keyboard.inline_keyboard[0].map(button => button.text), ['🚀 Start Gramup', '📢 کانال رسمی']);
 assert.strictEqual(keyboard.inline_keyboard[0][0].url, 'https://t.me/Gram_up_bot/app');
 assert.strictEqual(keyboard.inline_keyboard[0][1].url, 'https://t.me/GramupOfficialChannel');
 
-console.log('PASS — Persian payout receipt formatting, Kabul time, TON link and keyboard contracts');
+console.log('PASS — English payout receipt formatting, Kabul time, TON link and keyboard contracts');

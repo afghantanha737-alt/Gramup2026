@@ -10,8 +10,8 @@ const PAYOUT_SEQUENCE_ID = 'completed-withdrawals';
 const PAYOUT_CLAIM_TTL_MS = 5 * 60 * 1000;
 
 function maskName(user) {
-  const raw = String((user && (user.username || user.firstName)) || 'کاربر').trim();
-  return `\u200e${raw.slice(0, 3) || 'کاربر'}***\u200e`;
+  const raw = String((user && (user.username || user.firstName)) || 'User').trim();
+  return `\u200e${raw.slice(0, 3) || 'User'}***\u200e`;
 }
 
 function maskAddress(addr) {
@@ -78,7 +78,7 @@ function communityUrl() {
 
 function payoutKeyboard() {
   const buttons = [
-    { text: '🚀 باز کردن گرام اپ', url: gramAppUrl() },
+    { text: '🚀 Start Gramup', url: gramAppUrl() },
     { text: '📢 کانال رسمی', url: communityUrl() }
   ].filter(button => button.url);
   return buttons.length ? { inline_keyboard: [buttons] } : undefined;
@@ -118,15 +118,15 @@ function buildPayoutReceipt({ payoutNumber, user, withdrawal, totalPaidOut }) {
   const tx = String(withdrawal.txHash || '').trim();
   const txUrl = tx ? `https://tonviewer.com/transaction/${encodeURIComponent(tx)}` : '';
   const txLine = tx
-    ? `✊ <a href="${txUrl}">تراکنش پرداخت روی بلاکچین تون</a>`
-    : '✊ تراکنش پرداخت روی بلاکچین تون';
+    ? `✊ <a href="${txUrl}">Transaction on TON blockchain</a>`
+    : '✊ Transaction on TON blockchain';
   return [
-    `💸 پرداخت شمارهٔ #${esc(payoutNumber)} انجام شد`,
+    `💸 Payout #${esc(payoutNumber)}`,
     '',
-    `👤 کاربر: ${esc(maskName(user))}`,
-    `💰 مبلغ: ${esc(formatAmount(withdrawal.cryptoAmount))} Gram`,
-    `🕒 زمان: ${esc(formatAfghanistanDateTime(withdrawal.paidAt || Date.now()))}`,
-    `📊 مجموع پرداختی‌ها تا امروز: ${esc(formatAmount(totalPaidOut))} Gram`,
+    `👤 User: ${esc(maskName(user))}`,
+    `💰 Amount: ${esc(formatAmount(withdrawal.cryptoAmount))} Gram`,
+    `🕒 Time: ${esc(formatAfghanistanDateTime(withdrawal.paidAt || Date.now()))}`,
+    `📊 Total Paid Out: ${esc(formatAmount(totalPaidOut))} Gram`,
     '',
     txLine
   ].join('\n');
