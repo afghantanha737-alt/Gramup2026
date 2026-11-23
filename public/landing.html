@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <meta property="og:title" content="Gramup — Earn, Mine & Spin on TON">
   <meta property="og:description" content="Complete tasks, mine UP, spin for rewards and connect your TON wallet inside Telegram.">
-  <link rel="icon" type="image/png" href="img/gramup-logo-cube-transparent.png">
+  <link rel="icon" type="image/jpeg" href="img/gramup-official-logo.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -44,7 +44,7 @@
     .nav { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(18px); background: rgba(11,15,25,.76); border-bottom: 1px solid rgba(154,187,224,.1); }
     .navInner { height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
     .brand { display: inline-flex; align-items: center; gap: 11px; font-size: 19px; font-weight: 800; letter-spacing: -.04em; }
-    .brand img { width: 38px; height: 38px; object-fit: contain; filter: drop-shadow(0 0 16px rgba(0,184,255,.42)); }
+    .brand img { width: 38px; height: 38px; flex: 0 0 38px; object-fit: cover; border-radius: 12px; filter: drop-shadow(0 0 16px rgba(0,184,255,.42)); }
     .brand span { color: var(--cyan-bright); }
     .navLinks { display: flex; gap: 27px; color: var(--muted); font-size: 13px; font-weight: 600; }
     .navLinks a:hover { color: var(--text); }
@@ -68,9 +68,9 @@
     .previewTop, .previewLabel, .previewRow, .miniStat { display: flex; align-items: center; justify-content: space-between; }
     .previewTop { color: #a8bad4; font-size: 12px; }
     .avatar { display: grid; place-items: center; width: 35px; height: 35px; border-radius: 12px; color: #071521; font-weight: 900; background: linear-gradient(135deg, var(--cyan-bright), #8fa8ff); }
-    .previewBalance { margin: 35px 0 26px; padding: 25px; border-radius: 20px; background: linear-gradient(135deg, rgba(0,184,255,.22), rgba(73,98,207,.2)); border: 1px solid rgba(98,221,255,.2); }
+    .previewOverview { margin: 35px 0 26px; padding: 25px; border-radius: 20px; background: linear-gradient(135deg, rgba(0,184,255,.22), rgba(73,98,207,.2)); border: 1px solid rgba(98,221,255,.2); }
     .previewLabel { color: #9eb1ca; font-size: 12px; }
-    .previewAmount { margin-top: 7px; font-size: 37px; font-weight: 800; letter-spacing: -.07em; }
+    .previewAmount { margin-top: 7px; font-size: 30px; font-weight: 800; letter-spacing: -.07em; }
     .previewAmount small { color: var(--cyan-bright); font-size: 13px; letter-spacing: 0; }
     .liveBadge { display: inline-flex; align-items: center; gap: 6px; color: #92f4c9; font-size: 11px; }
     .liveBadge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px var(--green); }
@@ -132,12 +132,11 @@
 <body>
   <header class="nav">
     <div class="container navInner">
-      <a class="brand" href="#top" aria-label="Gramup home"><img src="img/gramup-logo-cube-transparent.png" alt="Gramup logo"><span>Gram</span>up</a>
+      <a class="brand" href="#top" aria-label="Gramup home"><img src="img/gramup-official-logo.jpg" alt="Official Gramup logo"><span>Gram</span>up</a>
       <nav class="navLinks" aria-label="Primary navigation">
         <a href="#features">Features</a><a href="#how-it-works">How It Works</a><a href="#tokenomics">Tokenomics</a><a href="#roadmap">Roadmap</a><a href="#faq">FAQ</a>
       </nav>
-      <!-- PLACEHOLDER: replace with the exact Gramup bot URL when available. -->
-      <a class="navCta" data-bot-link href="https://t.me/Gramup_bot" target="_blank" rel="noopener">Launch App ↗</a>
+      <a class="navCta" href="https://t.me/Gram_up_bot/app" target="_blank" rel="noopener">Launch App ↗</a>
     </div>
   </header>
 
@@ -149,17 +148,17 @@
           <h1>Earn, Mine &amp; Spin in the <em>TON Ecosystem</em></h1>
           <p class="heroCopy">Complete verified tasks, spin for daily rewards, mine UP tokens and connect your TON wallet — all inside the Gramup Telegram Mini App.</p>
           <div class="buttonRow">
-            <!-- PLACEHOLDER: replace with the exact bot URL. -->
-            <a class="button buttonPrimary" data-bot-link href="https://t.me/Gramup_bot" target="_blank" rel="noopener">Open Gramup Bot ↗</a>
-            <!-- PLACEHOLDER: replace with the official community channel URL. -->
-            <a class="button buttonSecondary" href="https://t.me/Gramup" target="_blank" rel="noopener">Join Community</a>
+            <a class="button buttonPrimary" href="https://t.me/Gram_up_bot/app" target="_blank" rel="noopener">Open Gramup Bot ↗</a>
+            <a class="button buttonSecondary" href="https://t.me/GramupOfficialChannel" target="_blank" rel="noopener">Join Community</a>
           </div>
           <p class="heroNote">Instant UP rewards · TON Connect ready · Telegram-native experience</p>
         </div>
         <div class="appPreview" aria-label="Gramup app preview">
           <div class="previewScreen">
             <div class="previewTop"><span>Good evening, Miner</span><span class="avatar">G</span></div>
-            <div class="previewBalance"><div class="previewLabel"><span>Total UP balance</span><span class="liveBadge">Live</span></div><div class="previewAmount">12,480 <small>UP</small></div></div>
+            <div class="previewOverview"><div class="previewLabel"><span>App Preview</span><span>Gramup Mini App</span></div><div class="previewAmount">Earn inside Telegram <small>TON ecosystem</small></div></div>
+            <div class="miniStat"><span>Community milestone</span><strong>2,000+ active users</strong></div>
+            <div class="miniStat"><span>Reward rails</span><strong>TON &amp; UP rewards</strong></div>
             <div class="previewSectionTitle">Your Gramup activity</div>
             <div class="miniStat"><span>Mining vault</span><strong>+28.4 UP / day</strong></div>
             <div class="miniStat"><span>Daily streak</span><strong>7 days</strong></div>
@@ -206,21 +205,6 @@
     <section class="section" id="faq"><div class="container"><div class="sectionHead"><div><div class="sectionKicker">Questions, answered</div><h2>Frequently asked.</h2></div></div><div class="faq"><details open><summary>How do I start with Gramup?</summary><p>Open the official Gramup bot, launch the Mini App and follow the onboarding steps. You can start with tasks, daily rewards and the mining hub.</p></details><details><summary>How do I connect Tonkeeper?</summary><p>Open the wallet area inside Gramup and choose TON Connect. Select Tonkeeper or MyTonWallet, then approve the connection in your wallet app.</p></details><details><summary>How do referral rewards work?</summary><p>Share your personal invitation link. When eligible invited users join and earn, the applicable referral reward is credited according to Gramup’s current rules.</p></details><details><summary>Where can I check payout proofs?</summary><p>Visit the public payment records page to review verified payouts and available Tonviewer transaction links.</p></details><details><summary>Is Gramup available outside Telegram?</summary><p>Gramup is designed as a Telegram Mini App. The landing page explains the ecosystem, while the full reward experience runs inside Telegram.</p></details></div></div></section>
   </main>
 
-  <footer><div class="container"><div class="footerGrid"><div class="footerBrand"><a class="brand" href="#top"><img src="img/gramup-logo-cube-transparent.png" alt="Gramup logo"><span>Gram</span>up</a><p>Tasks, mining and Web3 rewards — built for the TON ecosystem and delivered through Telegram.</p></div><div class="footerLinks"><a href="#features">Features</a><a href="#tokenomics">Tokenomics</a><a href="#roadmap">Roadmap</a><a href="#faq">FAQ</a><a href="proof.html">Payout proofs</a><!-- PLACEHOLDER: replace these official Telegram URLs. --><a href="https://t.me/Gramup_bot" target="_blank" rel="noopener">Bot</a><a href="https://t.me/Gramup" target="_blank" rel="noopener">Main Channel</a><a href="https://t.me/GramUpPayouts" target="_blank" rel="noopener">Payouts</a></div></div><div class="copyright">© 2026 Gramup. Built on TON. Rewards and withdrawals are subject to eligibility and published rules.</div></div></footer>
-
-  <script>
-    // PLACEHOLDER LINKS: replace the fallback URLs above when the official handles are finalized.
-    async function loadOfficialBotLink() {
-      try {
-        const response = await fetch('/api/app-info', { headers: { Accept: 'application/json' } });
-        if (!response.ok) return;
-        const data = await response.json();
-        const url = new URL(String(data.botLink || ''));
-        if (url.protocol !== 'https:' || url.hostname !== 't.me') return;
-        document.querySelectorAll('[data-bot-link]').forEach(link => { link.href = url.toString(); });
-      } catch (_) { /* keep the clearly marked fallback placeholder */ }
-    }
-    loadOfficialBotLink();
-  </script>
+  <footer><div class="container"><div class="footerGrid"><div class="footerBrand"><a class="brand" href="#top"><img src="img/gramup-official-logo.jpg" alt="Official Gramup logo"><span>Gram</span>up</a><p>Tasks, mining and Web3 rewards — built for the TON ecosystem and delivered through Telegram.</p></div><div class="footerLinks"><a href="#features">Features</a><a href="#tokenomics">Tokenomics</a><a href="#roadmap">Roadmap</a><a href="#faq">FAQ</a><a href="proof.html">Payout proofs</a><a href="https://t.me/Gram_up_bot/app" target="_blank" rel="noopener">Bot</a><a href="https://t.me/GramupOfficialChannel" target="_blank" rel="noopener">Main Channel</a><a href="https://t.me/GramUpPayouts" target="_blank" rel="noopener">Payouts</a></div></div><div class="copyright">© 2026 Gramup. Built on TON. Rewards and withdrawals are subject to eligibility and published rules.</div></div></footer>
 </body>
 </html>

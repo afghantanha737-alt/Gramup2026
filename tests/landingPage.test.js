@@ -10,11 +10,15 @@ for (const id of ['features', 'how-it-works', 'tokenomics', 'roadmap', 'faq']) {
 for (const text of ['Earn, Mine &amp; Spin', 'Mining Hub', 'Spin the Wheel', 'Verified Tasks', 'TON Wallet', 'Open Gramup Bot', 'Join Community']) {
   assert.ok(html.includes(text), `landing page must include ${text}`);
 }
-assert.match(html, /gramup-logo-cube-transparent\.png/);
-assert.match(html, /data-bot-link/);
-assert.match(html, /https:\/\/t\.me\/Gramup_bot/);
-assert.match(html, /PLACEHOLDER/);
+assert.match(html, /gramup-official-logo\.jpg/);
+assert.ok(html.includes('https://t.me/Gram_up_bot/app'));
+assert.ok(html.includes('https://t.me/GramupOfficialChannel'));
+assert.ok(html.includes('https://t.me/GramUpPayouts'));
+assert.doesNotMatch(html, /Gramup_bot|https:\/\/t\.me\/Gramup(?:["']|\/)/);
+assert.doesNotMatch(html, /12,480|Total UP balance|class="liveBadge"/);
+assert.match(html, /App Preview/);
+assert.match(html, /2,000\+ active users/);
+assert.match(html, /TON &amp; UP rewards/);
 assert.match(html, /@media \(max-width: 650px\)/);
 assert.match(html, /<details/);
-assert.match(html, /loadOfficialBotLink/);
 console.log('PASS — Gramup landing page sections, responsive layout, CTA placeholders and FAQ contracts');
