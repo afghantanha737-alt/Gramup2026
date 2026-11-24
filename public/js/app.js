@@ -522,7 +522,7 @@ const WALLET_HISTORY_FALLBACKS = {
     wallet_view_all_button: "مشاهده صفحه عمومی پرداخت‌ها",
     wallet_proof_channel_button: "کانال عمومی تأیید پرداخت‌ها",
     history_received: "حقوق گرفت",
-    transaction_status_on_chain: "تایید شده روی بلاکچین",
+    transaction_status_on_chain: "تایید شد روی بلاکچین",
     history_time_just_now: "همین حالا",
     history_time_minutes_ago: "{n} دقیقه پیش",
     history_time_hours_ago: "{n} ساعت پیش"
@@ -1720,7 +1720,7 @@ function renderHome() {
       <div class="tbStat">
         <div class="tbStatIcon tbIconMint"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#2f9bf0"/><path d="M20 24h24l6 8-18 20L14 32z" fill="#fff"/><path d="M32 30v10M27 35h10" stroke="#2f9bf0" stroke-width="3" stroke-linecap="round"/></svg></div>
         <div class="tbStatLabel tbColGreen">${t("tb_earned")}</div>
-        <div class="tbStatValue">${formatPoints(state.totalEarnedPoints)}</div>
+        <div class="tbStatValue">${formatCompactPoints(state.totalEarnedPoints)}</div>
       </div>
       <div class="tbStat">
         <div class="tbStatIcon tbIconOrange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2A6.5 6.5 0 0 1 21.5 20"/></svg></div>
@@ -3388,7 +3388,7 @@ function renderProfileMenu() {
     <section class="profilePulseGrid" aria-label="${escapeHTML(t("tb_your_progress"))}">
       <div><strong>${formatCompactPoints(state.points)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("profile_available_balance")}</span></div>
       <div><strong>${formatNumber(state.invitedCount)}</strong><span class="profilePulseLabel">${t("referral_kpi_direct")}</span></div>
-      <div><strong>${formatPoints(state.totalEarnedPoints)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("profile_earned_label")}</span></div>
+      <div><strong>${formatCompactPoints(state.totalEarnedPoints)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("profile_earned_label")}</span></div>
     </section>
     <div class="card profileMenuPanel">
       <div class="profileMenuLabel">${t("menu_referral")}</div>

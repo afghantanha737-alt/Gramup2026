@@ -168,7 +168,7 @@ const TRANSLATIONS = {
     history_time_just_now: "همین حالا",
     history_time_minutes_ago: "{n} دقیقه پیش",
     history_time_hours_ago: "{n} ساعت پیش",
-    history_status_completed: "تکمیل‌شده", history_received: "حقوق گرفت", history_on_chain_confirmed: "تایید شده روی بلاکچین", transaction_status_on_chain: "تایید شده روی بلاکچین",
+    history_status_completed: "تکمیل‌شده", history_received: "حقوق گرفت", history_on_chain_confirmed: "تایید شد روی بلاکچین", transaction_status_on_chain: "تایید شد روی بلاکچین",
     history_to_label: "به:",
     history_from_label: "از:",
     history_txid_label: "شناسهٔ تراکنش:",

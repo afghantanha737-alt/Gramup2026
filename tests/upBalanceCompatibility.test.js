@@ -118,6 +118,8 @@ app.use('/api/points', pointsRouter);
   assert.match(appJs, /function formatCompactPoints\(value\)[\s\S]*?Math\.abs\(amount\) < 10000[\s\S]*?Math\.floor\(Math\.abs\(amount\) \/ 1000\).*K/);
   assert.match(appJs, /tb_points_chip[\s\S]*?formatCompactPoints\(state\.points\)/);
   assert.match(appJs, /formatCompactPoints\(state\.points\)[\s\S]*?profile_available_balance/);
+  assert.match(appJs, /tb_earned[\s\S]*?formatCompactPoints\(state\.totalEarnedPoints\)/);
+  assert.match(appJs, /formatCompactPoints\(state\.totalEarnedPoints\)[\s\S]*?profile_earned_label/);
   assert.match(appJs, /function upBalanceFromResponse\(response, fallback = state\.points\)[\s\S]*?response\?\.upBalance \?\? response\?\.points/);
   assert.match(appJs, /state\.points = upBalanceFromResponse\(data\);/);
   assert.match(appJs, /tbLabel.*wallet_points_card_title[\s\S]*?class="upTokenMark"[\s\S]*?formatPoints\(state\.points\)/);
