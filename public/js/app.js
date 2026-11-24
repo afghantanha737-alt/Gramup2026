@@ -469,6 +469,12 @@ function formatPoints(value) {
   const amount = Number(value) || 0;
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(Number(amount.toFixed(6)));
 }
+function formatCompactPoints(value) {
+  const amount = Number(value) || 0;
+  if (Math.abs(amount) < 10000) return formatPoints(amount);
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}${Math.floor(Math.abs(amount) / 1000)}K`;
+}
 function formatNumber(value, decimals = 4) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: decimals }).format(Number(value) || 0);
 }
@@ -516,7 +522,7 @@ const WALLET_HISTORY_FALLBACKS = {
     wallet_view_all_button: "مشاهده صفحه عمومی پرداخت‌ها",
     wallet_proof_channel_button: "کانال عمومی تأیید پرداخت‌ها",
     history_received: "حقوق گرفت",
-    transaction_status_on_chain: "تأییدشده روی زنجیره",
+    transaction_status_on_chain: "تایید شده روی بلاکچین",
     history_time_just_now: "همین حالا",
     history_time_minutes_ago: "{n} دقیقه پیش",
     history_time_hours_ago: "{n} ساعت پیش"
@@ -2999,7 +3005,7 @@ function renderPublicHistoryList() {
       <article class="publicTxCard">
         <div class="publicTxIdentity">
           <div class="publicTxUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(walletHistoryText("history_received"))}</em></strong></div>
-          <div class="publicTxMeta" dir="ltr"><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time><span class="publicTxSeparator" aria-hidden="true">•</span><span class="publicTxStatus" dir="${state.language === "en" ? "ltr" : "rtl"}">${escapeHTML(walletHistoryText("transaction_status_on_chain"))}</span></div>
+          <div class="publicTxMeta" dir="ltr"><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time> <span class="publicTxStatus" dir="${state.language === "en" ? "ltr" : "rtl"}">${escapeHTML(walletHistoryText("transaction_status_on_chain"))}</span></div>
         </div>
         <div class="publicTxPayment"><div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorer}</div>
       </article>`;
@@ -3371,7 +3377,7 @@ function renderProfileMenu() {
       <div class="profileHeadInfo">
         <div class="profileNameLg">${escapeHTML(firstName)}</div>
         <div class="tbPills">
-          <span class="tbPill tbPillPurple tbPillSm">${t("tb_points_chip", { n: formatPoints(state.points) })}</span>
+          <span class="tbPill tbPillPurple tbPillSm">${t("tb_points_chip", { n: formatCompactPoints(state.points) })}</span>
           <span class="tbPill tbPillOrange tbPillSm">${formatPoints(state.invitedCount)} ${t("tb_referrals")}</span>
           <span class="tbPill tbPillGreen tbPillSm">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
         </div>
@@ -3380,7 +3386,7 @@ function renderProfileMenu() {
     </section>
 
     <section class="profilePulseGrid" aria-label="${escapeHTML(t("tb_your_progress"))}">
-      <div><strong>${formatPoints(state.points)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("profile_available_balance")}</span></div>
+      <div><strong>${formatCompactPoints(state.points)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("profile_available_balance")}</span></div>
       <div><strong>${formatNumber(state.invitedCount)}</strong><span class="profilePulseLabel">${t("referral_kpi_direct")}</span></div>
       <div><strong>${formatPoints(state.totalEarnedPoints)}</strong><small class="profilePulseUnit">${tokenIconMarkup()}<span>UP</span></small><span class="profilePulseLabel">${t("profile_earned_label")}</span></div>
     </section>

@@ -30,6 +30,7 @@ async function main() {
     getInitials: () => 'A',
     escapeHTML: value => String(value ?? ''),
     formatPoints: value => String(value),
+    formatCompactPoints: value => Number(value) >= 10000 ? `${Math.floor(Number(value) / 1000)}K` : String(value),
     formatNumber: value => String(value),
     tokenAmount: value => String(value)
   };
