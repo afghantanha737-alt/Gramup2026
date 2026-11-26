@@ -137,7 +137,7 @@ for (const code of ['VIP0_ALREADY_CLAIMED', 'VIP0_UNAVAILABLE', 'VIP0_CONFIG_INV
 assert.match(i18n, /vip0_free: "رایگان"/);
 assert.match(i18n, /vip0_free: "وړیا"/);
 assert.match(i18n, /vip0_activate: "Activate Free"/);
-assert.match(index, /i18n\.js\?v=i18n_20261126_2/);
-assert.match(index, /app\.js\?v=swap_20261126_1/);
+assert.match(index, /i18n\.js\?v=i18n_20261126_3/);
+assert.match(index, /app\.js\?v=swap_20261126_2/);
 
 console.log('PASS — VIP0 free miner has validated terms, atomic one-time claim protections, 20 UP/day accrual, localized UI/admin controls, and expiry handling');

@@ -11,7 +11,9 @@ const {
   parseExchangeAmount,
   exchangeAmountFromUp,
   exchangeAmountToUp,
-  exchangeRateSnapshot
+  exchangeRateSnapshot,
+  upToGramRate,
+  exchangeUpToGram
 } = require('../utils/exchangeAmounts');
 
 const root = path.join(__dirname, '..');
@@ -22,13 +24,17 @@ const helperStart = appSource.indexOf('function normalizeLocalizedExchangeAmount
 const helperEnd = appSource.indexOf('\nfunction setExchangePair(', helperStart);
 assert.notStrictEqual(helperStart, -1, 'frontend localized amount helper exists');
 assert.ok(helperEnd > helperStart, 'frontend localized amount helper block is bounded');
-const browserHelpers = {};
-vm.runInNewContext(`${appSource.slice(helperStart, helperEnd)}\nglobalThis.testHelpers = { normalizeLocalizedExchangeAmount, parseLocalizedExchangeAmount };`, browserHelpers);
+const browserHelpers = { UP_PER_USDT: 10000 };
+vm.runInNewContext(`${appSource.slice(helperStart, helperEnd)}\nglobalThis.testHelpers = { normalizeLocalizedExchangeAmount, parseLocalizedExchangeAmount, calculateUpToGramClient };`, browserHelpers);
 
 const normalizeClient = browserHelpers.testHelpers.normalizeLocalizedExchangeAmount;
 const parseClient = browserHelpers.testHelpers.parseLocalizedExchangeAmount;
+const upToGramClient = browserHelpers.testHelpers.calculateUpToGramClient;
 assert.strictEqual(normalizeClient('۲٫۰۳۲۱۲۵۰۰۰'), '2.032125000');
 assert.strictEqual(parseClient('۲٫۰۳۲۱۲۵۰۰۰'), 2.032125);
+assert.strictEqual(upToGramRate(0.02), 0.005);
+assert.strictEqual(exchangeUpToGram(1000, 0.02), 5);
+assert.strictEqual(upToGramClient(1000, 0.02), 5, 'the UI preview uses the same fixed-UP/USD and live-GRAM/USD calculation');
 assert.strictEqual(normalizeClient('۲,۰۳۲۱۲۵'), '2.032125');
 assert.strictEqual(normalizeClient('٢٬٠٣٢٫١٢'), '2032.12');
 assert.strictEqual(normalizeClient('2,032.12'), '2032.12');
@@ -134,7 +140,23 @@ async function request(handler, body) {
   return output;
 }
 
+let originalGetLiveRates;
 (async () => {
+  const stonFi = require('../routes/stonFi');
+  originalGetLiveRates = stonFi.getLiveRates;
+  let liveGramUsd = 0.02;
+  let failLiveRates = false;
+  stonFi.getLiveRates = async () => {
+    if (failLiveRates) throw new Error('STON.fi unavailable');
+    return {
+      source: 'STON.fi market API', updatedAt: '2026-11-26T00:00:00.000Z', gramUsdt: liveGramUsd,
+      usdtGram: 1 / liveGramUsd,
+      assets: {
+        GRAM: { address: 'native-gram-test-asset', symbol: 'GRAM', decimals: 9, priceUsd: liveGramUsd },
+        USDT: { address: 'usdt-test-asset', symbol: 'USDT', decimals: 6, priceUsd: 1 }
+      }
+    };
+  };
   const pointsRouter = require('../routes/points');
   const exchange = routeHandler(pointsRouter, '/exchange');
 
@@ -161,6 +183,31 @@ async function request(handler, body) {
   assert.strictEqual(account.gramBalance, 1.5);
   assert.strictEqual(account.usdtBalance, expectedLiveUsdt);
   assert.deepStrictEqual(ledgerRows.map(row => [row.asset, row.currency]), [['GRAM', 'gram'], ['USDT', 'usdt']]);
+
+  account = { _id: 'swap-user', points: 20000, gramBalance: 0, usdtBalance: 0 };
+  ledgerRows = [];
+  response = await request(exchange, { from: 'UP', to: 'GRAM', amount: '10000' });
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(response.body.receivedAmount, 50, '10000 UP is $1.00 and buys 50 GRAM at $0.02 each');
+  assert.strictEqual(response.body.rates.upUsd, 0.0001);
+  assert.strictEqual(response.body.rates.gramUsd, 0.02);
+  assert.strictEqual(response.body.rates.upToGram, 0.005);
+  assert.strictEqual(account.points, 10000);
+  assert.strictEqual(account.gramBalance, 50);
+  assert.deepStrictEqual(ledgerRows.map(row => [row.asset, row.currency, row.amount]), [
+    ['UP', 'points', -10000], ['GRAM', 'gram', 50]
+  ]);
+
+  account = { _id: 'swap-user', points: 10000, gramBalance: 0, usdtBalance: 0 };
+  ledgerRows = [];
+  failLiveRates = true;
+  response = await request(exchange, { from: 'UP', to: 'GRAM', amount: '10000' });
+  failLiveRates = false;
+  assert.strictEqual(response.status, 503, 'UP-to-GRAM refuses to use a stale configured rate when STON.fi is unavailable');
+  assert.strictEqual(response.body.code, 'STON_RATES_UNAVAILABLE');
+  assert.strictEqual(account.points, 10000);
+  assert.strictEqual(account.gramBalance, 0);
+  assert.strictEqual(ledgerRows.length, 0);
 
   account = { _id: 'swap-user', points: 0, gramBalance: 0.1, usdtBalance: 0 };
   ledgerRows = [];
@@ -203,6 +250,7 @@ async function request(handler, body) {
   }
   console.log('PASS — localized Swap amounts, GRAM→UP/USDT balance and ledger paths, and precise atomic-error responses');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => {
+  if (originalGetLiveRates) require('../routes/stonFi').getLiveRates = originalGetLiveRates;
   idempotency.executeIdempotently = originals.executeIdempotently;
   ledger.recordLedgerRequired = originals.recordLedgerRequired;
   Settings.getGlobal = originals.getGlobal;

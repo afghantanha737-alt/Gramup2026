@@ -2514,21 +2514,30 @@ let stonRates = null;
 let stonQuote = null;
 let stonQuoteTimer = null;
 let stonRatesPromise = null;
+let stonRatesFetchedAt = 0;
+const STON_MARKET_RATE_TTL_MS = 15000;
 function isStonPair() { return (exchangeFromAsset === "GRAM" && exchangeToAsset === "USDT") || (exchangeFromAsset === "USDT" && exchangeToAsset === "GRAM"); }
+function isUpToGramPair() { return exchangeFromAsset === "UP" && exchangeToAsset === "GRAM"; }
+function usesStonRates() { return isStonPair() || isUpToGramPair(); }
 function renderStonMarket() {
   const panel = $("#stonMarketPanel");
   if (!panel) return;
-  panel.style.display = isStonPair() ? "block" : "none";
-  if (!stonRates || !isStonPair()) return;
+  panel.style.display = usesStonRates() ? "block" : "none";
+  if (!stonRates || !usesStonRates()) return;
   const gram = Number(stonRates.assets?.GRAM?.priceUsd) || 0;
   const usdt = Number(stonRates.assets?.USDT?.priceUsd) || 0;
-  $("#stonMarketPrices").textContent = `${t("ston_price_gram")}: $${gram.toFixed(6)} · ${t("ston_price_usdt")}: $${usdt.toFixed(6)}`;
-  const direct = exchangeFromAsset === "GRAM" ? stonRates.gramUsdt : stonRates.usdtGram;
-  $("#stonDirectRate").textContent = `${t("ston_direct_rate")}: 1 ${exchangeFromAsset} ≈ ${Number(direct || 0).toFixed(exchangeFromAsset === "GRAM" ? 6 : 4)} ${exchangeToAsset}`;
+  const upUsd = 1 / UP_PER_USDT;
+  $("#stonMarketPrices").textContent = isUpToGramPair()
+    ? `${t("ston_price_gram")}: $${gram.toFixed(6)} · ${t("ston_price_up")}: $${upUsd.toFixed(4)}`
+    : `${t("ston_price_gram")}: $${gram.toFixed(6)} · ${t("ston_price_usdt")}: $${usdt.toFixed(6)}`;
+  const direct = isUpToGramPair() ? upUsd / gram
+    : exchangeFromAsset === "GRAM" ? stonRates.gramUsdt : stonRates.usdtGram;
+  const sourceAsset = isUpToGramPair() ? "UP" : exchangeFromAsset;
+  $("#stonDirectRate").textContent = `${t("ston_direct_rate")}: 1 ${sourceAsset} ≈ ${Number(direct || 0).toFixed(isUpToGramPair() ? 9 : exchangeFromAsset === "GRAM" ? 6 : 4)} ${exchangeToAsset}`;
 }
 async function refreshStonRates() {
   if (stonRatesPromise) return stonRatesPromise;
-  stonRatesPromise = api("/api/ston/rates", { cache: "no-store" }).then(result => { stonRates = result; renderStonMarket(); return result; }).catch(error => { const status = $("#stonQuoteStatus"); if (status) status.textContent = translateServerMessage(error.code, error.message); throw error; }).finally(() => { stonRatesPromise = null; });
+  stonRatesPromise = api("/api/ston/rates", { cache: "no-store" }).then(result => { stonRates = result; stonRatesFetchedAt = Date.now(); renderStonMarket(); if (isUpToGramPair()) updateExchangePreview(); return result; }).catch(error => { stonRates = null; stonRatesFetchedAt = 0; renderStonMarket(); if (isUpToGramPair()) updateExchangePreview(); const status = $("#stonQuoteStatus"); if (status) status.textContent = translateServerMessage(error.code, error.message); throw error; }).finally(() => { stonRatesPromise = null; });
   return stonRatesPromise;
 }
 async function refreshStonQuote() {
@@ -2564,6 +2573,12 @@ function parseLocalizedExchangeAmount(value) {
   const normalized = normalizeLocalizedExchangeAmount(value);
   return normalized == null ? NaN : Number(normalized);
 }
+function calculateUpToGramClient(upAmount, gramPriceUsd) {
+  const amount = Number(upAmount);
+  const price = Number(gramPriceUsd);
+  if (!Number.isSafeInteger(amount) || amount <= 0 || !Number.isFinite(price) || price <= 0) return 0;
+  return Math.floor(amount * (1 / UP_PER_USDT) / price * 1e9) / 1e9;
+}
 function setExchangePair(from, to, { reset = true } = {}) {
   const nextFrom = normalizeExchangeAssetClient(from) || "UP";
   const nextTo = normalizeExchangeAssetClient(to) || (nextFrom === "UP" ? "USDT" : "UP");
@@ -2594,7 +2609,7 @@ function setExchangePair(from, to, { reset = true } = {}) {
   updateExchangeQuickButtons();
   renderStonMarket();
   updateExchangePreview();
-  if (isStonPair()) { void refreshStonRates().then(() => refreshStonQuote()).catch(() => {}); }
+  if (usesStonRates()) { void refreshStonRates().then(() => { if (isStonPair()) void refreshStonQuote(); else if (isUpToGramPair()) updateExchangePreview(); }).catch(() => {}); }
 }
 function showExchange() {
   if (!readModelActionAllowed()) return;
@@ -2665,6 +2680,18 @@ function updateExchangePreview() {
   else if (amount > getExchangeAvailableBalance()) { if (error) error.textContent = translateServerMessage("EXCHANGE_INSUFFICIENT_BALANCE"); }
   else if (error) error.textContent = "";
   if (isStonPair()) { renderStonMarket(); scheduleStonQuote(); return; }
+  if (isUpToGramPair()) {
+    renderStonMarket();
+    const gramPriceUsd = Number(stonRates?.assets?.GRAM?.priceUsd) || 0;
+    if (!(gramPriceUsd > 0) || Date.now() - stonRatesFetchedAt > STON_MARKET_RATE_TTL_MS) {
+      preview.textContent = t("ston_rate_loading");
+      if (!stonRatesPromise) void refreshStonRates().then(updateExchangePreview).catch(() => {});
+      return;
+    }
+    const received = calculateUpToGramClient(amount, gramPriceUsd);
+    preview.textContent = `${t("exchange_result_label_gram")}: ${formatNumber(received, 9)} GRAM`;
+    return;
+  }
   const upAmount = exchangeAmountToUpClient(amount, exchangeFromAsset);
   const received = exchangeAmountFromUpClient(upAmount, exchangeToAsset);
   const decimals = exchangeToAsset === "UP" ? 0 : exchangeToAsset === "GRAM" ? 9 : 6;
