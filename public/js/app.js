@@ -3100,7 +3100,7 @@ function renderWallet() {
       <div class="tbWalletCard">
         <div class="tbWalletIcon tbIconBlue">${TB_ICONS.coin}</div>
         <div class="tbStatLabel tbColBlue">GRAM</div>
-        <div class="tbWalletValue">${formatNumber(state.gramBalance, 9)} GRAM</div>
+        <div class="tbWalletValue gramBalanceUnit">${gramTokenIconMarkup()}${formatNumber(state.gramBalance, 9)} GRAM</div>
       </div>
     </div>
 
@@ -3385,6 +3385,10 @@ function tokenIconMarkup() {
 }
 function usdtTokenIconMarkup() {
   return '<img class="usdtTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true">';
+}
+
+function gramTokenIconMarkup() {
+  return '<img class="gramTokenIcon" src="img/gram-token-logo.png" alt="" aria-hidden="true">';
 }
 function upRewardMarkup(value, showSign = true) {
   const amount = `${showSign ? "+" : ""}${formatPoints(value)} UP`;

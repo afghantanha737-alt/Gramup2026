@@ -2657,7 +2657,9 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 .usdtAmountUnit .usdtTokenIcon { width: 13px; height: 13px; }
 .walletChainBalance #walletChainBalanceValue .usdtTokenIcon { width: 14px; height: 14px; }
 .tbWalletIcon .usdtTokenIcon { width: 24px; height: 24px; }
-
+.gramTokenIcon { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: cover; object-position: center; border-radius: 50%; vertical-align: middle; }
+.gramBalanceUnit { display: inline-flex; align-items: center; gap: 6px; direction: ltr; font-variant-numeric: tabular-nums; }
+.tbWalletValue.gramBalanceUnit .gramTokenIcon { width: 24px; height: 24px; }
 .exchangeQuickAmounts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: -3px 0 12px; }
 .exchangeQuickBtn { min-height: 34px; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-3); color: var(--text); font-size: 11px; font-weight: 800; }
 .exchangeQuickBtn:not(:disabled):active { transform: scale(.97); }
