@@ -2331,7 +2331,9 @@ html[data-theme="light"] .profileOptionCheck { color: #0f766e; }
 .profileHistoryView .ledgerIcon { width: 35px; height: 35px; display: grid; place-items: center; border: 1px solid rgba(167,139,250,.16); border-radius: 11px; background: rgba(167,139,250,.10); font-size: 15px; }
 .profileHistoryView .ledgerDesc { font-size: 11px; font-weight: 850; }
 .profileHistoryView .historyMeta { overflow: hidden; margin-top: 4px; color: var(--text-muted); font-size: 8px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
-.profileHistoryView .ledgerAmount { font-size: 11px; font-weight: 900; direction: ltr; }
+.profileHistoryView .ledgerAmount { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 11px; font-weight: 900; direction: ltr; line-height: 1.2; }
+.profileHistoryView .ledgerUnit { display: inline-flex; align-items: center; gap: 3px; margin-inline-start: 0; line-height: 1; vertical-align: middle; }
+.profileHistoryView .ledgerUnit img { display: block; flex: 0 0 auto; }
 .profileHistoryView .loadMoreBtn { width: 100%; min-height: 42px; margin-top: 10px; border-radius: 12px; }
 
 /* Terms, privacy and language are opened from Profile but remain shared overlays. */
