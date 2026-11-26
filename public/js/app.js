@@ -880,7 +880,7 @@ function renderMembershipGate(override) {
     <div class="gateInner">
       <div class="gateBrand">
         <img src="img/gramup-logo-cube-transparent.png" alt="Gramup">
-        <div class="brandName">Usdt<span>up</span></div>
+        <div class="brandName">Gram<span>up</span></div>
       </div>
       <div class="gateHero">${GATE_PLANE}</div>
       <h1 class="gateTitle">${t("gate_title")}</h1>
@@ -1718,7 +1718,7 @@ function renderHome() {
 
     <div class="tbStats">
       <div class="tbStat">
-        <div class="tbStatIcon tbIconMint"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#2f9bf0"/><path d="M20 24h24l6 8-18 20L14 32z" fill="#fff"/><path d="M32 30v10M27 35h10" stroke="#2f9bf0" stroke-width="3" stroke-linecap="round"/></svg></div>
+        <div class="tbStatIcon tbIconMint"><img class="tbStatLogo" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div>
         <div class="tbStatLabel tbColGreen">${t("tb_earned")}</div>
         <div class="tbStatValue">${formatCompactPoints(state.totalEarnedPoints)}</div>
       </div>

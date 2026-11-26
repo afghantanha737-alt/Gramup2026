@@ -20,6 +20,10 @@ assert.match(themeCss, /html\[data-theme="light"\] body \{[\s\S]*?radial-gradien
   'light mode must provide an actual light background');
 assert.match(css, /\.brandName span \{ color: #7c3aed; \}/,
   'the Gram/up wordmark must use the current brand color');
+assert.match(html, /<div class="brandName">Gram<span>up<\/span><\/div>/,
+  'the app header must preserve the Gramup wordmark');
+assert.match(app, /<div class="brandName">Gram<span>up<\/span><\/div>/,
+  'the channel-gate header must preserve the Gramup wordmark');
 assert.match(css, /\.vipHeroBrand strong span \{ color: #c4b5fd; \}/,
   'the Mine hero wordmark must use the current light accent');
 
@@ -30,6 +34,10 @@ const homeStats = app.slice(statsStart, statsEnd);
 assert.strictEqual((homeStats.match(/class="tbStatIcon(?:\s|\")/g) || []).length, 3,
   'Home earned, invite, and task cards must use the shared icon base class');
 assert.match(homeStats, /tbIconMint/);
+assert.match(homeStats, /<div class="tbStatIcon tbIconMint"><img class="tbStatLogo" src="img\/gramup-logo-cube-transparent\.png" alt="" aria-hidden="true"><\/div>[\s\S]*?tb_earned/,
+  'Home earned UP must use the same Gramup cube asset used by other UP balances');
+assert.match(css, /\.tbIconMint \.tbStatLogo \{[^}]*object-fit: contain;/,
+  'the Home earned-UP cube must preserve its proportions');
 assert.match(homeStats, /tbIconOrange/);
 assert.match(homeStats, /tbIconPurple/);
 assert.match(css, /\.tbIconMint \{ background: #d1fae5;/,

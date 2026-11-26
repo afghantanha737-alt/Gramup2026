@@ -815,6 +815,7 @@ html[dir="rtl"] .tbLinkArrow { display: inline-block; transform: scaleX(-1); }
 .tbStatIcon svg { width: 20px; height: 20px; }
 .tbIconMint { background: #d1fae5; border: 1.5px solid #a7f3d0; }
 .tbIconMint svg { width: 18px; height: 18px; }
+.tbIconMint .tbStatLogo { width: 23px; height: 23px; object-fit: contain; }
 .tbIconOrange { background: #f59e0b; box-shadow: 0 5px 12px rgba(245, 158, 11, .32); }
 .tbIconPurple { background: #6d28d9; box-shadow: 0 5px 12px rgba(109, 40, 217, .32); }
 .tbStatLabel { font-size: 11.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
