@@ -3098,9 +3098,9 @@ function renderWallet() {
         <div class="tbWalletValue usdtBalanceUnit">${formatNumber(state.usdtBalance, 6)} USDT</div>
       </div>
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconBlue">${TB_ICONS.coin}</div>
+        <div class="tbWalletIcon tbGramWalletIcon">${gramTokenIconMarkup()}</div>
         <div class="tbStatLabel tbColBlue">GRAM</div>
-        <div class="tbWalletValue gramBalanceUnit">${gramTokenIconMarkup()}${formatNumber(state.gramBalance, 9)} GRAM</div>
+        <div class="tbWalletValue">${formatNumber(state.gramBalance, 9)} GRAM</div>
       </div>
     </div>
 
