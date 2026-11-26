@@ -76,7 +76,7 @@ for (const [asset, version] of Object.entries({
 })) {
   assert.ok(html.includes(`js/${asset}.js?v=${version}`), `${asset} must use its current cache version`);
 }
-assert.ok(html.includes('js/i18n.js?v=payout_board_20261117_2'), 'i18n.js must use the current locale cache version');
+assert.ok(html.includes('js/i18n.js?v=i18n_20261126_1'), 'i18n.js must use the current locale cache version');
 assert.ok(html.includes('js/app.js?v=payout_board_20261117_2'), 'app.js must use the current UI cache version');
 assert.doesNotMatch(html, /gamification\.js|spinCelebration\.js/, 'unbuilt Lucky Spin scripts must remain unloaded');
 
