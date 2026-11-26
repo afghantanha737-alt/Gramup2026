@@ -51,6 +51,7 @@ const context = vm.createContext({
   },
   $: selector => elements[selector] || null,
   t: key => key,
+  translateServerMessage: code => code || 'error_generic',
   formatNumber: (value, precision) => Number(value).toFixed(precision),
   formatPoints: value => Number(value).toFixed(3),
   console
@@ -82,10 +83,10 @@ assert.equal(vm.runInContext('isExchangeAmountValid(70.123456790)', context), fa
 assert.equal(vm.runInContext('isExchangeAmountValid(70.123456789)', context), true, 'the exact available USDT balance is valid');
 input.value = '-1';
 vm.runInContext('updateExchangePreview()', context);
-assert.equal(error.textContent, 'error_generic', 'negative input displays a validation error');
+assert.equal(error.textContent, 'INVALID_AMOUNT', 'negative input displays the invalid-amount error');
 input.value = '70.123456790';
 vm.runInContext('updateExchangePreview()', context);
-assert.equal(error.textContent, 'error_generic', 'over-balance input displays a validation error');
+assert.equal(error.textContent, 'EXCHANGE_INSUFFICIENT_BALANCE', 'over-balance input displays the insufficient-balance error');
 
 vm.runInContext('window.gramupWallet.isConnected = () => false; window.gramupWallet.isProofVerified = () => false;', context);
 state.chainUsdtBalance = 70.123456789;

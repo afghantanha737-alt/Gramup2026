@@ -1434,7 +1434,13 @@ const TRANSLATIONS = {
 // نگاشت کدهای خطای سرور به کلید ترجمه (اگر مپ نشده بود، پیام خام سرور نمایش داده می‌شود)
 const ERROR_CODE_MAP = {
   ALREADY_CHECKED_IN: { fa: "امروز قبلاً ورود روزانه ثبت شده است.", ps: "نن دی مخکې ثبت شوی.", en: "You've already checked in today." },
-  INVALID_AMOUNT: { fa: "مقدار UP نامعتبر است.", ps: "د UP اندازه سمه نه ده.", en: "Invalid UP amount." },
+  INVALID_AMOUNT: { fa: "مقدار واردشده معتبر نیست.", ps: "ورکړل شوې اندازه سمه نه ده.", en: "The amount entered is invalid." },
+  INVALID_DIRECTION: { fa: "جفت‌ارز انتخاب‌شده برای تبدیل معتبر نیست.", ps: "د تبادلې غوره شوې جوړه سمه نه ده.", en: "The selected exchange pair is invalid." },
+  INVALID_RATE: { fa: "نرخ تبدیل فعلاً معتبر نیست.", ps: "د تبادلې نرخ اوس سم نه دی.", en: "The exchange rate is currently invalid." },
+  EXCHANGE_AMOUNT_TOO_SMALL: { fa: "مقدار برای دریافت حداقل یک UP کافی نیست.", ps: "اندازه د لږ تر لږه یو UP ترلاسه کولو لپاره بسنه نه کوي.", en: "The amount is too small to receive at least 1 UP." },
+  EXCHANGE_INSUFFICIENT_BALANCE: { fa: "موجودی ارز انتخاب‌شده برای این تبدیل کافی نیست.", ps: "د غوره شوې شتمنۍ بیلانس د دې تبادلې لپاره کافي نه دی.", en: "Not enough balance in the selected asset." },
+  EXCHANGE_TEMPORARILY_UNAVAILABLE: { fa: "تبدیل موقتاً در دسترس نیست؛ موجودی حساب تغییر نکرد.", ps: "تبادله اوس مهال شتون نه لري؛ د حساب بیلانس بدل شوی نه دی.", en: "Swap is temporarily unavailable; your balance was not changed." },
+  EXCHANGE_ACCOUNTING_FAILED: { fa: "ثبت مالی تبدیل انجام نشد و موجودی تغییر نکرد؛ بعداً دوباره تلاش کنید.", ps: "د تبادلې مالي ثبت بشپړ نه شو او بیلانس بدل نه شو؛ وروسته بیا هڅه وکړئ.", en: "The swap could not be recorded and your balance was not changed. Please try again later." },
   INVALID_ADDRESS: { fa: "آدرس کیف پول نامعتبر است.", ps: "د والټ آدرس سم نه دی.", en: "Invalid wallet address." },
   INSUFFICIENT_BALANCE: { fa: "موجودی کافی نیست.", ps: "بیلانس کافي نه دی.", en: "Insufficient balance." },
   ALREADY_DONE: { fa: "این تسک قبلاً انجام شده است.", ps: "دا دنده مخکې ترسره شوې ده.", en: "This task is already completed." },

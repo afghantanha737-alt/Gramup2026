@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 
 /**
- * هر ردیف این کالکشن یک رویداد تغییر موجودی (پوینت یا USDT) کاربر است.
+ * هر ردیف این کالکشن یک رویداد تغییر موجودی (UP، GRAM یا USDT) کاربر است.
  * هدف: صفحه‌ی «تاریخچه‌ی تراکنش‌ها» در پروفایل کاربر — که نشان می‌دهد
  * امتیازش دقیقاً از کجا آمده و کجا خرج شده، بدون نیاز به حدس زدن از
  * روی چند کالکشن جدا (Task/Withdrawal/...).
@@ -26,7 +26,7 @@ const pointsLedgerSchema = new mongoose.Schema(
         'referral_welcome', // welcome credit created by the retention flow
         'referral_commission', // کمیسیون چندسطحی بر درآمد اصلی
         'leaderboard_reward', // جایزه رتبه برتر leaderboard هفتگی
-        'exchange_out',    // کسر شده در تبدیل (پوینت->USDT یا USDT->پوینت)
+        'exchange_out',    // کسر از دارایی مبدأ در تبدیل بین UP، GRAM و USDT
         'exchange_in',     // اضافه شده در تبدیل
         'withdraw',        // کسر USDT بابت درخواست برداشت
         'deposit',         // واریز تاییدشده USDT روی TON Mainnet

@@ -292,7 +292,7 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
         <button type="button" class="exchangeDirectionBtn" id="exchangeDirGTP" onclick="setExchangeDirection('usdt_to_points')" data-i18n="exchange_direction_usdt_to_points">USDT → UP</button>
       </div>
       <label class="fieldLabel" id="exchangeAmountLabel" data-i18n="exchange_points_label">مقدار UP</label>
-      <input id="exchangePoints" type="number" inputmode="numeric" placeholder="مثلاً 1000" data-i18n-ph="exchange_points_ph" oninput="updateExchangePreview()">
+      <input id="exchangePoints" type="text" inputmode="decimal" dir="ltr" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="مثلاً 1000" data-i18n-ph="exchange_points_ph" oninput="updateExchangePreview()">
       <div id="exchangeQuickAmounts" class="exchangeQuickAmounts" aria-label="Quick exchange amounts">
         <button type="button" class="exchangeQuickBtn" onclick="setExchangeAmountPercent(25)">25%</button>
         <button type="button" class="exchangeQuickBtn" onclick="setExchangeAmountPercent(50)">50%</button>
@@ -373,9 +373,9 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script defer src="js/maintenanceGate.js?v=20261006-maintenance"></script>
-<script defer src="js/i18n.js?v=i18n_20261126_1"></script>
+<script defer src="js/i18n.js?v=i18n_20261126_2"></script>
 <script defer src="js/readModelCache.js?v=20261030-read-model-1"></script>
-<script defer src="js/app.js?v=payout_board_20261117_2"></script>
+<script defer src="js/app.js?v=swap_20261126_1"></script>
 
 <script defer src="js/walletConnect.js?v=ad_ui_v3_20261109"></script>
 </body>

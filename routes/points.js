@@ -18,6 +18,14 @@ const Task = require('../models/Task');
 const TaskCompletion = require('../models/TaskCompletion');
 const { vipActivationTaskDefinition } = require('../utils/vipActivationTasks');
 const { idempotencyTransactionId, executeIdempotently } = require('../utils/idempotency');
+const {
+  EXCHANGE_ASSETS,
+  normalizeExchangeAsset,
+  parseExchangeAmount,
+  exchangeAmountFromUp,
+  exchangeAmountToUp,
+  exchangeRateSnapshot
+} = require('../utils/exchangeAmounts');
 const { utcDayKey, wasUtcYesterday } = require('../utils/utcDay');
 const { claimDailyCheckin } = require('../utils/dailyAutoCheckin');
 const {
@@ -480,36 +488,15 @@ const round6 = n => Number(Number(n).toFixed(6));
  * New body: { from: 'UP'|'GRAM'|'USDT', to: 'UP'|'GRAM'|'USDT', amount }
  * Legacy directions remain accepted for existing clients.
  */
-const EXCHANGE_ASSETS = Object.freeze({
-  UP: { balanceField: 'points', currency: 'points', decimals: 0 },
-  GRAM: { balanceField: 'gramBalance', currency: 'gram', decimals: 9 },
-  USDT: { balanceField: 'usdtBalance', currency: 'usdt', decimals: 6 }
-});
-function normalizeExchangeAsset(value) {
-  const asset = String(value || '').trim().toUpperCase();
-  return Object.prototype.hasOwnProperty.call(EXCHANGE_ASSETS, asset) ? asset : null;
-}
-function roundExchangeAmount(value, asset) {
-  const decimals = EXCHANGE_ASSETS[asset]?.decimals ?? 6;
-  return asset === 'UP' ? Math.floor(Number(value) || 0) : Number((Number(value) || 0).toFixed(decimals));
-}
-function exchangeAmountFromUp(upAmount, asset, gramPerUp) {
-  if (asset === 'UP') return Math.floor(upAmount);
-  if (asset === 'GRAM') return roundExchangeAmount(upAmount * gramPerUp, 'GRAM');
-  return roundExchangeAmount(upAmount / UP_PER_USDT, 'USDT');
-}
-function exchangeAmountToUp(amount, asset, gramPerUp) {
-  if (asset === 'UP') return Math.floor(amount);
-  if (asset === 'GRAM') return Math.floor(amount / gramPerUp);
-  return usdtToUp(String(amount));
-}
-function exchangeRateSnapshot(gramPerUp) {
-  return { upToGram: gramPerUp, gramToUp: 1 / gramPerUp, upToUsdt: 1 / UP_PER_USDT, usdtToUp: UP_PER_USDT, gramToUsdt: gramPerUp / (1 / UP_PER_USDT), usdtToGram: (1 / UP_PER_USDT) / gramPerUp };
-}
-
 router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) => {
   const u = req.dbUser;
-  const settings = await Settings.getGlobal();
+  let settings;
+  try {
+    settings = await Settings.getGlobal();
+  } catch (error) {
+    console.error('Exchange rate settings could not be loaded:', error.message || error);
+    return res.status(503).json({ success: false, code: 'EXCHANGE_TEMPORARILY_UNAVAILABLE', message: 'نرخ تبدیل فعلاً در دسترس نیست؛ موجودی حساب تغییر نکرد.' });
+  }
   const body = req.body || {};
   const legacyDirection = body.direction === 'points_to_usdt' ? ['UP', 'USDT']
     : body.direction === 'usdt_to_points' ? ['USDT', 'UP']
@@ -528,18 +515,18 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
   if (!['number', 'string'].includes(typeof rawAmount) || String(rawAmount).trim() === '') {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار تبدیل نامعتبر است.' });
   }
-  const requestedAmount = roundExchangeAmount(rawAmount, from);
+  const requestedAmount = parseExchangeAmount(rawAmount, from);
   if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: `مقدار ${from} نامعتبر است.` });
   }
   const upAmount = exchangeAmountToUp(requestedAmount, from, gramPerUp);
   if (!Number.isSafeInteger(upAmount) || upAmount <= 0) {
-    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: `مقدار ${from} برای تبدیل بسیار کم است.` });
+    return res.status(400).json({ success: false, code: 'EXCHANGE_AMOUNT_TOO_SMALL', message: `مقدار ${from} برای تبدیل بسیار کم است.` });
   }
   const spentAmount = exchangeAmountFromUp(upAmount, from, gramPerUp);
   const receivedAmount = exchangeAmountFromUp(upAmount, to, gramPerUp);
   if (!Number.isFinite(spentAmount) || spentAmount <= 0 || !Number.isFinite(receivedAmount) || receivedAmount <= 0) {
-    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار تبدیل بسیار کم است.' });
+    return res.status(400).json({ success: false, code: 'EXCHANGE_AMOUNT_TOO_SMALL', message: 'مقدار تبدیل بسیار کم است.' });
   }
   const source = EXCHANGE_ASSETS[from];
   const target = EXCHANGE_ASSETS[to];
@@ -565,8 +552,8 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
           { new: true, session }
         );
         if (!result) {
-          const error = new Error(`موجودی ${from} کافی نیست.`);
-          error.code = 'INSUFFICIENT_BALANCE';
+          const error = new Error(`موجودی ${from} برای این تبدیل کافی نیست.`);
+          error.code = 'EXCHANGE_INSUFFICIENT_BALANCE';
           throw error;
         }
         await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: source.currency, asset: from, amount: -spentAmount, description: `تبدیل ${from} به ${to}`, balanceAfter: result[source.balanceField], sourceId: `exchange:${u._id}:${scope}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope, key: operationKey, leg: 'out' }), session });
@@ -584,9 +571,16 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
       }
     });
   } catch (error) {
-    if (error.code === 'INSUFFICIENT_BALANCE') return res.status(400).json({ success: false, message: error.message, code: error.code });
+    if (error.code === 'EXCHANGE_INSUFFICIENT_BALANCE') return res.status(400).json({ success: false, message: error.message, code: error.code });
+    if (error.code === 'TRANSACTIONS_UNAVAILABLE') {
+      console.error('Exchange is unavailable because MongoDB transactions are unsupported:', error.message || error);
+      return res.status(503).json({ success: false, code: 'EXCHANGE_TEMPORARILY_UNAVAILABLE', message: 'تبدیل موقتاً در دسترس نیست؛ موجودی حساب تغییر نکرد.' });
+    }
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message, code: error.code });
-    throw error;
+    console.error('Atomic exchange failed; transaction was rolled back:', {
+      userId: String(u._id), from, to, code: error.code || 'UNEXPECTED_ERROR', message: error.message || String(error)
+    });
+    return res.status(500).json({ success: false, code: 'EXCHANGE_ACCOUNTING_FAILED', message: 'تبدیل در ثبت حسابداری انجام نشد؛ موجودی تغییر نکرد. لطفاً بعداً دوباره تلاش کنید.' });
   }
   return res.status(operation.status).json(operation.body);
 });

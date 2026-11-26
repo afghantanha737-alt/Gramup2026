@@ -2514,6 +2514,21 @@ function normalizeExchangeAssetClient(value) {
   const asset = String(value || "").toUpperCase();
   return EXCHANGE_ASSETS.includes(asset) ? asset : null;
 }
+function normalizeLocalizedExchangeAmount(value) {
+  let normalized = String(value ?? "").trim()
+    .replace(/[۰-۹]/g, digit => String(digit.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, digit => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/٫/g, ".")
+    .replace(/[٬\s\u00a0\u202f]/g, "");
+  const commaSeparators = normalized.match(/[,،]/g) || [];
+  if (!normalized.includes(".") && commaSeparators.length === 1) normalized = normalized.replace(/[,،]/, ".");
+  else normalized = normalized.replace(/[,،]/g, "");
+  return /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized) ? normalized : null;
+}
+function parseLocalizedExchangeAmount(value) {
+  const normalized = normalizeLocalizedExchangeAmount(value);
+  return normalized == null ? NaN : Number(normalized);
+}
 function setExchangePair(from, to, { reset = true } = {}) {
   const nextFrom = normalizeExchangeAssetClient(from) || "UP";
   const nextTo = normalizeExchangeAssetClient(to) || (nextFrom === "UP" ? "USDT" : "UP");
@@ -2588,7 +2603,7 @@ function exchangeAmountFromUpClient(upAmount, asset) {
   if (asset === "GRAM") return Number((upAmount * (Number(state.gramRate) || 0.0001)).toFixed(9));
   return Number((upAmount / UP_PER_USDT).toFixed(6));
 }
-function isExchangeAmountValid(value) { const amount = Number(value); return Number.isFinite(amount) && amount > 0 && amount <= getExchangeAvailableBalance(); }
+function isExchangeAmountValid(value) { const amount = parseLocalizedExchangeAmount(value); return Number.isFinite(amount) && amount > 0 && amount <= getExchangeAvailableBalance(); }
 function updateExchangeQuickButtons() {
   const available = getExchangeAvailableBalance();
   document.querySelectorAll("#exchangeQuickAmounts .exchangeQuickBtn").forEach(button => { button.disabled = available <= 0; button.setAttribute("aria-disabled", available <= 0 ? "true" : "false"); });
@@ -2606,9 +2621,10 @@ function setExchangeAmountPercent(percent) {
 window.setExchangeAmountPercent = setExchangeAmountPercent;
 function updateExchangePreview() {
   const input = $("#exchangePoints"); const preview = $("#exchangePreview"); if (!input || !preview) return;
-  const rawAmount = String(input.value ?? "").trim(); const amount = Number(rawAmount) || 0; const error = $("#exchangeError");
-  if (!rawAmount || amount === 0) { if (error) error.textContent = ""; }
-  else if (!isExchangeAmountValid(amount)) { if (error) error.textContent = t("error_generic"); }
+  const rawAmount = String(input.value ?? "").trim(); const parsedAmount = parseLocalizedExchangeAmount(rawAmount); const amount = Number.isFinite(parsedAmount) ? parsedAmount : 0; const error = $("#exchangeError");
+  if (!rawAmount) { if (error) error.textContent = ""; }
+  else if (!Number.isFinite(parsedAmount) || amount <= 0) { if (error) error.textContent = translateServerMessage("INVALID_AMOUNT"); }
+  else if (amount > getExchangeAvailableBalance()) { if (error) error.textContent = translateServerMessage("EXCHANGE_INSUFFICIENT_BALANCE"); }
   else if (error) error.textContent = "";
   const upAmount = exchangeAmountToUpClient(amount, exchangeFromAsset);
   const received = exchangeAmountFromUpClient(upAmount, exchangeToAsset);
@@ -2619,15 +2635,18 @@ function updateExchangePreview() {
 window.updateExchangePreview = updateExchangePreview;
 async function submitExchange() {
   if (!readModelActionAllowed()) return;
-  const input = $("#exchangePoints"); const error = $("#exchangeError"); const button = $("#submitExchange"); const amount = Number(input?.value);
-  if (!amount || amount <= 0 || !isExchangeAmountValid(amount)) { if (error) error.textContent = t("error_generic"); return; }
+  const input = $("#exchangePoints"); const error = $("#exchangeError"); const button = $("#submitExchange");
+  const normalizedAmount = normalizeLocalizedExchangeAmount(input?.value);
+  const amount = normalizedAmount == null ? NaN : Number(normalizedAmount);
+  if (!Number.isFinite(amount) || amount <= 0) { if (error) error.textContent = translateServerMessage("INVALID_AMOUNT"); return; }
+  if (amount > getExchangeAvailableBalance() || !isExchangeAmountValid(amount)) { if (error) error.textContent = translateServerMessage("EXCHANGE_INSUFFICIENT_BALANCE"); return; }
   if (button) button.disabled = true;
   const useInternalUsdtBalance = exchangeFromAsset === "USDT" && exchangeToAsset === "UP" && amount <= state.usdtBalance;
   const idempotencyScope = `exchange_${exchangeFromAsset.toLowerCase()}_to_${exchangeToAsset.toLowerCase()}`;
   try {
     const result = exchangeFromAsset === "USDT" && exchangeToAsset === "UP" && !useInternalUsdtBalance
       ? (typeof window.gramupWallet?.swapUsdtToPoints === "function" ? await window.gramupWallet.swapUsdtToPoints(amount) : Promise.reject(Object.assign(new Error(t("wallet_connection_unavailable")), { code: "WALLET_PROOF_REQUIRED" })))
-      : await api("/api/points/exchange", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) }, body: { from: exchangeFromAsset, to: exchangeToAsset, amount } });
+      : await api("/api/points/exchange", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) }, body: { from: exchangeFromAsset, to: exchangeToAsset, amount: normalizedAmount } });
     clearPendingIdempotencyKey(idempotencyScope);
     state.points = upBalanceFromResponse(result);
     if (result.usdtBalance != null) state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;

@@ -32,7 +32,7 @@ async function call(run, body, params = {}) {
   for (const amount of [[1], {}, 1e100, -2, 0]) {
     response = await call(handler(points, '/exchange'), { direction: 'points_to_usdt', amount });
     assert.strictEqual(response.status, 400);
-    assert.strictEqual(response.body.code, 'INVALID_AMOUNT');
+    assert.ok(['INVALID_AMOUNT', 'EXCHANGE_AMOUNT_TOO_SMALL'].includes(response.body.code));
   }
   response = await call(handler(points, '/withdraw'), { gram: [10], address: 'test-address' });
   assert.strictEqual(response.status, 400);

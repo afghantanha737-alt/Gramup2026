@@ -1,0 +1,209 @@
+'use strict';
+
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const {
+  EXCHANGE_ASSETS,
+  normalizeExchangeAsset,
+  normalizeLocalizedNumericString,
+  parseExchangeAmount,
+  exchangeAmountFromUp,
+  exchangeAmountToUp,
+  exchangeRateSnapshot
+} = require('../utils/exchangeAmounts');
+
+const root = path.join(__dirname, '..');
+const appSource = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
+const indexSource = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+const i18nSource = fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8');
+const helperStart = appSource.indexOf('function normalizeLocalizedExchangeAmount(value) {');
+const helperEnd = appSource.indexOf('\nfunction setExchangePair(', helperStart);
+assert.notStrictEqual(helperStart, -1, 'frontend localized amount helper exists');
+assert.ok(helperEnd > helperStart, 'frontend localized amount helper block is bounded');
+const browserHelpers = {};
+vm.runInNewContext(`${appSource.slice(helperStart, helperEnd)}\nglobalThis.testHelpers = { normalizeLocalizedExchangeAmount, parseLocalizedExchangeAmount };`, browserHelpers);
+
+const normalizeClient = browserHelpers.testHelpers.normalizeLocalizedExchangeAmount;
+const parseClient = browserHelpers.testHelpers.parseLocalizedExchangeAmount;
+assert.strictEqual(normalizeClient('۲٫۰۳۲۱۲۵۰۰۰'), '2.032125000');
+assert.strictEqual(parseClient('۲٫۰۳۲۱۲۵۰۰۰'), 2.032125);
+assert.strictEqual(normalizeClient('۲,۰۳۲۱۲۵'), '2.032125');
+assert.strictEqual(normalizeClient('٢٬٠٣٢٫١٢'), '2032.12');
+assert.strictEqual(normalizeClient('2,032.12'), '2032.12');
+assert.strictEqual(normalizeClient('2٫03x'), null);
+assert.match(appSource, /body: \{ from: exchangeFromAsset, to: exchangeToAsset, amount: normalizedAmount \}/, 'frontend sends an ASCII-decimal amount string');
+assert.match(indexSource, /id="exchangePoints" type="text" inputmode="decimal"/, 'mobile Swap input preserves locale-specific decimal digits');
+for (const code of ['INVALID_DIRECTION', 'INVALID_RATE', 'INVALID_AMOUNT', 'EXCHANGE_AMOUNT_TOO_SMALL', 'EXCHANGE_INSUFFICIENT_BALANCE', 'EXCHANGE_TEMPORARILY_UNAVAILABLE', 'EXCHANGE_ACCOUNTING_FAILED']) {
+  const row = i18nSource.match(new RegExp(`${code}: \\{[^\\n]+`))?.[0] || '';
+  assert.ok(row.includes('fa:') && row.includes('ps:') && row.includes('en:'), `${code} has fa/ps/en messages`);
+}
+
+assert.strictEqual(normalizeLocalizedNumericString('۲٫۰۳۲۱۲۵۰۰۰'), '2.032125000');
+assert.strictEqual(normalizeLocalizedNumericString('۲,۰۳۲۱۲۵'), '2.032125');
+assert.strictEqual(normalizeLocalizedNumericString('٢٬٠٣٢٫١٢'), '2032.12');
+assert.strictEqual(normalizeLocalizedNumericString('2٫03x'), null);
+assert.strictEqual(parseExchangeAmount('۲٫۰۳۲۱۲۵۰۰۰', 'GRAM'), 2.032125);
+assert.strictEqual(parseExchangeAmount('۲٫۰۳۲۱۲۵۰۰۰', 'UP'), 2);
+assert.ok(Number.isNaN(parseExchangeAmount({ amount: 2 }, 'GRAM')));
+assert.strictEqual(normalizeExchangeAsset(' gram '), 'GRAM');
+assert.deepStrictEqual(
+  ['UP', 'GRAM', 'USDT'].map(asset => [asset, EXCHANGE_ASSETS[asset].balanceField, EXCHANGE_ASSETS[asset].currency]),
+  [['UP', 'points', 'points'], ['GRAM', 'gramBalance', 'gram'], ['USDT', 'usdtBalance', 'usdt']]
+);
+
+const gramPerUp = 0.0001;
+const amountInGram = parseExchangeAmount('۲٫۰۳۲۱۲۵۰۰۰', 'GRAM');
+const upFromGram = exchangeAmountToUp(amountInGram, 'GRAM', gramPerUp);
+assert.strictEqual(upFromGram, 20321);
+assert.strictEqual(exchangeAmountFromUp(upFromGram, 'GRAM', gramPerUp), 2.0321);
+assert.strictEqual(exchangeAmountFromUp(upFromGram, 'UP', gramPerUp), 20321);
+assert.strictEqual(exchangeAmountFromUp(upFromGram, 'USDT', gramPerUp), 2.0321);
+const halfGramUp = exchangeAmountToUp(0.5, 'GRAM', gramPerUp);
+assert.strictEqual(halfGramUp, 5000);
+assert.strictEqual(exchangeAmountFromUp(halfGramUp, 'USDT', gramPerUp), 0.5);
+const rates = exchangeRateSnapshot(gramPerUp);
+assert.strictEqual(rates.gramToUp, 10000);
+assert.strictEqual(rates.gramToUsdt, 1);
+
+// Exercise the real route handler with transaction/ledger adapters so pair
+// selection, balance paths, currency tags, and failure responses are covered.
+process.env.BOT_TOKEN = '';
+const idempotency = require('../utils/idempotency');
+const ledger = require('../utils/ledger');
+const Settings = require('../models/Settings');
+const User = require('../models/User');
+const PointsLedger = require('../models/PointsLedger');
+const Transaction = require('../models/Transaction');
+const originals = {
+  executeIdempotently: idempotency.executeIdempotently,
+  recordLedgerRequired: ledger.recordLedgerRequired,
+  getGlobal: Settings.getGlobal,
+  findOneAndUpdate: User.findOneAndUpdate
+};
+let account;
+let ledgerRows = [];
+let failLedger = false;
+let transactionsUnavailable = false;
+let failSettings = false;
+idempotency.executeIdempotently = async ({ execute }) => {
+  if (transactionsUnavailable) throw Object.assign(new Error('transactions disabled'), { code: 'TRANSACTIONS_UNAVAILABLE' });
+  const before = { ...account };
+  const ledgerStart = ledgerRows.length;
+  try {
+    const result = await execute({ mockSession: true });
+    return { status: 200, body: result.body };
+  } catch (error) {
+    account = before;
+    ledgerRows.length = ledgerStart;
+    throw error;
+  }
+};
+ledger.recordLedgerRequired = async row => {
+  if (failLedger) throw Object.assign(new Error('journal unavailable'), { code: 'TRANSACTION_JOURNAL_UNAVAILABLE' });
+  ledgerRows.push({ ...row });
+  return { created: true };
+};
+Settings.getGlobal = async () => {
+  if (failSettings) throw new Error('settings store unavailable');
+  return { rate: gramPerUp };
+};
+User.findOneAndUpdate = async (filter, update) => {
+  const balanceField = Object.keys(update.$inc || {})[0];
+  if (filter[balanceField]?.$gte != null && account[balanceField] < filter[balanceField].$gte) return null;
+  for (const [field, change] of Object.entries(update.$inc || {})) account[field] += change;
+  return { ...account };
+};
+
+function routeHandler(router, routePath) {
+  const layer = router.stack.find(item => item.route?.path === routePath && item.route.methods.post);
+  assert.ok(layer, `POST ${routePath} is registered`);
+  return layer.route.stack.at(-1).handle;
+}
+async function request(handler, body) {
+  const output = { status: 200 };
+  const req = { body, dbUser: { ...account }, get: () => 'qa-swap-key-0001' };
+  const res = {
+    status(code) { output.status = code; return this; },
+    json(payload) { output.body = payload; return this; }
+  };
+  let forwarded;
+  await handler(req, res, error => { forwarded = error; });
+  if (forwarded) throw forwarded;
+  return output;
+}
+
+(async () => {
+  const pointsRouter = require('../routes/points');
+  const exchange = routeHandler(pointsRouter, '/exchange');
+
+  account = { _id: 'swap-user', points: 0, gramBalance: 3, usdtBalance: 0 };
+  ledgerRows = [];
+  let response = await request(exchange, { from: 'GRAM', to: 'UP', amount: '۲٫۰۳۲۱۲۵۰۰۰' });
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(response.body.from, 'GRAM');
+  assert.strictEqual(response.body.to, 'UP');
+  assert.strictEqual(response.body.upAmount, 20321);
+  assert.strictEqual(response.body.receivedAmount, 20321);
+  assert.strictEqual(account.points, 20321);
+  assert.ok(Math.abs(account.gramBalance - 0.9679) < 1e-12);
+  assert.deepStrictEqual(ledgerRows.map(row => [row.asset, row.currency, row.amount]), [
+    ['GRAM', 'gram', -2.0321], ['UP', 'points', 20321]
+  ]);
+
+  account = { _id: 'swap-user', points: 0, gramBalance: 2, usdtBalance: 0 };
+  ledgerRows = [];
+  response = await request(exchange, { from: 'GRAM', to: 'USDT', amount: '۰٫۵' });
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(response.body.receivedAmount, 0.5);
+  assert.strictEqual(account.gramBalance, 1.5);
+  assert.strictEqual(account.usdtBalance, 0.5);
+  assert.deepStrictEqual(ledgerRows.map(row => [row.asset, row.currency]), [['GRAM', 'gram'], ['USDT', 'usdt']]);
+
+  account = { _id: 'swap-user', points: 0, gramBalance: 0.1, usdtBalance: 0 };
+  ledgerRows = [];
+  response = await request(exchange, { from: 'GRAM', to: 'UP', amount: '2.0' });
+  assert.strictEqual(response.status, 400);
+  assert.strictEqual(response.body.code, 'EXCHANGE_INSUFFICIENT_BALANCE');
+  assert.strictEqual(account.gramBalance, 0.1);
+  assert.strictEqual(ledgerRows.length, 0);
+
+  account = { _id: 'swap-user', points: 0, gramBalance: 3, usdtBalance: 0 };
+  ledgerRows = [];
+  failLedger = true;
+  response = await request(exchange, { from: 'GRAM', to: 'UP', amount: '0.5' });
+  failLedger = false;
+  assert.strictEqual(response.status, 500);
+  assert.strictEqual(response.body.code, 'EXCHANGE_ACCOUNTING_FAILED');
+  assert.strictEqual(account.gramBalance, 3, 'the transaction adapter rolls back balance changes if ledger persistence fails');
+  assert.strictEqual(account.points, 0);
+
+  transactionsUnavailable = true;
+  response = await request(exchange, { from: 'GRAM', to: 'UP', amount: '0.5' });
+  transactionsUnavailable = false;
+  assert.strictEqual(response.status, 503);
+  assert.strictEqual(response.body.code, 'EXCHANGE_TEMPORARILY_UNAVAILABLE');
+
+  transactionsUnavailable = false;
+  failSettings = true;
+  response = await request(exchange, { from: 'GRAM', to: 'UP', amount: '0.5' });
+  failSettings = false;
+  assert.strictEqual(response.status, 503);
+  assert.strictEqual(response.body.code, 'EXCHANGE_TEMPORARILY_UNAVAILABLE');
+
+  for (const currency of ['gram', 'points', 'usdt']) {
+    assert.ok(PointsLedger.schema.path('currency').enumValues.includes(currency), `PointsLedger accepts ${currency}`);
+    assert.ok(Transaction.schema.path('currency').enumValues.includes(currency), `Transaction journal accepts ${currency}`);
+  }
+  for (const asset of ['GRAM', 'UP', 'USDT']) {
+    assert.ok(PointsLedger.schema.path('asset').enumValues.includes(asset), `PointsLedger accepts asset ${asset}`);
+    assert.ok(Transaction.schema.path('asset').enumValues.includes(asset), `Transaction journal accepts asset ${asset}`);
+  }
+  console.log('PASS — localized Swap amounts, GRAM→UP/USDT balance and ledger paths, and precise atomic-error responses');
+})().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => {
+  idempotency.executeIdempotently = originals.executeIdempotently;
+  ledger.recordLedgerRequired = originals.recordLedgerRequired;
+  Settings.getGlobal = originals.getGlobal;
+  User.findOneAndUpdate = originals.findOneAndUpdate;
+});
