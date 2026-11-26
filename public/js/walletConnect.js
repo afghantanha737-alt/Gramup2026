@@ -450,14 +450,14 @@
     }
   }
 
-  async function requestDeposit(amount) {
+  async function requestDeposit(amount, asset = 'USDT') {
     assertVerifiedWallet();
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) throw Object.assign(new Error('Invalid deposit amount.'), { code: 'INVALID_AMOUNT' });
     setOperation('deposit', 'submitting');
     let created = null;
     try {
-      created = await apiClient()('/api/points/deposits', { method: 'POST', body: { amount: value } });
+      created = await apiClient()('/api/points/deposits', { method: 'POST', body: { amount: value, asset: String(asset || 'USDT').toUpperCase() } });
       if (!created?.deposit?._id || !created?.transaction?.messages?.length) {
         throw Object.assign(new Error('Deposit transaction is unavailable.'), { code: 'DEPOSIT_TRANSACTION_UNAVAILABLE' });
       }
@@ -489,7 +489,7 @@
     return apiClient()(`/api/points/deposits/${encodeURIComponent(depositId)}/verify`, { method: 'POST', body: { boc: proof?.boc || '', txHash: proof?.txHash || '' } });
   }
 
-  async function requestWithdrawal(usdt, idempotencyKey) {
+  async function requestWithdrawal(usdt, idempotencyKey, asset = 'USDT') {
     assertVerifiedWallet();
     const amount = Number(usdt);
     if (!Number.isFinite(amount) || amount <= 0) throw Object.assign(new Error('Invalid withdrawal amount.'), { code: 'INVALID_AMOUNT' });
@@ -498,7 +498,7 @@
       const result = await apiClient()('/api/points/withdraw', {
         method: 'POST',
         headers: { 'Idempotency-Key': String(idempotencyKey || '') },
-        body: { usdt: amount, address: state.address }
+        body: { amount, usdt: amount, asset: String(asset || 'USDT').toUpperCase(), address: state.address }
       });
       setOperation('withdrawal', 'pending');
       return result;

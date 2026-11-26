@@ -7,7 +7,7 @@ const { recordAdminLogRequired } = require('./adminLog');
 const { withMongoTransaction } = require('./mongoTransaction');
 
 /**
- * Credits one already provider-verified TON USDT Jetton deposit exactly once.
+ * Credits one already provider-verified TON GRAM or USDT deposit exactly once.
  * The caller must validate the chain transfer, source wallet and amount before
  * entering this helper. Deposit state, user balance, Ledger and admin audit
  * are committed together.
@@ -21,7 +21,7 @@ async function creditVerifiedDeposit({ depositId, verification, submittedHash = 
 
   return withMongoTransaction(async session => {
     const claimed = await Deposit.findOneAndUpdate(
-      { _id: depositId, status: 'pending', txHashNormalized: { $exists: false } },
+      { _id: depositId, status: { $in: ['pending', 'verifying'] }, txHashNormalized: { $exists: false } },
       { $set: {
         status: 'confirmed',
         amount: verification.amount,
@@ -30,7 +30,7 @@ async function creditVerifiedDeposit({ depositId, verification, submittedHash = 
         txHash: verification.txHash,
         txHashNormalized: verification.txHash,
         sourceAddress: verification.sourceAddress || '',
-        verificationNote: note || 'confirmed_jetton_usdt_by_admin_after_toncenter_verification',
+        verificationNote: note || 'confirmed_on_chain_by_admin_after_toncenter_verification',
         verifiedAt: verification.confirmedAt || new Date(),
         creditedAt: new Date()
       } },
@@ -45,9 +45,12 @@ async function creditVerifiedDeposit({ depositId, verification, submittedHash = 
       throw error;
     }
 
+    const token = String(claimed.token || 'USDT').toUpperCase();
+    const balanceField = token === 'GRAM' ? 'gramBalance' : 'usdtBalance';
+    const currency = token === 'GRAM' ? 'gram' : 'usdt';
     const updatedUser = await User.findByIdAndUpdate(
       claimed.user,
-      { $inc: { usdtBalance: verification.amount } },
+      { $inc: { [balanceField]: verification.amount } },
       { new: true, session }
     );
     if (!updatedUser) {
@@ -59,10 +62,11 @@ async function creditVerifiedDeposit({ depositId, verification, submittedHash = 
     const ledger = await recordLedgerRequired({
       user: updatedUser._id,
       type: 'deposit',
-      currency: 'usdt',
+      currency,
+      asset: token,
       amount: verification.amount,
-      description: 'Deposit — TON USDT Jetton on TON Mainnet (Admin verified)',
-      balanceAfter: updatedUser.usdtBalance,
+      description: `Deposit — TON ${token} on TON Mainnet (Admin verified)`,
+      balanceAfter: updatedUser[balanceField],
       sourceId: `deposit:${verification.txHash}`,
       transactionId: verification.txHash,
       session
@@ -78,7 +82,7 @@ async function creditVerifiedDeposit({ depositId, verification, submittedHash = 
       action: 'deposit_approve',
       targetType: 'deposit',
       targetId: claimed._id,
-      details: `${verification.amount} USDT — ${verification.txHash}`
+      details: `${verification.amount} ${token} — ${verification.txHash}`
     }, session);
 
     return { alreadyConfirmed: false, deposit: claimed, user: updatedUser };
@@ -94,7 +98,7 @@ async function rejectPendingDeposit({ depositId, actor = 'ادمین', reason })
   }
   return withMongoTransaction(async session => {
     const rejected = await Deposit.findOneAndUpdate(
-      { _id: depositId, status: 'pending' },
+      { _id: depositId, status: { $in: ['pending', 'verifying'] } },
       { $set: { status: 'rejected', verificationNote: `admin_rejected: ${cleanReason}`, verifiedAt: new Date() } },
       { new: true, session }
     );

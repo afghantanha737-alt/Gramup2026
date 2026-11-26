@@ -51,6 +51,7 @@ async function recordLedger({
   recipientUserId = null,
   commissionRatePercent = null,
   earningTransactionId = '',
+  asset = null,
   session = null,
   throwOnError = false,
   PointsLedgerModel = PointsLedger,
@@ -81,6 +82,7 @@ async function recordLedger({
       sourceId: effectiveSourceId,
       transactionId: effectiveTransactionId
     };
+    if (asset) payload.asset = String(asset).toUpperCase();
     if (referralLevel != null) payload.referralLevel = referralLevel;
     if (sourceUserId) payload.sourceUserId = sourceUserId;
     if (recipientUserId) payload.recipientUserId = recipientUserId;
@@ -109,6 +111,7 @@ async function recordLedger({
         recipientUserId,
         commissionRatePercent,
         earningTransactionId,
+        asset,
         session
       });
       if (!journalResult.created) {

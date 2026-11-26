@@ -32,7 +32,14 @@ const { LEGACY_VIP_POLICY_VERSION, NEW_VIP_POLICY_VERSION, VIP0_POLICY_VERSION, 
 const { getVipMiningDailyRatePoints } = require('../utils/vipMining');
 const { getVipDisplayName } = require('../utils/vipDisplayNames');
 const { reserveForSubscription, pointsFromCents: reservePointsFromCents } = require('../utils/vipReserve');
-const { normalizeTonAddress, normalizeTonTxHash } = require('../utils/tonNativeDepositVerify');
+const {
+  normalizeTonAddress,
+  normalizeTonTxHash,
+  amountToNanoGram,
+  verifyNativeGramTransfer,
+  findIncomingNativeGramTransferByReference,
+  createDepositReference
+} = require('../utils/tonNativeDepositVerify');
 const {
   USDT_BASE_UNIT,
   UP_PER_USDT,
@@ -213,6 +220,17 @@ function hasRecentWalletProof(user) {
   return Boolean(wallet.address && wallet.network === '-239' && wallet.proofPublicKey && proofAt && proofAt <= Date.now());
 }
 
+const ASSET_CONFIG = Object.freeze({
+  GRAM: { token: 'GRAM', currency: 'gram', assetType: 'native_gram', balanceField: 'gramBalance', minWithdrawal: 0.1 },
+  USDT: { token: 'USDT', currency: 'usdt', assetType: 'jetton_usdt', balanceField: 'usdtBalance', minWithdrawal: 0.1 }
+});
+function assetConfig(value, fallback = 'USDT') {
+  return ASSET_CONFIG[String(value || fallback).trim().toUpperCase()] || null;
+}
+function publicBalances(user) {
+  return { GRAM: Number(user.gramBalance) || 0, USDT: Number(user.usdtBalance) || 0, UP: Number(user.points) || 0 };
+}
+
 // TON Connect performs the wallet handshake in the client. This endpoint only
 // records the selected address for the authenticated UsdtUp account.
 router.get('/wallet/connection', auth, async (req, res) => {
@@ -306,7 +324,16 @@ function getDepositSettingsStatus(settings) {
     && settings?.depositNetwork === 'TON_MAINNET'
     && normalizeTonAddress(depositWalletAddress)
     && usdtToBaseUnits(minimumDepositUsdt) != null;
-  return { ready: Boolean(ready), depositWalletAddress, minimumDepositUsdt };
+  return { ready: Boolean(ready), depositWalletAddress, minimumDepositUsdt, minimumDepositGram: 0.1 };
+}
+function gramTransferTransaction({ senderAddress, recipientAddress, amount, reference }) {
+  const amountRaw = amountToNanoGram(amount);
+  if (!amountRaw) throw new Error('مقدار GRAM نامعتبر است.');
+  return {
+    validUntil: Math.floor(Date.now() / 1000) + 600,
+    network: '-239',
+    messages: [{ address: recipientAddress, amount: amountRaw.toString(), payload: comment(reference) }]
+  };
 }
 
 async function usdtTransferTransaction({ senderAddress, recipientAddress, amountRaw, reference }) {
@@ -333,6 +360,14 @@ async function usdtTransferTransaction({ senderAddress, recipientAddress, amount
 }
 
 async function publicDepositTransaction(deposit) {
+  if (deposit.assetType === 'native_gram') {
+    return gramTransferTransaction({
+      senderAddress: deposit.walletAddressSnapshot,
+      recipientAddress: deposit.depositAddressSnapshot,
+      amount: deposit.requestedAmount,
+      reference: deposit.reference
+    });
+  }
   return usdtTransferTransaction({
     senderAddress: deposit.walletAddressSnapshot,
     recipientAddress: deposit.depositAddressSnapshot,
@@ -389,7 +424,8 @@ router.get('/me', auth, async (req, res) => {
     points: u.points,
     upBalance: Number(u.points) || 0,
     usdtBalance: u.usdtBalance,
-    balances: { UP: Number(u.points) || 0, USDT: Number(u.usdtBalance) || 0 },
+    gramBalance: Number(u.gramBalance) || 0,
+    balances: publicBalances(u),
     rate: fixedRate,
     streak: u.streak,
     canCheckIn,
@@ -555,20 +591,22 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
   res.status(operation.status).json(operation.body);
 });
 
-// POST /api/points/withdraw — برداشت از موجودی USDT (نه مستقیم از UP)
+// POST /api/points/withdraw — TON withdrawal request for GRAM or USDT
 router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
-  const { usdt, address } = req.body || {};
-  if (!['number', 'string'].includes(typeof usdt) || typeof address !== 'string') {
+  const asset = assetConfig(req.body?.asset || req.body?.token || 'USDT');
+  const rawAmount = req.body?.amount ?? req.body?.usdt;
+  const { address } = req.body || {};
+  if (!asset || !['number', 'string'].includes(typeof rawAmount) || typeof address !== 'string') {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار برداشت یا آدرس نامعتبر است.' });
   }
-  const amount = round6(usdt);
+  const amountRaw = asset.token === 'GRAM' ? amountToNanoGram(rawAmount) : usdtToBaseUnits(String(rawAmount));
+  const amount = amountRaw == null ? NaN : asset.token === 'GRAM' ? Number(amountRaw) / 1e9 : baseUnitsToUsdt(amountRaw);
   const walletAddress = String(address || '').trim();
-  const minWithdrawUsdt = round6(settings.minWithdrawPoints / UP_PER_USDT);
 
   if (!Number.isFinite(amount) || amount <= 0) {
-    return res.status(400).json({ success: false, message: 'مقدار USDT نامعتبر است.', code: 'INVALID_AMOUNT' });
+    return res.status(400).json({ success: false, message: `مقدار ${asset.token} نامعتبر است.`, code: 'INVALID_AMOUNT' });
   }
   if (!/^[A-Za-z0-9_\-:+/=.]{6,120}$/.test(walletAddress)) {
     return res.status(400).json({ success: false, message: 'آدرس کیف پول نامعتبر است.', code: 'INVALID_ADDRESS' });
@@ -580,10 +618,10 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
   if (!connectedAddress || walletAddress !== connectedAddress) {
     return res.status(409).json({ success: false, message: 'آدرس برداشت باید با Wallet متصل‌شده یکسان باشد.', code: 'WALLET_ADDRESS_MISMATCH' });
   }
-  if (amount < minWithdrawUsdt) {
+  if (amount < asset.minWithdrawal) {
     return res.status(400).json({
       success: false,
-      message: `حداقل مقدار برداشت ${minWithdrawUsdt} USDT است.`,
+      message: `حداقل مقدار برداشت ${asset.minWithdrawal} ${asset.token} است.`,
       code: 'BELOW_MIN_WITHDRAW'
     });
   }
@@ -595,15 +633,15 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
       userId: u._id,
       scope: 'withdraw',
       key: operationKey,
-      body: { amount, address: walletAddress },
+      body: { amount, asset: asset.token, address: walletAddress },
       execute: async session => {
         const nextUser = await User.findOneAndUpdate(
-          { _id: u._id, usdtBalance: { $gte: amount } },
-          { $inc: { usdtBalance: -amount }, $set: { walletAddress } },
+          { _id: u._id, [asset.balanceField]: { $gte: amount } },
+          { $inc: { [asset.balanceField]: -amount }, $set: { walletAddress } },
           { new: true, session }
         );
         if (!nextUser) {
-          const error = new Error('موجودی USDT کافی نیست.');
+          const error = new Error(`موجودی ${asset.token} کافی نیست.`);
           error.code = 'INSUFFICIENT_BALANCE';
           throw error;
         }
@@ -612,17 +650,21 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
           user: u._id,
           pointsSpent: Math.round(amount * UP_PER_USDT),
           cryptoAmount: amount,
+          asset: asset.token,
           address: walletAddress,
+          network: 'TON',
+          token: asset.token,
           statusHistory: [{ status: 'pending', at: new Date() }]
         }).save({ session });
 
         const ledger = await recordLedgerRequired({
           user: u._id,
           type: 'withdraw',
-          currency: 'usdt',
+          currency: asset.currency,
+          asset: asset.token,
           amount: -amount,
           description: `درخواست برداشت به ${truncateAddress(walletAddress)}`,
-          balanceAfter: nextUser.usdtBalance,
+          balanceAfter: nextUser[asset.balanceField],
           sourceId: `withdrawal:${nextWithdrawal._id}`,
           transactionId: idempotencyTransactionId({ userId: u._id, scope: 'withdraw', key: operationKey, leg: 'debit' }),
           session
@@ -632,7 +674,10 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
         return { status: 201, resourceId: nextWithdrawal._id, body: {
           success: true,
           message: 'درخواست برداشت ثبت شد و به‌زودی بررسی می‌شود.',
-          usdtBalance: nextUser.usdtBalance,
+          balance: nextUser[asset.balanceField],
+          [asset.balanceField]: nextUser[asset.balanceField],
+          fee: 0,
+          token: asset.token,
           withdrawalId: String(nextWithdrawal._id)
         } };
       }
@@ -645,7 +690,7 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
 
   res.status(operation.status).json(operation.body);
   if (!operation.replayed) {
-    notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, 'USDT')).catch(() => {});
+    notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, asset.token)).catch(() => {});
     Withdrawal.findById(operation.body.withdrawalId).lean()
       .then(createdWithdrawal => {
         if (createdWithdrawal) return postWithdrawalRequested(u, createdWithdrawal);
@@ -693,8 +738,13 @@ router.get('/deposit/config', auth, async (req, res) => {
     enabled: config.ready,
     network: 'TON_MAINNET',
     token: 'USDT',
+    assets: [
+      { token: 'GRAM', network: 'TON_MAINNET', minimum: config.minimumDepositGram },
+      { token: 'USDT', network: 'TON_MAINNET', minimum: config.minimumDepositUsdt }
+    ],
     depositWalletAddress: config.ready ? config.depositWalletAddress : '',
-    minimumDepositUsdt: config.minimumDepositUsdt > 0 ? config.minimumDepositUsdt : null
+    minimumDepositUsdt: config.minimumDepositUsdt > 0 ? config.minimumDepositUsdt : null,
+    minimumDepositGram: config.minimumDepositGram
   });
 });
 
@@ -704,9 +754,13 @@ function publicDepositRecord(deposit) {
     reference: deposit.reference,
     network: deposit.network,
     token: deposit.token,
+    asset: deposit.token,
+    assetType: deposit.assetType,
     depositWalletAddress: deposit.depositAddressSnapshot,
     requestedAmount: deposit.requestedAmount,
+    minimumDeposit: deposit.minimumDepositSnapshot,
     minimumDepositUsdt: deposit.minimumDepositSnapshot,
+    minimumDepositGram: deposit.minimumDepositSnapshot,
     amount: deposit.amount,
     txHash: deposit.txHash || deposit.submittedTxHash || '',
     hasSubmittedBoc: Boolean(deposit.submittedBoc),
@@ -718,7 +772,7 @@ function publicDepositRecord(deposit) {
 }
 
 router.get('/deposits', auth, async (req, res) => {
-  const deposits = await Deposit.find({ user: req.dbUser._id, assetType: 'jetton_usdt' })
+  const deposits = await Deposit.find({ user: req.dbUser._id })
     .sort({ createdAt: -1 })
     .limit(30)
     .select('reference network token assetType depositAddressSnapshot minimumDepositSnapshot requestedAmount amount submittedTxHash txHash status createdAt verifiedAt creditedAt');
@@ -728,20 +782,26 @@ router.get('/deposits', auth, async (req, res) => {
 router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) => {
   const settings = await Settings.getGlobal();
   const config = getDepositSettingsStatus(settings);
+  const asset = assetConfig(req.body?.asset || req.body?.token || 'USDT');
+  if (!asset) return res.status(400).json({ success: false, code: 'INVALID_ASSET', message: 'دارایی واریز باید GRAM یا USDT باشد.' });
   if (!config.ready) {
-    return res.status(503).json({ success: false, code: 'DEPOSIT_DISABLED', message: 'واریز USDT روی TON Mainnet در حال حاضر فعال نیست.' });
+    return res.status(503).json({ success: false, code: 'DEPOSIT_DISABLED', message: `واریز ${asset.token} روی TON Mainnet در حال حاضر فعال نیست.` });
   }
   if (!hasRecentWalletProof(req.dbUser)) {
     return res.status(401).json({ success: false, code: 'WALLET_PROOF_REQUIRED', message: 'برای واریز ابتدا Wallet را وصل و مالکیت آن را تأیید کنید.' });
   }
-  const requestedAmountRaw = usdtToBaseUnits(String(req.body?.amount ?? ''));
-  const requestedAmount = requestedAmountRaw == null ? null : baseUnitsToUsdt(requestedAmountRaw);
+  const requestedAmountRaw = asset.token === 'GRAM'
+    ? amountToNanoGram(req.body?.amount)
+    : usdtToBaseUnits(String(req.body?.amount ?? ''));
+  const requestedAmount = requestedAmountRaw == null ? null : asset.token === 'GRAM'
+    ? Number(requestedAmountRaw) / 1e9
+    : baseUnitsToUsdt(requestedAmountRaw);
   if (requestedAmountRaw == null) {
-    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار USDT برای واریز معتبر نیست.' });
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: `مقدار ${asset.token} برای واریز معتبر نیست.` });
   }
-  const minimumRaw = usdtToBaseUnits(String(config.minimumDepositUsdt));
+  const minimumRaw = asset.token === 'GRAM' ? amountToNanoGram(config.minimumDepositGram) : usdtToBaseUnits(String(config.minimumDepositUsdt));
   if (minimumRaw == null || requestedAmountRaw < minimumRaw) {
-    return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: `حداقل مبلغ واریز ${config.minimumDepositUsdt} USDT است.` });
+    return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: `حداقل مبلغ واریز ${asset.token === 'GRAM' ? config.minimumDepositGram : config.minimumDepositUsdt} ${asset.token} است.` });
   }
 
   // Close any unverified invoice from the former Jetton-only implementation. It is
@@ -762,7 +822,7 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
     { user: req.dbUser._id, assetType: 'jetton_usdt', status: 'pending', createdAt: { $lt: new Date(Date.now() - 2 * 60 * 1000) } },
     { $set: { status: 'cancelled', verificationNote: 'unsigned_deposit_intent_expired', verifiedAt: new Date() } }
   );
-  let existing = await Deposit.findOne({ user: req.dbUser._id, assetType: 'jetton_usdt', status: { $in: ['pending', 'verifying'] } }).sort({ createdAt: -1 });
+  let existing = await Deposit.findOne({ user: req.dbUser._id, assetType: asset.assetType, status: { $in: ['pending', 'verifying'] } }).sort({ createdAt: -1 });
   if (existing) {
     if (existing.status === 'verifying' || existing.submittedBoc || existing.submittedTxHash) {
       return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_VERIFYING', deposit: publicDepositRecord(existing), message: 'واریز قبلی امضا شده و در حال بررسی شبکه است.' });
@@ -777,20 +837,20 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
   try {
     deposit = await Deposit.create({
       user: req.dbUser._id,
-      reference: createUsdtReference(),
+      reference: asset.token === 'GRAM' ? createDepositReference() : createUsdtReference(),
       network: 'TON_MAINNET',
-      token: 'USDT',
-      assetType: 'jetton_usdt',
+      token: asset.token,
+      assetType: asset.assetType,
       depositAddressSnapshot: config.depositWalletAddress,
       walletAddressSnapshot: req.dbUser.connectedWallet.address,
-      minimumDepositSnapshot: config.minimumDepositUsdt,
+      minimumDepositSnapshot: asset.token === 'GRAM' ? config.minimumDepositGram : config.minimumDepositUsdt,
       requestedAmount,
       requestedAmountRaw: requestedAmountRaw.toString(),
       status: 'pending'
     });
   } catch (error) {
     if (error?.code !== 11000) throw error;
-    deposit = await Deposit.findOne({ user: req.dbUser._id, assetType: 'jetton_usdt', status: 'pending' }).sort({ createdAt: -1 });
+    deposit = await Deposit.findOne({ user: req.dbUser._id, assetType: asset.assetType, status: 'pending' }).sort({ createdAt: -1 });
     if (!deposit) throw error;
     return res.json({ success: true, deposit: publicDepositRecord(deposit), transaction: await publicDepositTransaction(deposit) });
   }
@@ -802,12 +862,12 @@ router.post('/deposits/:id/cancel', auth, sensitiveRateLimit('general'), async (
     return res.status(404).json({ success: false, code: 'DEPOSIT_NOT_FOUND' });
   }
   const cancelled = await Deposit.findOneAndUpdate(
-    { _id: req.params.id, user: req.dbUser._id, assetType: 'jetton_usdt', status: { $in: ['pending', 'verifying'] }, submittedBoc: { $in: ['', null] }, submittedTxHash: { $in: ['', null] } },
+    { _id: req.params.id, user: req.dbUser._id, status: { $in: ['pending', 'verifying'] }, submittedBoc: { $in: ['', null] }, submittedTxHash: { $in: ['', null] } },
     { $set: { status: 'cancelled', verificationNote: 'wallet_rejected_or_closed', verifiedAt: new Date() } },
     { new: true }
   );
   if (!cancelled) {
-    const current = await Deposit.findOne({ _id: req.params.id, user: req.dbUser._id, assetType: 'jetton_usdt' });
+    const current = await Deposit.findOne({ _id: req.params.id, user: req.dbUser._id });
     if (!current) return res.status(404).json({ success: false, code: 'DEPOSIT_NOT_FOUND' });
     return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_SUBMITTED', status: current.status, deposit: publicDepositRecord(current) });
   }
@@ -818,11 +878,12 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
   if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) {
     return res.status(404).json({ success: false, message: 'درخواست Deposit پیدا نشد.' });
   }
-  const deposit = await Deposit.findOne({ _id: req.params.id, user: req.dbUser._id, assetType: 'jetton_usdt' });
+  const deposit = await Deposit.findOne({ _id: req.params.id, user: req.dbUser._id });
   if (!deposit) return res.status(404).json({ success: false, message: 'درخواست Deposit پیدا نشد.' });
+  const asset = assetConfig(deposit.token);
   if (deposit.status === 'confirmed') {
-    const user = await User.findById(req.dbUser._id).select('usdtBalance');
-    return res.json({ success: true, alreadyConfirmed: true, status: 'confirmed', amount: deposit.amount, usdtBalance: user?.usdtBalance ?? 0, deposit: publicDepositRecord(deposit) });
+    const user = await User.findById(req.dbUser._id).select('gramBalance usdtBalance');
+    return res.json({ success: true, alreadyConfirmed: true, status: 'confirmed', amount: deposit.amount, token: deposit.token, balance: user?.[asset.balanceField] ?? 0, [asset.balanceField]: user?.[asset.balanceField] ?? 0, deposit: publicDepositRecord(deposit) });
   }
   if (deposit.status === 'rejected' || deposit.status === 'cancelled') {
     return res.status(409).json({ success: false, code: 'DEPOSIT_CANCELLED', status: deposit.status, deposit: publicDepositRecord(deposit), message: 'این واریز لغو شده است؛ لطفاً درخواست جدید بسازید.' });
@@ -833,14 +894,9 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
 
   let verification;
   try {
-    verification = await findUsdtTransfer({
-      txHash: submittedHash,
-      ownerAddress: deposit.depositAddressSnapshot,
-      destinationAddress: deposit.depositAddressSnapshot,
-      sourceAddress: deposit.walletAddressSnapshot,
-      amountRaw: deposit.requestedAmountRaw,
-      reference: deposit.reference
-    });
+    verification = asset.token === 'GRAM'
+      ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
+      : await findUsdtTransfer({ txHash: submittedHash, ownerAddress: deposit.depositAddressSnapshot, destinationAddress: deposit.depositAddressSnapshot, sourceAddress: deposit.walletAddressSnapshot, amountRaw: deposit.requestedAmountRaw, reference: deposit.reference });
   } catch {
     return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'TON Center در دسترس نیست؛ موجودی تغییر نکرده است. دوباره تلاش کنید.' });
   }
@@ -865,7 +921,7 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
     });
   }
 
-  const minimumRaw = usdtToBaseUnits(String(deposit.minimumDepositSnapshot));
+  const minimumRaw = asset.token === 'GRAM' ? amountToNanoGram(deposit.minimumDepositSnapshot) : usdtToBaseUnits(String(deposit.minimumDepositSnapshot));
   const actualRaw = BigInt(verification.amountRaw);
   if (minimumRaw == null) {
     return res.status(503).json({ success: false, code: 'INVALID_DEPOSIT_SETTINGS', message: 'تنظیم حداقل Deposit با دقت ۹ رقم اعشار TON USDT Jetton سازگار نیست؛ موجودی تغییر نکرد.' });
@@ -894,7 +950,7 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
         { new: true }
       );
       if (!rejected) return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_PROCESSED', message: 'این تراکنش قبلاً پردازش شده است.' });
-      return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', status: 'rejected', deposit: publicDepositRecord(rejected), message: 'مبلغ تأییدشده از حداقل Deposit کمتر است؛ هیچ USDT به موجودی اضافه نشد.' });
+      return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', status: 'rejected', deposit: publicDepositRecord(rejected), message: `مبلغ تأییدشده از حداقل Deposit کمتر است؛ هیچ ${asset.token} به موجودی اضافه نشد.` });
     } catch (error) {
       if (error?.code === 11000) return res.status(409).json({ success: false, code: 'DEPOSIT_TX_ALREADY_USED', message: 'این Transaction Hash قبلاً استفاده شده است.' });
       throw error;
@@ -929,7 +985,7 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
 
       const updatedUser = await User.findByIdAndUpdate(
         req.dbUser._id,
-        { $inc: { usdtBalance: verification.amount } },
+        { $inc: { [asset.balanceField]: verification.amount } },
         { new: true, session }
       );
       if (!updatedUser) throw new Error('DEPOSIT_USER_NOT_FOUND');
@@ -937,16 +993,17 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
       const ledgerResult = await recordLedgerRequired({
         user: updatedUser._id,
         type: 'deposit',
-        currency: 'usdt',
+        currency: asset.currency,
+        asset: asset.token,
         amount: verification.amount,
-        description: 'Deposit — TON USDT Jetton on TON Mainnet',
-        balanceAfter: updatedUser.usdtBalance,
+        description: `Deposit — TON ${asset.token} on TON Mainnet`,
+        balanceAfter: updatedUser[asset.balanceField],
         sourceId: `deposit:${verification.txHash}`,
         transactionId: verification.txHash,
         session
       });
       if (!ledgerResult.created) throw new Error('DEPOSIT_LEDGER_ALREADY_EXISTS');
-      outcome = { alreadyConfirmed: false, deposit: claimed, usdtBalance: updatedUser.usdtBalance };
+      outcome = { alreadyConfirmed: false, deposit: claimed, balance: updatedUser[asset.balanceField], [asset.balanceField]: updatedUser[asset.balanceField] };
     });
   } catch (error) {
     if (error?.code === 11000) {
@@ -955,8 +1012,8 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
     if (error?.code === 'DEPOSIT_ALREADY_PROCESSED') {
       const current = await Deposit.findById(deposit._id);
       if (current?.status === 'confirmed') {
-        const user = await User.findById(req.dbUser._id).select('usdtBalance');
-        return res.json({ success: true, alreadyConfirmed: true, status: 'confirmed', amount: current.amount, usdtBalance: user?.usdtBalance ?? 0, deposit: publicDepositRecord(current) });
+        const user = await User.findById(req.dbUser._id).select('gramBalance usdtBalance');
+        return res.json({ success: true, alreadyConfirmed: true, status: 'confirmed', amount: current.amount, token: current.token, balance: user?.[asset.balanceField] ?? 0, [asset.balanceField]: user?.[asset.balanceField] ?? 0, deposit: publicDepositRecord(current) });
       }
       return res.status(409).json({ success: false, code: error.code, message: 'این درخواست قبلاً پردازش شده است.' });
     }
@@ -964,13 +1021,15 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
   }
 
   if (outcome?.alreadyConfirmed) {
-    const user = await User.findById(req.dbUser._id).select('usdtBalance');
+    const user = await User.findById(req.dbUser._id).select('gramBalance usdtBalance');
     return res.json({
       success: true,
       alreadyConfirmed: true,
       status: 'confirmed',
       amount: outcome.deposit.amount,
-      usdtBalance: user?.usdtBalance ?? 0,
+      token: outcome.deposit.token,
+      balance: user?.[asset.balanceField] ?? 0,
+      [asset.balanceField]: user?.[asset.balanceField] ?? 0,
       deposit: publicDepositRecord(outcome.deposit)
     });
   }
@@ -980,9 +1039,11 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
     alreadyConfirmed: Boolean(outcome?.alreadyConfirmed),
     status: 'confirmed',
     amount: verification.amount,
-    usdtBalance: outcome?.usdtBalance,
+    token: asset.token,
+    balance: outcome?.balance,
+    [asset.balanceField]: outcome?.[asset.balanceField],
     deposit: publicDepositRecord(outcome.deposit),
-    message: 'واریز TON USDT Jetton در TON Mainnet تأیید شد و موجودی افزایش یافت.'
+    message: `واریز TON ${asset.token} در TON Mainnet تأیید شد و موجودی افزایش یافت.`
   });
 });
 
@@ -1441,7 +1502,6 @@ router.get('/history', auth, async (req, res) => {
   const ledgerFilter = { user: req.dbUser._id, ...timeFilter };
   const depositFilter = {
     user: req.dbUser._id,
-    assetType: 'jetton_usdt',
     status: { $in: ['pending', 'rejected', 'confirmed'] },
     ...timeFilter
   };
@@ -1449,7 +1509,7 @@ router.get('/history', auth, async (req, res) => {
   const [ledgerItems, depositItems] = await Promise.all([
     PointsLedger.find(ledgerFilter).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).lean(),
     Deposit.find(depositFilter).sort({ createdAt: -1, _id: -1 }).limit(limit + 1)
-      .select('assetType amount submittedTxHash txHash status createdAt verifiedAt creditedAt')
+      .select('assetType token amount submittedTxHash txHash status createdAt verifiedAt creditedAt')
       .lean()
   ]);
   const depositByHash = new Map(depositItems.filter(item => item.status === 'confirmed' && item.txHash)
@@ -1462,7 +1522,7 @@ router.get('/history', auth, async (req, res) => {
   for (const item of depositItems) {
     if (item.status === 'confirmed') continue;
     history.push({
-      _id: item._id, type: 'deposit', currency: 'usdt', amount: item.amount,
+      _id: item._id, type: 'deposit', currency: item.token === 'GRAM' ? 'gram' : 'usdt', asset: item.token || 'USDT', amount: item.amount,
       transactionId: item.txHash || item.submittedTxHash || '', status: item.status,
       description: '', createdAt: item.createdAt, transactionAt: item.verifiedAt || item.createdAt,
       verifiedAt: item.verifiedAt, creditedAt: item.creditedAt
@@ -1474,7 +1534,7 @@ router.get('/history', auth, async (req, res) => {
   });
   const page = history.slice(0, limit).map(item => ({
     ...item,
-    tokenSymbol: item.currency === 'points' ? 'UP' : item.currency === 'usdt' ? 'USDT' : undefined,
+    tokenSymbol: item.currency === 'points' ? 'UP' : item.currency === 'usdt' ? 'USDT' : item.currency === 'gram' ? 'GRAM' : undefined,
     ...(item.currency === 'points' ? {
       upAmount: Number(item.amount) || 0,
       upBalanceAfter: item.balanceAfter == null ? null : Number(item.balanceAfter)
@@ -1493,7 +1553,8 @@ router.get('/history', auth, async (req, res) => {
     upBalance,
     points: upBalance,
     usdtBalance,
-    balances: { UP: upBalance, USDT: usdtBalance },
+    gramBalance: Number(req.dbUser.gramBalance) || 0,
+    balances: { UP: upBalance, USDT: usdtBalance, GRAM: Number(req.dbUser.gramBalance) || 0 },
     history: page,
     hasMore,
     nextCursor

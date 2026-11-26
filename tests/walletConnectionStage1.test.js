@@ -37,11 +37,11 @@ assert(wallet.includes('onStatusChange(wallet => applyWallet(wallet), handleConn
 assert(wallet.includes('state.proofAddress === state.address'), 'proof must match the currently connected address');
 assert(wallet.includes("fetch('/api/app-info'"), 'Telegram Mini App resolves a public TWA return URL');
 assert(wallet.includes('twaReturnUrl: info.botLink'), 'Tonkeeper returns to the public GramUp Mini App');
-assert(wallet.includes("async function requestDeposit(amount)"));
+assert(wallet.includes("async function requestDeposit(amount, asset = 'USDT')"));
 assert(wallet.includes("async function verifyDeposit(depositId)"));
-assert(wallet.includes("async function requestWithdrawal(usdt, idempotencyKey)"));
-assert(app.includes('window.gramupWallet.requestWithdrawal(usdt, getPendingIdempotencyKey("withdraw"))'));
-assert(app.includes('window.gramupWallet.requestDeposit(amount)'));
+assert(wallet.includes("async function requestWithdrawal(usdt, idempotencyKey, asset = 'USDT')"));
+assert(app.includes('window.gramupWallet.requestWithdrawal(usdt, getPendingIdempotencyKey("withdraw"), asset)'));
+assert(app.includes('window.gramupWallet.requestDeposit(amount, state.selectedDepositAsset || "GRAM")'));
 assert(app.includes('window.gramupWallet.verifyDeposit(currentDeposit._id)'));
 assert(!app.includes('api("/api/points/withdraw"'), 'withdrawal HTTP request is owned by wallet integration');
 assert(!app.includes('sendDepositTransaction(created.transaction)'), 'deposit transaction must not be sent twice');

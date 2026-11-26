@@ -37,7 +37,8 @@ const IMMUTABLE_ERROR = 'Transaction records are append-only and cannot be mutat
 const transactionSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    currency: { type: String, enum: ['points', 'usdt'], required: true, index: true },
+    currency: { type: String, enum: ['points', 'usdt', 'gram'], required: true, index: true },
+    asset: { type: String, enum: ['UP', 'USDT', 'GRAM'], default: null, index: true },
     transactionId: { type: String, required: true, trim: true },
     sourceId: { type: String, required: true, trim: true },
     type: { type: String, enum: TRANSACTION_TYPES, required: true },

@@ -50,7 +50,10 @@ const state = {
   botReminderEnabled: true,
   soundEnabled: true,
   points: 0,
+  gramBalance: 0,
   usdtBalance: 0,
+  selectedWithdrawAsset: "GRAM",
+  selectedDepositAsset: "GRAM",
   chainUsdtBalance: 0,
   rate: 0,
   streak: 0,
@@ -1212,7 +1215,8 @@ function applyCachedReadModel(entry) {
   if (!entry || !state.verifiedSessionUserId || entry.userId !== state.verifiedSessionUserId) return false;
   const profile = entry.profile || {};
   state.points = Number(profile.upBalance ?? profile.points) || 0;
-  state.usdtBalance = Number(profile.usdtBalance) || 0;
+    state.usdtBalance = Number(profile.usdtBalance) || 0;
+    state.gramBalance = Number(profile.gramBalance ?? profile.balances?.GRAM) || 0;
   state.rate = Number(profile.rate) || 0;
   state.streak = Number(profile.streak) || 0;
   state.canCheckIn = Boolean(profile.canCheckIn);
@@ -1255,7 +1259,7 @@ function persistReadModelCache() {
   if (!readModelCache || !state.verifiedSessionUserId) return;
   readModelCache.write(state.verifiedSessionUserId, {
     profile: {
-      upBalance: state.points, points: state.points, usdtBalance: state.usdtBalance, rate: state.rate, streak: state.streak,
+      upBalance: state.points, points: state.points, gramBalance: state.gramBalance, usdtBalance: state.usdtBalance, rate: state.rate, streak: state.streak,
       canCheckIn: state.canCheckIn, dailyCheckinCycleDay: state.dailyCheckinCycleDay,
       dailyCheckinReward: state.dailyCheckinReward, totalCheckins: state.totalCheckins, minWithdrawUsdt: state.minWithdrawUsdt,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
@@ -1307,6 +1311,7 @@ async function bootstrapAuth() {
     const authUpBalance = Number(data?.upBalance ?? data?.points);
     if (Number.isFinite(authUpBalance)) state.points = authUpBalance;
     if (data?.usdtBalance != null && Number.isFinite(Number(data.usdtBalance))) state.usdtBalance = Number(data.usdtBalance);
+    if (data?.gramBalance != null && Number.isFinite(Number(data.gramBalance))) state.gramBalance = Number(data.gramBalance);
     state.language = localStorage.getItem("appLanguage") || data.language || "fa";
     state.referralMessageConsent = ["granted", "denied", "unset"].includes(data.referralMessageConsent)
       ? data.referralMessageConsent : "unset";
@@ -1332,6 +1337,7 @@ async function loadUserData({ force = false } = {}) {
   if (requestId !== userDataRequestSequence) return;
   state.points = Number(data?.upBalance ?? data?.points) || 0;
   state.usdtBalance = Number(data?.usdtBalance) || 0;
+  state.gramBalance = Number(data?.gramBalance ?? data?.balances?.GRAM) || 0;
   state.rate = Number(data?.rate) || 0;
   state.streak = Number(data?.streak) || 0;
   state.canCheckIn = Boolean(data?.canCheckIn);
@@ -2417,10 +2423,6 @@ window.retryTasks = retryTasks;
 /* ================= WALLET ================= */
 function showWithdraw() {
   if (!readModelActionAllowed()) return;
-  if (state.usdtBalance < state.minWithdrawUsdt) {
-    toast(t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawUsdt, 6) }), "warning");
-    return;
-  }
   if (!window.gramupWallet?.isConnected()) {
     toast(t("wallet_connect_required"), "warning");
     void window.gramupWallet?.connect();
@@ -2437,6 +2439,14 @@ function showWithdraw() {
 }
 window.showWithdraw = showWithdraw;
 
+function selectWithdrawAsset(asset) {
+  state.selectedWithdrawAsset = String(asset || "GRAM").toUpperCase() === "USDT" ? "USDT" : "GRAM";
+  document.querySelectorAll("[data-withdraw-asset]").forEach(button => button.classList.toggle("active", button.dataset.withdrawAsset === state.selectedWithdrawAsset));
+  const label = $("#withdrawAmountLabel");
+  if (label) label.textContent = `مقدار ${state.selectedWithdrawAsset}`;
+}
+window.selectWithdrawAsset = selectWithdrawAsset;
+
 function hideWithdraw() {
   const overlay = $("#withdrawOverlay");
   if (overlay) overlay.style.display = "none";
@@ -2451,6 +2461,7 @@ async function submitWithdraw() {
   const button = $("#submitWithdraw");
 
   const usdt = Number(usdtInput?.value);
+  const asset = state.selectedWithdrawAsset || "GRAM";
   const address = String(window.gramupWallet?.getAddress?.() || addressInput?.value || "").trim();
 
   if (!usdt || usdt <= 0) {
@@ -2464,9 +2475,10 @@ async function submitWithdraw() {
 
   if (button) button.disabled = true;
   try {
-    const result = await window.gramupWallet.requestWithdrawal(usdt, getPendingIdempotencyKey("withdraw"));
+    const result = await window.gramupWallet.requestWithdrawal(usdt, getPendingIdempotencyKey("withdraw"), asset);
     clearPendingIdempotencyKey("withdraw");
-    state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
+    if (asset === "GRAM") state.gramBalance = Number(result.gramBalance ?? result.balance) || state.gramBalance;
+    else state.usdtBalance = Number(result.usdtBalance ?? result.balance) || state.usdtBalance;
     haptic("success");
     toast(result.message, "success");
     hideWithdraw();
@@ -2735,7 +2747,8 @@ function renderDepositHistory(deposits) {
     <div class="small" style="font-weight:700;margin-bottom:6px">${escapeHTML(t("deposit_history_title"))}</div>
     ${list.map(item => {
       const statusKey = item.status === "confirmed" ? "deposit_status_confirmed" : item.status === "rejected" || item.status === "cancelled" ? "deposit_status_rejected" : item.status === "verifying" ? "deposit_status_verifying" : "deposit_status_pending";
-      const amount = item.amount == null ? t("deposit_pending_amount") : `${formatNumber(item.amount, 9)} USDT`;
+      const token = String(item.token || item.asset || "USDT").toUpperCase();
+      const amount = item.amount == null ? t("deposit_pending_amount") : `${formatNumber(item.amount, 9)} ${token}`;
       return `<div style="padding:8px 0;border-top:1px solid var(--line);font-size:12px">
         <div style="display:flex;justify-content:space-between;gap:8px"><b>${escapeHTML(amount)}</b><span>${escapeHTML(t(statusKey))}</span></div>
         ${item.txHash ? `<div dir="ltr" style="text-align:start;opacity:.75;margin-top:3px">${escapeHTML(truncateMiddle(item.txHash, 8, 8))}</div>` : ""}
@@ -2778,6 +2791,14 @@ function showDeposit() {
 }
 window.showDeposit = showDeposit;
 
+function selectDepositAsset(asset) {
+  state.selectedDepositAsset = String(asset || "GRAM").toUpperCase() === "USDT" ? "USDT" : "GRAM";
+  document.querySelectorAll("[data-deposit-asset]").forEach(button => button.classList.toggle("active", button.dataset.depositAsset === state.selectedDepositAsset));
+  const label = $("[for=depositAmount]");
+  if (label) label.textContent = `مقدار ${state.selectedDepositAsset} برای واریز`;
+}
+window.selectDepositAsset = selectDepositAsset;
+
 async function loadDepositPanel() {
   if (depositPanelLoading) return;
   depositPanelLoading = true;
@@ -2807,7 +2828,8 @@ async function loadDepositPanel() {
     const minimum = $("#depositMinimumText");
     if (address) address.value = configData?.depositWalletAddress || "";
     if (reference) reference.textContent = t("deposit_reference_auto");
-    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(configData?.minimumDepositUsdt ?? 0, 9) });
+    selectDepositAsset(state.selectedDepositAsset);
+    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(state.selectedDepositAsset === "GRAM" ? configData?.minimumDepositGram ?? 0.1 : configData?.minimumDepositUsdt ?? 0, 9) });
     if (button) button.disabled = true;
 
     // The form is visible now; finish optional history lookup and restore an
@@ -2818,7 +2840,8 @@ async function loadDepositPanel() {
     if (address) address.value = currentDeposit?.depositWalletAddress || configData?.depositWalletAddress || "";
     if (reference) reference.textContent = currentDeposit?.reference || t("deposit_reference_auto");
     if (amount && currentDeposit?.requestedAmount != null) amount.value = currentDeposit.requestedAmount;
-    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(currentDeposit?.minimumDepositUsdt ?? configData?.minimumDepositUsdt ?? 0, 9) });
+    if (currentDeposit?.token) selectDepositAsset(currentDeposit.token);
+    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(currentDeposit?.minimumDeposit ?? (state.selectedDepositAsset === "GRAM" ? configData?.minimumDepositGram ?? 0.1 : configData?.minimumDepositUsdt ?? 0), 9) });
     if (button) button.disabled = currentDeposit?.status === "confirmed" || currentDeposit?.status === "verifying";
   } catch (error) {
     if (panel) panel.style.display = "none";
@@ -2847,7 +2870,7 @@ async function submitUsdtDeposit() {
     if (!window.gramupWallet?.isProofVerified?.()) {
       throw Object.assign(new Error(t("wallet_proof_required_for_deposit")), { code: "WALLET_PROOF_REQUIRED" });
     }
-    const created = await window.gramupWallet.requestDeposit(amount);
+    const created = await window.gramupWallet.requestDeposit(amount, state.selectedDepositAsset || "GRAM");
     currentDeposit = created?.deposit;
     if (!currentDeposit?._id || !created?.transaction) throw new Error(t("deposit_transaction_unavailable"));
     setDepositActionMessage(t("deposit_sent_waiting"), "normal");
@@ -2865,8 +2888,11 @@ async function submitUsdtDeposit() {
     }
     if (result?.status === "confirmed") {
       window.gramupWallet?.setOperation?.("deposit", "confirmed");
-      const balance = Number(result.usdtBalance);
-      if (Number.isFinite(balance)) state.usdtBalance = balance;
+      const balance = Number(result.balance ?? result.usdtBalance ?? result.gramBalance);
+      if (Number.isFinite(balance)) {
+        if ((result.token || state.selectedDepositAsset) === "GRAM") state.gramBalance = balance;
+        else state.usdtBalance = balance;
+      }
       setDepositActionMessage(t("deposit_confirmed_message", { amount: formatNumber(result.amount, 9) }), "success");
       toast(t("deposit_confirmed_message", { amount: formatNumber(result.amount, 9) }), "success");
       haptic("success");
@@ -3070,6 +3096,11 @@ function renderWallet() {
         <div class="tbWalletIcon tbIconBlue">${usdtTokenIconMarkup()}</div>
         <div class="tbStatLabel tbColBlue">${t("wallet_usdt_card_title")}</div>
         <div class="tbWalletValue usdtBalanceUnit">${formatNumber(state.usdtBalance, 6)} USDT</div>
+      </div>
+      <div class="tbWalletCard">
+        <div class="tbWalletIcon tbIconBlue">${TB_ICONS.coin}</div>
+        <div class="tbStatLabel tbColBlue">GRAM</div>
+        <div class="tbWalletValue">${formatNumber(state.gramBalance, 9)} GRAM</div>
       </div>
     </div>
 

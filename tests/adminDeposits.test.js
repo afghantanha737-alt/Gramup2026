@@ -13,7 +13,7 @@ assert(admin.includes('DEPOSIT_SOURCE_WALLET_MISMATCH'), 'approval must bind sou
 assert(admin.includes('DEPOSIT_AMOUNT_MISMATCH'), 'approval must bind requested amount');
 assert(finance.includes('withMongoTransaction'), 'credit must use Mongo transaction');
 assert(finance.includes('recordLedgerRequired'), 'credit must write required ledger entry');
-assert(finance.includes("status: 'pending'"), 'state transition must be conditional on pending');
+assert(finance.includes("status: { $in: ['pending', 'verifying'] }"), 'state transition must be conditional on pending or verifying');
 assert(html.includes('data-tab="deposits"'), 'admin deposits tab must exist');
 assert(html.includes('approveDeposit'), 'admin approval UI must exist');
 assert(html.includes('rejectDeposit'), 'admin rejection UI must exist');

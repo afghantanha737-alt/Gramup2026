@@ -185,7 +185,7 @@ async function run() {
   assert.ok(route.includes("DEPOSIT_SOURCE_WALLET_MISMATCH"));
   assert.ok(route.includes('findUsdtTransfer'));
   assert.ok(route.includes('await findUsdtTransfer('));
-  assert.ok(!route.includes('findIncomingNativeGramTransferByReference') && !route.includes('verifyNativeGramTransfer'));
+  assert.ok(route.includes('findIncomingNativeGramTransferByReference') && route.includes('verifyNativeGramTransfer'), 'native GRAM deposits use on-chain verification');
   assert.ok(route.includes('await withMongoTransaction(async session =>'));
   assert.ok(route.includes('txHashNormalized: verification.txHash'), 'canonical receiving transaction hash is uniquely claimed');
   assert.ok(route.includes('sourceId: `deposit:${verification.txHash}`'), 'ledger source uses canonical transaction hash');
@@ -195,11 +195,11 @@ async function run() {
   assert.ok(model.includes("unique: true") && model.includes("partialFilterExpression: { status: { $in: ['pending', 'verifying'] } }"), 'only one active native deposit intent per user');
   assert.ok(model.includes("'cancelled'"), 'cancelled deposit status is persisted');
   assert.ok(model.includes("partialFilterExpression: { txHashNormalized: { $type: 'string' } }"));
-  assert.ok(model.includes("enum: ['jetton_usdt']"));
+  assert.ok(model.includes("enum: ['native_gram', 'jetton_usdt']"));
   assert.ok(!model.includes('jettonMasterSnapshot'));
   assert.ok(settings.includes("depositEnabled: { type: Boolean, default: false }"), 'deposits default off');
   assert.ok(!settings.includes('gramJettonMasterAddress'));
-  assert.ok(!adminRoute.includes('getJettonMasterInfo') && !adminRoute.includes('gramJettonMasterAddress'));
+  assert.ok(adminRoute.includes("deposit.token === 'GRAM'") && adminRoute.includes('verifyNativeGramTransfer'));
   assert.ok(!adminUi.includes('setGramJettonMasterAddress'));
   assert.ok(miniAppUi.includes('USDT JETTON'));
   assert.ok(app.includes('submitUsdtDeposit'));
@@ -211,7 +211,7 @@ async function run() {
   assert.ok(i18n.includes('deposit_manual_details') && i18n.includes('deposit_auto_send_hint'));
   assert.ok(miniAppUi.includes('class="depositMemoCode"') && !miniAppUi.includes('copyAddress('));
   assert.ok(app.includes('reference.textContent = currentDeposit?.reference || t("deposit_reference_auto")'));
-  assert.ok(app.includes('window.gramupWallet.requestDeposit(amount)'));
+  assert.ok(app.includes('window.gramupWallet.requestDeposit(amount, state.selectedDepositAsset || "GRAM")'));
   assert.ok(app.includes('window.gramupWallet.verifyDeposit(currentDeposit._id, { boc: created.boc })'));
   assert.ok(app.includes('deposit_status_verifying'));
   assert.ok(walletConnect.includes('sendTransaction(created.transaction)'));

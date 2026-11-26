@@ -9,7 +9,7 @@ const Task = require('../models/Task');
 const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
-const { normalizeTonAddress } = require('../utils/tonNativeDepositVerify');
+const { normalizeTonAddress, verifyNativeGramTransfer } = require('../utils/tonNativeDepositVerify');
 const { usdtToBaseUnits, findUsdtTransfer } = require('../utils/tonUsdt');
 const { bot, notifyUser, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers, buildBroadcastButtonsReplyMarkup, sanitizeTelegramHtml } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
@@ -1033,6 +1033,9 @@ function publicAdminDeposit(deposit) {
     status: row.status,
     network: row.network,
     token: row.token,
+    asset: row.token,
+    assetType: row.assetType,
+    fee: 0,
     requestedAmount: row.requestedAmount,
     amount: row.amount,
     txHash: row.txHash || row.submittedTxHash || '',
@@ -1058,11 +1061,11 @@ function publicAdminDeposit(deposit) {
 // Deposit operations are deliberately separate from the read-only liability summary.
 router.get('/deposits', async (req, res) => {
   const status = String(req.query.status || '').trim();
-  if (status && !['pending', 'confirmed', 'rejected'].includes(status)) {
+  if (status && !['pending', 'verifying', 'confirmed', 'rejected'].includes(status)) {
     return res.status(400).json({ success: false, message: 'وضعیت Deposit نامعتبر است.' });
   }
   const search = String(req.query.search || '').trim();
-  const filter = { assetType: 'jetton_usdt', ...(status ? { status } : {}) };
+  const filter = { assetType: { $in: ['native_gram', 'jetton_usdt'] }, ...(status ? { status } : {}) };
   if (search) {
     const regex = new RegExp(escapeRegex(search), 'i');
     const matchingUsers = await User.find({ $or: [{ walletAddress: regex }, { 'connectedWallet.address': regex }, { 'connectedWallet.canonicalAddress': regex }, { telegramId: regex }, { username: regex }] }).select('_id').lean();
@@ -1073,7 +1076,7 @@ router.get('/deposits', async (req, res) => {
     Deposit.find(filter).populate('user', 'telegramId username firstName walletAddress connectedWallet').sort({ createdAt: -1 }).skip(skip).limit(limit),
     Deposit.countDocuments(filter),
     Deposit.aggregate([
-      { $match: { assetType: 'jetton_usdt' } },
+      { $match: { assetType: { $in: ['native_gram', 'jetton_usdt'] } } },
       { $group: { _id: '$status', amount: { $sum: { $ifNull: ['$amount', 0] } }, count: { $sum: 1 } } }
     ])
   ]);
@@ -1094,27 +1097,22 @@ router.get('/deposits', async (req, res) => {
 
 router.post('/deposits/:id/approve', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ success: false, message: 'Deposit پیدا نشد.' });
-  const deposit = await Deposit.findOne({ _id: req.params.id, assetType: 'jetton_usdt' });
+  const deposit = await Deposit.findOne({ _id: req.params.id, assetType: { $in: ['native_gram', 'jetton_usdt'] } });
   if (!deposit) return res.status(404).json({ success: false, message: 'Deposit پیدا نشد.' });
-  if (deposit.status !== 'pending') return res.status(409).json({ success: false, code: 'DEPOSIT_NOT_PENDING', message: 'این Deposit دیگر در انتظار تأیید نیست.' });
+  if (!['pending', 'verifying'].includes(deposit.status)) return res.status(409).json({ success: false, code: 'DEPOSIT_NOT_PENDING', message: 'این Deposit دیگر در انتظار تأیید نیست.' });
   const submittedHash = normalizeTonTxHash(req.body?.txHash);
   let verification;
   try {
-    verification = await findUsdtTransfer({
-      txHash: submittedHash,
-      ownerAddress: deposit.depositAddressSnapshot,
-      destinationAddress: deposit.depositAddressSnapshot,
-      sourceAddress: deposit.walletAddressSnapshot,
-      amountRaw: deposit.requestedAmountRaw,
-      reference: deposit.reference
-    });
+    verification = deposit.token === 'GRAM'
+      ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
+      : await findUsdtTransfer({ txHash: submittedHash, ownerAddress: deposit.depositAddressSnapshot, destinationAddress: deposit.depositAddressSnapshot, sourceAddress: deposit.walletAddressSnapshot, amountRaw: deposit.requestedAmountRaw, reference: deposit.reference });
   } catch {
     return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'بررسی TON Center فعلاً در دسترس نیست؛ موجودی تغییر نکرد.' });
   }
   if (verification.status !== 'verified') {
     return res.status(400).json({ success: false, code: verification.code || 'DEPOSIT_NOT_VERIFIED', message: 'تراکنش واقعی و نهایی برای این Reference پیدا نشد؛ Deposit تأیید نشد.' });
   }
-  const minimumRaw = usdtToBaseUnits(String(deposit.minimumDepositSnapshot));
+  const minimumRaw = deposit.token === 'GRAM' ? BigInt(Math.round(Number(deposit.minimumDepositSnapshot) * 1e9)) : usdtToBaseUnits(String(deposit.minimumDepositSnapshot));
   if (minimumRaw == null || BigInt(verification.amountRaw) < minimumRaw) {
     return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: 'مبلغ تراکنش از حداقل Deposit کمتر است.' });
   }
@@ -1173,7 +1171,7 @@ router.get('/withdrawals', async (req, res) => {
     withdrawals: list.map(w => {
       const row = w.toObject();
       const userWallet = connectedWalletAddress(row.user);
-      return { ...row, walletAddress: row.address || '', connectedWalletAddress: userWallet, timeline: synthesizeHistory(w) };
+      return { ...row, walletAddress: row.address || '', connectedWalletAddress: userWallet, fee: 0, timeline: synthesizeHistory(w) };
     }),
     pagination: { page, limit, total, pages: Math.ceil(total / limit) }
   });

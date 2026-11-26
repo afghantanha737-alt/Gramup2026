@@ -39,9 +39,12 @@ async function transitionWithdrawalWithRefund({ withdrawalId, targetStatus, reas
       throw error;
     }
 
+    const token = String(withdrawal.asset || withdrawal.token || 'USDT').toUpperCase();
+    const balanceField = token === 'GRAM' ? 'gramBalance' : 'usdtBalance';
+    const currency = token === 'GRAM' ? 'gram' : 'usdt';
     const refunded = await User.findByIdAndUpdate(
       withdrawal.user,
-      { $inc: { usdtBalance: withdrawal.cryptoAmount } },
+      { $inc: { [balanceField]: withdrawal.cryptoAmount } },
       { new: true, session }
     );
     if (!refunded) {
@@ -53,12 +56,13 @@ async function transitionWithdrawalWithRefund({ withdrawalId, targetStatus, reas
     const refundLedger = await recordLedgerRequired({
       user: refunded._id,
       type: 'admin_adjust',
-      currency: 'usdt',
+      currency,
+      asset: token,
       amount: withdrawal.cryptoAmount,
       description: targetStatus === 'cancelled'
         ? 'بازگشت USDT بابت لغو درخواست برداشت'
         : 'بازگشت USDT بابت رد درخواست برداشت',
-      balanceAfter: refunded.usdtBalance,
+      balanceAfter: refunded[balanceField],
       sourceId: `withdrawal-refund:${withdrawal._id}`,
       session
     });

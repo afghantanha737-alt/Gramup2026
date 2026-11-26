@@ -345,11 +345,12 @@
     <div id="tab-deposits" class="tabContent hidden">
       <div class="card">
         <div class="flexBetween">
-          <b>واریزهای TON USDT Jetton</b>
+          <b>واریزهای TON — GRAM و USDT</b>
           <div class="row">
             <input id="depositSearch" placeholder="جستجو با کیف‌پول/آیدی/یوزرنیم..." style="flex:1;min-width:180px;margin:0" oninput="debouncedLoadDeposits()"><select id="depositFilter" onchange="loadDeposits()" style="width:auto;margin:0">
               <option value="">همه</option>
               <option value="pending" selected>در انتظار تأیید</option>
+              <option value="verifying">در حال بررسی</option>
               <option value="confirmed">تأییدشده</option>
               <option value="rejected">لغوشده/ردشده</option>
             </select>
@@ -1673,7 +1674,7 @@ async function loadWithdrawals() {
           <span class="badge ${w.status}">${STATUS_FA[w.status] || w.status}</span>
         </div>
         <div class="small" style="margin-bottom:2px">شناسه‌ی برداشت: <span style="font-family:monospace">${escapeHtml(w._id)}</span></div>
-        <div class="small" style="margin-bottom:6px">مقدار: <b style="color:var(--text)">${w.cryptoAmount} ${escapeHtml(w.token || "USDT")}</b> · شبکه: ${escapeHtml(w.network || "TON")}</div>
+        <div class="small" style="margin-bottom:6px">دارایی: <b style="color:var(--text)">${escapeHtml(w.asset || w.token || "USDT")}</b> · مقدار: <b style="color:var(--text)">${w.cryptoAmount} ${escapeHtml(w.token || "USDT")}</b> · کارمزد: <b>0</b> · شبکه: ${escapeHtml(w.network || "TON")}</div>
         <label class="small" style="margin-bottom:4px">آدرس مقصد (کیف‌پول کاربر)</label>
         <div style="display:flex;gap:6px;align-items:stretch;margin-bottom:8px">
           <input type="text" readonly value="${escapeHtml(w.address)}" style="margin:0;direction:ltr;font-family:monospace;font-size:11px" onclick="this.select()">
@@ -1747,10 +1748,10 @@ async function loadDeposits() {
       return `<div class="card" style="margin-bottom:10px">
         <div class="flexBetween"><div><b>${escapeHtml(user)}</b><div class="small">Telegram ID: ${escapeHtml(d.user?.telegramId || "—")}</div></div><div class="small">کیف‌پول: ${walletMarkup(walletAddressValue(d))}</div><span class="badge ${d.status === "confirmed" ? "approved" : d.status === "rejected" ? "rejected" : "pending"}">${escapeHtml(DEPOSIT_STATUS_FA[d.status] || d.status)}</span></div>
         <div class="small" style="margin-top:8px">شناسه: <span style="font-family:monospace">${escapeHtml(d._id)}</span> · تاریخ: ${escapeHtml(date)}</div>
-        <div style="margin-top:6px">مبلغ: <b>${n(d.amount || d.requestedAmount)} USDT</b> · شبکه: ${escapeHtml(d.network || "TON Mainnet")}</div>
+        <div style="margin-top:6px">دارایی: <b>${escapeHtml(d.asset || d.token || "USDT")}</b> · مبلغ: <b>${n(d.amount || d.requestedAmount)} ${escapeHtml(d.token || "USDT")}</b> · کارمزد: <b>0</b> · شبکه: ${escapeHtml(d.network || "TON Mainnet")}</div>
         <div class="small" style="margin-top:5px">Reference: <span style="font-family:monospace;user-select:all">${escapeHtml(d.reference || "—")}</span></div>
         ${d.txHash ? `<div class="small" style="margin-top:5px">TxID: <span style="font-family:monospace;user-select:all">${escapeHtml(d.txHash)}</span></div>` : ""}
-        ${d.status === "pending" ? `<div class="row" style="margin-top:10px"><button class="success" type="button" onclick="approveDeposit('${d._id}')">بررسی و تأیید</button><button class="danger" type="button" onclick="rejectDeposit('${d._id}')">لغو Deposit</button></div>` : ""}
+        ${d.status === "pending" || d.status === "verifying" ? `<div class="row" style="margin-top:10px"><button class="success" type="button" onclick="approveDeposit('${d._id}')">بررسی و تأیید</button><button class="danger" type="button" onclick="rejectDeposit('${d._id}')">لغو Deposit</button></div>` : ""}
         ${d.verificationNote ? `<div class="small" style="margin-top:6px">یادداشت: ${escapeHtml(d.verificationNote)}</div>` : ""}
       </div>`;
     }).join("");

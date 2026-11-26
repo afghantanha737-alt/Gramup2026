@@ -94,7 +94,7 @@ app.use('/api/points', pointsRouter);
     assert.strictEqual(body.upBalance, 1750, 'main status API exposes current legacy points as UP');
     assert.strictEqual(body.points, 1750, 'legacy API field remains available');
     assert.strictEqual(body.usdtBalance, 4.25, 'existing USDT balance remains unchanged');
-    assert.deepStrictEqual(body.balances, { UP: 1750, USDT: 4.25 });
+    assert.deepStrictEqual(body.balances, { UP: 1750, USDT: 4.25, GRAM: 0 });
 
     response = await fetch(`${base}/api/points/history`);
     assert.strictEqual(response.status, 200);

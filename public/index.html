@@ -217,7 +217,8 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
       <button class="closeBtn" type="button" onclick="hideWithdraw()" data-i18n-aria="common_close" aria-label="بستن">×</button>
     </div>
     <div class="withdrawBody">
-      <label class="fieldLabel" data-i18n="exchange_usdt_label">مقدار USDT</label>
+      <div class="row" style="gap:8px;margin-bottom:10px"><button type="button" class="secondaryBtn assetChoice active" data-withdraw-asset="GRAM" onclick="selectWithdrawAsset('GRAM')">برداشت GRAM روی شبکه TON</button><button type="button" class="secondaryBtn assetChoice" data-withdraw-asset="USDT" onclick="selectWithdrawAsset('USDT')">برداشت USDT روی شبکه TON</button></div>
+      <label class="fieldLabel" id="withdrawAmountLabel" data-i18n="exchange_usdt_label">مقدار GRAM</label>
       <input id="withdrawPoints" type="number" inputmode="decimal" step="0.000001" placeholder="مثلاً 0.5" data-i18n-ph="withdraw_amount_ph">
       <label class="fieldLabel" data-i18n="withdraw_address_label">Wallet متصل‌شده</label>
       <input id="withdrawAddress" type="text" placeholder="ابتدا Wallet خود را متصل کنید" data-i18n-ph="withdraw_address_ph" readonly aria-readonly="true">
@@ -317,6 +318,7 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
     </div>
 
     <div id="depositPanel" style="display:none;text-align:start">
+      <div class="row" style="gap:8px;margin-bottom:10px"><button type="button" class="secondaryBtn assetChoice active" data-deposit-asset="GRAM" onclick="selectDepositAsset('GRAM')">واریز گرام</button><button type="button" class="secondaryBtn assetChoice" data-deposit-asset="USDT" onclick="selectDepositAsset('USDT')">واریز یو اس دیتی</button></div>
       <div class="tbPill tbPillGreen" style="margin:0 auto 12px;display:table" data-i18n="deposit_network_ton_mainnet">TON Mainnet</div>
       <p style="font-size:13px;color:var(--danger);font-weight:700" data-i18n="deposit_mainnet_warning">فقط USDT Jetton رسمی روی TON Mainnet ارسال کنید.</p>
       <label for="depositAmount" data-i18n="deposit_amount_label">مقدار USDT برای واریز</label>

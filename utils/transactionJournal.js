@@ -72,10 +72,11 @@ async function appendTransaction(options = {}) {
     recipientUserId = null,
     commissionRatePercent = null,
     earningTransactionId = '',
+    asset = null,
     session = null
   } = options;
 
-  if (!user || !type || !['points', 'usdt'].includes(currency)) {
+  if (!user || !type || !['points', 'usdt', 'gram'].includes(currency)) {
     const error = new Error('Transaction journal identity is incomplete.');
     error.code = 'TRANSACTION_JOURNAL_INVALID';
     throw error;
@@ -111,6 +112,7 @@ async function appendTransaction(options = {}) {
     commissionRatePercent,
     earningTransactionId: String(earningTransactionId || '')
   };
+  if (asset) immutable.asset = String(asset).toUpperCase();
   const payload = { ...immutable, integrityHash: hashTransaction(immutable) };
 
   try {

@@ -6,9 +6,10 @@ const withdrawalSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     pointsSpent: { type: Number, required: true, min: 0 },
     cryptoAmount: { type: Number, required: true, min: 0 },
+    asset: { type: String, enum: ['GRAM', 'USDT'], default: 'USDT', index: true },
     address: { type: String, required: true },
     network: { type: String, default: 'TON' },
-    token: { type: String, default: 'USDT' },
+    token: { type: String, enum: ['GRAM', 'USDT'], default: 'USDT' },
     fromAddress: { type: String, default: '' },
     txHash: { type: String, default: null },
     // Deliberately unset until a verified chain transaction is attached.
