@@ -3353,7 +3353,7 @@ function tokenIconMarkup() {
   return '<img class="upTokenIcon" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
 }
 function usdtTokenIconMarkup() {
-  return '<img class="usdtTokenIcon" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true">';
+  return '<img class="usdtTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true">';
 }
 function upRewardMarkup(value, showSign = true) {
   const amount = `${showSign ? "+" : ""}${formatPoints(value)} UP`;

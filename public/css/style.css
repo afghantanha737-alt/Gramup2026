@@ -2483,7 +2483,7 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 }
 
 
-/* Profile balances: the PNG mark pairs with the UP ticker, while GRAM stays separate. */
+/* Profile balances: keep Gramup's UP cube distinct from the TON USDT token mark. */
 .profileOverviewCard {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;
@@ -2645,7 +2645,7 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 .leaderPointUnit .upTokenIcon { width: 11px; height: 11px; }
 .leaderPrize .upAmountWithLogo { font-size: 8px; }
 .rf-level-foot .upAmountWithLogo { font-size: 10px; }
-.usdtTokenIcon { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; vertical-align: -3px; }
+.usdtTokenIcon { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; object-position: center; background: transparent; vertical-align: -3px; }
 .usdtBalanceUnit { display: inline-flex; align-items: center; gap: 6px; direction: ltr; font-variant-numeric: tabular-nums; }
 .usdtAmountUnit { display: inline-flex; align-items: center; gap: 4px; }
 .usdtAmountUnit .usdtTokenIcon { width: 13px; height: 13px; }

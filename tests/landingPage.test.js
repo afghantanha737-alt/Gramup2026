@@ -11,7 +11,7 @@ for (const text of ['Mine, Spin &amp; Earn', 'Mining Hub', 'Spin the Wheel', 'Ve
   assert.ok(html.includes(text), `landing page must include ${text}`);
 }
 assert.match(html, /gramup-logo-cube-transparent\.png/);
-assert.ok(!html.includes('gramup-official-logo.jpg'), 'Toncoin diamond logo must not be used as the Gramup brand mark');
+assert.ok(!html.includes('ton-usdt-logo.png'), 'TON USDT token art must not be used as the Gramup brand mark');
 assert.match(html, /alt="Official Gramup cube logo"/);
 assert.ok((html.match(/<span class="brandAccent">Gramup<\/span>/g) || []).length >= 2, 'navbar and footer must show Gramup as one word');
 assert.ok(html.includes('https://t.me/Gram_up_bot/app'));
