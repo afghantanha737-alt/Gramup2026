@@ -156,9 +156,10 @@ async function request(handler, body) {
   ledgerRows = [];
   response = await request(exchange, { from: 'GRAM', to: 'USDT', amount: '۰٫۵' });
   assert.strictEqual(response.status, 200);
-  assert.strictEqual(response.body.receivedAmount, 0.5);
+  const expectedLiveUsdt = Number((0.5 * response.body.rates.gramUsdt).toFixed(6));
+  assert.strictEqual(response.body.receivedAmount, expectedLiveUsdt);
   assert.strictEqual(account.gramBalance, 1.5);
-  assert.strictEqual(account.usdtBalance, 0.5);
+  assert.strictEqual(account.usdtBalance, expectedLiveUsdt);
   assert.deepStrictEqual(ledgerRows.map(row => [row.asset, row.currency]), [['GRAM', 'gram'], ['USDT', 'usdt']]);
 
   account = { _id: 'swap-user', points: 0, gramBalance: 0.1, usdtBalance: 0 };

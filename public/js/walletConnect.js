@@ -553,29 +553,6 @@
     }
   }
 
-  async function swapSton(from, to, amount) {
-    assertVerifiedWallet();
-    const value = Number(amount);
-    if (!Number.isFinite(value) || value <= 0) throw Object.assign(new Error('Invalid swap amount.'), { code: 'INVALID_AMOUNT' });
-    setOperation('swap', 'submitting');
-    try {
-      const created = await apiClient()('/api/ston/swap/transaction', {
-        method: 'POST',
-        body: { from: String(from || '').toUpperCase(), to: String(to || '').toUpperCase(), amount: String(amount) }
-      });
-      if (!created?.transaction?.messages?.length) throw Object.assign(new Error('STON.fi transaction is unavailable.'), { code: 'STON_TRANSACTION_UNAVAILABLE' });
-      if (!isCurrentProof()) throw Object.assign(new Error(labels().proofRequired), { code: 'WALLET_PROOF_REQUIRED' });
-      setOperation('swap', 'sending');
-      const sent = await state.ui.sendTransaction(created.transaction);
-      if (!sent?.boc) throw Object.assign(new Error('Wallet did not return a signed transaction.'), { code: 'SWAP_SIGNATURE_UNAVAILABLE' });
-      setOperation('swap', 'pending');
-      return { ...created, boc: sent.boc };
-    } catch (error) {
-      operationError('swap', error);
-      throw error;
-    }
-  }
-
   async function init() {
     if (state.ready) return state;
     if (!window.TON_CONNECT_UI?.TonConnectUI) {
@@ -633,7 +610,6 @@
     verifyDeposit,
     requestWithdrawal,
     swapUsdtToPoints,
-    swapSton,
     sendTonTransaction,
     getStatusHtml,
     getAddress: () => state.address,

@@ -61,6 +61,7 @@ const {
   createUsdtReference
 } = require('../utils/tonUsdt');
 const { comment } = require('@ton/ton');
+const { getLiveRates } = require('./stonFi');
 
 // احراز هویت تلگرام + بررسی عضویت فعلی در کانال‌های اجباری (روی هر درخواست محافظت‌شده)
 const { withMembership } = require('../utils/membership');
@@ -507,8 +508,16 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
   if (!from || !to || from === to) {
     return res.status(400).json({ success: false, code: 'INVALID_DIRECTION', message: 'جهت تبدیل معتبر نیست.' });
   }
-  const gramPerUp = Number(settings.rate);
-  if (!Number.isFinite(gramPerUp) || gramPerUp <= 0) {
+  const liveMarketPair = (from === 'GRAM' && to === 'USDT') || (from === 'USDT' && to === 'GRAM');
+  let marketRates = null;
+  let gramPerUp = Number(settings.rate);
+  if (liveMarketPair) {
+    try { marketRates = await getLiveRates(); }
+    catch (error) {
+      console.error('Live STON.fi market rates could not be loaded:', error.message || error);
+      return res.status(503).json({ success: false, code: 'STON_RATES_UNAVAILABLE', message: 'نرخ لحظه‌ای برای تبدیل داخلی فعلاً در دسترس نیست؛ موجودی تغییر نکرد.' });
+    }
+  } else if (!Number.isFinite(gramPerUp) || gramPerUp <= 0) {
     return res.status(400).json({ success: false, code: 'INVALID_RATE', message: 'نرخ تبدیل معتبر نیست.' });
   }
   const rawAmount = body.amount != null ? body.amount : body.points;
@@ -519,12 +528,14 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
   if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: `مقدار ${from} نامعتبر است.` });
   }
-  const upAmount = exchangeAmountToUp(requestedAmount, from, gramPerUp);
-  if (!Number.isSafeInteger(upAmount) || upAmount <= 0) {
+  const upAmount = liveMarketPair ? null : exchangeAmountToUp(requestedAmount, from, gramPerUp);
+  if (!liveMarketPair && (!Number.isSafeInteger(upAmount) || upAmount <= 0)) {
     return res.status(400).json({ success: false, code: 'EXCHANGE_AMOUNT_TOO_SMALL', message: `مقدار ${from} برای تبدیل بسیار کم است.` });
   }
-  const spentAmount = exchangeAmountFromUp(upAmount, from, gramPerUp);
-  const receivedAmount = exchangeAmountFromUp(upAmount, to, gramPerUp);
+  const spentAmount = liveMarketPair ? requestedAmount : exchangeAmountFromUp(upAmount, from, gramPerUp);
+  const receivedAmount = liveMarketPair
+    ? Number((requestedAmount * (from === 'GRAM' ? marketRates.gramUsdt : marketRates.usdtGram)).toFixed(to === 'GRAM' ? 9 : 6))
+    : exchangeAmountFromUp(upAmount, to, gramPerUp);
   if (!Number.isFinite(spentAmount) || spentAmount <= 0 || !Number.isFinite(receivedAmount) || receivedAmount <= 0) {
     return res.status(400).json({ success: false, code: 'EXCHANGE_AMOUNT_TOO_SMALL', message: 'مقدار تبدیل بسیار کم است.' });
   }
@@ -563,7 +574,14 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
           amount: spentAmount, spentAmount, receivedAmount, upAmount,
           points: result.points, upBalance: Number(result.points) || 0,
           gramBalance: Number(result.gramBalance) || 0, usdtBalance: result.usdtBalance,
-          rates: exchangeRateSnapshot(gramPerUp),
+          rates: liveMarketPair ? {
+            source: marketRates.source,
+            execution: 'internal',
+            updatedAt: marketRates.updatedAt,
+            gramUsdt: marketRates.gramUsdt,
+            usdtGram: marketRates.usdtGram,
+            assets: marketRates.assets
+          } : exchangeRateSnapshot(gramPerUp),
           message: `${spentAmount} ${from} به ${receivedAmount} ${to} تبدیل شد.`
         };
         bodyResult[`${to.toLowerCase()}Gained`] = receivedAmount;

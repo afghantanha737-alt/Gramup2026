@@ -2680,22 +2680,14 @@ async function submitExchange() {
   if (!Number.isFinite(amount) || amount <= 0) { if (error) error.textContent = translateServerMessage("INVALID_AMOUNT"); return; }
   if (amount > getExchangeAvailableBalance() || !isExchangeAmountValid(amount)) { if (error) error.textContent = translateServerMessage("EXCHANGE_INSUFFICIENT_BALANCE"); return; }
   if (button) button.disabled = true;
-  const useInternalUsdtBalance = exchangeFromAsset === "USDT" && exchangeToAsset === "UP" && amount <= state.usdtBalance;
-  const useSton = isStonPair();
   const idempotencyScope = `exchange_${exchangeFromAsset.toLowerCase()}_to_${exchangeToAsset.toLowerCase()}`;
   try {
-    const result = useSton
-      ? (typeof window.gramupWallet?.swapSton === "function" ? await window.gramupWallet.swapSton(exchangeFromAsset, exchangeToAsset, normalizedAmount) : Promise.reject(Object.assign(new Error(t("wallet_connection_unavailable")), { code: "WALLET_PROOF_REQUIRED" })))
-      : exchangeFromAsset === "USDT" && exchangeToAsset === "UP" && !useInternalUsdtBalance
-      ? (typeof window.gramupWallet?.swapUsdtToPoints === "function" ? await window.gramupWallet.swapUsdtToPoints(amount) : Promise.reject(Object.assign(new Error(t("wallet_connection_unavailable")), { code: "WALLET_PROOF_REQUIRED" })))
-      : await api("/api/points/exchange", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) }, body: { from: exchangeFromAsset, to: exchangeToAsset, amount: normalizedAmount } });
+    const result = await api("/api/points/exchange", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) }, body: { from: exchangeFromAsset, to: exchangeToAsset, amount: normalizedAmount } });
     clearPendingIdempotencyKey(idempotencyScope);
-    if (!useSton) {
-      state.points = upBalanceFromResponse(result);
-      if (result.usdtBalance != null) state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
-      if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
-    }
-    haptic("success"); toast(useSton ? t("ston_swap_submitted") : (result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) })), "success"); hideExchange(); updateHeader(); renderWallet();
+    state.points = upBalanceFromResponse(result);
+    if (result.usdtBalance != null) state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
+    if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
+    haptic("success"); toast(result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) }), "success"); hideExchange(); updateHeader(); renderWallet();
   } catch (err) { clearDefinitiveIdempotencyFailure(idempotencyScope, err); if (error) error.textContent = translateServerMessage(err.code, err.message); haptic("error"); }
   finally { if (button) button.disabled = false; }
 }

@@ -1,37 +1,21 @@
-# STON.fi live rates and swaps
+# STON.fi market rates for internal exchange
 
 ## Scope
 
-Gramup uses the TON-native asset exposed by STON.fi as `GRAM` and canonical TON USDT as the second DEX asset. The integration keeps the existing internal UP/GRAM/USDT accounting flow intact and adds a separate wallet-confirmed STON.fi DEX path for real GRAM/USDT swaps.
+Gramup uses STON.fi only as a read-only market-rate source. GRAM and USDT conversions are internal accounting operations that atomically debit and credit the user's Gramup balances. No STON.fi router, simulation, SDK transaction, TonConnect approval, or on-chain swap is created by the exchange flow.
 
 ## Official sources
 
-- STON.fi REST API overview: https://docs.ston.fi/developer-section/dex/api.md
+- STON.fi REST API: https://docs.ston.fi/developer-section/dex/api.md
 - STON.fi API reference: https://docs.ston.fi/developer-section/dex/api/reference.md
-- STON.fi DEX v2 swap guide: https://docs.ston.fi/developer-section/dex/sdk/swap.md
-- STON.fi DEX v2 setup and environments: https://docs.ston.fi/developer-section/dex/sdk/v2.md
-- STON.fi transaction sending: https://docs.ston.fi/developer-section/common/transaction-sending.md
-- Official API client source: https://github.com/ston-fi/api
-- Official SDK source: https://github.com/ston-fi/sdk
+- Official API client: https://github.com/ston-fi/api
 
-## Verified protocol facts
+## Verified market data
 
-- REST base URL is `https://api.ston.fi`.
-- Direct quote endpoint is `POST /v1/swap/simulate`. The API client sends `offer_address`, `ask_address`, `units`, and `slippage_tolerance` as URL query parameters.
-- A simulation returns `ask_units`, `min_ask_units`, `recommended_min_ask_units`, `router`, `gas_params`, `price_impact`, and `swap_rate`.
-- Mainnet asset address for native GRAM/Ton is `EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c`, with 9 decimals.
-- Mainnet USDT master is `EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs`, with 6 decimals.
-- STON.fi recommends feeding `simulation.router` into `dexFactory()` and reusing the returned simulation amounts when building the transaction.
-- For TON/jetton swaps, the SDK uses `getSwapTonToJettonTxParams` or `getSwapJettonToTonTxParams`; the resulting `{to, value, body}` maps to one TonConnect message with `address`, `amount`, and base64 `payload`.
-- Slippage values are fractional, so `0.01` is 1%.
+The backend reads asset metadata from `https://api.ston.fi` for the TON-native GRAM address `EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c` and TON USDT master `EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs`. It uses the live DEX USD prices returned by the API and derives `GRAM/USDT` and `USDT/GRAM` rates.
 
-## Live API smoke-test evidence
+## Runtime behavior
 
-On 2026-11-26, the STON.fi API returned HTTP 200 for the asset catalog and direct simulations. A 1 GRAM simulation returned a live ask amount in USDT base units and a router object. A 1 USDT simulation returned a live ask amount in GRAM base units and a router object. Quotes are therefore amount-specific and are refreshed immediately before execution.
+`GET /api/ston/rates` returns the current read-only market snapshot. `POST /api/ston/quote` returns a short-lived, rate-derived internal quote; it does not call swap simulation. `POST /api/points/exchange` is the only execution path and atomically updates internal balances. For GRAM ↔ USDT it fetches a fresh STON.fi market snapshot on the server immediately before the accounting transaction, validates the source balance, and records both ledger legs. UP pairs retain their existing configured internal rate.
 
-## Integration decisions
-
-- Server-side route `/api/ston/rates` proxies the two canonical asset metadata records and returns live DEX/USD prices plus a derived GRAM/USDT ratio.
-- Server-side route `/api/ston/quote` simulates a requested GRAM/USDT amount and returns the exact output/minimum output and expiry metadata.
-- Server-side route `/api/ston/swap/transaction` re-simulates and builds a current STON.fi transaction using the verified TON wallet bound to the authenticated Gramup user. The client only submits that transaction after the user confirms it in their wallet.
-- The client refreshes market metadata when the exchange modal opens and re-quotes as the amount or pair changes. Existing UP/internal balance swaps remain unchanged; actual STON.fi execution is reserved for GRAM <-> USDT.
+The frontend displays live GRAM and USDT prices, derives the direct rate, refreshes the internal quote on input changes, and submits all exchange pairs to `/api/points/exchange`. Wallet connection and TonConnect remain available for deposits and withdrawals, but are not involved in internal exchange.
