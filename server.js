@@ -259,7 +259,7 @@ async function startServer() {
       './models/IdempotencyOperation', './models/TelegramWebhookUpdate', './models/RateLimitBucket',
       './models/AdminSession', './models/TelegramAdminConversation', './models/AdminLog', './models/DistributedJobLock',
       './models/TaskReactionState', './models/LatestPostEngagementState', './models/Deposit', './models/TaskSubmissionBulkJob',
-      './models/VipPlan', './models/VipSubscription', './models/VipReserve', './models/BroadcastJob', './models/TonProofChallenge', './models/GramSwapIntent'
+      './models/VipPlan', './models/VipSubscription', './models/VipReserve', './models/BroadcastJob', './models/TonProofChallenge', './models/UsdtSwapIntent'
     ]) await require(modelPath).init();
 
     // Route imports register every application model. Await all indexes too;

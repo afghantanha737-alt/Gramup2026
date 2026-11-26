@@ -39,7 +39,7 @@ const userSchema = new mongoose.Schema(
     onboardingCompletedAt: { type: Date, default: null },
     // Monotonic transaction lock marker used to serialize VIP financial claims.
     vipClaimLockVersion: { type: Number, default: 0, min: 0 },
-    gramBalance: { type: Number, default: 0, min: 0 },
+    usdtBalance: { type: Number, default: 0, min: 0 },
     streak: { type: Number, default: 0, min: 0 },
     tickets: { type: Number, default: 0, min: 0 },
     totalCheckins: { type: Number, default: 0, min: 0 },

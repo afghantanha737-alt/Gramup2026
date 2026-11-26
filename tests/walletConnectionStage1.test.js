@@ -39,8 +39,8 @@ assert(wallet.includes("fetch('/api/app-info'"), 'Telegram Mini App resolves a p
 assert(wallet.includes('twaReturnUrl: info.botLink'), 'Tonkeeper returns to the public GramUp Mini App');
 assert(wallet.includes("async function requestDeposit(amount)"));
 assert(wallet.includes("async function verifyDeposit(depositId)"));
-assert(wallet.includes("async function requestWithdrawal(gram, idempotencyKey)"));
-assert(app.includes('window.gramupWallet.requestWithdrawal(gram, getPendingIdempotencyKey("withdraw"))'));
+assert(wallet.includes("async function requestWithdrawal(usdt, idempotencyKey)"));
+assert(app.includes('window.gramupWallet.requestWithdrawal(usdt, getPendingIdempotencyKey("withdraw"))'));
 assert(app.includes('window.gramupWallet.requestDeposit(amount)'));
 assert(app.includes('window.gramupWallet.verifyDeposit(currentDeposit._id)'));
 assert(!app.includes('api("/api/points/withdraw"'), 'withdrawal HTTP request is owned by wallet integration');

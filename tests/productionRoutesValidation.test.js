@@ -30,7 +30,7 @@ async function call(run, body, params = {}) {
   assert.strictEqual(response.status, 400);
   assert.strictEqual(response.body.code, 'INVALID_DIRECTION');
   for (const amount of [[1], {}, 1e100, -2, 0]) {
-    response = await call(handler(points, '/exchange'), { direction: 'points_to_gram', amount });
+    response = await call(handler(points, '/exchange'), { direction: 'points_to_usdt', amount });
     assert.strictEqual(response.status, 400);
     assert.strictEqual(response.body.code, 'INVALID_AMOUNT');
   }

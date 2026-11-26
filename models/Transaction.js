@@ -37,7 +37,7 @@ const IMMUTABLE_ERROR = 'Transaction records are append-only and cannot be mutat
 const transactionSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    currency: { type: String, enum: ['points', 'gram'], required: true, index: true },
+    currency: { type: String, enum: ['points', 'usdt'], required: true, index: true },
     transactionId: { type: String, required: true, trim: true },
     sourceId: { type: String, required: true, trim: true },
     type: { type: String, enum: TRANSACTION_TYPES, required: true },
@@ -59,7 +59,7 @@ const transactionSchema = new mongoose.Schema(
 );
 
 // Journal identity is scoped to account and currency. This permits the same
-// external source label to exist independently in points and GRAM while still
+// external source label to exist independently in points and USDT while still
 // preventing replay/double-credit for one account and currency.
 transactionSchema.index({ user: 1, currency: 1, sourceId: 1 }, { unique: true });
 transactionSchema.index({ user: 1, currency: 1, transactionId: 1 }, { unique: true });

@@ -67,7 +67,7 @@ async function approveTaskSubmission({ submissionId, adminActor, settings }) {
     if (!ledger.created) throw submissionError('پاداش task قبلاً ثبت شده است؛ پرداخت دوباره انجام نشد.', 'TASK_REWARD_ALREADY_PAID');
 
     const revenueUsd = reservedTask.isSponsored ? Number(reservedTask.sponsorPriceUsd) || 0 : 0;
-    const costUsd = rewardCostUsd(reward, settings.rate, settings.gramUsdPrice);
+    const costUsd = rewardCostUsd(reward, 0.0001, settings.usdtUsdPrice);
     await TaskCompletion.updateOne({ _id: approved._id, status: 'approved' }, { $set: { revenueUsd, costUsd } }, { session });
     return { reward, points: user.points, taskTitle: task.title, userId: user._id };
   });

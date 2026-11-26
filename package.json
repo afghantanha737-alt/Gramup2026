@@ -11,6 +11,7 @@
     "migrate:referral-v2": "node scripts/migrate-referral-v2.js",
     "migrate:vip-100d": "node scripts/migrate-vip-100d.js",
     "migrate:vip-pricing": "node scripts/migrate-vip-pricing.js",
+    "migrate:gram-to-usdt": "node scripts/migrate-gram-to-usdt.js",
     "verify:production": "node scripts/verify-production.js"
   },
   "dependencies": {

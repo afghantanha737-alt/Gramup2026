@@ -27,7 +27,7 @@ const storage = makeStorage();
 const sessionStorage = makeStorage();
 const cache = CacheFactory({ storage, sessionStorage, ttlMs: 1_000, now: () => now });
 const safeModel = {
-  profile: { points: 42, gramBalance: 1.25, firstName: 'A', level: { badge: '🥇', name: 'Gold' } },
+  profile: { points: 42, usdtBalance: 1.25, firstName: 'A', level: { badge: '🥇', name: 'Gold' } },
   tasks: {
     tasks: [{ _id: 'task-a', title: 'Task A', reward: 5, url: 'https://example.test' }],
     completions: [{ task: 'task-a', status: 'approved' }],

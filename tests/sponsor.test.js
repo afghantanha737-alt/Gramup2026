@@ -43,16 +43,16 @@ console.log('PASS  محاسبه‌ی هزینه‌ی دلاری هر پاداش'
 // ---- marginInfo: سناریوی واقعی ضرر که بدون این قابلیت رخ می‌داد
 // پاداش 100 پوینت، نرخ 0.0001 GRAM/پوینت، قیمت GRAM=1.38$ => هزینه‌ی هر عضو = 0.0138$
 // اگر ادمین اشتباهی قیمت 0.01$ بگذارد، ضرر است.
-let m = marginInfo({ reward: 100, rate: 0.0001, gramUsdPrice: 1.38, priceUsd: 0.01, budgetUsd: 10 });
+let m = marginInfo({ reward: 100, rate: 0.0001, usdtUsdPrice: 1.38, priceUsd: 0.01, budgetUsd: 10 });
 assert.ok(m.isLoss);
 assert.ok(Math.abs(m.profitPerJoinUsd - (0.01 - 0.0138)) < 1e-9);
-m = marginInfo({ reward: 100, rate: 0.0001, gramUsdPrice: 1.38, priceUsd: 0.05, budgetUsd: 10 });
+m = marginInfo({ reward: 100, rate: 0.0001, usdtUsdPrice: 1.38, priceUsd: 0.05, budgetUsd: 10 });
 assert.ok(!m.isLoss);
 assert.strictEqual(m.capacity, 200);
 assert.ok(Math.abs(m.totalProfitUsd - (200 * (0.05 - 0.0138))) < 1e-6);
 console.log('PASS  marginInfo: ضرر با قیمت پایین تشخیص داده می‌شود؛ سود کل درست محاسبه می‌شود');
 
-m = marginInfo({ reward: 100, rate: 0, gramUsdPrice: 0, priceUsd: 0.05, budgetUsd: 10 });
+m = marginInfo({ reward: 100, rate: 0, usdtUsdPrice: 0, priceUsd: 0.05, budgetUsd: 10 });
 assert.strictEqual(m.canCompute, false, 'بدون نرخ/قیمت GRAM قابل‌محاسبه نیست');
 console.log('PASS  بدون تنظیم نرخ/قیمت GRAM، سود/زیان "نامشخص" است نه "امن"');
 

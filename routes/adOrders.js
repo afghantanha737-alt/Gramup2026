@@ -13,14 +13,15 @@ const Task = require('../models/Task');
 const Settings = require('../models/Settings');
 const { normalizeAdCampaign, calculateAdPricing, publicOrder } = require('../utils/adCampaign');
 const { comment } = require('@ton/ton');
-const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
+const { normalizeTonAddress, normalizeTonTxHash } = require('../utils/tonNativeDepositVerify');
+const { usdtToBaseUnits, getUsdtJettonWallet, buildUsdtTransferBody, findUsdtTransfer } = require('../utils/tonUsdt');
 const { bot } = require('../utils/bot');
 const auth = requireUnifiedAuth(process.env.BOT_TOKEN);
 
 function publicAdConfig(settings) {
   return {
     enabled: settings.adMarketplaceEnabled !== false,
-    gramUsdPrice: Number(settings.gramUsdPrice || 0),
+    usdtUsdPrice: Number(settings.usdtUsdPrice || 0),
     basePriceUsdPerUser: Number(settings.adBasePriceUsdPerUser || 0),
     channelSurchargeUsdPerUser: Number(settings.adChannelSurchargeUsdPerUser || 0),
     languageSurchargeUsdPerUser: Number(settings.adLanguageSurchargeUsdPerUser || 0),
@@ -60,28 +61,28 @@ router.post('/', auth, sensitiveRateLimit('ad_order'), async (req, res) => {
     const pricing = calculateAdPricing({ settings, ...input });
     if (pricing.error) return res.status(503).json({ success: false, code: 'AD_PRICING_UNAVAILABLE', message: pricing.error });
     input = { ...input, ...pricing };
-    if (input.totalCostGram < Number(settings.adCampaignMinBudgetGram || 0.1) || input.totalCostGram > Number(settings.adCampaignMaxBudgetGram || 100000)) {
+    if (input.totalCostUsdt < Number(settings.adCampaignMinBudgetUsdt || 0.1) || input.totalCostUsdt > Number(settings.adCampaignMaxBudgetUsdt || 100000)) {
       return res.status(400).json({ success: false, code: 'AD_BUDGET_OUT_OF_RANGE', message: 'بودجه کمپین خارج از محدوده مجاز است.' });
     }
     const order = await withMongoTransaction(async session => {
       const user = await User.findById(req.dbUser._id).session(session);
       if (!user) throw Object.assign(new Error('کاربر پیدا نشد.'), { code: 'USER_NOT_FOUND' });
-      if (Number(user.gramBalance || 0) < input.totalCostGram) throw Object.assign(new Error('موجودی GRAM برای این کمپین کافی نیست.'), { code: 'INSUFFICIENT_GRAM' });
+      if (Number(user.usdtBalance || 0) < input.totalCostUsdt) throw Object.assign(new Error('موجودی USDT برای این کمپین کافی نیست.'), { code: 'INSUFFICIENT_USDT' });
       const sourceId = `ad-order:${new mongoose.Types.ObjectId().toString()}`;
-      const before = Number(user.gramBalance || 0);
-      const after = Number((before - input.totalCostGram).toFixed(9));
-      user.gramBalance = after;
+      const before = Number(user.usdtBalance || 0);
+      const after = Number((before - input.totalCostUsdt).toFixed(9));
+      user.usdtBalance = after;
       await user.save({ session });
       const created = await new AdOrder({
         advertiserTelegramId: String(user.telegramId), advertiserName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '',
-        ...input, paymentMethod: 'gram_balance', paymentStatus: 'paid', status: 'pending_review', paymentSourceId: sourceId
+        ...input, paymentMethod: 'usdt_balance', paymentStatus: 'paid', status: 'pending_review', paymentSourceId: sourceId
       }).save({ session });
-      await recordLedgerRequired({ user: user._id, type: 'ad_order_payment', currency: 'gram', amount: -input.totalCostGram, balanceAfter: after, sourceId, description: `Ad campaign reservation ${created._id}`, session });
+      await recordLedgerRequired({ user: user._id, type: 'ad_order_payment', currency: 'usdt', amount: -input.totalCostUsdt, balanceAfter: after, sourceId, description: `Ad campaign reservation ${created._id}`, session });
       return created;
     });
     res.status(201).json({ success: true, order: publicOrder(order), message: 'کمپین ثبت و مبلغ آن در انتظار بررسی ادمین رزرو شد.' });
   } catch (error) {
-    if (error.code === 'INSUFFICIENT_GRAM') return res.status(400).json({ success: false, code: error.code, message: error.message });
+    if (error.code === 'INSUFFICIENT_USDT') return res.status(400).json({ success: false, code: error.code, message: error.message });
     console.error('Create ad order failed:', error);
     res.status(500).json({ success: false, code: 'AD_ORDER_FAILED', message: 'ثبت کمپین انجام نشد؛ دوباره تلاش کنید.' });
   }
@@ -98,11 +99,15 @@ router.post('/ton-intents', auth, sensitiveRateLimit('ad_order_ton'), async (req
     const pricing = calculateAdPricing({ settings, ...input });
     if (pricing.error) return res.status(503).json({ success: false, code: 'AD_PRICING_UNAVAILABLE', message: pricing.error });
     input = { ...input, ...pricing };
-    if (input.totalCostGram < Number(settings.adCampaignMinBudgetGram || 0.1) || input.totalCostGram > Number(settings.adCampaignMaxBudgetGram || 100000)) return res.status(400).json({ success: false, code: 'AD_BUDGET_OUT_OF_RANGE', message: 'بودجه کمپین خارج از محدوده مجاز است.' });
-    const amountRaw = amountToNanoGram(input.totalCostGram);
-    if (!amountRaw) return res.status(400).json({ success: false, code: 'INVALID_TON_AMOUNT', message: 'مبلغ TON معتبر نیست.' });
+    if (input.totalCostUsdt < Number(settings.adCampaignMinBudgetUsdt || 0.1) || input.totalCostUsdt > Number(settings.adCampaignMaxBudgetUsdt || 100000)) return res.status(400).json({ success: false, code: 'AD_BUDGET_OUT_OF_RANGE', message: 'بودجه کمپین خارج از محدوده مجاز است.' });
+    const amountRaw = usdtToBaseUnits(String(input.totalCostUsdt));
+    if (!amountRaw) return res.status(400).json({ success: false, code: 'INVALID_USDT_AMOUNT', message: 'مبلغ USDT معتبر نیست.' });
+    const walletAddress = normalizeTonAddress(req.dbUser.connectedWallet?.canonicalAddress || req.dbUser.connectedWallet?.address);
+    if (!walletAddress || req.dbUser.connectedWallet?.network !== '-239' || !req.dbUser.connectedWallet?.proofVerifiedAt) return res.status(401).json({ success: false, code: 'WALLET_PROOF_REQUIRED', message: 'ابتدا مالکیت Wallet را تأیید کنید.' });
+    const senderJettonWallet = await getUsdtJettonWallet(walletAddress);
+    if (!senderJettonWallet) return res.status(503).json({ success: false, code: 'USDT_JETTON_WALLET_NOT_FOUND', message: 'USDT Jetton Wallet پیدا نشد.' });
     const created = await new AdOrder({ advertiserTelegramId: String(req.dbUser.telegramId), advertiserName: `${req.dbUser.firstName || ''} ${req.dbUser.lastName || ''}`.trim() || req.dbUser.username || '', ...input, paymentMethod: 'ton_mainnet', paymentStatus: 'pending', status: 'payment_pending', paymentReference: `ad_${new mongoose.Types.ObjectId().toString()}`, paymentAddressSnapshot: address, paymentAmountRaw: amountRaw.toString() }).save();
-    res.status(201).json({ success: true, order: publicOrder(created), intent: { id: String(created._id), reference: created.paymentReference, amount: input.totalCostGram, address }, transaction: { validUntil: Math.floor(Date.now() / 1000) + 900, messages: [{ address, amount: amountRaw.toString(), payload: comment(created.paymentReference).toBoc().toString('base64') }] } });
+    res.status(201).json({ success: true, order: publicOrder(created), intent: { id: String(created._id), reference: created.paymentReference, amount: input.totalCostUsdt, address }, transaction: { validUntil: Math.floor(Date.now() / 1000) + 900, network: '-239', messages: [{ address: senderJettonWallet, amount: '50000000', payload: buildUsdtTransferBody({ destination: address, responseDestination: walletAddress, amountRaw, forwardPayload: comment(created.paymentReference) }) }] } });
   } catch (error) { res.status(error.code === 'TON_PAYMENT_NOT_CONFIGURED' ? 503 : 500).json({ success: false, code: error.code || 'AD_TON_INTENT_FAILED', message: error.message || 'ایجاد درخواست پرداخت TON انجام نشد.' }); }
 });
 
@@ -113,7 +118,7 @@ router.post('/:id/ton-verify', auth, sensitiveRateLimit('ad_order_ton_verify'), 
     if (order.paymentStatus === 'paid') return res.json({ success: true, status: 'confirmed', order: publicOrder(order) });
     const walletAddress = normalizeTonAddress(req.dbUser.connectedWallet?.canonicalAddress || req.dbUser.connectedWallet?.address);
     if (!walletAddress || req.dbUser.connectedWallet?.network !== '-239' || !req.dbUser.connectedWallet?.proofVerifiedAt) return res.status(400).json({ success: false, code: 'WALLET_PROOF_REQUIRED', message: 'ابتدا مالکیت Wallet را تأیید کنید.' });
-    const details = req.body?.txHash ? await verifyNativeGramTransfer({ txHash: req.body.txHash, depositAddress: order.paymentAddressSnapshot, reference: order.paymentReference }) : await findIncomingNativeGramTransferByReference({ depositAddress: order.paymentAddressSnapshot, reference: order.paymentReference });
+    const details = await findUsdtTransfer({ txHash: req.body?.txHash ? normalizeTonTxHash(req.body.txHash) : null, ownerAddress: order.paymentAddressSnapshot, destinationAddress: order.paymentAddressSnapshot, sourceAddress: walletAddress, amountRaw: order.paymentAmountRaw, reference: order.paymentReference });
     if (details.status !== 'verified') return res.status(202).json({ success: true, status: details.status, code: details.code, message: 'تراکنش هنوز در شبکه TON تأیید نشده است.' });
     const expected = BigInt(order.paymentAmountRaw);
     if (BigInt(details.amountRaw) !== expected || normalizeTonAddress(details.sourceAddress) !== walletAddress) return res.status(400).json({ success: false, code: 'AD_TON_PAYMENT_MISMATCH', message: 'مبلغ یا فرستنده تراکنش با سفارش مطابقت ندارد.' });

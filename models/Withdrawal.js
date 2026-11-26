@@ -8,7 +8,7 @@ const withdrawalSchema = new mongoose.Schema(
     cryptoAmount: { type: Number, required: true, min: 0 },
     address: { type: String, required: true },
     network: { type: String, default: 'TON' },
-    token: { type: String, default: 'GRAM' },
+    token: { type: String, default: 'USDT' },
     fromAddress: { type: String, default: '' },
     txHash: { type: String, default: null },
     // Deliberately unset until a verified chain transaction is attached.

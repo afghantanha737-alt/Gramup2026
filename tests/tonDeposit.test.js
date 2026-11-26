@@ -10,6 +10,7 @@ const {
   amountToNanoGram,
   nanoGramToNumber,
   hasExactReference,
+  findIncomingNativeGramTransferByReference,
   verifyNativeGramTransfer
 } = require('../utils/tonNativeDepositVerify');
 
@@ -78,7 +79,7 @@ async function run() {
   assert.strictEqual(hasExactReference({ message_content: { decoded: { comment: reference } } }, ''), false, 'empty invoice IDs never match');
 
   const directRequests = [];
-  const direct = await verifyNativeGramTransfer({ txHash: hash, depositAddress: destination, reference }, {
+  const direct = await findIncomingNativeGramTransferByReference({ txHash: hash, depositAddress: destination, reference }, {
     apiKey: 'test-key',
     fetchImpl: async (url, init) => {
       directRequests.push({ url: String(url), headers: init.headers });
@@ -182,26 +183,26 @@ async function run() {
   assert.ok(route.includes('hasRecentWalletProof(req.dbUser)'));
   assert.ok(route.includes('requestedAmountRaw'));
   assert.ok(route.includes("DEPOSIT_SOURCE_WALLET_MISMATCH"));
-  assert.ok(route.includes('findIncomingNativeGramTransferByReference'));
-  assert.ok(route.includes('await verifyNativeGramTransfer('));
-  assert.ok(!route.includes('verifyGramJettonTransfer') && !route.includes('/jetton/transfers'));
+  assert.ok(route.includes('findUsdtTransfer'));
+  assert.ok(route.includes('await findUsdtTransfer('));
+  assert.ok(!route.includes('findIncomingNativeGramTransferByReference') && !route.includes('verifyNativeGramTransfer'));
   assert.ok(route.includes('await withMongoTransaction(async session =>'));
   assert.ok(route.includes('txHashNormalized: verification.txHash'), 'canonical receiving transaction hash is uniquely claimed');
   assert.ok(route.includes('sourceId: `deposit:${verification.txHash}`'), 'ledger source uses canonical transaction hash');
   assert.ok(route.includes("type: 'deposit'"));
-  assert.ok(route.includes("assetType: 'native_gram'"));
+  assert.ok(route.includes("assetType: 'jetton_usdt'"));
   assert.ok(model.includes("name: 'active_deposit_per_user'"), 'active deposit index has a stable non-legacy name');
   assert.ok(model.includes("unique: true") && model.includes("partialFilterExpression: { status: { $in: ['pending', 'verifying'] } }"), 'only one active native deposit intent per user');
   assert.ok(model.includes("'cancelled'"), 'cancelled deposit status is persisted');
   assert.ok(model.includes("partialFilterExpression: { txHashNormalized: { $type: 'string' } }"));
-  assert.ok(model.includes("enum: ['native_gram']"));
+  assert.ok(model.includes("enum: ['jetton_usdt']"));
   assert.ok(!model.includes('jettonMasterSnapshot'));
   assert.ok(settings.includes("depositEnabled: { type: Boolean, default: false }"), 'deposits default off');
   assert.ok(!settings.includes('gramJettonMasterAddress'));
   assert.ok(!adminRoute.includes('getJettonMasterInfo') && !adminRoute.includes('gramJettonMasterAddress'));
   assert.ok(!adminUi.includes('setGramJettonMasterAddress'));
-  assert.ok(miniAppUi.includes('NATIVE GRAM'));
-  assert.ok(app.includes('submitGramDeposit'));
+  assert.ok(miniAppUi.includes('USDT JETTON'));
+  assert.ok(app.includes('submitUsdtDeposit'));
   assert.ok(miniAppUi.includes('data-copy-target="depositWalletAddress"'));
   assert.ok(miniAppUi.includes('data-copy-target="depositReference"'));
   assert.ok(miniAppUi.includes('<details class="depositManualDetails">'), 'manual deposit address and reference are collapsed by default');
@@ -224,7 +225,7 @@ async function run() {
   assert.ok(i18n.includes('deposit_memo_not_address') && i18n.includes('deposit_copy_success'));
   assert.ok(route.includes('transactionAt: linkedDeposit?.verifiedAt || item.createdAt'), 'history includes on-chain transfer time');
 
-  console.log('Native GRAM Deposit verifier tests passed (mocked read-only provider; no live transfers).');
+  console.log('TON USDT Deposit verifier tests passed (mocked read-only provider; no live transfers).');
 }
 
 run().catch(error => {

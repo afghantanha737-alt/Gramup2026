@@ -44,13 +44,13 @@ const requestReceipt = buildWithdrawalRequest(
   { username: 'nasiruddin' },
   {
     cryptoAmount: 1.25,
-    token: 'GRAM',
+    token: 'USDT',
     address: 'EQ' + 'a'.repeat(46),
     _id: 'withdrawal-123456',
     createdAt: new Date('2026-11-23T12:15:00.000Z')
   }
 );
-assert.match(requestReceipt, /New withdrawal request<\/b>\n\n👤 User: ‎nas\*\*\*‎\n\n💰 Amount: <b>1\.25 GRAM<\/b>\n\n👛 Wallet:/);
+assert.match(requestReceipt, /New withdrawal request<\/b>\n\n👤 User: ‎nas\*\*\*‎\n\n💰 Amount: <b>1\.25 USDT<\/b>\n\n👛 Wallet:/);
 assert.match(requestReceipt, /\n\n🆔 Request: #123456\n\n📅 2026-11-23 12:15 UTC\n\n⏳ Status: Pending review$/);
 
 const keyboard = payoutKeyboard();

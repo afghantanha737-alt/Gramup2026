@@ -8,7 +8,7 @@ const balanceAuditSchema = new mongoose.Schema({
   actor: { type: String, required: true },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   action: { type: String, enum: ['add', 'subtract', 'set', 'zero', 'account_status'], required: true },
-  currency: { type: String, enum: ['points', 'gram', 'account'], required: true },
+  currency: { type: String, enum: ['points', 'usdt', 'account'], required: true },
   before: { type: Number, default: null },
   change: { type: Number, default: null },
   after: { type: Number, default: null },

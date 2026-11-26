@@ -10,7 +10,7 @@ const settingsSchema = new mongoose.Schema(
     minWithdrawPoints: { type: Number, default: 1000 },
     dailyCheckInPoints: { type: Number, default: 10 },
     streakBonusPoints: { type: Number, default: 2 },
-    gramUsdPrice: { type: Number, default: 0, min: 0 },
+    usdtUsdPrice: { type: Number, default: 0, min: 0 },
     // Retained for compatibility; v4 only credits on an authenticated manual Claim.
     dailyAutoCheckinEnabled: { type: Boolean, default: false },
     dailyReminderEnabled: { type: Boolean, default: true },
@@ -37,11 +37,11 @@ const settingsSchema = new mongoose.Schema(
     // حالت تعمیرات برای محیط‌های تست/به‌روزرسانی؛ کاربران مجاز همچنان می‌توانند وارد شوند.
     maintenanceEnabled: { type: Boolean, default: false },
     maintenanceAllowedTelegramIds: { type: [String], default: () => [] },
-    // Native GRAM deposits stay disabled until an administrator supplies the project's TON Mainnet wallet.
+    // TON USDT Jetton deposits stay disabled until an administrator supplies the project's TON Mainnet wallet.
     depositEnabled: { type: Boolean, default: false },
     depositNetwork: { type: String, enum: ['TON_MAINNET'], default: 'TON_MAINNET' },
     depositWalletAddress: { type: String, default: '' },
-    minimumDepositGram: { type: Number, default: 1, min: 0 },
+    minimumDepositUsdt: { type: Number, default: 1, min: 0 },
     // Fixed by the current referral policy; retained for backwards compatibility.
     referralInitialRewardPoints: { type: Number, default: DEFAULT_REFERRAL_INITIAL_REWARD_POINTS, min: 0, max: 1000000 },
     // A newly accepted invitee receives this one-time welcome credit; zero disables it.
@@ -57,7 +57,7 @@ const settingsSchema = new mongoose.Schema(
     // Legacy settings may still contain 24; spinPolicy ignores cooldown and admin writes accept only 0.
     luckySpinCooldownHours: { type: Number, default: 0, min: 0, max: 24 },
     luckySpinPrizes: {
-      type: [{ _id: false, id: String, kind: { type: String, enum: ['points', 'gram', 'boost', 'spins', 'none'] }, amount: { type: Number, min: 0 }, label: { type: String, default: '' }, probability: { type: Number, min: 0, max: 100 } }],
+      type: [{ _id: false, id: String, kind: { type: String, enum: ['points', 'usdt', 'boost', 'spins', 'none'] }, amount: { type: Number, min: 0 }, label: { type: String, default: '' }, probability: { type: Number, min: 0, max: 100 } }],
       default: defaultSpinPrizes
     },
     adMarketplaceEnabled: { type: Boolean, default: true },
@@ -68,8 +68,8 @@ const settingsSchema = new mongoose.Schema(
     adPlayerRewardUp: { type: Number, default: 10, min: 0 },
     adMinUsers: { type: Number, default: 50, min: 1 },
     adMaxUsers: { type: Number, default: 50000, min: 1 },
-    adCampaignMinBudgetGram: { type: Number, default: 0.1, min: 0 },
-    adCampaignMaxBudgetGram: { type: Number, default: 100000, min: 0 }
+    adCampaignMinBudgetUsdt: { type: Number, default: 0.1, min: 0 },
+    adCampaignMaxBudgetUsdt: { type: Number, default: 100000, min: 0 }
   },
   { timestamps: true }
 );

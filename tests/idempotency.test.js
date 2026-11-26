@@ -10,13 +10,13 @@ assert.strictEqual(validateIdempotencyKey('bad key'), null);
 assert.strictEqual(validateIdempotencyKey('short'), null);
 assert.strictEqual(validateIdempotencyKey('x'.repeat(121)), null);
 assert.strictEqual(
-  hashIdempotencyRequest('exchange_points_to_gram', { direction: 'points_to_gram', amount: 100 }),
-  hashIdempotencyRequest('exchange_points_to_gram', { amount: 100, direction: 'points_to_gram' }),
+  hashIdempotencyRequest('exchange_points_to_usdt', { direction: 'points_to_usdt', amount: 100 }),
+  hashIdempotencyRequest('exchange_points_to_usdt', { amount: 100, direction: 'points_to_usdt' }),
   'stable payload hashing ignores property order'
 );
 assert.notStrictEqual(
-  hashIdempotencyRequest('exchange_points_to_gram', { amount: 100 }),
-  hashIdempotencyRequest('exchange_gram_to_points', { amount: 100 }),
+  hashIdempotencyRequest('exchange_points_to_usdt', { amount: 100 }),
+  hashIdempotencyRequest('exchange_usdt_to_points', { amount: 100 }),
   'operation scope is part of the hash'
 );
 assert.strictEqual(
@@ -36,7 +36,7 @@ assert(IdempotencyOperation.schema.path('scope').enumValues.includes('vip0_claim
 const withdrawalIndexes = Withdrawal.schema.indexes();
 assert(withdrawalIndexes.some(([keys, options]) => keys.txHashNormalized === 1 && options.unique === true && options.partialFilterExpression));
 assert.strictEqual(normalizeTonTxHash('A'.repeat(64)), 'a'.repeat(64));
-assert.strictEqual(normalizeTonTxHash('  abcdef123456  '), 'abcdef123456');
+assert.strictEqual(normalizeTonTxHash('  abcdef123456  '), null);
 assert(legacyTonTxHashMatcher('A'.repeat(64)) instanceof RegExp);
 assert.strictEqual(legacyTonTxHashMatcher('abcdef123456'), 'abcdef123456');
 

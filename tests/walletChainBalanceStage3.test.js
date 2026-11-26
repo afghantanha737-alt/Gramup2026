@@ -40,14 +40,15 @@ const address = '0:2222222222222222222222222222222222222222222222222222222222222
   const styles = fs.readFileSync(path.join(root, 'public/css/style.css'), 'utf8');
   const i18n = fs.readFileSync(path.join(root, 'public/js/i18n.js'), 'utf8');
   assert.match(route, /router\.get\('\/wallet\/chain-balance'/);
-  assert.match(route, /getNativeGramBalance\(address\)/);
+  assert.match(route, /getUsdtBalance\(address\)/);
+  assert.match(route, /network: 'TON_MAINNET', token: 'USDT'/);
   assert.match(app, /\/api\/points\/wallet\/chain-balance/);
   assert.match(app, /walletChainBalanceValue/);
   assert.match(styles, /\.walletChainBalance/);
   for (const key of ['wallet_chain_balance_title', 'wallet_chain_balance_refresh', 'wallet_chain_balance_unavailable']) {
     assert.ok(i18n.includes(`${key}:`), `missing translation ${key}`);
   }
-  console.log('ALL PASS — on-chain Wallet balance read-only contract');
+  console.log('ALL PASS — on-chain TON USDT Wallet balance read-only contract');
 })().catch(error => {
   console.error(error);
   process.exit(1);

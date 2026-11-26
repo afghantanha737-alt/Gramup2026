@@ -59,9 +59,9 @@ const v5Proof = {
 const verifiedV5 = verifyTonProof({ address: v5Address, network: SUPPORTED_NETWORK, walletStateInit: v5StateInit, proof: v5Proof, expectedDomain: domain, expectedPayload: payload });
 assert.strictEqual(verifiedV5.address, v5Address);
 assert.strictEqual(Buffer.from(verifiedV5.publicKey, 'base64').toString('hex'), publicKey.toString('hex'));
-assert.match(pointsRoute, /swap\/gram-to-points\/intents/);
+assert.match(pointsRoute, /swap\/usdt-to-points\/intents/);
 assert.match(pointsRoute, /txHashNormalized/);
 assert.match(serverSource, /models\/TonProofChallenge/);
-assert.match(serverSource, /models\/GramSwapIntent/);
+assert.doesNotMatch(serverSource, /models\/GramSwapIntent/);
 assert.match(serverSource, /app\.use\('\/api\/ton-proof'/);
 console.log('TON Proof cryptographic verification and Stage 2 contracts: PASS');

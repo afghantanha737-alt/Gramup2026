@@ -12,6 +12,7 @@ const makeFetch = destination => async () => ({
   status: 200,
   json: async () => ({ transactions: [{
     account: '0:' + '3'.repeat(64),
+    mc_block_seqno: 100,
     description: { compute_ph: { success: true }, action: { success: true } },
     out_msgs: [{ destination, value: '1000000000' }]
   }] })
@@ -21,6 +22,7 @@ const makeAbortedFetch = destination => async () => ({
   status: 200,
   json: async () => ({ transactions: [{
     account: '0:' + '3'.repeat(64),
+    mc_block_seqno: 100,
     description: { aborted: true, compute_ph: { success: true }, action: { success: true } },
     out_msgs: [{ destination, value: '1000000000' }]
   }] })

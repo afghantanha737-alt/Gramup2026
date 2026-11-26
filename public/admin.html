@@ -345,7 +345,7 @@
     <div id="tab-deposits" class="tabContent hidden">
       <div class="card">
         <div class="flexBetween">
-          <b>واریزهای Native GRAM</b>
+          <b>واریزهای TON USDT Jetton</b>
           <div class="row">
             <input id="depositSearch" placeholder="جستجو با کیف‌پول/آیدی/یوزرنیم..." style="flex:1;min-width:180px;margin:0" oninput="debouncedLoadDeposits()"><select id="depositFilter" onchange="loadDeposits()" style="width:auto;margin:0">
               <option value="">همه</option>
@@ -415,7 +415,7 @@
           <b>عملیات گروهی موجودی</b>
           <p class="small">فقط کاربران انتخاب‌شده در صفحهٔ فعلی اعمال می‌شوند؛ برای کاربران دیگر از صفحه‌بندی یا جستجو استفاده کنید. هر کاربر جداگانه در Audit و Ledger ثبت خواهد شد. حداکثر ۱۰۰ کاربر.</p>
           <div class="row">
-            <select id="bulkCurrency" style="flex:1;margin:0"><option value="points">Points</option><option value="gram">GRAM</option></select>
+            <select id="bulkCurrency" style="flex:1;margin:0"><option value="points">Points</option><option value="usdt">USDT</option></select>
             <select id="bulkAction" style="flex:1;margin:0" onchange="toggleBulkAmount()"><option value="add">افزودن</option><option value="zero">صفرکردن</option></select>
             <input id="bulkAmount" type="number" min="0" step="1" placeholder="مقدار" style="flex:1;margin:0">
             <input id="bulkReason" placeholder="دلیل اجباری" style="flex:2;margin:0">
@@ -453,7 +453,7 @@
         <label>دکمه‌های درون‌خطی (اختیاری؛ حداکثر ۸ دکمه)</label>
         <div id="broadcastButtonRows">
           <div class="broadcastButtonRow">
-            <input class="broadcastButtonLabel" type="text" maxlength="64" value="Open Gramup 🚀" aria-label="Button label" placeholder="Open Gram App">
+            <input class="broadcastButtonLabel" type="text" maxlength="64" value="Open Gramup 🚀" aria-label="Button label" placeholder="Open Usdt App">
             <input class="broadcastButtonUrl" type="text" maxlength="2048" aria-label="Button destination URL" placeholder="https://... (خالی = باز کردن Mini App)">
             <button type="button" class="secondary broadcastRemoveButton" aria-label="Remove button" title="حذف دکمه" onclick="removeBroadcastButtonRow(this)">×</button>
           </div>
@@ -497,13 +497,13 @@
         <div class="flexBetween"><b id="channelFormTitle">افزودن کانال اجباری</b></div>
         <p class="small">کاربران برای استفاده از مینی‌اپ باید عضو <b>همه‌ی کانال‌های فعال</b> باشند. عضویت هر بار که کاربر وارد برنامه می‌شود دوباره از خود تلگرام بررسی می‌شود. اگر هیچ کانالی فعال نباشد، ورود آزاد است.</p>
         <label>نام کانال (برای نمایش به کاربر)</label>
-        <input id="chName" placeholder="مثلاً GramUp Official">
+        <input id="chName" placeholder="مثلاً UsdtUp Official">
         <label>یوزرنیم تلگرام</label>
-        <input id="chUsername" placeholder="@GramUpOfficial" style="direction:ltr">
+        <input id="chUsername" placeholder="@UsdtUpOfficial" style="direction:ltr">
         <label>آیدی عددی کانال (اختیاری — اگر خالی باشد بعد از اعتبارسنجی خودکار پر می‌شود)</label>
         <input id="chChatId" placeholder="-1001234567890" style="direction:ltr">
         <label>لینک کانال (خالی = ساخت خودکار از یوزرنیم)</label>
-        <input id="chUrl" placeholder="https://t.me/GramUpOfficial" style="direction:ltr">
+        <input id="chUrl" placeholder="https://t.me/UsdtUpOfficial" style="direction:ltr">
         <label>وضعیت</label>
         <select id="chActive">
           <option value="true">فعال (اجباری)</option>
@@ -640,10 +640,10 @@
           <div id="maintenanceAllowedList" class="small" style="margin-top:10px"></div>
           <div id="maintenanceMessage" class="small" style="margin-top:8px"></div>
         </div>
-        <label>نرخ تبدیل (هر پوینت به GRAM)</label>
+        <label>نرخ تبدیل (هر پوینت به USDT)</label>
         <input id="setRate" type="number" step="0.000001">
-        <label>قیمت هر ۱ GRAM به دلار (برای نمایش ≈ USD؛ صفر = مخفی)</label>
-        <input id="setGramUsd" type="number" step="0.0001" min="0">
+        <label>قیمت هر ۱ USDT به دلار (برای نمایش ≈ USD؛ صفر = مخفی)</label>
+        <input id="setUsdtUsd" type="number" step="0.0001" min="0">
         <div style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:4px 0 12px;background:var(--surface2)">
           <b>دیلی چک‌این و پیام روزانه</b>
           <p class="small" style="margin:8px 0">پاداش روزانه فقط با Claim دستی خود کاربر ثبت می‌شود؛ ورود به حساب یا زمان‌بندی هیچ پاداشی را خودکار پرداخت نمی‌کند. پیام روزانه صرفاً یادآوری است و Claim دستی را جایگزین نمی‌کند.</p>
@@ -724,7 +724,7 @@
         </div>
         <div style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:14px 0;background:var(--surface2)">
           <b>📣 Self-Serve Ad Marketplace — بازار تبلیغات</b>
-          <p class="small">قیمت هر کاربر از USD به GRAM با استفاده از نرخ GRAM/USD همین تنظیمات محاسبه می‌شود. تغییرات برای سفارش‌های جدید اعمال می‌شوند؛ کمپین‌های موجود تغییر نمی‌کنند.</p>
+          <p class="small">قیمت هر کاربر از USD به USDT با استفاده از نرخ USDT/USD همین تنظیمات محاسبه می‌شود. تغییرات برای سفارش‌های جدید اعمال می‌شوند؛ کمپین‌های موجود تغییر نمی‌کنند.</p>
           <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" id="setAdMarketplaceEnabled" style="width:auto"><b>بازار تبلیغات فعال باشد</b></label>
           <div class="row"><div><label>قیمت پایه هر کاربر (USD)</label><input id="setAdBasePriceUsd" type="number" min="0" step="0.0001"></div><div><label>پاداش هر کاربر (UP)</label><input id="setAdPlayerRewardUp" type="number" min="1" step="1"></div></div>
           <div class="row"><div><label>هزینه عضویت کانال برای هر کاربر (USD)</label><input id="setAdChannelSurchargeUsd" type="number" min="0" step="0.0001"></div><div><label>هزینه فیلتر زبان برای هر کاربر (USD)</label><input id="setAdLanguageSurchargeUsd" type="number" min="0" step="0.0001"></div></div>
@@ -733,19 +733,19 @@
           <p class="small" id="adPricingPreview" style="margin-bottom:0"></p>
         </div>
         <div style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:14px 0;background:var(--surface2)">
-          <b>💎 Native GRAM Deposit — TON Mainnet</b>
-          <p class="small">این Deposit فقط ارز بومی GRAM شبکه TON را می‌پذیرد و از Jetton یا Jetton Master استفاده نمی‌کند. آدرس عمومی کیف‌پول پروژه را از منبع مورداعتماد وارد کنید؛ هر کاربر باید Reference اختصاصی را در comment تراکنش Native GRAM بنویسد. این برنامه seed یا private key نگهداری نمی‌کند. Deposit به‌صورت پیش‌فرض خاموش است.</p>
+          <b>💎 USDT Jetton Deposit — TON Mainnet</b>
+          <p class="small">این Deposit فقط USDT Jetton رسمی شبکه TON را می‌پذیرد و Master رسمی USDT را اعتبارسنجی می‌کند. آدرس عمومی کیف‌پول پروژه را از منبع مورداعتماد وارد کنید؛ هر کاربر باید Reference اختصاصی را در comment انتقال USDT Jetton بنویسد. این برنامه seed یا private key نگهداری نمی‌کند. Deposit به‌صورت پیش‌فرض خاموش است.</p>
           <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
             <input type="checkbox" id="setDepositEnabled" style="width:auto">
             <span>Deposit فعال باشد</span>
           </label>
           <label>Network</label>
           <input id="setDepositNetwork" value="TON Mainnet" readonly>
-          <label>آدرس عمومی دریافت GRAM (TON wallet owner)</label>
+          <label>آدرس عمومی دریافت USDT (TON wallet owner)</label>
           <input id="setDepositWalletAddress" autocomplete="off" spellcheck="false" placeholder="آدرس معتبر TON">
-          <label>Minimum Deposit (GRAM)</label>
-          <input id="setMinimumDepositGram" type="number" min="0.000000001" step="0.000000001" value="1">
-          <p class="small" style="margin-bottom:0">برای روشن‌کردن، آدرس معتبر TON Mainnet و حداقل مبلغ Native GRAM لازم است. برنامه هیچ کلید یا عبارت بازیابی کیف‌پول را نگهداری نمی‌کند.</p>
+          <label>Minimum Deposit (USDT)</label>
+          <input id="setMinimumDepositUsdt" type="number" min="0.000000001" step="0.000000001" value="1">
+          <p class="small" style="margin-bottom:0">برای روشن‌کردن، آدرس معتبر TON Mainnet و حداقل مبلغ TON USDT Jetton لازم است. برنامه هیچ کلید یا عبارت بازیابی کیف‌پول را نگهداری نمی‌کند.</p>
         </div>
         <button onclick="saveSettings()">ذخیره تنظیمات</button>
       </div>
@@ -926,7 +926,7 @@ async function loadAdOrders() {
   const el = document.getElementById("adOrdersList"); if (!el) return;
   try {
     const data = await api("/api/admin/ad-orders");
-    el.innerHTML = (data.orders || []).map(order => `<div class="card" style="margin:8px 0"><b>${escapeHtml(order.title)}</b><div class="small">${escapeHtml(order.advertiserTelegramId || "")} · ${order.totalCostGram} GRAM · ${order.status}</div><div class="row" style="margin-top:8px">${order.status === "pending_review" ? `<button onclick="reviewAdOrder('${order.id}','approve')">تأیید و ساخت تسک</button><button class="danger" onclick="reviewAdOrder('${order.id}','reject')">رد و بازگشت وجه</button>` : ""}</div></div>`).join("") || "سفارشی وجود ندارد.";
+    el.innerHTML = (data.orders || []).map(order => `<div class="card" style="margin:8px 0"><b>${escapeHtml(order.title)}</b><div class="small">${escapeHtml(order.advertiserTelegramId || "")} · ${order.totalCostUsdt} USDT · ${order.status}</div><div class="row" style="margin-top:8px">${order.status === "pending_review" ? `<button onclick="reviewAdOrder('${order.id}','approve')">تأیید و ساخت تسک</button><button class="danger" onclick="reviewAdOrder('${order.id}','reject')">رد و بازگشت وجه</button>` : ""}</div></div>`).join("") || "سفارشی وجود ندارد.";
   } catch (error) { el.textContent = error.message || "خطا در بارگذاری سفارش‌ها"; }
 }
 async function reviewAdOrder(id, action) {
@@ -1023,10 +1023,10 @@ async function loadLiabilitySummary() {
     const confirmedDeposits = Number(data.deposits?.confirmed?.amount || 0);
     container.innerHTML = `<div class="statsGrid" style="margin-top:12px">
       <div class="card" style="margin-bottom:0"><div class="small">تعهد Points فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.points?.currentUserLiability)}</div></div>
-      <div class="card" style="margin-bottom:0"><div class="small">تعهد GRAM فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.gram?.currentUserLiability)} GRAM</div></div>
-      <div class="card" style="margin-bottom:0"><div class="small">برداشت در انتظار/پردازش</div><div style="font-size:20px;font-weight:800">${n(pending + processing)} GRAM</div></div>
-      <div class="card" style="margin-bottom:0"><div class="small">برداشت پرداخت‌شده</div><div style="font-size:20px;font-weight:800">${n(paid)} GRAM</div></div>
-      <div class="card" style="margin-bottom:0"><div class="small">Deposit تأییدشده</div><div style="font-size:20px;font-weight:800">${n(confirmedDeposits)} GRAM</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">تعهد USDT فعلی کاربران</div><div style="font-size:20px;font-weight:800">${n(data.usdt?.currentUserLiability)} USDT</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">برداشت در انتظار/پردازش</div><div style="font-size:20px;font-weight:800">${n(pending + processing)} USDT</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">برداشت پرداخت‌شده</div><div style="font-size:20px;font-weight:800">${n(paid)} USDT</div></div>
+      <div class="card" style="margin-bottom:0"><div class="small">Deposit تأییدشده</div><div style="font-size:20px;font-weight:800">${n(confirmedDeposits)} USDT</div></div>
     </div><div class="small" style="margin-top:12px">کاربران بررسی‌شده: ${n(data.users)} · ذخیره واقعی: گزارش‌نشده تا ثبت مقدار معتبر · آخرین بررسی: ${new Date(data.generatedAt).toLocaleString("fa-IR")}</div>`;
   } catch (error) {
     container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
@@ -1602,7 +1602,7 @@ async function deleteTask(id) {
   }
 }
 
-/* ---------- WITHDRAWALS (نمایش بر اساس GRAM) ---------- */
+/* ---------- WITHDRAWALS (نمایش بر اساس USDT) ---------- */
 const STATUS_FA = {
   pending: "در انتظار بررسی", approved: "تاییدشده", processing: "در حال پردازش",
   paid: "پرداخت‌شده", rejected: "رد شده", cancelled: "لغوشده"
@@ -1673,7 +1673,7 @@ async function loadWithdrawals() {
           <span class="badge ${w.status}">${STATUS_FA[w.status] || w.status}</span>
         </div>
         <div class="small" style="margin-bottom:2px">شناسه‌ی برداشت: <span style="font-family:monospace">${escapeHtml(w._id)}</span></div>
-        <div class="small" style="margin-bottom:6px">مقدار: <b style="color:var(--text)">${w.cryptoAmount} ${escapeHtml(w.token || "GRAM")}</b> · شبکه: ${escapeHtml(w.network || "TON")}</div>
+        <div class="small" style="margin-bottom:6px">مقدار: <b style="color:var(--text)">${w.cryptoAmount} ${escapeHtml(w.token || "USDT")}</b> · شبکه: ${escapeHtml(w.network || "TON")}</div>
         <label class="small" style="margin-bottom:4px">آدرس مقصد (کیف‌پول کاربر)</label>
         <div style="display:flex;gap:6px;align-items:stretch;margin-bottom:8px">
           <input type="text" readonly value="${escapeHtml(w.address)}" style="margin:0;direction:ltr;font-family:monospace;font-size:11px" onclick="this.select()">
@@ -1723,9 +1723,9 @@ function renderDepositSummary(summary) {
   const box = document.getElementById("depositSummary");
   if (!box) return;
   box.innerHTML = `
-    <div class="card" style="margin-bottom:0"><div class="small">مجموع واریز تأییدشده</div><div style="font-size:20px;font-weight:800">${n(summary?.totalConfirmedAmount)} GRAM</div><div class="small">${n(summary?.totalConfirmedCount)} تراکنش</div></div>
-    <div class="card" style="margin-bottom:0"><div class="small">در انتظار تأیید</div><div style="font-size:20px;font-weight:800">${n(summary?.pending?.amount)} GRAM</div><div class="small">${n(summary?.pending?.count)} تراکنش</div></div>
-    <div class="card" style="margin-bottom:0"><div class="small">لغوشده/ردشده</div><div style="font-size:20px;font-weight:800">${n(summary?.rejected?.amount)} GRAM</div><div class="small">${n(summary?.rejected?.count)} تراکنش</div></div>`;
+    <div class="card" style="margin-bottom:0"><div class="small">مجموع واریز تأییدشده</div><div style="font-size:20px;font-weight:800">${n(summary?.totalConfirmedAmount)} USDT</div><div class="small">${n(summary?.totalConfirmedCount)} تراکنش</div></div>
+    <div class="card" style="margin-bottom:0"><div class="small">در انتظار تأیید</div><div style="font-size:20px;font-weight:800">${n(summary?.pending?.amount)} USDT</div><div class="small">${n(summary?.pending?.count)} تراکنش</div></div>
+    <div class="card" style="margin-bottom:0"><div class="small">لغوشده/ردشده</div><div style="font-size:20px;font-weight:800">${n(summary?.rejected?.amount)} USDT</div><div class="small">${n(summary?.rejected?.count)} تراکنش</div></div>`;
 }
 
 async function loadDeposits() {
@@ -1747,7 +1747,7 @@ async function loadDeposits() {
       return `<div class="card" style="margin-bottom:10px">
         <div class="flexBetween"><div><b>${escapeHtml(user)}</b><div class="small">Telegram ID: ${escapeHtml(d.user?.telegramId || "—")}</div></div><div class="small">کیف‌پول: ${walletMarkup(walletAddressValue(d))}</div><span class="badge ${d.status === "confirmed" ? "approved" : d.status === "rejected" ? "rejected" : "pending"}">${escapeHtml(DEPOSIT_STATUS_FA[d.status] || d.status)}</span></div>
         <div class="small" style="margin-top:8px">شناسه: <span style="font-family:monospace">${escapeHtml(d._id)}</span> · تاریخ: ${escapeHtml(date)}</div>
-        <div style="margin-top:6px">مبلغ: <b>${n(d.amount || d.requestedAmount)} GRAM</b> · شبکه: ${escapeHtml(d.network || "TON Mainnet")}</div>
+        <div style="margin-top:6px">مبلغ: <b>${n(d.amount || d.requestedAmount)} USDT</b> · شبکه: ${escapeHtml(d.network || "TON Mainnet")}</div>
         <div class="small" style="margin-top:5px">Reference: <span style="font-family:monospace;user-select:all">${escapeHtml(d.reference || "—")}</span></div>
         ${d.txHash ? `<div class="small" style="margin-top:5px">TxID: <span style="font-family:monospace;user-select:all">${escapeHtml(d.txHash)}</span></div>` : ""}
         ${d.status === "pending" ? `<div class="row" style="margin-top:10px"><button class="success" type="button" onclick="approveDeposit('${d._id}')">بررسی و تأیید</button><button class="danger" type="button" onclick="rejectDeposit('${d._id}')">لغو Deposit</button></div>` : ""}
@@ -1833,7 +1833,7 @@ async function withdrawSetStatus(id, target) {
     if (reason === null) return;
     note = reason.trim();
     if (!note) { showMsg("برای لغو درخواست، دلیل الزامی است.", "error"); return; }
-    if (!confirm("با لغو این درخواست، GRAM به موجودی کاربر برمی‌گردد. ادامه می‌دهید؟")) return;
+    if (!confirm("با لغو این درخواست، USDT به موجودی کاربر برمی‌گردد. ادامه می‌دهید؟")) return;
   }
   try {
     await api(`/api/admin/withdrawals/${id}/status`, { method: "POST", body: JSON.stringify({ status: target, note }) });
@@ -1888,7 +1888,7 @@ async function loadFinancialAudit() {
       container.innerHTML = `<div class="empty">اختلافی پیدا نشد. ${data.checkedUsers} کاربر بررسی شد.</div>`;
       return;
     }
-    container.innerHTML = `<div class="small" style="margin-bottom:8px">${data.checkedUsers} کاربر بررسی شد؛ ${data.discrepancyCount} اختلاف نمایش داده می‌شود.</div><table><thead><tr><th>کاربر</th><th>موجودی پوینت</th><th>Ledger پوینت</th><th>اختلاف پوینت</th><th>موجودی GRAM</th><th>Ledger GRAM</th><th>اختلاف GRAM</th></tr></thead><tbody>${data.discrepancies.map(row => `<tr><td>${escapeHtml(row.name || row.telegramId || "—")}</td><td>${row.pointsBalance}</td><td>${row.pointsLedger}</td><td style="color:var(--danger)">${row.pointsDifference}</td><td>${row.gramBalance}</td><td>${row.gramLedger}</td><td style="color:var(--danger)">${row.gramDifference}</td></tr>`).join("")}</tbody></table>`;
+    container.innerHTML = `<div class="small" style="margin-bottom:8px">${data.checkedUsers} کاربر بررسی شد؛ ${data.discrepancyCount} اختلاف نمایش داده می‌شود.</div><table><thead><tr><th>کاربر</th><th>موجودی پوینت</th><th>Ledger پوینت</th><th>اختلاف پوینت</th><th>موجودی USDT</th><th>Ledger USDT</th><th>اختلاف USDT</th></tr></thead><tbody>${data.discrepancies.map(row => `<tr><td>${escapeHtml(row.name || row.telegramId || "—")}</td><td>${row.pointsBalance}</td><td>${row.pointsLedger}</td><td style="color:var(--danger)">${row.pointsDifference}</td><td>${row.usdtBalance}</td><td>${row.usdtLedger}</td><td style="color:var(--danger)">${row.usdtDifference}</td></tr>`).join("")}</tbody></table>`;
   } catch (error) {
     container.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
@@ -1953,14 +1953,14 @@ async function loadUsers() {
     }
     container.innerHTML = `
       <table class="adminUsersTable">
-        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه کاربران این صفحه" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>کیف‌پول</th><th>Points</th><th>GRAM</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+        <thead><tr><th><input type="checkbox" aria-label="انتخاب همه کاربران این صفحه" style="width:auto;margin:0" onchange="selectVisibleUsers(this.checked)"></th><th>نام / یوزرنیم · Telegram ID</th><th>کیف‌پول</th><th>Points</th><th>USDT</th><th>دعوت‌شده</th><th>وضعیت</th><th>عملیات</th></tr></thead>
         <tbody>
           ${users.map(u => `
             <tr>
               <td class="usersSelectCell"><input class="user-select" type="checkbox" value="${u._id}" aria-label="انتخاب کاربر" style="width:auto;margin:0"></td>
               <td class="usersNameCell" data-label="نام / یوزرنیم · Telegram ID">${escapeHtml(u.firstName || u.username || "—")}<div class="small">Telegram ID: ${escapeHtml(u.telegramId || "—")}</div></td><td data-label="کیف‌پول">${walletMarkup(u.connectedWalletAddress || u.walletAddress)}</td>
               <td data-label="Points">${Number(u.points || 0)}</td>
-              <td data-label="GRAM">${Number(u.gramBalance || 0)}</td>
+              <td data-label="USDT">${Number(u.usdtBalance || 0)}</td>
               <td data-label="دعوت‌شده">${u.invitedCount || 0}</td>
               <td data-label="وضعیت">${u.isBanned ? '<span class="badge rejected">مسدود</span>' : '<span class="badge approved">فعال</span>'}</td>
               <td class="usersActions" data-label="عملیات">
@@ -2024,17 +2024,17 @@ function renderUserAccount(data) {
   document.getElementById("accountModalBody").innerHTML = `
     <div class="statsGrid" style="margin-top:12px">
       <div class="card"><div class="small">Points موجود</div><b>${Number(b.currentPoints || 0)}</b></div>
-      <div class="card"><div class="small">GRAM موجود</div><b>${Number(b.currentGram || 0)}</b></div>
+      <div class="card"><div class="small">USDT موجود</div><b>${Number(b.currentUsdt || 0)}</b></div>
       <div class="card"><div class="small">کل Points کسب‌شده</div><b>${Number(b.totalEarnedPoints || 0)}</b></div>
-      <div class="card"><div class="small">GRAM واریزشده</div><b>${Number(b.totalGramCredited || 0)}</b></div>
-      <div class="card"><div class="small">GRAM برداشت‌شده</div><b>${Number(b.totalWithdrawnGram || 0)}</b></div>
+      <div class="card"><div class="small">USDT واریزشده</div><b>${Number(b.totalUsdtCredited || 0)}</b></div>
+      <div class="card"><div class="small">USDT برداشت‌شده</div><b>${Number(b.totalWithdrawnUsdt || 0)}</b></div>
       <div class="card"><div class="small">دعوت / فعال</div><b>${Number(b.referralCount || 0)} / ${Number(b.activeReferralCount || 0)}</b></div>
     </div>
     <div class="card"><b>کیف‌پول متصل</b><div style="margin-top:8px">${walletMarkup(u.connectedWalletAddress || u.walletAddress)}</div></div>
     <div class="card">
       <b>تغییر دستی موجودی</b>
       <div class="row" style="margin-top:10px">
-        <select id="accountBalanceCurrency" style="flex:1;margin:0"><option value="points">Points</option><option value="gram">GRAM</option></select>
+        <select id="accountBalanceCurrency" style="flex:1;margin:0"><option value="points">Points</option><option value="usdt">USDT</option></select>
         <select id="accountBalanceAction" style="flex:1;margin:0"><option value="add">افزودن</option><option value="subtract">کسر</option><option value="set">تنظیم مقدار دقیق</option><option value="zero">صفرکردن</option></select>
         <input id="accountBalanceAmount" type="number" min="0" step="1" placeholder="مقدار" style="flex:1;margin:0">
       </div>
@@ -2297,7 +2297,7 @@ async function pollBroadcastStatus(id, msgEl) {
 }
 
 /* ---------- SETTINGS ---------- */
-let currentSettingsCache = { rate: 0.0001, gramUsdPrice: 0 };
+let currentSettingsCache = { rate: 0.0001, usdtUsdPrice: 0 };
 let editingTaskId = null;
 
 function toggleSponsorFields() {
@@ -2307,22 +2307,22 @@ function toggleSponsorFields() {
   if (on) updateSponsorPreview();
 }
 
-// پیش‌نمایش زنده‌ی سود/زیان قبل از ذخیره (همان فرمول سرور: هزینه = پاداش × نرخ × قیمت GRAM)
+// پیش‌نمایش زنده‌ی سود/زیان قبل از ذخیره (همان فرمول سرور: هزینه = پاداش × نرخ × قیمت USDT)
 function updateSponsorPreview() {
   const box = document.getElementById("sponsorPreview");
   if (!box) return;
   const reward = Number(document.getElementById("taskReward").value) || 0;
   const price = Number(document.getElementById("sponsorPrice").value) || 0;
   const budget = Number(document.getElementById("sponsorBudget").value) || 0;
-  const { rate, gramUsdPrice } = currentSettingsCache;
+  const { rate, usdtUsdPrice } = currentSettingsCache;
 
   if (!price || !budget) { box.innerHTML = ""; return; }
   const capacity = Math.floor(budget / price + 1e-9);
-  if (!rate || !gramUsdPrice) {
-    box.innerHTML = `ظرفیت این تسک: <b>${capacity}</b> عضو<br><span style="color:var(--danger)">⚠️ نرخ تبدیل یا قیمت دلاری GRAM در تنظیمات خالی است؛ سود/زیان قابل‌محاسبه نیست.</span>`;
+  if (!rate || !usdtUsdPrice) {
+    box.innerHTML = `ظرفیت این تسک: <b>${capacity}</b> عضو<br><span style="color:var(--danger)">⚠️ نرخ تبدیل یا قیمت دلاری USDT در تنظیمات خالی است؛ سود/زیان قابل‌محاسبه نیست.</span>`;
     return;
   }
-  const costPerJoin = reward * rate * gramUsdPrice;
+  const costPerJoin = reward * rate * usdtUsdPrice;
   const profitPerJoin = price - costPerJoin;
   const totalProfit = capacity * profitPerJoin;
   const ok = profitPerJoin >= 0;
@@ -2354,7 +2354,7 @@ function renderSponsorSummary(summary) {
 async function loadTaskFormSettings() {
   try {
     const data = await api("/api/admin/settings");
-    currentSettingsCache = { rate: data.settings.rate || 0, gramUsdPrice: data.settings.gramUsdPrice || 0 };
+    currentSettingsCache = { rate: data.settings.rate || 0, usdtUsdPrice: data.settings.usdtUsdPrice || 0 };
   } catch (error) { /* پیش‌نمایش بدون این مقدارها هم به‌صورت "نامشخص" کار می‌کند */ }
 }
 
@@ -2801,7 +2801,7 @@ async function loadVipPlansAdmin() {
           <div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:var(--surface)">
             <b>پلن ${Number(plan.planNumber)}</b>
             <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px">
-              <div><label>هزینه (${Number(plan.pricing?.grams) || 0} GRAM، پوینت ثابت)</label><input id="vipPlanPrice${Number(plan.planNumber)}" type="number" min="0" step="1" value="${Number(plan.pricing?.pricePoints ?? plan.pricePoints) || 0}" readonly></div>
+              <div><label>هزینه (${Number(plan.pricing?.usdts) || 0} USDT، پوینت ثابت)</label><input id="vipPlanPrice${Number(plan.planNumber)}" type="number" min="0" step="1" value="${Number(plan.pricing?.pricePoints ?? plan.pricePoints) || 0}" readonly></div>
               <div><label>بازدهی دوره (۱۰۰ روزه، %)</label><input id="vipPlanRate${Number(plan.planNumber)}" type="number" min="0" max="100" step="0.01" value="${Number(plan.monthlyRewardPercent) || 0}" readonly></div>
               <div><label>مدت (روز)</label><input id="vipPlanDays${Number(plan.planNumber)}" type="number" min="1" max="3650" step="1" value="${Number(plan.durationDays) || 100}" readonly></div>
               <label style="display:flex;align-items:center;gap:8px;margin-top:28px"><input id="vipPlanEnabled${Number(plan.planNumber)}" type="checkbox" style="width:auto" ${plan.enabled ? "checked" : ""}> فعال برای خرید</label>
@@ -2962,7 +2962,7 @@ async function loadSettings() {
     document.getElementById("setReminderTz").innerHTML = reminderTimezones
       .map(z => `<option value="${escapeHtml(z.id)}">${escapeHtml(z.label)}</option>`).join("");
     document.getElementById("setRate").value = s.rate ?? "";
-    document.getElementById("setGramUsd").value = s.gramUsdPrice ?? 0;
+    document.getElementById("setUsdtUsd").value = s.usdtUsdPrice ?? 0;
     document.getElementById("setReminderEnabled").checked = !!s.dailyReminderEnabled;
     document.getElementById("setReminderTz").value = s.dailyReminderTimezone || "UTC";
     document.getElementById("setReminderLocalHour").value = s.dailyReminderLocalHour ?? 7;
@@ -2992,7 +2992,7 @@ async function loadSettings() {
     document.getElementById("setDepositEnabled").checked = !!s.depositEnabled;
     document.getElementById("setDepositNetwork").value = "TON Mainnet";
     document.getElementById("setDepositWalletAddress").value = s.depositWalletAddress || "";
-    document.getElementById("setMinimumDepositGram").value = s.minimumDepositGram ?? 1;
+    document.getElementById("setMinimumDepositUsdt").value = s.minimumDepositUsdt ?? 1;
   } catch (error) {
     showMsg(error.message, "error");
   }
@@ -3005,15 +3005,15 @@ function updateAdPricingPreview() {
   const channel = Number(document.getElementById("setAdChannelSurchargeUsd")?.value || 0);
   const language = Number(document.getElementById("setAdLanguageSurchargeUsd")?.value || 0);
   const premium = Number(document.getElementById("setAdPremiumSurchargeUsd")?.value || 0);
-  const gramUsd = Number(document.getElementById("setGramUsd")?.value || 0);
+  const usdtUsd = Number(document.getElementById("setUsdtUsd")?.value || 0);
   const perUser = base + channel + language + premium;
-  out.textContent = gramUsd > 0 ? `نرخ مؤثر کانال با همه گزینه‌ها: $${perUser.toFixed(4)} = ${(perUser / gramUsd).toFixed(6)} GRAM برای هر کاربر؛ GRAM/USD فعلی: $${gramUsd}.` : "برای نمایش تبدیل به GRAM، ابتدا GRAM/USD را در بالا تنظیم کنید.";
+  out.textContent = usdtUsd > 0 ? `نرخ مؤثر کانال با همه گزینه‌ها: $${perUser.toFixed(4)} = ${(perUser / usdtUsd).toFixed(6)} USDT برای هر کاربر؛ USDT/USD فعلی: $${usdtUsd}.` : "برای نمایش تبدیل به USDT، ابتدا USDT/USD را در بالا تنظیم کنید.";
 }
 
 async function saveSettings() {
   const body = {
     rate: Number(document.getElementById("setRate").value),
-    gramUsdPrice: Number(document.getElementById("setGramUsd").value) || 0,
+    usdtUsdPrice: Number(document.getElementById("setUsdtUsd").value) || 0,
     dailyReminderEnabled: document.getElementById("setReminderEnabled").checked,
     dailyReminderTimezone: document.getElementById("setReminderTz").value,
     dailyReminderLocalHour: Number(document.getElementById("setReminderLocalHour").value) || 0,
@@ -3039,7 +3039,7 @@ async function saveSettings() {
     depositEnabled: document.getElementById("setDepositEnabled").checked,
     depositNetwork: "TON_MAINNET",
     depositWalletAddress: document.getElementById("setDepositWalletAddress").value.trim(),
-    minimumDepositGram: Number(document.getElementById("setMinimumDepositGram").value)
+    minimumDepositUsdt: Number(document.getElementById("setMinimumDepositUsdt").value)
   };
   try {
     const data = await api("/api/admin/settings", { method: "PUT", body: JSON.stringify(body) });

@@ -8,7 +8,7 @@ const telegramId = '123456';
 const sentBotMessages = [];
 const user = {
   _id: 'user-1', telegramId, username: 'test-user', firstName: 'Test', lastName: '', photoUrl: '',
-  referralCode: 'R123', referredBy: null, points: 500, gramBalance: 3.25,
+  referralCode: 'R123', referredBy: null, points: 500, usdtBalance: 3.25,
   createdAt: new Date('2020-01-01T00:00:00Z'), telegramBlockedAt: null, isBanned: false,
   language: 'en', referralMessageConsent: 'unset', save: async () => user
 };

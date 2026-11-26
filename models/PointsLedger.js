@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 
 /**
- * هر ردیف این کالکشن یک رویداد تغییر موجودی (پوینت یا GRAM) کاربر است.
+ * هر ردیف این کالکشن یک رویداد تغییر موجودی (پوینت یا USDT) کاربر است.
  * هدف: صفحه‌ی «تاریخچه‌ی تراکنش‌ها» در پروفایل کاربر — که نشان می‌دهد
  * امتیازش دقیقاً از کجا آمده و کجا خرج شده، بدون نیاز به حدس زدن از
  * روی چند کالکشن جدا (Task/Withdrawal/...).
@@ -26,22 +26,22 @@ const pointsLedgerSchema = new mongoose.Schema(
         'referral_welcome', // welcome credit created by the retention flow
         'referral_commission', // کمیسیون چندسطحی بر درآمد اصلی
         'leaderboard_reward', // جایزه رتبه برتر leaderboard هفتگی
-        'exchange_out',    // کسر شده در تبدیل (پوینت->GRAM یا GRAM->پوینت)
+        'exchange_out',    // کسر شده در تبدیل (پوینت->USDT یا USDT->پوینت)
         'exchange_in',     // اضافه شده در تبدیل
-        'withdraw',        // کسر GRAM بابت درخواست برداشت
-        'deposit',         // واریز تاییدشده GRAM روی TON Mainnet
+        'withdraw',        // کسر USDT بابت درخواست برداشت
+        'deposit',         // واریز تاییدشده USDT روی TON Mainnet
         'vip_purchase',    // خرید اشتراک VIP با پوینت
         'vip_free_claim',  // one-time free VIP 0 miner activation; zero balance impact
         'vip_daily_principal', // پرداخت روزانه اصل سرمایه از Reserve VIP
         'vip_daily_reward', // پاداش روزانه‌ی دوره VIP
         'vip_principal_return', // بازگشت اصل پوینت پس از پایان دوره VIP
         'admin_adjust',     // اصلاح دستی توسط ادمین (مثلاً بازگشت وجه بعد از رد برداشت)
-        'ad_order_payment', // کسر GRAM بابت رزرو کمپین تبلیغاتی
-        'ad_order_refund'   // بازگشت GRAM کمپین ردشده یا لغوشده
+        'ad_order_payment', // کسر USDT بابت رزرو کمپین تبلیغاتی
+        'ad_order_refund'   // بازگشت USDT کمپین ردشده یا لغوشده
       ],
       required: true
     },
-    currency: { type: String, enum: ['points', 'gram'], default: 'points' },
+    currency: { type: String, enum: ['points', 'usdt'], default: 'points' },
     // مقدار با علامت: مثبت یعنی اضافه شدن، منفی یعنی کسر شدن
     amount: { type: Number, required: true },
     // شناسه یکتای اختیاری برای جلوگیری از ثبت دوباره‌ی یک رویداد مالی

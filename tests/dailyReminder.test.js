@@ -27,7 +27,7 @@ for (const lang of ['fa', 'ps', 'en']) {
   assert.ok(botText('taskNew', lang, 'Task X', 50, '').includes('Task X'), `taskNew/${lang}`);
   assert.ok(botText('taskNew', lang, 'Task X', 50, '').includes('UP'), `taskNew UP ticker/${lang}`);
   assert.ok(botText('taskNew', lang, 'Task X', 50, 'Acme').includes('Acme'), `taskNew sponsored/${lang}`);
-  assert.ok(botText('withdrawalApproved', lang, 1.5, 'GRAM', 'abc123').includes('abc123'), `withdrawalApproved/${lang}`);
+  assert.ok(botText('withdrawalApproved', lang, 1.5, 'USDT', 'abc123').includes('abc123'), `withdrawalApproved/${lang}`);
   assert.ok(botText('withdrawalRejected', lang, 'too fast').includes('too fast'), `withdrawalRejected/${lang}`);
   assert.ok(botText('referralBonus', lang, 'Sara', 50, 200).includes('Sara'), `referralBonus/${lang}`);
   assert.ok(botText('referralBonus', lang, 'Sara', 50, 200).includes('UP'), `referralBonus UP ticker/${lang}`);

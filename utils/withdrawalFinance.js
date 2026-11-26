@@ -41,7 +41,7 @@ async function transitionWithdrawalWithRefund({ withdrawalId, targetStatus, reas
 
     const refunded = await User.findByIdAndUpdate(
       withdrawal.user,
-      { $inc: { gramBalance: withdrawal.cryptoAmount } },
+      { $inc: { usdtBalance: withdrawal.cryptoAmount } },
       { new: true, session }
     );
     if (!refunded) {
@@ -53,12 +53,12 @@ async function transitionWithdrawalWithRefund({ withdrawalId, targetStatus, reas
     const refundLedger = await recordLedgerRequired({
       user: refunded._id,
       type: 'admin_adjust',
-      currency: 'gram',
+      currency: 'usdt',
       amount: withdrawal.cryptoAmount,
       description: targetStatus === 'cancelled'
-        ? 'بازگشت GRAM بابت لغو درخواست برداشت'
-        : 'بازگشت GRAM بابت رد درخواست برداشت',
-      balanceAfter: refunded.gramBalance,
+        ? 'بازگشت USDT بابت لغو درخواست برداشت'
+        : 'بازگشت USDT بابت رد درخواست برداشت',
+      balanceAfter: refunded.usdtBalance,
       sourceId: `withdrawal-refund:${withdrawal._id}`,
       session
     });

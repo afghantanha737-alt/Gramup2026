@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 
 const schema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  direction: { type: String, enum: ['gram_to_points'], required: true },
+  direction: { type: String, enum: ['usdt_to_points'], required: true },
   status: { type: String, enum: ['pending', 'confirmed', 'rejected'], default: 'pending', index: true },
   reference: { type: String, required: true },
   amount: { type: Number, required: true, min: 0 },
@@ -29,4 +29,4 @@ schema.index({ reference: 1 }, { unique: true });
 schema.index({ txHashNormalized: 1 }, { unique: true, partialFilterExpression: { txHashNormalized: { $type: 'string' } } });
 
 schema.set('toJSON', { transform(_doc, ret) { delete ret.txHashNormalized; return ret; } });
-module.exports = mongoose.model('GramSwapIntent', schema);
+module.exports = mongoose.model('UsdtSwapIntent', schema);

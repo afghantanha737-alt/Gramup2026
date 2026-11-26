@@ -326,7 +326,7 @@ router.post('/:id/engagement/check', auth, async (req, res) => {
 
       const recurringClaimCount = Number(completion?.recurringClaimCount || 0) + 1;
       const nextAvailableAt = nextLatestPostAvailableAt(transactionNow);
-      const costUsd = rewardCostUsd(currentTask.reward, settings.rate, settings.gramUsdPrice);
+      const costUsd = rewardCostUsd(currentTask.reward, settings.rate, settings.usdtUsdPrice);
       const updatedTask = await Task.findOneAndUpdate(
         { ...taskCapacityFilter(currentTask._id, transactionNow), verifyType: 'latest_post' },
         { $inc: { completedCount: 1 } },
@@ -503,7 +503,7 @@ router.post('/:id/claim', auth, async (req, res) => {
       }
 
       const revenueUsd = currentTask.isSponsored ? Number(currentTask.sponsorPriceUsd) || 0 : 0;
-      const costUsd = rewardCostUsd(currentTask.reward, settings.rate, settings.gramUsdPrice);
+      const costUsd = rewardCostUsd(currentTask.reward, settings.rate, settings.usdtUsdPrice);
       if (currentCompletion) {
         await TaskCompletion.findOneAndUpdate(
           { _id: currentCompletion._id, status: 'rejected' },

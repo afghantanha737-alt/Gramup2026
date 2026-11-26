@@ -6,7 +6,7 @@
  * مدل درآمد: تبلیغ‌دهنده (صاحب کانال) برای هر عضو «تاییدشده» مبلغی به دلار می‌دهد (sponsorPriceUsd)
  * و یک بودجه‌ی کل تعیین می‌کند (sponsorBudgetUsd). ظرفیت تسک = floor(بودجه ÷ قیمت هر عضو)،
  * پس وقتی بودجه‌ی تبلیغ‌دهنده تمام شد، تسک خودکار بسته می‌شود.
- * هزینه‌ی هر تکمیل = پاداش کاربر به پوینت × نرخ (GRAM به‌ازای هر پوینت) × قیمت دلاری GRAM.
+ * هزینه‌ی هر تکمیل = پاداش کاربر به پوینت × نرخ (USDT به‌ازای هر پوینت) × قیمت دلاری USDT.
  */
 
 const MAX_PRICE_USD = 100;
@@ -23,8 +23,8 @@ function parseDate(value) {
 }
 
 /** هزینه‌ی دلاریِ پاداشی که به کاربر داده می‌شود */
-function rewardCostUsd(reward, rate, gramUsdPrice) {
-  const value = Number(reward) * Number(rate) * Number(gramUsdPrice);
+function rewardCostUsd(reward, rate, usdtUsdPrice) {
+  const value = Number(reward) * Number(rate) * Number(usdtUsdPrice);
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
@@ -72,9 +72,9 @@ function normalizeSponsorInput(input, now = new Date()) {
 }
 
 /** سود/زیان یک کمپین اسپانسری با تنظیمات فعلی */
-function marginInfo({ reward, rate, gramUsdPrice, priceUsd, budgetUsd }) {
-  const canCompute = Number(rate) > 0 && Number(gramUsdPrice) > 0;
-  const costPerJoinUsd = rewardCostUsd(reward, rate, gramUsdPrice);
+function marginInfo({ reward, rate, usdtUsdPrice, priceUsd, budgetUsd }) {
+  const canCompute = Number(rate) > 0 && Number(usdtUsdPrice) > 0;
+  const costPerJoinUsd = rewardCostUsd(reward, rate, usdtUsdPrice);
   const profitPerJoinUsd = Number(priceUsd) - costPerJoinUsd;
   const capacity = Math.floor(Number(budgetUsd) / Number(priceUsd) + 1e-9);
   return {

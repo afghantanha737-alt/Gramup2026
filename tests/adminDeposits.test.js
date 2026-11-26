@@ -8,7 +8,7 @@ const html = fs.readFileSync('public/admin.html', 'utf8');
 assert(admin.includes("router.get('/deposits'"), 'admin deposits list route must exist');
 assert(admin.includes("router.post('/deposits/:id/approve'"), 'admin deposit approval route must exist');
 assert(admin.includes("router.post('/deposits/:id/reject'"), 'admin deposit rejection route must exist');
-assert(admin.includes('findIncomingNativeGramTransferByReference'), 'approval must verify on-chain by reference');
+assert(admin.includes('findUsdtTransfer'), 'approval must verify on-chain by reference');
 assert(admin.includes('DEPOSIT_SOURCE_WALLET_MISMATCH'), 'approval must bind source wallet');
 assert(admin.includes('DEPOSIT_AMOUNT_MISMATCH'), 'approval must bind requested amount');
 assert(finance.includes('withMongoTransaction'), 'credit must use Mongo transaction');

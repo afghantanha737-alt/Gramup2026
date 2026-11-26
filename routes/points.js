@@ -11,7 +11,7 @@ const User = require('../models/User');
 const Withdrawal = require('../models/Withdrawal');
 const PointsLedger = require('../models/PointsLedger');
 const Deposit = require('../models/Deposit');
-const GramSwapIntent = require('../models/GramSwapIntent');
+const UsdtSwapIntent = require('../models/UsdtSwapIntent');
 const VipPlan = require('../models/VipPlan');
 const VipSubscription = require('../models/VipSubscription');
 const Task = require('../models/Task');
@@ -32,15 +32,19 @@ const { LEGACY_VIP_POLICY_VERSION, NEW_VIP_POLICY_VERSION, VIP0_POLICY_VERSION, 
 const { getVipMiningDailyRatePoints } = require('../utils/vipMining');
 const { getVipDisplayName } = require('../utils/vipDisplayNames');
 const { reserveForSubscription, pointsFromCents: reservePointsFromCents } = require('../utils/vipReserve');
+const { normalizeTonAddress, normalizeTonTxHash } = require('../utils/tonNativeDepositVerify');
 const {
-  normalizeTonAddress,
-  normalizeTonTxHash,
-  amountToNanoGram,
-  verifyNativeGramTransfer,
-  findIncomingNativeGramTransferByReference,
-  getNativeGramBalance,
-  createDepositReference
-} = require('../utils/tonNativeDepositVerify');
+  USDT_BASE_UNIT,
+  UP_PER_USDT,
+  usdtToBaseUnits,
+  baseUnitsToUsdt,
+  usdtToUp,
+  getUsdtJettonWallet,
+  getUsdtBalance,
+  buildUsdtTransferBody,
+  findUsdtTransfer,
+  createUsdtReference
+} = require('../utils/tonUsdt');
 const { comment } = require('@ton/ton');
 
 // احراز هویت تلگرام + بررسی عضویت فعلی در کانال‌های اجباری (روی هر درخواست محافظت‌شده)
@@ -210,7 +214,7 @@ function hasRecentWalletProof(user) {
 }
 
 // TON Connect performs the wallet handshake in the client. This endpoint only
-// records the selected address for the authenticated GramUp account.
+// records the selected address for the authenticated UsdtUp account.
 router.get('/wallet/connection', auth, async (req, res) => {
   res.json({ success: true, wallet: publicConnectedWallet(req.dbUser) });
 });
@@ -242,11 +246,11 @@ router.get('/wallet/chain-balance', auth, async (req, res) => {
   const address = req.dbUser.connectedWallet?.canonicalAddress || req.dbUser.connectedWallet?.address || '';
   if (!address) return res.status(409).json({ success: false, code: 'WALLET_NOT_CONNECTED', message: 'ابتدا Wallet خود را وصل کنید.' });
   try {
-    const balance = await getNativeGramBalance(address);
+    const balance = await getUsdtBalance(address);
     if (balance.status !== 'ok') {
       return res.status(502).json({ success: false, code: balance.code, message: 'موجودی Wallet فعلاً از شبکه دریافت نشد.' });
     }
-    return res.json({ success: true, network: 'TON_MAINNET', token: 'GRAM', ...balance });
+    return res.json({ success: true, network: 'TON_MAINNET', token: 'USDT', ...balance });
   } catch (error) {
     const code = error?.message === 'TON_PROVIDER_TIMEOUT' ? 'TON_PROVIDER_TIMEOUT' : 'TON_PROVIDER_UNAVAILABLE';
     return res.status(503).json({ success: false, code, message: 'ارتباط با شبکه TON فعلاً در دسترس نیست.' });
@@ -297,12 +301,44 @@ router.delete('/wallet/connection', auth, async (req, res) => {
 
 function getDepositSettingsStatus(settings) {
   const depositWalletAddress = String(settings?.depositWalletAddress || '').trim();
-  const minimumDepositGram = Number(settings?.minimumDepositGram);
+  const minimumDepositUsdt = Number(settings?.minimumDepositUsdt);
   const ready = settings?.depositEnabled === true
     && settings?.depositNetwork === 'TON_MAINNET'
     && normalizeTonAddress(depositWalletAddress)
-    && amountToNanoGram(minimumDepositGram) != null;
-  return { ready: Boolean(ready), depositWalletAddress, minimumDepositGram };
+    && usdtToBaseUnits(minimumDepositUsdt) != null;
+  return { ready: Boolean(ready), depositWalletAddress, minimumDepositUsdt };
+}
+
+async function usdtTransferTransaction({ senderAddress, recipientAddress, amountRaw, reference }) {
+  const senderJettonWallet = await getUsdtJettonWallet(senderAddress);
+  if (!senderJettonWallet) {
+    const error = new Error('USDT Jetton wallet was not found for the connected TON wallet.');
+    error.code = 'USDT_JETTON_WALLET_NOT_FOUND';
+    throw error;
+  }
+  return {
+    validUntil: Math.floor(Date.now() / 1000) + 600,
+    network: '-239',
+    messages: [{
+      address: senderJettonWallet,
+      amount: '50000000',
+      payload: buildUsdtTransferBody({
+        destination: recipientAddress,
+        responseDestination: senderAddress,
+        amountRaw,
+        forwardPayload: comment(reference)
+      })
+    }]
+  };
+}
+
+async function publicDepositTransaction(deposit) {
+  return usdtTransferTransaction({
+    senderAddress: deposit.walletAddressSnapshot,
+    recipientAddress: deposit.depositAddressSnapshot,
+    amountRaw: deposit.requestedAmountRaw,
+    reference: deposit.reference
+  });
 }
 
 const { notifyUser } = require('../utils/bot');
@@ -332,28 +368,29 @@ router.get('/me', auth, async (req, res) => {
     : Math.max(1, streakValue);
   const dailyCheckinCycleDay = cycleDayForStreak(nextStreak);
   const dailyCheckinRewardAmount = dailyCheckinReward(nextStreak);
-  const minWithdrawGram = Number((settings.minWithdrawPoints * settings.rate).toFixed(6));
+  const fixedRate = 1 / UP_PER_USDT;
+  const minWithdrawUsdt = Number((settings.minWithdrawPoints * fixedRate).toFixed(6));
 
-  // مجموع UP که کاربر تا امروز «کسب» کرده (بدون احتساب تبدیل GRAM→UP و اصلاح دستی ادمین)
+  // مجموع UP که کاربر تا امروز «کسب» کرده (بدون احتساب تبدیل USDT→UP و اصلاح دستی ادمین)
   const totalEarnedPoints = earnedAgg.length ? earnedAgg[0].total : 0;
   const level = getLevel(totalEarnedPoints);
-  const withdrawalProgress = minWithdrawGram > 0
-    ? Math.min(100, Math.round((u.gramBalance / minWithdrawGram) * 100))
+  const withdrawalProgress = minWithdrawUsdt > 0
+    ? Math.min(100, Math.round((u.usdtBalance / minWithdrawUsdt) * 100))
     : 0;
-  const withdrawalRemainingGram = Math.max(0, round6(minWithdrawGram - u.gramBalance));
+  const withdrawalRemainingUsdt = Math.max(0, round6(minWithdrawUsdt - u.usdtBalance));
 
   res.json({
     success: true,
     totalEarnedPoints,
     level,
     withdrawalProgress,
-    withdrawalRemainingGram,
-    gramUsdPrice: settings.gramUsdPrice || 0,
+    withdrawalRemainingUsdt,
+    usdtUsdPrice: settings.usdtUsdPrice || 0,
     points: u.points,
     upBalance: Number(u.points) || 0,
-    gramBalance: u.gramBalance,
-    balances: { UP: Number(u.points) || 0, GRAM: Number(u.gramBalance) || 0 },
-    rate: settings.rate,
+    usdtBalance: u.usdtBalance,
+    balances: { UP: Number(u.points) || 0, USDT: Number(u.usdtBalance) || 0 },
+    rate: fixedRate,
     streak: u.streak,
     canCheckIn,
     dailyCheckinCycleDay,
@@ -361,7 +398,7 @@ router.get('/me', auth, async (req, res) => {
     lastCheckIn: u.lastCheckIn || null,
     totalCheckins: u.totalCheckins,
     firstName: u.firstName,
-    minWithdrawGram,
+    minWithdrawUsdt,
     nextResetAt: nextResetTimestamp(),
     language: u.language
   });
@@ -396,48 +433,44 @@ router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
 const round6 = n => Number(Number(n).toFixed(6));
 
 /**
- * POST /api/points/exchange — تبدیل دوطرفه UP <-> موجودی GRAM
+ * POST /api/points/exchange — تبدیل دوطرفه UP <-> موجودی USDT
  * (بر اساس نرخ فعلی؛ این مبلغ بعداً از طریق «برداشت» قابل خارج شدن است)
- * body: { direction: 'points_to_gram' | 'gram_to_points', amount }
- * برای سازگاری با نسخه‌ی قبلی، body.points هم به‌عنوان amount برای points_to_gram پذیرفته می‌شود.
+ * body: { direction: 'points_to_usdt' | 'usdt_to_points', amount }
+ * برای سازگاری با نسخه‌ی قبلی، body.points هم به‌عنوان amount برای points_to_usdt پذیرفته می‌شود.
  */
 router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
   const body = req.body || {};
-  if (body.direction != null && !['points_to_gram', 'gram_to_points'].includes(body.direction)) {
+  if (body.direction != null && !['points_to_usdt', 'usdt_to_points'].includes(body.direction)) {
     return res.status(400).json({ success: false, code: 'INVALID_DIRECTION', message: 'جهت تبدیل معتبر نیست.' });
   }
   const rawAmount = body.amount != null ? body.amount : body.points;
   if (!['number', 'string'].includes(typeof rawAmount)) {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار تبدیل نامعتبر است.' });
   }
-  const direction = body.direction === 'gram_to_points' ? 'gram_to_points' : 'points_to_gram';
+  const direction = body.direction === 'usdt_to_points' ? 'usdt_to_points' : 'points_to_usdt';
 
-  if (!Number.isFinite(settings.rate) || settings.rate <= 0) {
-    return res.status(400).json({ success: false, message: 'نرخ تبدیل نامعتبر است.', code: 'INVALID_RATE' });
-  }
-
-  if (direction === 'points_to_gram') {
+  if (direction === 'points_to_usdt') {
     const points = Math.floor(Number(body.amount != null ? body.amount : body.points) || 0);
 
     if (!Number.isSafeInteger(points) || points <= 0) {
       return res.status(400).json({ success: false, message: 'مقدار UP نامعتبر است.', code: 'INVALID_AMOUNT' });
     }
 
-    const gramGained = round6(points * settings.rate);
+    const usdtGained = round6(points / UP_PER_USDT);
     let operation;
     const operationKey = String(req.get('Idempotency-Key') || '').trim();
     try {
       operation = await executeIdempotently({
         userId: u._id,
-        scope: 'exchange_points_to_gram',
+        scope: 'exchange_points_to_usdt',
         key: operationKey,
         body: { direction, points },
         execute: async session => {
         const result = await User.findOneAndUpdate(
           { _id: u._id, points: { $gte: points } },
-          { $inc: { points: -points, gramBalance: gramGained } },
+          { $inc: { points: -points, usdtBalance: usdtGained } },
           { new: true, session }
         );
         if (!result) {
@@ -445,16 +478,16 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
           error.code = 'INSUFFICIENT_BALANCE';
           throw error;
         }
-        await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'points', amount: -points, description: 'تبدیل UP به GRAM', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_gram', key: operationKey, leg: 'out' }), session });
-        await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'gram', amount: gramGained, description: 'تبدیل UP به GRAM', balanceAfter: result.gramBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_gram', key: operationKey, leg: 'in' }), session });
+        await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'points', amount: -points, description: 'تبدیل UP به USDT', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_usdt', key: operationKey, leg: 'out' }), session });
+        await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'usdt', amount: usdtGained, description: 'تبدیل UP به USDT', balanceAfter: result.usdtBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_usdt', key: operationKey, leg: 'in' }), session });
         return { body: {
           success: true,
           direction,
-          message: `${points} UP به ${gramGained} GRAM تبدیل شد.`,
+          message: `${points} UP به ${usdtGained} USDT تبدیل شد.`,
           points: result.points,
           upBalance: Number(result.points) || 0,
-          gramBalance: result.gramBalance,
-          gramGained
+          usdtBalance: result.usdtBalance,
+          usdtGained
         } };
         }
       });
@@ -466,49 +499,49 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
     return res.status(operation.status).json(operation.body);
   }
 
-  // direction === 'gram_to_points'
-  const gram = round6(body.amount || 0);
+  // direction === 'usdt_to_points'
+  const usdt = round6(body.amount || 0);
 
-  if (!Number.isFinite(gram) || gram <= 0) {
-    return res.status(400).json({ success: false, message: 'مقدار GRAM نامعتبر است.', code: 'INVALID_AMOUNT' });
+  if (!Number.isFinite(usdt) || usdt <= 0) {
+    return res.status(400).json({ success: false, message: 'مقدار USDT نامعتبر است.', code: 'INVALID_AMOUNT' });
   }
 
-  const pointsGained = Math.floor(gram / settings.rate);
+  const pointsGained = usdtToUp(String(body.amount || ''));
 
   if (!Number.isSafeInteger(pointsGained) || pointsGained <= 0) {
-    return res.status(400).json({ success: false, message: 'مقدار GRAM برای تبدیل بسیار کم است.', code: 'INVALID_AMOUNT' });
+    return res.status(400).json({ success: false, message: 'مقدار USDT برای تبدیل بسیار کم است.', code: 'INVALID_AMOUNT' });
   }
 
-  const gramSpent = round6(pointsGained * settings.rate);
+  const usdtSpent = round6(pointsGained / UP_PER_USDT);
 
   let operation;
   const operationKey = String(req.get('Idempotency-Key') || '').trim();
   try {
     operation = await executeIdempotently({
       userId: u._id,
-      scope: 'exchange_gram_to_points',
+      scope: 'exchange_usdt_to_points',
       key: operationKey,
-      body: { direction, gram },
+      body: { direction, usdt },
       execute: async session => {
       const result = await User.findOneAndUpdate(
-        { _id: u._id, gramBalance: { $gte: gramSpent } },
-        { $inc: { gramBalance: -gramSpent, points: pointsGained } },
+        { _id: u._id, usdtBalance: { $gte: usdtSpent } },
+        { $inc: { usdtBalance: -usdtSpent, points: pointsGained } },
         { new: true, session }
       );
       if (!result) {
-        const error = new Error('موجودی GRAM کافی نیست.');
+        const error = new Error('موجودی USDT کافی نیست.');
         error.code = 'INSUFFICIENT_BALANCE';
         throw error;
       }
-      await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'gram', amount: -gramSpent, description: 'تبدیل GRAM به UP', balanceAfter: result.gramBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_gram_to_points', key: operationKey, leg: 'out' }), session });
-      await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'points', amount: pointsGained, description: 'تبدیل GRAM به UP', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_gram_to_points', key: operationKey, leg: 'in' }), session });
+      await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'usdt', amount: -usdtSpent, description: 'تبدیل USDT به UP', balanceAfter: result.usdtBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_usdt_to_points', key: operationKey, leg: 'out' }), session });
+      await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'points', amount: pointsGained, description: 'تبدیل USDT به UP', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_usdt_to_points', key: operationKey, leg: 'in' }), session });
       return { body: {
         success: true,
         direction,
-        message: `${gramSpent} GRAM به ${pointsGained} UP تبدیل شد.`,
+        message: `${usdtSpent} USDT به ${pointsGained} UP تبدیل شد.`,
         points: result.points,
         upBalance: Number(result.points) || 0,
-        gramBalance: result.gramBalance,
+        usdtBalance: result.usdtBalance,
         pointsGained
       } };
       }
@@ -522,20 +555,20 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
   res.status(operation.status).json(operation.body);
 });
 
-// POST /api/points/withdraw — برداشت از موجودی GRAM (نه مستقیم از UP)
+// POST /api/points/withdraw — برداشت از موجودی USDT (نه مستقیم از UP)
 router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
-  const { gram, address } = req.body || {};
-  if (!['number', 'string'].includes(typeof gram) || typeof address !== 'string') {
+  const { usdt, address } = req.body || {};
+  if (!['number', 'string'].includes(typeof usdt) || typeof address !== 'string') {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار برداشت یا آدرس نامعتبر است.' });
   }
-  const amount = round6(gram);
+  const amount = round6(usdt);
   const walletAddress = String(address || '').trim();
-  const minWithdrawGram = round6(settings.minWithdrawPoints * settings.rate);
+  const minWithdrawUsdt = round6(settings.minWithdrawPoints / UP_PER_USDT);
 
   if (!Number.isFinite(amount) || amount <= 0) {
-    return res.status(400).json({ success: false, message: 'مقدار GRAM نامعتبر است.', code: 'INVALID_AMOUNT' });
+    return res.status(400).json({ success: false, message: 'مقدار USDT نامعتبر است.', code: 'INVALID_AMOUNT' });
   }
   if (!/^[A-Za-z0-9_\-:+/=.]{6,120}$/.test(walletAddress)) {
     return res.status(400).json({ success: false, message: 'آدرس کیف پول نامعتبر است.', code: 'INVALID_ADDRESS' });
@@ -547,10 +580,10 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
   if (!connectedAddress || walletAddress !== connectedAddress) {
     return res.status(409).json({ success: false, message: 'آدرس برداشت باید با Wallet متصل‌شده یکسان باشد.', code: 'WALLET_ADDRESS_MISMATCH' });
   }
-  if (amount < minWithdrawGram) {
+  if (amount < minWithdrawUsdt) {
     return res.status(400).json({
       success: false,
-      message: `حداقل مقدار برداشت ${minWithdrawGram} GRAM است.`,
+      message: `حداقل مقدار برداشت ${minWithdrawUsdt} USDT است.`,
       code: 'BELOW_MIN_WITHDRAW'
     });
   }
@@ -565,19 +598,19 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
       body: { amount, address: walletAddress },
       execute: async session => {
         const nextUser = await User.findOneAndUpdate(
-          { _id: u._id, gramBalance: { $gte: amount } },
-          { $inc: { gramBalance: -amount }, $set: { walletAddress } },
+          { _id: u._id, usdtBalance: { $gte: amount } },
+          { $inc: { usdtBalance: -amount }, $set: { walletAddress } },
           { new: true, session }
         );
         if (!nextUser) {
-          const error = new Error('موجودی GRAM کافی نیست.');
+          const error = new Error('موجودی USDT کافی نیست.');
           error.code = 'INSUFFICIENT_BALANCE';
           throw error;
         }
 
         const nextWithdrawal = await new Withdrawal({
           user: u._id,
-          pointsSpent: settings.rate > 0 ? Math.round(amount / settings.rate) : 0,
+          pointsSpent: Math.round(amount * UP_PER_USDT),
           cryptoAmount: amount,
           address: walletAddress,
           statusHistory: [{ status: 'pending', at: new Date() }]
@@ -586,10 +619,10 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
         const ledger = await recordLedgerRequired({
           user: u._id,
           type: 'withdraw',
-          currency: 'gram',
+          currency: 'usdt',
           amount: -amount,
           description: `درخواست برداشت به ${truncateAddress(walletAddress)}`,
-          balanceAfter: nextUser.gramBalance,
+          balanceAfter: nextUser.usdtBalance,
           sourceId: `withdrawal:${nextWithdrawal._id}`,
           transactionId: idempotencyTransactionId({ userId: u._id, scope: 'withdraw', key: operationKey, leg: 'debit' }),
           session
@@ -599,7 +632,7 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
         return { status: 201, resourceId: nextWithdrawal._id, body: {
           success: true,
           message: 'درخواست برداشت ثبت شد و به‌زودی بررسی می‌شود.',
-          gramBalance: nextUser.gramBalance,
+          usdtBalance: nextUser.usdtBalance,
           withdrawalId: String(nextWithdrawal._id)
         } };
       }
@@ -612,7 +645,7 @@ router.post('/withdraw', auth, sensitiveRateLimit('withdraw'), async (req, res) 
 
   res.status(operation.status).json(operation.body);
   if (!operation.replayed) {
-    notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, 'GRAM')).catch(() => {});
+    notifyUser(u.telegramId, botText('withdrawalSubmitted', u.language, amount, 'USDT')).catch(() => {});
     Withdrawal.findById(operation.body.withdrawalId).lean()
       .then(createdWithdrawal => {
         if (createdWithdrawal) return postWithdrawalRequested(u, createdWithdrawal);
@@ -651,7 +684,7 @@ router.get('/withdrawals', auth, async (req, res) => {
   res.json({ success: true, withdrawals: list.map(withdrawal => ({ ...withdrawal.toObject(), timeline: synthesizeHistory(withdrawal) })) });
 });
 
-// Native GRAM deposits use one project-controlled TON Mainnet wallet and a unique invoice comment.
+// TON USDT Jetton deposits use one project-controlled TON Mainnet wallet and a unique invoice comment.
 router.get('/deposit/config', auth, async (req, res) => {
   const settings = await Settings.getGlobal();
   const config = getDepositSettingsStatus(settings);
@@ -659,9 +692,9 @@ router.get('/deposit/config', auth, async (req, res) => {
     success: true,
     enabled: config.ready,
     network: 'TON_MAINNET',
-    token: 'GRAM',
+    token: 'USDT',
     depositWalletAddress: config.ready ? config.depositWalletAddress : '',
-    minimumDepositGram: config.minimumDepositGram > 0 ? config.minimumDepositGram : null
+    minimumDepositUsdt: config.minimumDepositUsdt > 0 ? config.minimumDepositUsdt : null
   });
 });
 
@@ -673,7 +706,7 @@ function publicDepositRecord(deposit) {
     token: deposit.token,
     depositWalletAddress: deposit.depositAddressSnapshot,
     requestedAmount: deposit.requestedAmount,
-    minimumDepositGram: deposit.minimumDepositSnapshot,
+    minimumDepositUsdt: deposit.minimumDepositSnapshot,
     amount: deposit.amount,
     txHash: deposit.txHash || deposit.submittedTxHash || '',
     hasSubmittedBoc: Boolean(deposit.submittedBoc),
@@ -685,7 +718,7 @@ function publicDepositRecord(deposit) {
 }
 
 router.get('/deposits', auth, async (req, res) => {
-  const deposits = await Deposit.find({ user: req.dbUser._id, assetType: 'native_gram' })
+  const deposits = await Deposit.find({ user: req.dbUser._id, assetType: 'jetton_usdt' })
     .sort({ createdAt: -1 })
     .limit(30)
     .select('reference network token assetType depositAddressSnapshot minimumDepositSnapshot requestedAmount amount submittedTxHash txHash status createdAt verifiedAt creditedAt');
@@ -696,40 +729,40 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
   const settings = await Settings.getGlobal();
   const config = getDepositSettingsStatus(settings);
   if (!config.ready) {
-    return res.status(503).json({ success: false, code: 'DEPOSIT_DISABLED', message: 'واریز GRAM روی TON Mainnet در حال حاضر فعال نیست.' });
+    return res.status(503).json({ success: false, code: 'DEPOSIT_DISABLED', message: 'واریز USDT روی TON Mainnet در حال حاضر فعال نیست.' });
   }
   if (!hasRecentWalletProof(req.dbUser)) {
     return res.status(401).json({ success: false, code: 'WALLET_PROOF_REQUIRED', message: 'برای واریز ابتدا Wallet را وصل و مالکیت آن را تأیید کنید.' });
   }
-  const requestedAmount = round6(req.body?.amount);
-  const requestedAmountRaw = amountToNanoGram(requestedAmount);
+  const requestedAmountRaw = usdtToBaseUnits(String(req.body?.amount ?? ''));
+  const requestedAmount = requestedAmountRaw == null ? null : baseUnitsToUsdt(requestedAmountRaw);
   if (requestedAmountRaw == null) {
-    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار GRAM برای واریز معتبر نیست.' });
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار USDT برای واریز معتبر نیست.' });
   }
-  const minimumRaw = amountToNanoGram(config.minimumDepositGram);
+  const minimumRaw = usdtToBaseUnits(String(config.minimumDepositUsdt));
   if (minimumRaw == null || requestedAmountRaw < minimumRaw) {
-    return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: `حداقل مبلغ واریز ${config.minimumDepositGram} GRAM است.` });
+    return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: `حداقل مبلغ واریز ${config.minimumDepositUsdt} USDT است.` });
   }
 
   // Close any unverified invoice from the former Jetton-only implementation. It is
-  // never eligible for Native GRAM credit; changing status releases the legacy
+  // never eligible for TON USDT Jetton credit; changing status releases the legacy
   // one-pending-invoice-per-user unique index without altering balances.
   await Deposit.updateMany(
-    { user: req.dbUser._id, status: 'pending', assetType: { $ne: 'native_gram' } },
+    { user: req.dbUser._id, status: 'pending', assetType: { $ne: 'jetton_usdt' } },
     { $set: { status: 'rejected', verificationNote: 'legacy_jetton_deposit_disabled', verifiedAt: new Date() } }
   );
   // Cancel unsigned intents left behind by a rejected wallet prompt or closed app.
   await Deposit.updateMany(
-    { user: req.dbUser._id, assetType: 'native_gram', status: { $in: ['pending', 'verifying'] },
+    { user: req.dbUser._id, assetType: 'jetton_usdt', status: { $in: ['pending', 'verifying'] },
       $and: [{ submittedBoc: { $in: ['', null] } }, { submittedTxHash: { $in: ['', null] } }] },
     { $set: { status: 'cancelled', verificationNote: 'replaced_unsigned_deposit_intent', verifiedAt: new Date() } }
   );
   // Expire old unsigned requests even if the user does not open the form again.
   await Deposit.updateMany(
-    { user: req.dbUser._id, assetType: 'native_gram', status: 'pending', createdAt: { $lt: new Date(Date.now() - 2 * 60 * 1000) } },
+    { user: req.dbUser._id, assetType: 'jetton_usdt', status: 'pending', createdAt: { $lt: new Date(Date.now() - 2 * 60 * 1000) } },
     { $set: { status: 'cancelled', verificationNote: 'unsigned_deposit_intent_expired', verifiedAt: new Date() } }
   );
-  let existing = await Deposit.findOne({ user: req.dbUser._id, assetType: 'native_gram', status: { $in: ['pending', 'verifying'] } }).sort({ createdAt: -1 });
+  let existing = await Deposit.findOne({ user: req.dbUser._id, assetType: 'jetton_usdt', status: { $in: ['pending', 'verifying'] } }).sort({ createdAt: -1 });
   if (existing) {
     if (existing.status === 'verifying' || existing.submittedBoc || existing.submittedTxHash) {
       return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_VERIFYING', deposit: publicDepositRecord(existing), message: 'واریز قبلی امضا شده و در حال بررسی شبکه است.' });
@@ -737,43 +770,31 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
     if (existing.requestedAmountRaw && existing.requestedAmountRaw !== requestedAmountRaw.toString()) {
       return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_PENDING', message: 'یک واریز قبلی هنوز در حال تأیید است.' });
     }
-    return res.json({ success: true, deposit: publicDepositRecord(existing), transaction: {
-      validUntil: Math.floor(Date.now() / 1000) + 600,
-      network: '-239',
-      messages: [{ address: existing.depositAddressSnapshot, amount: existing.requestedAmountRaw, payload: comment(existing.reference).toBoc().toString('base64') }]
-    } });
+    return res.json({ success: true, deposit: publicDepositRecord(existing), transaction: await publicDepositTransaction(existing) });
   }
 
   let deposit;
   try {
     deposit = await Deposit.create({
       user: req.dbUser._id,
-      reference: createDepositReference(),
+      reference: createUsdtReference(),
       network: 'TON_MAINNET',
-      token: 'GRAM',
-      assetType: 'native_gram',
+      token: 'USDT',
+      assetType: 'jetton_usdt',
       depositAddressSnapshot: config.depositWalletAddress,
       walletAddressSnapshot: req.dbUser.connectedWallet.address,
-      minimumDepositSnapshot: config.minimumDepositGram,
+      minimumDepositSnapshot: config.minimumDepositUsdt,
       requestedAmount,
       requestedAmountRaw: requestedAmountRaw.toString(),
       status: 'pending'
     });
   } catch (error) {
     if (error?.code !== 11000) throw error;
-    deposit = await Deposit.findOne({ user: req.dbUser._id, assetType: 'native_gram', status: 'pending' }).sort({ createdAt: -1 });
+    deposit = await Deposit.findOne({ user: req.dbUser._id, assetType: 'jetton_usdt', status: 'pending' }).sort({ createdAt: -1 });
     if (!deposit) throw error;
-    return res.json({ success: true, deposit: publicDepositRecord(deposit), transaction: {
-      validUntil: Math.floor(Date.now() / 1000) + 600,
-      network: '-239',
-      messages: [{ address: deposit.depositAddressSnapshot, amount: deposit.requestedAmountRaw, payload: comment(deposit.reference).toBoc().toString('base64') }]
-    } });
+    return res.json({ success: true, deposit: publicDepositRecord(deposit), transaction: await publicDepositTransaction(deposit) });
   }
-  return res.status(201).json({ success: true, deposit: publicDepositRecord(deposit), transaction: {
-    validUntil: Math.floor(Date.now() / 1000) + 600,
-    network: '-239',
-    messages: [{ address: deposit.depositAddressSnapshot, amount: deposit.requestedAmountRaw, payload: comment(deposit.reference).toBoc().toString('base64') }]
-  } });
+  return res.status(201).json({ success: true, deposit: publicDepositRecord(deposit), transaction: await publicDepositTransaction(deposit) });
 });
 
 router.post('/deposits/:id/cancel', auth, sensitiveRateLimit('general'), async (req, res) => {
@@ -781,12 +802,12 @@ router.post('/deposits/:id/cancel', auth, sensitiveRateLimit('general'), async (
     return res.status(404).json({ success: false, code: 'DEPOSIT_NOT_FOUND' });
   }
   const cancelled = await Deposit.findOneAndUpdate(
-    { _id: req.params.id, user: req.dbUser._id, assetType: 'native_gram', status: { $in: ['pending', 'verifying'] }, submittedBoc: { $in: ['', null] }, submittedTxHash: { $in: ['', null] } },
+    { _id: req.params.id, user: req.dbUser._id, assetType: 'jetton_usdt', status: { $in: ['pending', 'verifying'] }, submittedBoc: { $in: ['', null] }, submittedTxHash: { $in: ['', null] } },
     { $set: { status: 'cancelled', verificationNote: 'wallet_rejected_or_closed', verifiedAt: new Date() } },
     { new: true }
   );
   if (!cancelled) {
-    const current = await Deposit.findOne({ _id: req.params.id, user: req.dbUser._id, assetType: 'native_gram' });
+    const current = await Deposit.findOne({ _id: req.params.id, user: req.dbUser._id, assetType: 'jetton_usdt' });
     if (!current) return res.status(404).json({ success: false, code: 'DEPOSIT_NOT_FOUND' });
     return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_SUBMITTED', status: current.status, deposit: publicDepositRecord(current) });
   }
@@ -797,11 +818,11 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
   if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) {
     return res.status(404).json({ success: false, message: 'درخواست Deposit پیدا نشد.' });
   }
-  const deposit = await Deposit.findOne({ _id: req.params.id, user: req.dbUser._id, assetType: 'native_gram' });
+  const deposit = await Deposit.findOne({ _id: req.params.id, user: req.dbUser._id, assetType: 'jetton_usdt' });
   if (!deposit) return res.status(404).json({ success: false, message: 'درخواست Deposit پیدا نشد.' });
   if (deposit.status === 'confirmed') {
-    const user = await User.findById(req.dbUser._id).select('gramBalance');
-    return res.json({ success: true, alreadyConfirmed: true, status: 'confirmed', amount: deposit.amount, gramBalance: user?.gramBalance ?? 0, deposit: publicDepositRecord(deposit) });
+    const user = await User.findById(req.dbUser._id).select('usdtBalance');
+    return res.json({ success: true, alreadyConfirmed: true, status: 'confirmed', amount: deposit.amount, usdtBalance: user?.usdtBalance ?? 0, deposit: publicDepositRecord(deposit) });
   }
   if (deposit.status === 'rejected' || deposit.status === 'cancelled') {
     return res.status(409).json({ success: false, code: 'DEPOSIT_CANCELLED', status: deposit.status, deposit: publicDepositRecord(deposit), message: 'این واریز لغو شده است؛ لطفاً درخواست جدید بسازید.' });
@@ -812,9 +833,14 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
 
   let verification;
   try {
-    verification = submittedHash
-      ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
-      : await findIncomingNativeGramTransferByReference({ depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference });
+    verification = await findUsdtTransfer({
+      txHash: submittedHash,
+      ownerAddress: deposit.depositAddressSnapshot,
+      destinationAddress: deposit.depositAddressSnapshot,
+      sourceAddress: deposit.walletAddressSnapshot,
+      amountRaw: deposit.requestedAmountRaw,
+      reference: deposit.reference
+    });
   } catch {
     return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'TON Center در دسترس نیست؛ موجودی تغییر نکرده است. دوباره تلاش کنید.' });
   }
@@ -835,14 +861,14 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
     return res.status(400).json({
       success: false,
       code: verification.code || 'DEPOSIT_VERIFICATION_FAILED',
-      message: 'تراکنش Native GRAM، آدرس دریافت، Reference یا وضعیت نهایی Mainnet مطابقت ندارد؛ موجودی تغییر نکرد.'
+      message: 'تراکنش TON USDT Jetton، آدرس دریافت، Reference یا وضعیت نهایی Mainnet مطابقت ندارد؛ موجودی تغییر نکرد.'
     });
   }
 
-  const minimumRaw = amountToNanoGram(deposit.minimumDepositSnapshot);
+  const minimumRaw = usdtToBaseUnits(String(deposit.minimumDepositSnapshot));
   const actualRaw = BigInt(verification.amountRaw);
   if (minimumRaw == null) {
-    return res.status(503).json({ success: false, code: 'INVALID_DEPOSIT_SETTINGS', message: 'تنظیم حداقل Deposit با دقت ۹ رقم اعشار Native GRAM سازگار نیست؛ موجودی تغییر نکرد.' });
+    return res.status(503).json({ success: false, code: 'INVALID_DEPOSIT_SETTINGS', message: 'تنظیم حداقل Deposit با دقت ۹ رقم اعشار TON USDT Jetton سازگار نیست؛ موجودی تغییر نکرد.' });
   }
 
   if (deposit.walletAddressSnapshot) {
@@ -868,7 +894,7 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
         { new: true }
       );
       if (!rejected) return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_PROCESSED', message: 'این تراکنش قبلاً پردازش شده است.' });
-      return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', status: 'rejected', deposit: publicDepositRecord(rejected), message: 'مبلغ تأییدشده از حداقل Deposit کمتر است؛ هیچ GRAM به موجودی اضافه نشد.' });
+      return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', status: 'rejected', deposit: publicDepositRecord(rejected), message: 'مبلغ تأییدشده از حداقل Deposit کمتر است؛ هیچ USDT به موجودی اضافه نشد.' });
     } catch (error) {
       if (error?.code === 11000) return res.status(409).json({ success: false, code: 'DEPOSIT_TX_ALREADY_USED', message: 'این Transaction Hash قبلاً استفاده شده است.' });
       throw error;
@@ -884,7 +910,7 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
         { $set: {
           status: 'confirmed', amount: verification.amount, amountRaw: verification.amountRaw,
           submittedTxHash: submittedHash || deposit.submittedTxHash, submittedBoc: submittedBoc || deposit.submittedBoc, txHash: verification.txHash, txHashNormalized: verification.txHash,
-          sourceAddress: verification.sourceAddress, verificationNote: 'confirmed_native_gram_by_toncenter_v3_mainnet',
+          sourceAddress: verification.sourceAddress, verificationNote: 'confirmed_jetton_usdt_by_toncenter_v3_mainnet',
           verifiedAt: verification.confirmedAt, creditedAt: now
         } },
         { new: true, session }
@@ -893,7 +919,7 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
       if (!claimed) {
         const current = await Deposit.findById(deposit._id).session(session);
         if (current?.status === 'confirmed') {
-          outcome = { alreadyConfirmed: true, deposit: current, gramBalance: null };
+          outcome = { alreadyConfirmed: true, deposit: current, usdtBalance: null };
           return;
         }
         const conflict = new Error('DEPOSIT_ALREADY_PROCESSED');
@@ -903,7 +929,7 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
 
       const updatedUser = await User.findByIdAndUpdate(
         req.dbUser._id,
-        { $inc: { gramBalance: verification.amount } },
+        { $inc: { usdtBalance: verification.amount } },
         { new: true, session }
       );
       if (!updatedUser) throw new Error('DEPOSIT_USER_NOT_FOUND');
@@ -911,16 +937,16 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
       const ledgerResult = await recordLedgerRequired({
         user: updatedUser._id,
         type: 'deposit',
-        currency: 'gram',
+        currency: 'usdt',
         amount: verification.amount,
-        description: 'Deposit — Native GRAM on TON Mainnet',
-        balanceAfter: updatedUser.gramBalance,
+        description: 'Deposit — TON USDT Jetton on TON Mainnet',
+        balanceAfter: updatedUser.usdtBalance,
         sourceId: `deposit:${verification.txHash}`,
         transactionId: verification.txHash,
         session
       });
       if (!ledgerResult.created) throw new Error('DEPOSIT_LEDGER_ALREADY_EXISTS');
-      outcome = { alreadyConfirmed: false, deposit: claimed, gramBalance: updatedUser.gramBalance };
+      outcome = { alreadyConfirmed: false, deposit: claimed, usdtBalance: updatedUser.usdtBalance };
     });
   } catch (error) {
     if (error?.code === 11000) {
@@ -929,8 +955,8 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
     if (error?.code === 'DEPOSIT_ALREADY_PROCESSED') {
       const current = await Deposit.findById(deposit._id);
       if (current?.status === 'confirmed') {
-        const user = await User.findById(req.dbUser._id).select('gramBalance');
-        return res.json({ success: true, alreadyConfirmed: true, status: 'confirmed', amount: current.amount, gramBalance: user?.gramBalance ?? 0, deposit: publicDepositRecord(current) });
+        const user = await User.findById(req.dbUser._id).select('usdtBalance');
+        return res.json({ success: true, alreadyConfirmed: true, status: 'confirmed', amount: current.amount, usdtBalance: user?.usdtBalance ?? 0, deposit: publicDepositRecord(current) });
       }
       return res.status(409).json({ success: false, code: error.code, message: 'این درخواست قبلاً پردازش شده است.' });
     }
@@ -938,13 +964,13 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
   }
 
   if (outcome?.alreadyConfirmed) {
-    const user = await User.findById(req.dbUser._id).select('gramBalance');
+    const user = await User.findById(req.dbUser._id).select('usdtBalance');
     return res.json({
       success: true,
       alreadyConfirmed: true,
       status: 'confirmed',
       amount: outcome.deposit.amount,
-      gramBalance: user?.gramBalance ?? 0,
+      usdtBalance: user?.usdtBalance ?? 0,
       deposit: publicDepositRecord(outcome.deposit)
     });
   }
@@ -954,9 +980,9 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
     alreadyConfirmed: Boolean(outcome?.alreadyConfirmed),
     status: 'confirmed',
     amount: verification.amount,
-    gramBalance: outcome?.gramBalance,
+    usdtBalance: outcome?.usdtBalance,
     deposit: publicDepositRecord(outcome.deposit),
-    message: 'واریز Native GRAM در TON Mainnet تأیید شد و موجودی افزایش یافت.'
+    message: 'واریز TON USDT Jetton در TON Mainnet تأیید شد و موجودی افزایش یافت.'
   });
 });
 
@@ -981,33 +1007,33 @@ function publicSwapIntent(intent) {
 // Creates a server-priced, single-pending Swap intent. The wallet signs the
 // transaction; no points are credited until the receiving transaction is
 // found, finalized and matched to this exact reference and source wallet.
-router.post('/swap/gram-to-points/intents', auth, sensitiveRateLimit('general'), async (req, res) => {
+router.post('/swap/usdt-to-points/intents', auth, sensitiveRateLimit('general'), async (req, res) => {
   const settings = await Settings.getGlobal();
   const config = getDepositSettingsStatus(settings);
   const wallet = req.dbUser.connectedWallet || {};
   if (!hasRecentWalletProof(req.dbUser) || wallet.network !== '-239') {
     return res.status(401).json({ success: false, code: 'WALLET_PROOF_REQUIRED', message: 'برای Swap ابتدا Wallet تأییدشدهٔ TON Mainnet را وصل کنید.' });
   }
-  if (!config.ready || !settings.rate || settings.rate <= 0) {
+  if (!config.ready) {
     return res.status(503).json({ success: false, code: 'SWAP_UNAVAILABLE', message: 'Swap خودکار فعلاً فعال نیست؛ تنظیمات شبکه یا نرخ کامل نیست.' });
   }
-  const amount = round6(req.body?.amount);
-  const amountRaw = amountToNanoGram(amount);
-  const expectedPoints = Math.floor(amount / settings.rate);
+  const amountRaw = usdtToBaseUnits(String(req.body?.amount ?? ''));
+  const amount = amountRaw == null ? null : baseUnitsToUsdt(amountRaw);
+  const expectedPoints = amount == null ? 0 : usdtToUp(String(amount));
   if (amountRaw == null || expectedPoints <= 0) {
-    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار GRAM برای تبدیل معتبر نیست.' });
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار USDT برای تبدیل معتبر نیست.' });
   }
-  const reference = createDepositReference().replace('GRAMUP:', 'GRAMUP:SWAP:');
+  const reference = createUsdtReference('GRAMUP:SWAP');
   let intent;
   try {
-    intent = await GramSwapIntent.create({
+    intent = await UsdtSwapIntent.create({
       user: req.dbUser._id,
-      direction: 'gram_to_points',
+      direction: 'usdt_to_points',
       reference,
       amount,
       amountRaw: amountRaw.toString(),
       expectedPoints,
-      rateSnapshot: settings.rate,
+      rateSnapshot: 1 / UP_PER_USDT,
       depositAddressSnapshot: config.depositWalletAddress,
       walletAddressSnapshot: wallet.address
     });
@@ -1015,28 +1041,27 @@ router.post('/swap/gram-to-points/intents', auth, sensitiveRateLimit('general'),
     if (error?.code === 11000) return res.status(409).json({ success: false, code: 'SWAP_ALREADY_PENDING', message: 'یک Swap قبلی هنوز در حال بررسی است.' });
     throw error;
   }
-  const payload = comment(reference).toBoc().toString('base64');
+  const transaction = await usdtTransferTransaction({ senderAddress: wallet.address, recipientAddress: config.depositWalletAddress, amountRaw: amountRaw.toString(), reference });
   return res.status(201).json({
     success: true,
     intent: publicSwapIntent(intent),
     transaction: {
       validUntil: Math.floor(Date.now() / 1000) + 600,
-      network: '-239',
-      messages: [{ address: config.depositWalletAddress, amount: amountRaw.toString(), payload }]
+      ...transaction
     }
   });
 });
 
-router.get('/swap/gram-to-points/intents/:id', auth, async (req, res) => {
+router.get('/swap/usdt-to-points/intents/:id', auth, async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
-  const intent = await GramSwapIntent.findOne({ _id: req.params.id, user: req.dbUser._id });
+  const intent = await UsdtSwapIntent.findOne({ _id: req.params.id, user: req.dbUser._id });
   if (!intent) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
   return res.json({ success: true, intent: publicSwapIntent(intent) });
 });
 
-router.post('/swap/gram-to-points/intents/:id/verify', auth, sensitiveRateLimit('general'), async (req, res) => {
+router.post('/swap/usdt-to-points/intents/:id/verify', auth, sensitiveRateLimit('general'), async (req, res) => {
   if (!/^[a-f\d]{24}$/i.test(String(req.params.id || ''))) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
-  const intent = await GramSwapIntent.findOne({ _id: req.params.id, user: req.dbUser._id });
+  const intent = await UsdtSwapIntent.findOne({ _id: req.params.id, user: req.dbUser._id });
   if (!intent) return res.status(404).json({ success: false, code: 'SWAP_INTENT_NOT_FOUND', message: 'درخواست Swap پیدا نشد.' });
   if (intent.status === 'confirmed') {
     const user = await User.findById(req.dbUser._id).select('points');
@@ -1045,34 +1070,39 @@ router.post('/swap/gram-to-points/intents/:id/verify', auth, sensitiveRateLimit(
   const sourceAddress = normalizeTonAddress(intent.walletAddressSnapshot);
   let verification;
   try {
-    verification = req.body?.txHash
-      ? await verifyNativeGramTransfer({ txHash: req.body.txHash, depositAddress: intent.depositAddressSnapshot, reference: intent.reference })
-      : await findIncomingNativeGramTransferByReference({ depositAddress: intent.depositAddressSnapshot, reference: intent.reference });
+    verification = await findUsdtTransfer({
+      txHash: req.body?.txHash ? normalizeTonTxHash(req.body.txHash) : null,
+      ownerAddress: intent.depositAddressSnapshot,
+      destinationAddress: intent.depositAddressSnapshot,
+      sourceAddress,
+      amountRaw: intent.amountRaw,
+      reference: intent.reference
+    });
   } catch {
     return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'بررسی TON فعلاً در دسترس نیست؛ موجودی تغییر نکرد.' });
   }
   if (verification.status === 'pending') {
-    await GramSwapIntent.updateOne({ _id: intent._id, user: req.dbUser._id, status: 'pending' }, { $set: { verificationNote: verification.code || 'pending' } });
+    await UsdtSwapIntent.updateOne({ _id: intent._id, user: req.dbUser._id, status: 'pending' }, { $set: { verificationNote: verification.code || 'pending' } });
     return res.status(202).json({ success: true, status: 'pending', code: verification.code, intent: publicSwapIntent(intent), message: 'تراکنش هنوز در TON نهایی نشده است؛ چند لحظه بعد دوباره بررسی کنید.' });
   }
   if (verification.status !== 'verified') return res.status(400).json({ success: false, code: verification.code || 'SWAP_VERIFICATION_FAILED', message: 'تراکنش Swap با Reference معتبر مطابقت ندارد؛ هیچ UP اضافه نشد.' });
   if (sourceAddress && verification.sourceAddress !== sourceAddress) {
     return res.status(400).json({ success: false, code: 'SWAP_SOURCE_WALLET_MISMATCH', message: 'تراکنش از Wallet متصل‌شده ارسال نشده است؛ هیچ UP اضافه نشد.' });
   }
-  const actualPoints = Math.floor(verification.amount / intent.rateSnapshot);
+  const actualPoints = usdtToUp(verification.amountRaw);
   if (actualPoints <= 0) return res.status(400).json({ success: false, code: 'SWAP_AMOUNT_TOO_SMALL', message: 'مبلغ تراکنش برای دریافت UP کافی نیست.' });
   let outcome;
   try {
     await withMongoTransaction(async session => {
-      const claimed = await GramSwapIntent.findOneAndUpdate(
+      const claimed = await UsdtSwapIntent.findOneAndUpdate(
         { _id: intent._id, user: req.dbUser._id, status: 'pending', txHashNormalized: { $exists: false } },
-        { $set: { status: 'confirmed', amount: verification.amount, amountRaw: verification.amountRaw, txHash: verification.txHash, txHashNormalized: verification.txHash, submittedTxHash: verification.submittedTxHash || '', sourceAddress: verification.sourceAddress, verificationNote: 'confirmed_native_gram_swap_by_toncenter_v3_mainnet', verifiedAt: verification.confirmedAt, creditedAt: new Date() } },
+        { $set: { status: 'confirmed', amount: verification.amount, amountRaw: verification.amountRaw, txHash: verification.txHash, txHashNormalized: verification.txHash, submittedTxHash: verification.submittedTxHash || '', sourceAddress: verification.sourceAddress, verificationNote: 'confirmed_jetton_usdt_swap_by_toncenter_v3_mainnet', verifiedAt: verification.confirmedAt, creditedAt: new Date() } },
         { new: true, session }
       );
       if (!claimed) throw Object.assign(new Error('SWAP_ALREADY_PROCESSED'), { code: 'SWAP_ALREADY_PROCESSED' });
       const updated = await User.findByIdAndUpdate(req.dbUser._id, { $inc: { points: actualPoints } }, { new: true, session });
       if (!updated) throw new Error('SWAP_USER_NOT_FOUND');
-      const ledgerResult = await recordLedgerRequired({ user: updated._id, type: 'exchange_in', currency: 'points', amount: actualPoints, description: 'Swap خودکار Native GRAM به UP', balanceAfter: updated.points, sourceId: `swap:${verification.txHash}`, transactionId: verification.txHash, session });
+      const ledgerResult = await recordLedgerRequired({ user: updated._id, type: 'exchange_in', currency: 'points', amount: actualPoints, description: 'Swap خودکار TON USDT Jetton به UP', balanceAfter: updated.points, sourceId: `swap:${verification.txHash}`, transactionId: verification.txHash, session });
       if (!ledgerResult.created) throw new Error('SWAP_LEDGER_ALREADY_EXISTS');
       outcome = { intent: claimed, points: updated.points };
     });
@@ -1411,7 +1441,7 @@ router.get('/history', auth, async (req, res) => {
   const ledgerFilter = { user: req.dbUser._id, ...timeFilter };
   const depositFilter = {
     user: req.dbUser._id,
-    assetType: 'native_gram',
+    assetType: 'jetton_usdt',
     status: { $in: ['pending', 'rejected', 'confirmed'] },
     ...timeFilter
   };
@@ -1432,7 +1462,7 @@ router.get('/history', auth, async (req, res) => {
   for (const item of depositItems) {
     if (item.status === 'confirmed') continue;
     history.push({
-      _id: item._id, type: 'deposit', currency: 'gram', amount: item.amount,
+      _id: item._id, type: 'deposit', currency: 'usdt', amount: item.amount,
       transactionId: item.txHash || item.submittedTxHash || '', status: item.status,
       description: '', createdAt: item.createdAt, transactionAt: item.verifiedAt || item.createdAt,
       verifiedAt: item.verifiedAt, creditedAt: item.creditedAt
@@ -1444,7 +1474,7 @@ router.get('/history', auth, async (req, res) => {
   });
   const page = history.slice(0, limit).map(item => ({
     ...item,
-    tokenSymbol: item.currency === 'points' ? 'UP' : item.currency === 'gram' ? 'GRAM' : undefined,
+    tokenSymbol: item.currency === 'points' ? 'UP' : item.currency === 'usdt' ? 'USDT' : undefined,
     ...(item.currency === 'points' ? {
       upAmount: Number(item.amount) || 0,
       upBalanceAfter: item.balanceAfter == null ? null : Number(item.balanceAfter)
@@ -1457,13 +1487,13 @@ router.get('/history', auth, async (req, res) => {
     : null;
 
   const upBalance = Number(req.dbUser.points) || 0;
-  const gramBalance = Number(req.dbUser.gramBalance) || 0;
+  const usdtBalance = Number(req.dbUser.usdtBalance) || 0;
   res.json({
     success: true,
     upBalance,
     points: upBalance,
-    gramBalance,
-    balances: { UP: upBalance, GRAM: gramBalance },
+    usdtBalance,
+    balances: { UP: upBalance, USDT: usdtBalance },
     history: page,
     hasMore,
     nextCursor
@@ -1501,7 +1531,7 @@ router.get('/public-history', async (req, res) => {
       { $match: { status: 'paid' } },
       {
         $group: {
-          _id: { $ifNull: ['$token', 'GRAM'] },
+          _id: { $ifNull: ['$token', 'USDT'] },
           total: { $sum: { $ifNull: ['$cryptoAmount', 0] } }
         }
       }

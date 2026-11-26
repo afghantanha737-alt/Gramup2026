@@ -38,7 +38,7 @@ function requiresReason(status) {
   return status === 'rejected' || status === 'cancelled';
 }
 
-/** آیا این انتقال باید GRAM را به کاربر برگرداند؟ (چون در لحظه‌ی درخواست از موجودی کسر شده) */
+/** آیا این انتقال باید USDT را به کاربر برگرداند؟ (چون در لحظه‌ی درخواست از موجودی کسر شده) */
 function shouldRefund(status) {
   return status === 'rejected' || status === 'cancelled';
 }

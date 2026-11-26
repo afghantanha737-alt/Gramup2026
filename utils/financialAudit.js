@@ -7,9 +7,9 @@ function round(value, digits = 6) {
 
 function buildDiscrepancy(user, sums) {
   const pointsLedger = round(sums.points);
-  const gramLedger = round(sums.gram);
+  const usdtLedger = round(sums.usdt);
   const pointsBalance = round(user.points);
-  const gramBalance = round(user.gramBalance);
+  const usdtBalance = round(user.usdtBalance);
   return {
     userId: user._id,
     telegramId: user.telegramId,
@@ -17,14 +17,14 @@ function buildDiscrepancy(user, sums) {
     pointsBalance,
     pointsLedger,
     pointsDifference: round(pointsBalance - pointsLedger),
-    gramBalance,
-    gramLedger,
-    gramDifference: round(gramBalance - gramLedger)
+    usdtBalance,
+    usdtLedger,
+    usdtDifference: round(usdtBalance - usdtLedger)
   };
 }
 
 function isDiscrepant(row, tolerance = 0.000001) {
-  return Math.abs(row.pointsDifference) > tolerance || Math.abs(row.gramDifference) > tolerance;
+  return Math.abs(row.pointsDifference) > tolerance || Math.abs(row.usdtDifference) > tolerance;
 }
 
 module.exports = { round, buildDiscrepancy, isDiscrepant };

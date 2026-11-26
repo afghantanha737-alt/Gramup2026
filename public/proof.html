@@ -28,7 +28,7 @@
     <div class="proofTopBar">
       <div class="proofBrand">
         <img src="img/gramup-logo-cube-transparent.png" alt="Gramup">
-        <span class="proofBrandName">Gram<span>up</span></span>
+        <span class="proofBrandName">Usdt<span>up</span></span>
       </div>
       <button type="button" class="proofLangBtn" id="langToggle" onclick="toggleLang()">فارسی</button>
     </div>
@@ -187,7 +187,7 @@ function renderList(history) {
           <div class="proofUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(dict.receivedPayout)}</em></strong></div>
           <div class="proofMeta" dir="ltr"><time class="proofDate" dir="${lang === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(timeAgo(item.date))}</time> <span class="proofBadgeOk" dir="${lang === "en" ? "ltr" : "rtl"}">${escapeHTML(dict.onChainConfirmed)}</span></div>
         </div>
-        <div class="proofPayment"><div class="proofAmount"><img src="img/gramup-official-logo.jpg" alt="GRAM" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorerLink}</div>
+        <div class="proofPayment"><div class="proofAmount"><img src="img/gramup-official-logo.jpg" alt="USDT" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "USDT")}</span></div>${explorerLink}</div>
       </div>`;
   }).join("");
 }

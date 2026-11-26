@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#08090d">
 <meta name="color-scheme" content="dark light">
-<meta name="description" content="Gramup — پلتفرم جمع‌آوری UP و پاداش با انجام تسک، دعوت دوستان و ورود روزانه، قابل تبدیل به GRAM در تلگرام">
+<meta name="description" content="Gramup — پلتفرم جمع‌آوری UP و پاداش با انجام تسک، دعوت دوستان و ورود روزانه، قابل تبدیل به USDT در تلگرام">
 <title>Gramup</title>
 <meta name="robots" content="noindex,nofollow">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -13,7 +13,7 @@
 <meta http-equiv="Expires" content="0">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Gramup">
-<meta property="og:description" content="Gramup — پلتفرم جمع‌آوری UP و پاداش با انجام تسک، دعوت دوستان و ورود روزانه، قابل تبدیل به GRAM در تلگرام">
+<meta property="og:description" content="Gramup — پلتفرم جمع‌آوری UP و پاداش با انجام تسک، دعوت دوستان و ورود روزانه، قابل تبدیل به USDT در تلگرام">
 
 <!-- Telegram Mini App -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -52,7 +52,7 @@
       <div class="brandBlock">
         <img class="brandLogo" src="img/gramup-logo-cube-transparent.png" alt="Gramup">
         <div class="brandInfo">
-          <div class="brandName">Gram<span>up</span></div>
+          <div class="brandName">Usdt<span>up</span></div>
           <div id="userIdLine" class="brandId">ID</div>
         </div>
       </div>
@@ -130,7 +130,7 @@
     <div id="onboardingStep2" class="onboardingStep" style="display:none">
       <div class="onboardingEmoji">💱</div>
       <h3 class="onboardingHeading" data-i18n="ob_title2">تبدیل و برداشت</h3>
-      <p class="onboardingText" data-i18n="ob_text2">از تب «کیف‌پول» UP‌هاتو به GRAM تبدیل کن و درخواست برداشت بده. هر پرداخت واقعی، با تراکنش روی زنجیره قابل بررسیه — همه‌چیز شفاف.</p>
+      <p class="onboardingText" data-i18n="ob_text2">از تب «کیف‌پول» UP‌هاتو به USDT تبدیل کن و درخواست برداشت بده. هر پرداخت واقعی، با تراکنش روی زنجیره قابل بررسیه — همه‌چیز شفاف.</p>
     </div>
 
     <div class="onboardingDots">
@@ -217,7 +217,7 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
       <button class="closeBtn" type="button" onclick="hideWithdraw()" data-i18n-aria="common_close" aria-label="بستن">×</button>
     </div>
     <div class="withdrawBody">
-      <label class="fieldLabel" data-i18n="exchange_gram_label">مقدار GRAM</label>
+      <label class="fieldLabel" data-i18n="exchange_usdt_label">مقدار USDT</label>
       <input id="withdrawPoints" type="number" inputmode="decimal" step="0.000001" placeholder="مثلاً 0.5" data-i18n-ph="withdraw_amount_ph">
       <label class="fieldLabel" data-i18n="withdraw_address_label">Wallet متصل‌شده</label>
       <input id="withdrawAddress" type="text" placeholder="ابتدا Wallet خود را متصل کنید" data-i18n-ph="withdraw_address_ph" readonly aria-readonly="true">
@@ -270,20 +270,20 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
   </div>
 </div>
 
-<!-- EXCHANGE MODAL (UP -> GRAM) -->
+<!-- EXCHANGE MODAL (UP -> USDT) -->
 <div id="exchangeOverlay" class="overlay" style="display:none">
   <div class="modalBox withdrawBox" role="dialog" aria-modal="true" aria-labelledby="exchangeTitle">
     <div class="modalHeader">
       <div>
         <span class="modalEyebrow" data-i18n="exchange_eyebrow">Exchange</span>
-        <h3 id="exchangeTitle" data-i18n="exchange_modal_title">تبدیل UP به GRAM</h3>
+        <h3 id="exchangeTitle" data-i18n="exchange_modal_title">تبدیل UP به USDT</h3>
       </div>
       <button class="closeBtn" type="button" onclick="hideExchange()" data-i18n-aria="common_close" aria-label="بستن">×</button>
     </div>
     <div class="withdrawBody">
       <div class="exchangeDirectionToggle">
-        <button type="button" class="exchangeDirectionBtn active" id="exchangeDirPTG" onclick="setExchangeDirection('points_to_gram')" data-i18n="exchange_direction_points_to_gram">UP → GRAM</button>
-        <button type="button" class="exchangeDirectionBtn" id="exchangeDirGTP" onclick="setExchangeDirection('gram_to_points')" data-i18n="exchange_direction_gram_to_points">GRAM → UP</button>
+        <button type="button" class="exchangeDirectionBtn active" id="exchangeDirPTG" onclick="setExchangeDirection('points_to_usdt')" data-i18n="exchange_direction_points_to_usdt">UP → USDT</button>
+        <button type="button" class="exchangeDirectionBtn" id="exchangeDirGTP" onclick="setExchangeDirection('usdt_to_points')" data-i18n="exchange_direction_usdt_to_points">USDT → UP</button>
       </div>
       <label class="fieldLabel" id="exchangeAmountLabel" data-i18n="exchange_points_label">مقدار UP</label>
       <input id="exchangePoints" type="number" inputmode="numeric" placeholder="مثلاً 1000" data-i18n-ph="exchange_points_ph" oninput="updateExchangePreview()">
@@ -293,19 +293,19 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
         <button type="button" class="exchangeQuickBtn" onclick="setExchangeAmountPercent(75)">75%</button>
         <button type="button" class="exchangeQuickBtn" onclick="setExchangeAmountPercent(100)">MAX</button>
       </div>
-      <p id="exchangePreview" style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">معادل GRAM دریافتی: 0</p>
+      <p id="exchangePreview" style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">معادل USDT دریافتی: 0</p>
       <p id="exchangeError" class="captchaErr" role="alert"></p>
       <button type="button" class="primaryBtn" id="submitExchange" onclick="submitExchange()" data-i18n="exchange_submit">تبدیل کن</button>
     </div>
   </div>
 </div>
 
-<!-- TON MAINNET GRAM DEPOSIT -->
+<!-- TON MAINNET USDT DEPOSIT -->
 <div id="depositOverlay" class="overlay" style="display:none">
   <div class="modalBox withdrawBox" role="dialog" aria-modal="true" aria-labelledby="depositTitle" style="text-align:center;max-height:92vh;overflow-y:auto">
     <div class="modalHeader">
       <div>
-        <span class="modalEyebrow" data-i18n="deposit_eyebrow">TON MAINNET · NATIVE GRAM</span>
+        <span class="modalEyebrow" data-i18n="deposit_eyebrow">TON MAINNET · USDT JETTON</span>
         <h3 id="depositTitle" data-i18n="deposit_modal_title">واریز</h3>
       </div>
       <button class="closeBtn" type="button" onclick="hideDeposit()" data-i18n-aria="common_close" aria-label="بستن">×</button>
@@ -313,24 +313,24 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
 
     <div id="depositDisabledMessage" class="emptyState" style="padding:18px 0">
       <div class="captchaIcon" aria-hidden="true">⏳</div>
-      <p id="depositMessage" style="font-size:13px;color:var(--text-soft)" data-i18n="deposit_coming_soon">واریز GRAM در حال حاضر فعال نیست.</p>
+      <p id="depositMessage" style="font-size:13px;color:var(--text-soft)" data-i18n="deposit_coming_soon">واریز USDT در حال حاضر فعال نیست.</p>
     </div>
 
     <div id="depositPanel" style="display:none;text-align:start">
       <div class="tbPill tbPillGreen" style="margin:0 auto 12px;display:table" data-i18n="deposit_network_ton_mainnet">TON Mainnet</div>
-      <p style="font-size:13px;color:var(--danger);font-weight:700" data-i18n="deposit_mainnet_warning">فقط ارز بومی GRAM روی TON Mainnet ارسال کنید؛ Jetton پذیرفته نمی‌شود.</p>
-      <label for="depositAmount" data-i18n="deposit_amount_label">مقدار GRAM برای واریز</label>
+      <p style="font-size:13px;color:var(--danger);font-weight:700" data-i18n="deposit_mainnet_warning">فقط USDT Jetton رسمی روی TON Mainnet ارسال کنید.</p>
+      <label for="depositAmount" data-i18n="deposit_amount_label">مقدار USDT برای واریز</label>
       <input id="depositAmount" type="number" inputmode="decimal" step="0.000000001" min="0" placeholder="مثلاً 1" data-i18n-ph="deposit_amount_ph">
       <p id="depositMinimumText" class="small" style="margin:8px 0 12px"></p>
       <p class="small depositAutoSendHint" data-i18n="deposit_auto_send_hint">با Wallet متصل‌شده، آدرس و کد مرجع خودکار به تراکنش اضافه می‌شوند.</p>
-      <button id="depositVerifyButton" type="button" class="primaryBtn" style="width:100%;margin-top:8px" onclick="submitGramDeposit()" data-i18n="deposit_send_button">ارسال درخواست واریز از Wallet</button>
+      <button id="depositVerifyButton" type="button" class="primaryBtn" style="width:100%;margin-top:8px" onclick="submitUsdtDeposit()" data-i18n="deposit_send_button">ارسال درخواست واریز از Wallet</button>
       <p id="depositActionMessage" role="status" aria-live="polite" class="small" style="min-height:20px"></p>
       <div id="depositHistoryList" style="margin-top:10px"></div>
 
       <details class="depositManualDetails">
         <summary data-i18n="deposit_manual_details">اطلاعات واریز دستی (اختیاری)</summary>
         <div class="depositManualBody">
-          <label for="depositWalletAddress" data-i18n="deposit_address_label">آدرس دریافت GRAM</label>
+          <label for="depositWalletAddress" data-i18n="deposit_address_label">آدرس دریافت USDT</label>
           <div class="depositCopyRow">
             <input id="depositWalletAddress" type="text" readonly dir="ltr" style="margin:0;min-width:0;font-size:12px">
             <button type="button" class="secondaryBtn" data-copy-target="depositWalletAddress" data-i18n="deposit_copy">کپی</button>

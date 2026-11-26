@@ -63,8 +63,8 @@ async function run() {
         deposit: { _id: 'deposit-123' },
         transaction: { validUntil: 1900000000, messages: [{ address: 'EQDepositTarget', amount: '1000000000' }] }
       };
-      if (url.endsWith('/verify')) return { success: true, status: 'confirmed', gramBalance: 5 };
-      if (url === '/api/points/withdraw') return { success: true, gramBalance: 4, withdrawalId: 'withdrawal-123' };
+      if (url.endsWith('/verify')) return { success: true, status: 'confirmed', usdtBalance: 5 };
+      if (url === '/api/points/withdraw') return { success: true, usdtBalance: 4, withdrawalId: 'withdrawal-123' };
       throw new Error(`Unexpected API call: ${url}`);
     }
   };

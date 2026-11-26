@@ -24,7 +24,7 @@ assert.strictEqual(isEligibleOriginalEarn({ type: 'spin', amount: 25 }), false);
 for (const type of ['referral_bonus', 'referral_initial', 'referral_commission', 'exchange_in', 'admin_adjust']) {
   assert.strictEqual(isEligibleOriginalEarn({ type, amount: 100 }), false, `${type} must not produce commissions`);
 }
-assert.strictEqual(isEligibleOriginalEarn({ type: 'task', currency: 'gram', amount: 100 }), false);
+assert.strictEqual(isEligibleOriginalEarn({ type: 'task', currency: 'usdt', amount: 100 }), false);
 assert.strictEqual(isEligibleOriginalEarn({ type: 'task', amount: -10 }), false);
 assert.strictEqual(calculateReferralCommission(100, 10), 10);
 assert.strictEqual(calculateReferralCommission(100, 5), 5);

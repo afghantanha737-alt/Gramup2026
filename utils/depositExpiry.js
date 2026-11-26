@@ -8,7 +8,7 @@ async function expireUnsignedNativeDeposits(now = new Date()) {
   const cutoff = new Date(now.getTime() - UNSIGNED_DEPOSIT_TTL_MS);
   const result = await Deposit.updateMany(
     {
-      assetType: 'native_gram',
+      assetType: 'jetton_usdt',
       status: 'pending',
       createdAt: { $lt: cutoff },
       $and: [{ submittedBoc: { $in: ['', null] } }, { submittedTxHash: { $in: ['', null] } }]

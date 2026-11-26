@@ -10,7 +10,7 @@ const admin = fs.readFileSync('routes/admin.js', 'utf8');
 const adminUi = fs.readFileSync('public/admin.html', 'utf8');
 assert.match(adRoute, /router\.post\('\/ton-intents'/);
 assert.match(adRoute, /router\.post\('\/:id\/ton-verify'/);
-assert.match(adRoute, /findIncomingNativeGramTransferByReference/);
+assert.match(adRoute, /findUsdtTransfer/);
 assert.match(adRoute, /paymentTxHash/);
 assert.match(adRoute, /getChatMember/);
 assert.match(adRoute, /router\.get\('\/config'/);

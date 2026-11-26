@@ -13,7 +13,7 @@ const user = {
   telegramId: 'up-balance-test-user',
   firstName: 'UP Test',
   points: 1750,
-  gramBalance: 4.25,
+  usdtBalance: 4.25,
   streak: 3,
   totalCheckins: 8,
   lastCheckIn: null,
@@ -42,7 +42,7 @@ function query(rows) {
 
 const settingsPath = require.resolve('../models/Settings');
 require.cache[settingsPath] = { id: settingsPath, filename: settingsPath, loaded: true, exports: {
-  getGlobal: async () => ({ rate: 0.002, minWithdrawPoints: 1000, gramUsdPrice: 2 })
+  getGlobal: async () => ({ rate: 0.002, minWithdrawPoints: 1000, usdtUsdPrice: 2 })
 } };
 const ledgerPath = require.resolve('../models/PointsLedger');
 require.cache[ledgerPath] = { id: ledgerPath, filename: ledgerPath, loaded: true, exports: {
@@ -71,7 +71,7 @@ require.cache[ledgerUtilPath] = { id: ledgerUtilPath, filename: ledgerUtilPath, 
 } };
 
 const User = require('../models/User');
-const legacyDoc = new User({ telegramId: 'legacy-up-alias-test', referralCode: 'UPTEST', points: 1750, gramBalance: 4.25 });
+const legacyDoc = new User({ telegramId: 'legacy-up-alias-test', referralCode: 'UPTEST', points: 1750, usdtBalance: 4.25 });
 assert.strictEqual(User.schema.path('points').options.alias, 'upBalance', 'existing persisted points path declares the UP alias');
 assert.ok(User.schema.virtuals.upBalance, 'Mongoose exposes the alias as a virtual accessor');
 assert.strictEqual(legacyDoc.upBalance, 1750, 'legacy stored points are exposed by the model as UP');
@@ -93,8 +93,8 @@ app.use('/api/points', pointsRouter);
     let body = await response.json();
     assert.strictEqual(body.upBalance, 1750, 'main status API exposes current legacy points as UP');
     assert.strictEqual(body.points, 1750, 'legacy API field remains available');
-    assert.strictEqual(body.gramBalance, 4.25, 'existing GRAM balance remains unchanged');
-    assert.deepStrictEqual(body.balances, { UP: 1750, GRAM: 4.25 });
+    assert.strictEqual(body.usdtBalance, 4.25, 'existing USDT balance remains unchanged');
+    assert.deepStrictEqual(body.balances, { UP: 1750, USDT: 4.25 });
 
     response = await fetch(`${base}/api/points/history`);
     assert.strictEqual(response.status, 200);
@@ -124,7 +124,7 @@ app.use('/api/points', pointsRouter);
   assert.match(appJs, /state\.points = upBalanceFromResponse\(data\);/);
   assert.match(appJs, /tbLabel.*wallet_points_card_title[\s\S]*?class="upTokenMark"[\s\S]*?formatPoints\(state\.points\)/);
   assert.match(appJs, /class="walletOverviewValue"[\s\S]*?class="upTokenMark upTokenMarkWallet"[\s\S]*?formatPoints\(state\.points\)[\s\S]*?UP/);
-  assert.match(appJs, /const unit = item\.tokenSymbol \|\| \(item\.currency === "gram" \? "GRAM" : t\("points_unit"\)\);/);
+  assert.match(appJs, /const unit = item\.tokenSymbol \|\| \(item\.currency === "usdt" \? "USDT" : t\("points_unit"\)\);/);
   assert.match(indexHtml, /id="headerUpBalance"/);
   assert.match(css, /\.upTokenMark\s*\{/);
   for (const locale of ['fa', 'ps', 'en']) {
@@ -133,7 +133,7 @@ app.use('/api/points', pointsRouter);
     assert.match(section, /wallet_points_card_title:/);
   }
 
-  console.log('PASS — legacy balance maps one-to-one to UP; status/history APIs, GRAM balance, ledger history, and UI labels are compatible');
+  console.log('PASS — migrated USDT balance maps one-to-one to UP; status/history APIs, ledger history, and UI labels are compatible');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

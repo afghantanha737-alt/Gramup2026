@@ -46,9 +46,9 @@ router.post('/:id/reject', async (req, res) => {
       const user = await User.findOne({ telegramId: current.advertiserTelegramId }).session(session);
       if (!user) throw Object.assign(new Error('تبلیغ‌دهنده پیدا نشد.'), { code: 'USER_NOT_FOUND' });
       const sourceId = `ad-order-refund:${current._id}`;
-      const after = Number((Number(user.gramBalance || 0) + Number(current.totalCostGram)).toFixed(9));
-      user.gramBalance = after; await user.save({ session });
-      await recordLedgerRequired({ user: user._id, type: 'ad_order_refund', currency: 'gram', amount: current.totalCostGram, balanceAfter: after, sourceId, description: `Refund rejected ad campaign ${current._id}`, session });
+      const after = Number((Number(user.usdtBalance || 0) + Number(current.totalCostUsdt)).toFixed(9));
+      user.usdtBalance = after; await user.save({ session });
+      await recordLedgerRequired({ user: user._id, type: 'ad_order_refund', currency: 'usdt', amount: current.totalCostUsdt, balanceAfter: after, sourceId, description: `Refund rejected ad campaign ${current._id}`, session });
       current.status = 'rejected'; current.paymentStatus = 'refunded'; current.refundSourceId = sourceId; current.reviewedBy = req.adminActor; current.reviewedAt = new Date(); current.reviewNote = String(req.body?.note || '').slice(0, 500);
       await current.save({ session }); return current;
     });

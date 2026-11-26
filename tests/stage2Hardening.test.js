@@ -79,13 +79,13 @@ async function main() {
     { currency: 'points', amount: -30, type: 'spin' },
     { currency: 'points', amount: 20, type: 'task' },
     { currency: 'points', amount: 10, type: 'referral_commission' },
-    { currency: 'gram', amount: 2, type: 'deposit' },
-    { currency: 'gram', amount: -0.5, type: 'withdraw' }
+    { currency: 'usdt', amount: 2, type: 'deposit' },
+    { currency: 'usdt', amount: -0.5, type: 'withdraw' }
   ];
   const ledgerSums = fixtureLedger.reduce((sums, entry) => ({ ...sums, [entry.currency]: (sums[entry.currency] || 0) + entry.amount }), {});
-  const reconciled = buildDiscrepancy({ _id: 'stage2-fixture', points: 0, gramBalance: 1.5 }, ledgerSums);
+  const reconciled = buildDiscrepancy({ _id: 'stage2-fixture', points: 0, usdtBalance: 1.5 }, ledgerSums);
   assert.strictEqual(isDiscrepant(reconciled), false);
-  assert.strictEqual(isDiscrepant(buildDiscrepancy({ _id: 'stage2-fixture', points: 1, gramBalance: 1.5 }, ledgerSums)), true);
+  assert.strictEqual(isDiscrepant(buildDiscrepancy({ _id: 'stage2-fixture', points: 1, usdtBalance: 1.5 }, ledgerSums)), true);
 
   // Withdrawal idempotency: fake transactional persistence exercises retry, rollback, payload conflict and race.
   const operationPath = require.resolve('../models/IdempotencyOperation');

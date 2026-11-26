@@ -20,7 +20,7 @@ async function main() {
   const context = {
     window: { state: { language: 'fa' } },
     state: {
-      language: 'fa', user: null, points: 123.45, gramBalance: 0.807,
+      language: 'fa', user: null, points: 123.45, usdtBalance: 0.807,
       invitedCount: 2, activeInvitedCount: 1, referralDataLoaded: true,
       referralLoading: false, referralError: '', totalEarnedPoints: 456.78, level: null
     },

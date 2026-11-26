@@ -335,7 +335,7 @@ router.post('/:id/engagement/check', auth, sensitiveRateLimit('claim'), async (r
 
       const recurringClaimCount = Number(completion?.recurringClaimCount || 0) + 1;
       const nextAvailableAt = nextLatestPostAvailableAt(transactionNow);
-      const costUsd = rewardCostUsd(currentTask.reward, settings.rate, settings.gramUsdPrice);
+      const costUsd = rewardCostUsd(currentTask.reward, 0.0001, settings.usdtUsdPrice);
       const updatedTask = await Task.findOneAndUpdate(
         { ...taskCapacityFilter(currentTask._id, transactionNow), verifyType: 'latest_post' },
         { $inc: { completedCount: 1 } },
@@ -481,7 +481,7 @@ async function claimBioLinkTask(req, res, task) {
       }
       const cycle = Number(completion?.recurringClaimCount || 0) + 1;
       const nextAvailableAt = nextBioClaimAt(now);
-      const costUsd = rewardCostUsd(BIO_LINK_REWARD, settings.rate, settings.gramUsdPrice);
+      const costUsd = rewardCostUsd(BIO_LINK_REWARD, 0.0001, settings.usdtUsdPrice);
       if (completion) {
         const saved = await TaskCompletion.findOneAndUpdate(
           { _id: completion._id, recurringClaimCount: Number(completion.recurringClaimCount || 0) },
@@ -614,7 +614,7 @@ router.post('/:id/claim', auth, sensitiveRateLimit('claim'), async (req, res) =>
       }
 
       const revenueUsd = currentTask.isSponsored ? Number(currentTask.sponsorPriceUsd) || 0 : 0;
-      const costUsd = rewardCostUsd(currentTask.reward, settings.rate, settings.gramUsdPrice);
+      const costUsd = rewardCostUsd(currentTask.reward, 0.0001, settings.usdtUsdPrice);
       if (currentCompletion) {
         await TaskCompletion.findOneAndUpdate(
           { _id: currentCompletion._id, status: 'rejected' },

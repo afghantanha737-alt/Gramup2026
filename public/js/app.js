@@ -50,15 +50,15 @@ const state = {
   botReminderEnabled: true,
   soundEnabled: true,
   points: 0,
-  gramBalance: 0,
-  chainGramBalance: 0,
+  usdtBalance: 0,
+  chainUsdtBalance: 0,
   rate: 0,
   streak: 0,
   canCheckIn: false,
   dailyCheckinCycleDay: 1,
   dailyCheckinReward: 5,
   totalCheckins: 0,
-  minWithdrawGram: 0,
+  minWithdrawUsdt: 0,
   nextResetAt: 0,
   referralCode: "",
   shareLink: "",
@@ -79,8 +79,8 @@ const state = {
   totalEarnedPoints: 0,
   level: null,
   withdrawalProgress: 0,
-  withdrawalRemainingGram: 0,
-  gramUsdPrice: 0,
+  withdrawalRemainingUsdt: 0,
+  usdtUsdPrice: 0,
   invited: [],
   referralMinTasks: 2,
   referralTasks: [],
@@ -880,7 +880,7 @@ function renderMembershipGate(override) {
     <div class="gateInner">
       <div class="gateBrand">
         <img src="img/gramup-logo-cube-transparent.png" alt="Gramup">
-        <div class="brandName">Gram<span>up</span></div>
+        <div class="brandName">Usdt<span>up</span></div>
       </div>
       <div class="gateHero">${GATE_PLANE}</div>
       <h1 class="gateTitle">${t("gate_title")}</h1>
@@ -1212,20 +1212,20 @@ function applyCachedReadModel(entry) {
   if (!entry || !state.verifiedSessionUserId || entry.userId !== state.verifiedSessionUserId) return false;
   const profile = entry.profile || {};
   state.points = Number(profile.upBalance ?? profile.points) || 0;
-  state.gramBalance = Number(profile.gramBalance) || 0;
+  state.usdtBalance = Number(profile.usdtBalance) || 0;
   state.rate = Number(profile.rate) || 0;
   state.streak = Number(profile.streak) || 0;
   state.canCheckIn = Boolean(profile.canCheckIn);
   state.dailyCheckinCycleDay = Math.min(7, Math.max(1, Number(profile.dailyCheckinCycleDay) || 1));
   state.dailyCheckinReward = Number(profile.dailyCheckinReward) || DAILY_CHECKIN_REWARDS[state.dailyCheckinCycleDay - 1];
   state.totalCheckins = Number(profile.totalCheckins) || 0;
-  state.minWithdrawGram = Number(profile.minWithdrawGram) || 0;
+  state.minWithdrawUsdt = Number(profile.minWithdrawUsdt) || 0;
   state.nextResetAt = Number(profile.nextResetAt) || 0;
   state.totalEarnedPoints = Number(profile.totalEarnedPoints) || 0;
   state.level = profile.level || null;
   state.withdrawalProgress = Number(profile.withdrawalProgress) || 0;
-  state.withdrawalRemainingGram = Number(profile.withdrawalRemainingGram) || 0;
-  state.gramUsdPrice = Number(profile.gramUsdPrice) || 0;
+  state.withdrawalRemainingUsdt = Number(profile.withdrawalRemainingUsdt) || 0;
+  state.usdtUsdPrice = Number(profile.usdtUsdPrice) || 0;
   if (profile.firstName) state.user = { ...(state.user || {}), first_name: profile.firstName };
   const tasks = entry.tasks || {};
   state.tasks = Array.isArray(tasks.tasks) ? tasks.tasks : [];
@@ -1255,12 +1255,12 @@ function persistReadModelCache() {
   if (!readModelCache || !state.verifiedSessionUserId) return;
   readModelCache.write(state.verifiedSessionUserId, {
     profile: {
-      upBalance: state.points, points: state.points, gramBalance: state.gramBalance, rate: state.rate, streak: state.streak,
+      upBalance: state.points, points: state.points, usdtBalance: state.usdtBalance, rate: state.rate, streak: state.streak,
       canCheckIn: state.canCheckIn, dailyCheckinCycleDay: state.dailyCheckinCycleDay,
-      dailyCheckinReward: state.dailyCheckinReward, totalCheckins: state.totalCheckins, minWithdrawGram: state.minWithdrawGram,
+      dailyCheckinReward: state.dailyCheckinReward, totalCheckins: state.totalCheckins, minWithdrawUsdt: state.minWithdrawUsdt,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
-      withdrawalProgress: state.withdrawalProgress, withdrawalRemainingGram: state.withdrawalRemainingGram,
-      gramUsdPrice: state.gramUsdPrice, firstName: state.user?.first_name || ""
+      withdrawalProgress: state.withdrawalProgress, withdrawalRemainingUsdt: state.withdrawalRemainingUsdt,
+      usdtUsdPrice: state.usdtUsdPrice, firstName: state.user?.first_name || ""
     },
     tasks: {
       tasks: state.tasks, completions: state.completions,
@@ -1306,7 +1306,7 @@ async function bootstrapAuth() {
     const data = await api(url);
     const authUpBalance = Number(data?.upBalance ?? data?.points);
     if (Number.isFinite(authUpBalance)) state.points = authUpBalance;
-    if (data?.gramBalance != null && Number.isFinite(Number(data.gramBalance))) state.gramBalance = Number(data.gramBalance);
+    if (data?.usdtBalance != null && Number.isFinite(Number(data.usdtBalance))) state.usdtBalance = Number(data.usdtBalance);
     state.language = localStorage.getItem("appLanguage") || data.language || "fa";
     state.referralMessageConsent = ["granted", "denied", "unset"].includes(data.referralMessageConsent)
       ? data.referralMessageConsent : "unset";
@@ -1331,20 +1331,20 @@ async function loadUserData({ force = false } = {}) {
   const data = await api("/api/points/me");
   if (requestId !== userDataRequestSequence) return;
   state.points = Number(data?.upBalance ?? data?.points) || 0;
-  state.gramBalance = Number(data?.gramBalance) || 0;
+  state.usdtBalance = Number(data?.usdtBalance) || 0;
   state.rate = Number(data?.rate) || 0;
   state.streak = Number(data?.streak) || 0;
   state.canCheckIn = Boolean(data?.canCheckIn);
   state.dailyCheckinCycleDay = Math.min(7, Math.max(1, Number(data?.dailyCheckinCycleDay) || 1));
   state.dailyCheckinReward = Number(data?.dailyCheckinReward) || DAILY_CHECKIN_REWARDS[state.dailyCheckinCycleDay - 1];
   state.totalCheckins = Number(data?.totalCheckins) || 0;
-  state.minWithdrawGram = Number(data?.minWithdrawGram) || 0;
+  state.minWithdrawUsdt = Number(data?.minWithdrawUsdt) || 0;
   state.nextResetAt = Number(data?.nextResetAt) || 0;
   state.totalEarnedPoints = Number(data?.totalEarnedPoints) || 0;
   state.level = data?.level || null;
   state.withdrawalProgress = Number(data?.withdrawalProgress) || 0;
-  state.withdrawalRemainingGram = Number(data?.withdrawalRemainingGram) || 0;
-  state.gramUsdPrice = Number(data?.gramUsdPrice) || 0;
+  state.withdrawalRemainingUsdt = Number(data?.withdrawalRemainingUsdt) || 0;
+  state.usdtUsdPrice = Number(data?.usdtUsdPrice) || 0;
   state.userDataLoadedAt = Date.now();
   state.readModelProfileConfirmed = true;
   state.financialDataConfirmed = true;
@@ -1665,7 +1665,7 @@ function renderHome() {
           <div class="tbLabel">${t("wallet_points_card_title")}</div>
           <div class="tbAmount"><img class="upTokenMark" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><span class="tbAmountNum">${formatPoints(state.points)}</span><span class="tbAmountUnit">UP</span></div>
           <div class="tbPills">
-            <span class="tbPill tbPillPurple">${formatNumber(state.gramBalance, 6)} GRAM</span>
+            <span class="tbPill tbPillPurple">${formatNumber(state.usdtBalance, 6)} USDT</span>
             <span class="tbPill tbPillOrange">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
           </div>
         </div>
@@ -1708,7 +1708,7 @@ function renderHome() {
       <div style="height:9px;background:var(--surface-3);border-radius:999px;overflow:hidden">
         <div style="height:100%;width:${withdrawalProgress}%;background:linear-gradient(90deg,var(--tb-blue),var(--primary));border-radius:999px"></div>
       </div>
-      <div class="cardSubtitle" style="margin-top:8px">${t("withdrawal_progress_remaining", { n: formatNumber(state.withdrawalRemainingGram, 6) })}</div>
+      <div class="cardSubtitle" style="margin-top:8px">${t("withdrawal_progress_remaining", { n: formatNumber(state.withdrawalRemainingUsdt, 6) })}</div>
     </div>
 
     <div class="tbSectionHead">
@@ -1841,8 +1841,8 @@ function renderAdvertiserCard() {
       <label class="adLabel">${t("ad_languages")}</label><div class="adChips" data-ad-languages>${["FA","EN","AR","RU","TR","ALL"].map(x=>`<button type="button" data-ad-language="${x}">${x}</button>`).join("")}</div>
       <label class="adToggle"><input type="checkbox" data-ad-premium><span class="adSwitch"></span><span>${t("ad_premium_only")} <small>+${t("ad_premium_fee")}</small></span></label>
       <label class="adLabel">${t("ad_quantity")}</label><div class="adQuantity"><div class="adChips" data-ad-quantity>${q.map((x,i)=>`<button type="button" data-ad-quantity-value="${x}" class="${i===0?"active":""}">${x.toLocaleString()}</button>`).join("")}</div><input data-ad-count type="number" min="1" step="1" value="500" placeholder="${t("ad_custom_quantity")}"></div>
-      <div class="adSummary"><div><span>${t("ad_cost_per_action")}</span><b data-ad-cost>—</b></div><div><span>${t("ad_player_reward")}</span><b data-ad-reward>—</b></div><div><span>${t("ad_total_payable")}</span><b data-ad-total>—</b></div><div><span>${t("ad_your_balance")}</span><b data-ad-balance>${Number(state.gramBalance || 0).toFixed(3)} GRAM</b></div></div>
-      <div class="adPaymentChoices"><button type="button" class="adPayment active" data-ad-payment="gram_balance">${t("ad_pay_gram")}</button><button type="button" class="adPayment" data-ad-payment="ton_mainnet">${t("ad_pay_ton")}</button></div>
+      <div class="adSummary"><div><span>${t("ad_cost_per_action")}</span><b data-ad-cost>—</b></div><div><span>${t("ad_player_reward")}</span><b data-ad-reward>—</b></div><div><span>${t("ad_total_payable")}</span><b data-ad-total>—</b></div><div><span>${t("ad_your_balance")}</span><b data-ad-balance>${Number(state.usdtBalance || 0).toFixed(3)} USDT</b></div></div>
+      <div class="adPaymentChoices"><button type="button" class="adPayment active" data-ad-payment="usdt_balance">${t("ad_pay_usdt")}</button><button type="button" class="adPayment" data-ad-payment="ton_mainnet">${t("ad_pay_ton")}</button></div>
       <p class="adNotice">${t("ad_review_notice")}</p><div class="adPaused" data-ad-paused hidden>${t("ad_marketplace_paused")}</div><button type="button" class="primaryBtn adSubmit" data-ad-submit>${t("ad_submit")}</button><div class="adMessage" data-ad-message role="status"></div>
     </div></div>
     <div class="adPanel" data-ad-panel="orders" hidden><div class="adOrdersList" data-ad-orders><div class="adEmpty">${t("ad_orders_loading")}</div></div></div>
@@ -1856,11 +1856,11 @@ function calculateAdPreview(root) {
   const type = root?.querySelector("[data-ad-type].active")?.dataset.adType;
   const config = root?._adConfig || {};
   const usd = Number(config.basePriceUsdPerUser || 0) + (type === "channel" ? Number(config.channelSurchargeUsdPerUser || 0) : 0) + (languageCount ? Number(config.languageSurchargeUsdPerUser || 0) : 0) + (premium ? Number(config.premiumSurchargeUsdPerUser || 0) : 0);
-  const gramUsdPrice = Number(config.gramUsdPrice || 0);
-  const cost = gramUsdPrice > 0 ? usd / gramUsdPrice : 0;
+  const usdtUsdPrice = Number(config.usdtUsdPrice || 0);
+  const cost = usdtUsdPrice > 0 ? usd / usdtUsdPrice : 0;
   const reward = Number(config.playerRewardUp || 0);
   const set = (selector, text) => { const el = root?.querySelector(selector); if (el) el.textContent = text; };
-  set("[data-ad-cost]", cost > 0 ? `${cost.toFixed(3)} GRAM` : "—"); set("[data-ad-reward]", reward > 0 ? `${reward} UP` : "—"); set("[data-ad-total]", cost > 0 ? `${(cost * count).toFixed(3)} GRAM` : "—");
+  set("[data-ad-cost]", cost > 0 ? `${cost.toFixed(3)} USDT` : "—"); set("[data-ad-reward]", reward > 0 ? `${reward} UP` : "—"); set("[data-ad-total]", cost > 0 ? `${(cost * count).toFixed(3)} USDT` : "—");
   return { count, cost, reward };
 }
 async function loadAdConfig(modal) {
@@ -1884,7 +1884,7 @@ async function loadAdOrders(root) {
 }
 async function submitAdCampaign(button) {
   const root = button.closest(".adSheet"); const value = selector => root?.querySelector(selector)?.value || ""; const message = root?.querySelector("[data-ad-message]"); button.disabled = true;
-  try { const preview = calculateAdPreview(root); if (!root._adConfig?.enabled) throw new Error(t("ad_marketplace_paused")); if (!(preview.cost > 0) || !(preview.reward > 0)) throw new Error(t("ad_pricing_unavailable")); const body = { title: value("[data-ad-title]"), description: value("[data-ad-description]"), destinationUrl: value("[data-ad-url]"), telegramChatId: value("[data-ad-chat]"), rewardUp: preview.reward, completionsRequested: preview.count, priceGramPerCompletion: preview.cost, targetLanguage: root.querySelector("[data-ad-language].active")?.dataset.adLanguage || "ALL", premiumOnly: root.querySelector("[data-ad-premium]")?.checked === true, verificationType: root.querySelector("[data-ad-type=channel].active") ? "telegram" : "latest_post" }; const payment = root.querySelector("[data-ad-payment].active")?.dataset.adPayment || "gram_balance"; if (payment === "ton_mainnet") { const created = await api("/api/ad-orders/ton-intents", { method: "POST", body }); if (!window.gramupWallet?.sendTonTransaction) throw new Error(t("ad_wallet_required")); await window.gramupWallet.sendTonTransaction(created.transaction); let verified; for (let attempt = 0; attempt < 12; attempt += 1) { await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000)); verified = await api(`/api/ad-orders/${encodeURIComponent(created.intent.id)}/ton-verify`, { method: "POST", body: {} }); if (verified.status === "confirmed") break; } if (verified?.status !== "confirmed") throw new Error(t("ad_payment_pending")); if (message) message.textContent = verified.message || t("ad_submitted"); } else { const result = await api("/api/ad-orders", { method: "POST", body }); if (message) message.textContent = result.message || t("ad_submitted"); } root.querySelectorAll("input,textarea").forEach(input => { if (input.type !== "checkbox") input.value = ""; }); } catch (error) { if (message) message.textContent = error.message || t("error_generic"); } finally { button.disabled = false; }
+  try { const preview = calculateAdPreview(root); if (!root._adConfig?.enabled) throw new Error(t("ad_marketplace_paused")); if (!(preview.cost > 0) || !(preview.reward > 0)) throw new Error(t("ad_pricing_unavailable")); const body = { title: value("[data-ad-title]"), description: value("[data-ad-description]"), destinationUrl: value("[data-ad-url]"), telegramChatId: value("[data-ad-chat]"), rewardUp: preview.reward, completionsRequested: preview.count, priceUsdtPerCompletion: preview.cost, targetLanguage: root.querySelector("[data-ad-language].active")?.dataset.adLanguage || "ALL", premiumOnly: root.querySelector("[data-ad-premium]")?.checked === true, verificationType: root.querySelector("[data-ad-type=channel].active") ? "telegram" : "latest_post" }; const payment = root.querySelector("[data-ad-payment].active")?.dataset.adPayment || "usdt_balance"; if (payment === "ton_mainnet") { const created = await api("/api/ad-orders/ton-intents", { method: "POST", body }); if (!window.gramupWallet?.sendTonTransaction) throw new Error(t("ad_wallet_required")); await window.gramupWallet.sendTonTransaction(created.transaction); let verified; for (let attempt = 0; attempt < 12; attempt += 1) { await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000)); verified = await api(`/api/ad-orders/${encodeURIComponent(created.intent.id)}/ton-verify`, { method: "POST", body: {} }); if (verified.status === "confirmed") break; } if (verified?.status !== "confirmed") throw new Error(t("ad_payment_pending")); if (message) message.textContent = verified.message || t("ad_submitted"); } else { const result = await api("/api/ad-orders", { method: "POST", body }); if (message) message.textContent = result.message || t("ad_submitted"); } root.querySelectorAll("input,textarea").forEach(input => { if (input.type !== "checkbox") input.value = ""; }); } catch (error) { if (message) message.textContent = error.message || t("error_generic"); } finally { button.disabled = false; }
 }
 window.submitAdCampaign = submitAdCampaign;
 
@@ -2417,8 +2417,8 @@ window.retryTasks = retryTasks;
 /* ================= WALLET ================= */
 function showWithdraw() {
   if (!readModelActionAllowed()) return;
-  if (state.gramBalance < state.minWithdrawGram) {
-    toast(t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawGram, 6) }), "warning");
+  if (state.usdtBalance < state.minWithdrawUsdt) {
+    toast(t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawUsdt, 6) }), "warning");
     return;
   }
   if (!window.gramupWallet?.isConnected()) {
@@ -2445,15 +2445,15 @@ window.hideWithdraw = hideWithdraw;
 
 async function submitWithdraw() {
   if (!readModelActionAllowed()) return;
-  const gramInput = $("#withdrawPoints");
+  const usdtInput = $("#withdrawPoints");
   const addressInput = $("#withdrawAddress");
   const error = $("#withdrawError");
   const button = $("#submitWithdraw");
 
-  const gram = Number(gramInput?.value);
+  const usdt = Number(usdtInput?.value);
   const address = String(window.gramupWallet?.getAddress?.() || addressInput?.value || "").trim();
 
-  if (!gram || gram <= 0) {
+  if (!usdt || usdt <= 0) {
     if (error) error.textContent = t("error_generic");
     return;
   }
@@ -2464,9 +2464,9 @@ async function submitWithdraw() {
 
   if (button) button.disabled = true;
   try {
-    const result = await window.gramupWallet.requestWithdrawal(gram, getPendingIdempotencyKey("withdraw"));
+    const result = await window.gramupWallet.requestWithdrawal(usdt, getPendingIdempotencyKey("withdraw"));
     clearPendingIdempotencyKey("withdraw");
-    state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
+    state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
     haptic("success");
     toast(result.message, "success");
     hideWithdraw();
@@ -2482,12 +2482,13 @@ async function submitWithdraw() {
 }
 window.submitWithdraw = submitWithdraw;
 
-/* ---- Exchange: Points <-> GRAM (bidirectional) ---- */
-let exchangeDirection = "points_to_gram"; // "points_to_gram" | "gram_to_points"
+/* ---- Exchange: Points <-> USDT (bidirectional) ---- */
+let exchangeDirection = "points_to_usdt"; // "points_to_usdt" | "usdt_to_points"
+const UP_PER_USDT = 10000;
 
 function showExchange() {
   if (!readModelActionAllowed()) return;
-  if (state.points <= 0 && state.gramBalance <= 0) {
+  if (state.points <= 0 && state.usdtBalance <= 0) {
     toast(t("error_generic"), "warning");
     return;
   }
@@ -2496,7 +2497,7 @@ function showExchange() {
   const error = $("#exchangeError");
   if (input) input.value = "";
   if (error) error.textContent = "";
-  setExchangeDirection("points_to_gram");
+  setExchangeDirection("points_to_usdt");
   if (overlay) overlay.style.display = "flex";
 }
 window.showExchange = showExchange;
@@ -2508,22 +2509,22 @@ function hideExchange() {
 window.hideExchange = hideExchange;
 
 function setExchangeDirection(direction) {
-  exchangeDirection = direction === "gram_to_points" ? "gram_to_points" : "points_to_gram";
+  exchangeDirection = direction === "usdt_to_points" ? "usdt_to_points" : "points_to_usdt";
 
   const btnPTG = $("#exchangeDirPTG");
   const btnGTP = $("#exchangeDirGTP");
-  if (btnPTG) btnPTG.classList.toggle("active", exchangeDirection === "points_to_gram");
-  if (btnGTP) btnGTP.classList.toggle("active", exchangeDirection === "gram_to_points");
+  if (btnPTG) btnPTG.classList.toggle("active", exchangeDirection === "points_to_usdt");
+  if (btnGTP) btnGTP.classList.toggle("active", exchangeDirection === "usdt_to_points");
 
   const label = $("#exchangeAmountLabel");
   const input = $("#exchangePoints");
   const title = $("#exchangeTitle");
-  if (exchangeDirection === "points_to_gram") {
+  if (exchangeDirection === "points_to_usdt") {
     if (label) { label.dataset.i18n = "exchange_points_label"; label.textContent = t("exchange_points_label"); }
     if (input) { input.dataset.i18nPh = "exchange_points_ph"; input.setAttribute("placeholder", t("exchange_points_ph")); }
     if (title) { title.dataset.i18n = "exchange_modal_title"; title.textContent = t("exchange_modal_title"); }
   } else {
-    if (label) { label.dataset.i18n = "exchange_gram_label"; label.textContent = t("exchange_gram_label"); }
+    if (label) { label.dataset.i18n = "exchange_usdt_label"; label.textContent = t("exchange_usdt_label"); }
     if (input) { input.dataset.i18nPh = "withdraw_amount_ph"; input.setAttribute("placeholder", t("withdraw_amount_ph")); }
     if (title) { title.dataset.i18n = "exchange_modal_title_reverse"; title.textContent = t("exchange_modal_title_reverse"); }
   }
@@ -2537,12 +2538,12 @@ function setExchangeDirection(direction) {
 window.setExchangeDirection = setExchangeDirection;
 
 function getExchangeAvailableBalance() {
-  if (exchangeDirection === "points_to_gram") return Math.max(0, Number(state.points) || 0);
-  const internalBalance = Math.max(0, Number(state.gramBalance) || 0);
+  if (exchangeDirection === "points_to_usdt") return Math.max(0, Number(state.points) || 0);
+  const internalBalance = Math.max(0, Number(state.usdtBalance) || 0);
   const wallet = window.gramupWallet;
   let verifiedWallet = false;
   try { verifiedWallet = Boolean(wallet?.isConnected?.() && wallet?.isProofVerified?.()); } catch { verifiedWallet = false; }
-  return verifiedWallet ? Math.max(internalBalance, Number(state.chainGramBalance) || 0) : internalBalance;
+  return verifiedWallet ? Math.max(internalBalance, Number(state.chainUsdtBalance) || 0) : internalBalance;
 }
 
 function isExchangeAmountValid(value) {
@@ -2562,7 +2563,7 @@ function setExchangeAmountPercent(percent) {
   const input = $("#exchangePoints");
   if (!input) return;
   const ratio = Math.min(100, Math.max(0, Number(percent) || 0)) / 100;
-  const precision = exchangeDirection === "points_to_gram" ? 3 : 9;
+  const precision = exchangeDirection === "points_to_usdt" ? 3 : 9;
   const factor = 10 ** precision;
   const amount = Math.floor(getExchangeAvailableBalance() * ratio * factor) / factor;
   input.value = amount.toFixed(precision);
@@ -2588,11 +2589,11 @@ function updateExchangePreview() {
     error.textContent = "";
   }
 
-  if (exchangeDirection === "points_to_gram") {
-    const gram = amount * state.rate;
-    preview.textContent = `${t("exchange_result_label")}: ${formatNumber(gram, 6)} GRAM`;
+  if (exchangeDirection === "points_to_usdt") {
+    const usdt = amount / UP_PER_USDT;
+    preview.textContent = `${t("exchange_result_label")}: ${formatNumber(usdt, 6)} USDT`;
   } else {
-    const points = state.rate > 0 ? Math.floor(amount / state.rate) : 0;
+    const points = Math.floor(amount * UP_PER_USDT);
     preview.textContent = `${t("exchange_result_label_points")}: ${formatPoints(points)} UP`;
   }
 }
@@ -2614,28 +2615,28 @@ async function submitExchange() {
     return;
   }
   if (button) button.disabled = true;
-  const useInternalGramBalance = exchangeDirection === "gram_to_points" && amount <= state.gramBalance;
-  const idempotencyScope = "exchange_points_to_gram";
+  const useInternalUsdtBalance = exchangeDirection === "usdt_to_points" && amount <= state.usdtBalance;
+  const idempotencyScope = "exchange_points_to_usdt";
   try {
-    const result = exchangeDirection === "gram_to_points" && !useInternalGramBalance
-      ? (typeof window.gramupWallet?.swapGramToPoints === "function"
-        ? await window.gramupWallet.swapGramToPoints(amount)
+    const result = exchangeDirection === "usdt_to_points" && !useInternalUsdtBalance
+      ? (typeof window.gramupWallet?.swapUsdtToPoints === "function"
+        ? await window.gramupWallet.swapUsdtToPoints(amount)
         : Promise.reject(Object.assign(new Error(t("wallet_connection_unavailable")), { code: "WALLET_PROOF_REQUIRED" })))
       : await api("/api/points/exchange", {
         method: "POST",
         headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) },
         body: { direction: exchangeDirection, amount }
       });
-    if (exchangeDirection === "points_to_gram" || useInternalGramBalance) clearPendingIdempotencyKey(idempotencyScope);
+    if (exchangeDirection === "points_to_usdt" || useInternalUsdtBalance) clearPendingIdempotencyKey(idempotencyScope);
     state.points = upBalanceFromResponse(result);
-    if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
+    if (result.usdtBalance != null) state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
     haptic("success");
     toast(result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) }), "success");
     hideExchange();
     updateHeader();
     renderWallet();
   } catch (err) {
-    if (exchangeDirection === "points_to_gram" || useInternalGramBalance) clearDefinitiveIdempotencyFailure(idempotencyScope, err);
+    if (exchangeDirection === "points_to_usdt" || useInternalUsdtBalance) clearDefinitiveIdempotencyFailure(idempotencyScope, err);
     if (error) error.textContent = translateServerMessage(err.code, err.message);
     haptic("error");
   } finally {
@@ -2644,7 +2645,7 @@ async function submitExchange() {
 }
 window.submitExchange = submitExchange;
 
-/* ---- TON Mainnet Native GRAM deposit ---- */
+/* ---- TON Mainnet TON USDT Jetton deposit ---- */
 let currentDeposit = null;
 let depositPanelLoading = false;
 let depositSubmissionBusy = false;
@@ -2734,7 +2735,7 @@ function renderDepositHistory(deposits) {
     <div class="small" style="font-weight:700;margin-bottom:6px">${escapeHTML(t("deposit_history_title"))}</div>
     ${list.map(item => {
       const statusKey = item.status === "confirmed" ? "deposit_status_confirmed" : item.status === "rejected" || item.status === "cancelled" ? "deposit_status_rejected" : item.status === "verifying" ? "deposit_status_verifying" : "deposit_status_pending";
-      const amount = item.amount == null ? t("deposit_pending_amount") : `${formatNumber(item.amount, 9)} GRAM`;
+      const amount = item.amount == null ? t("deposit_pending_amount") : `${formatNumber(item.amount, 9)} USDT`;
       return `<div style="padding:8px 0;border-top:1px solid var(--line);font-size:12px">
         <div style="display:flex;justify-content:space-between;gap:8px"><b>${escapeHTML(amount)}</b><span>${escapeHTML(t(statusKey))}</span></div>
         ${item.txHash ? `<div dir="ltr" style="text-align:start;opacity:.75;margin-top:3px">${escapeHTML(truncateMiddle(item.txHash, 8, 8))}</div>` : ""}
@@ -2806,7 +2807,7 @@ async function loadDepositPanel() {
     const minimum = $("#depositMinimumText");
     if (address) address.value = configData?.depositWalletAddress || "";
     if (reference) reference.textContent = t("deposit_reference_auto");
-    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(configData?.minimumDepositGram ?? 0, 9) });
+    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(configData?.minimumDepositUsdt ?? 0, 9) });
     if (button) button.disabled = true;
 
     // The form is visible now; finish optional history lookup and restore an
@@ -2817,7 +2818,7 @@ async function loadDepositPanel() {
     if (address) address.value = currentDeposit?.depositWalletAddress || configData?.depositWalletAddress || "";
     if (reference) reference.textContent = currentDeposit?.reference || t("deposit_reference_auto");
     if (amount && currentDeposit?.requestedAmount != null) amount.value = currentDeposit.requestedAmount;
-    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(currentDeposit?.minimumDepositGram ?? configData?.minimumDepositGram ?? 0, 9) });
+    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(currentDeposit?.minimumDepositUsdt ?? configData?.minimumDepositUsdt ?? 0, 9) });
     if (button) button.disabled = currentDeposit?.status === "confirmed" || currentDeposit?.status === "verifying";
   } catch (error) {
     if (panel) panel.style.display = "none";
@@ -2829,7 +2830,7 @@ async function loadDepositPanel() {
   }
 }
 
-async function submitGramDeposit() {
+async function submitUsdtDeposit() {
   if (!readModelActionAllowed()) return;
   const button = $("#depositVerifyButton");
   const input = $("#depositAmount");
@@ -2864,8 +2865,8 @@ async function submitGramDeposit() {
     }
     if (result?.status === "confirmed") {
       window.gramupWallet?.setOperation?.("deposit", "confirmed");
-      const balance = Number(result.gramBalance);
-      if (Number.isFinite(balance)) state.gramBalance = balance;
+      const balance = Number(result.usdtBalance);
+      if (Number.isFinite(balance)) state.usdtBalance = balance;
       setDepositActionMessage(t("deposit_confirmed_message", { amount: formatNumber(result.amount, 9) }), "success");
       toast(t("deposit_confirmed_message", { amount: formatNumber(result.amount, 9) }), "success");
       haptic("success");
@@ -2892,7 +2893,7 @@ async function submitGramDeposit() {
     depositSubmissionBusy = false;
   }
 }
-window.submitGramDeposit = submitGramDeposit;
+window.submitUsdtDeposit = submitUsdtDeposit;
 
 function hideDeposit() {
   const overlay = $("#depositOverlay");
@@ -2969,7 +2970,7 @@ function renderWalletHistoryList() {
     return `
       <button type="button" class="historyItem historyItemBtn" data-withdrawal-id="${escapeHTML(item._id)}">
         <div>
-          <div class="historyAmount">${formatNumber(item.cryptoAmount, 6)} ${escapeHTML(item.token || "GRAM")}</div>
+          <div class="historyAmount">${formatNumber(item.cryptoAmount, 6)} ${escapeHTML(item.token || "USDT")}</div>
           <div class="historyMeta">${transactionTimeLabel(item.createdAt)}</div>
           ${item.status === "paid" && item.txHash ? `
             <div class="historyTxRow">
@@ -3007,7 +3008,7 @@ function renderPublicHistoryList() {
           <div class="publicTxUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(walletHistoryText("history_received"))}</em></strong></div>
           <div class="publicTxMeta" dir="ltr"><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time> <span class="publicTxStatus" dir="${state.language === "en" ? "ltr" : "rtl"}">${escapeHTML(walletHistoryText("transaction_status_on_chain"))}</span></div>
         </div>
-        <div class="publicTxPayment"><div class="publicTxAmount">${gramTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "GRAM")}</span></div>${explorer}</div>
+        <div class="publicTxPayment"><div class="publicTxAmount">${usdtTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "USDT")}</span></div>${explorer}</div>
       </article>`;
   }).join("");
 }
@@ -3030,8 +3031,8 @@ async function loadWalletChainBalance(renderRequestId = walletRenderSequence) {
   try {
     const result = await api('/api/points/wallet/chain-balance');
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
-    state.chainGramBalance = Math.max(0, Number(result.balance) || 0);
-    value.innerHTML = `<span class="gramBalanceUnit">${gramTokenIconMarkup()}${formatNumber(result.balance, 6)} GRAM</span>`;
+    state.chainUsdtBalance = Math.max(0, Number(result.balance) || 0);
+    value.innerHTML = `<span class="usdtBalanceUnit">${usdtTokenIconMarkup()}${formatNumber(result.balance, 6)} USDT</span>`;
     meta.textContent = t('wallet_chain_balance_title');
   } catch (error) {
     if (renderRequestId !== walletRenderSequence || state.activeTab !== 'wallet') return;
@@ -3051,7 +3052,7 @@ function renderWallet() {
     <section class="walletOverview">
       <div class="walletOverviewTop"><div><span class="walletOverline">${t("wallet_title")}</span><h1>${t("wallet_balance_title")}</h1></div><span class="walletLivePill">● ${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })}</span></div>
       <div class="walletOverviewValue"><img class="upTokenMark upTokenMarkWallet" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><strong>${formatPoints(state.points)}</strong><span>UP</span></div>
-      <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.gramUsdPrice > 0 ? `≈ $${formatFixed(state.points * state.rate * state.gramUsdPrice, 3)}` : "—"}</b></div>
+      <div class="walletOverviewBottom"><span>${t("wallet_estimated_value")}</span><b>${state.usdtUsdPrice > 0 ? `≈ $${formatFixed(state.points * state.rate * state.usdtUsdPrice, 3)}` : "—"}</b></div>
     </section>
     <div id="tonWalletConnection" aria-live="polite"></div>
     <section class="walletChainBalance" aria-live="polite">
@@ -3066,9 +3067,9 @@ function renderWallet() {
         <div class="tbWalletValue">${formatPoints(state.points)}</div>
       </div>
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconBlue">${gramTokenIconMarkup()}</div>
-        <div class="tbStatLabel tbColBlue">${t("wallet_gram_card_title")}</div>
-        <div class="tbWalletValue gramBalanceUnit">${formatNumber(state.gramBalance, 6)} GRAM</div>
+        <div class="tbWalletIcon tbIconBlue">${usdtTokenIconMarkup()}</div>
+        <div class="tbStatLabel tbColBlue">${t("wallet_usdt_card_title")}</div>
+        <div class="tbWalletValue usdtBalanceUnit">${formatNumber(state.usdtBalance, 6)} USDT</div>
       </div>
     </div>
 
@@ -3088,7 +3089,7 @@ function renderWallet() {
     </div>
 
     <div class="card">
-      <p style="font-size:11px;margin-bottom:0">${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })} • ${t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawGram, 6) })}</p>
+      <p style="font-size:11px;margin-bottom:0">${t("wallet_rate_label", { rate: formatNumber(state.rate, 6) })} • ${t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawUsdt, 6) })}</p>
     </div>
 
     <div class="card" id="withdrawHistoryCard">
@@ -3183,7 +3184,7 @@ async function openWithdrawalDetail(id) {
         </div>
         <div class="withdrawBody">
           <div class="flexBetween" style="margin-bottom:12px">
-            <span class="historyAmount" style="font-size:20px">${formatNumber(w.cryptoAmount, 6)} ${escapeHTML(w.token || "GRAM")}</span>
+            <span class="historyAmount" style="font-size:20px">${formatNumber(w.cryptoAmount, 6)} ${escapeHTML(w.token || "USDT")}</span>
             <span class="badge ${statusInfo.cls}">${t(`withdraw_status_${w.status}`)}</span>
           </div>
           <div class="publicTxRow"><span>${t("history_to_label")}</span><span>${escapeHTML(w.address)}</span></div>
@@ -3351,8 +3352,8 @@ window.openWeeklyCompetition = openWeeklyCompetition;
 function tokenIconMarkup() {
   return '<img class="upTokenIcon" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
 }
-function gramTokenIconMarkup() {
-  return '<img class="gramTokenIcon" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true">';
+function usdtTokenIconMarkup() {
+  return '<img class="usdtTokenIcon" src="img/gramup-official-logo.jpg" alt="" aria-hidden="true">';
 }
 function upRewardMarkup(value, showSign = true) {
   const amount = `${showSign ? "+" : ""}${formatPoints(value)} UP`;
@@ -3382,7 +3383,7 @@ function renderProfileMenu() {
           <span class="tbPill tbPillGreen tbPillSm">${escapeHTML(level.badge)} ${escapeHTML(level.name)}</span>
         </div>
       </div>
-      <div class="profileBalanceMini"><span>${t("wallet_gram_card_title")}</span><strong>${formatNumber(state.gramBalance, 3)} <small>GRAM</small></strong></div>
+      <div class="profileBalanceMini"><span>${t("wallet_usdt_card_title")}</span><strong>${formatNumber(state.usdtBalance, 3)} <small>USDT</small></strong></div>
     </section>
 
     <section class="profilePulseGrid" aria-label="${escapeHTML(t("tb_your_progress"))}">
@@ -3918,13 +3919,13 @@ function renderProfileHistory() {
   const rows = historyList.map(item => {
     const isPendingDeposit = item.type === "deposit" && item.status === "pending";
     const isPositive = item.type === "deposit" ? item.status === "confirmed" : Number(item.amount) >= 0;
-    const unit = item.tokenSymbol || (item.currency === "gram" ? "GRAM" : t("points_unit"));
-    const amountValue = item.currency === "gram" ? formatNumber(item.amount, 9) : formatPoints(item.amount);
+    const unit = item.tokenSymbol || (item.currency === "usdt" ? "USDT" : t("points_unit"));
+    const amountValue = item.currency === "usdt" ? formatNumber(item.amount, 9) : formatPoints(item.amount);
     const amountText = isPendingDeposit
       ? t("deposit_pending_amount")
       : `${isPositive ? "+" : ""}${amountValue}`;
-    const amountUnit = isPendingDeposit ? "" : item.currency === "gram"
-      ? `<span class="ledgerUnit gramAmountUnit">${gramTokenIconMarkup()}${escapeHTML(unit)}</span>`
+    const amountUnit = isPendingDeposit ? "" : item.currency === "usdt"
+      ? `<span class="ledgerUnit usdtAmountUnit">${usdtTokenIconMarkup()}${escapeHTML(unit)}</span>`
       : `<span class="ledgerUnit">${escapeHTML(unit)}${tokenIconMarkup()}</span>`;
     const icon = (LEDGER_TYPE_UI[item.type] || {}).icon || "🔸";
     const desc = item.description || t(`history_type_${item.type}`);
@@ -4277,7 +4278,7 @@ function startVipCountdown() {
 function renderVipMiningConsole() {
   if (!state.vipMining) {
     const message = state.vipMiningLoading ? t("vip_mining_loading") : escapeHTML(state.vipMiningError || t("vip_mining_error"));
-    return `<section class="vipMiningConsole vipMiningConsole--empty" role="status" aria-live="polite"><div class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div><span class="vipMiningKicker">GRAMUP MINERS</span><h2>${t("vip_mining_title")}</h2></div></div><p>${message}</p>${state.vipMiningLoading ? "" : `<button class="vipMiningRetry" type="button" onclick="retryVipMiningStatus()">${t("vip_mining_retry")}</button>`}</section>`;
+    return `<section class="vipMiningConsole vipMiningConsole--empty" role="status" aria-live="polite"><div class="vipMiningHeader"><img class="vipMiningEmblem" src="img/gramup-logo-cube-transparent.png" alt="Gramup UP"><div><span class="vipMiningKicker">USDTUP MINERS</span><h2>${t("vip_mining_title")}</h2></div></div><p>${message}</p>${state.vipMiningLoading ? "" : `<button class="vipMiningRetry" type="button" onclick="retryVipMiningStatus()">${t("vip_mining_retry")}</button>`}</section>`;
   }
   const mining = state.vipMining;
   const live = vipMiningLiveValues();
@@ -4778,7 +4779,7 @@ function renderMiningPanel() {
   const progress = Math.min(100, Math.max(0, Number(live.percent) || 0));
 
   return `<div class="mineConsole">
-    <header class="mineHeader"><div class="mineEmblem"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><span aria-hidden="true">⛏</span></div><div class="mineHeading"><span class="mineEyebrow">GRAMUP MINER</span><h1 class="mineTitle">${t("mining_title")}</h1><p class="mineSubtitle">${t("mining_subtitle")}</p></div><span class="mineActiveBadge ${isStarted ? "is-active" : "is-idle"}"><i aria-hidden="true"></i>${isStarted ? t("mining_status_active") : t("mining_status_idle")}</span></header>
+    <header class="mineHeader"><div class="mineEmblem"><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"><span aria-hidden="true">⛏</span></div><div class="mineHeading"><span class="mineEyebrow">USDTUP MINER</span><h1 class="mineTitle">${t("mining_title")}</h1><p class="mineSubtitle">${t("mining_subtitle")}</p></div><span class="mineActiveBadge ${isStarted ? "is-active" : "is-idle"}"><i aria-hidden="true"></i>${isStarted ? t("mining_status_active") : t("mining_status_idle")}</span></header>
     <section class="mineSessionCard">
       <div class="mineBalanceLine"><span>${t("mining_accumulated")}</span><span class="mineLiveAmount"><strong data-mine-earned>${formatNumber(live.points, 1)}</strong><span>UP</span><img src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></span></div>
       <div class="mineProgressMeta"><span>${t("mining_progress")}</span><strong data-mine-progress-label>${progress.toFixed(1)}%</strong></div>

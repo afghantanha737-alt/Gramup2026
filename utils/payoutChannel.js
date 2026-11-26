@@ -55,7 +55,7 @@ function normalizePublicUrl(value) {
 }
 
 function gramAppUrl() {
-  const configured = normalizePublicUrl(process.env.GRAM_APP_PUBLIC_URL || process.env.MINI_APP_PUBLIC_URL);
+  const configured = normalizePublicUrl(process.env.USDT_APP_PUBLIC_URL || process.env.MINI_APP_PUBLIC_URL);
   if (configured) return configured;
   const botUsername = String(process.env.BOT_USERNAME || '').trim().replace(/^@/, '');
   const shortName = String(process.env.MINI_APP_SHORT_NAME || '').trim();
@@ -112,7 +112,7 @@ function buildWithdrawalRequest(user, withdrawal) {
     '',
     `👤 User: ${esc(maskName(user))}`,
     '',
-    `💰 Amount: <b>${esc(withdrawal.cryptoAmount)} ${esc(withdrawal.token || 'GRAM')}</b>`,
+    `💰 Amount: <b>${esc(withdrawal.cryptoAmount)} ${esc(withdrawal.token || 'USDT')}</b>`,
     '',
     `👛 Wallet: <code>${esc(maskAddress(withdrawal.address))}</code>`,
     '',
@@ -197,7 +197,7 @@ async function postWithdrawalPaid(user, withdrawal) {
       { $match: { status: 'paid' } },
       { $group: { _id: null, total: { $sum: '$cryptoAmount' } } }
     ]);
-    const historicalBase = Number(process.env.PAYOUT_TOTAL_BASE_GRAM || 0);
+    const historicalBase = Number(process.env.PAYOUT_TOTAL_BASE_USDT || 0);
     const totalPaidOut = (Number(total[0]?.total) || 0) + (Number.isFinite(historicalBase) ? historicalBase : 0);
     const sent = await post(buildPayoutReceipt({ payoutNumber, user, withdrawal: claimed, totalPaidOut }));
     if (sent) {

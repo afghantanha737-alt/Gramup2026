@@ -9,7 +9,8 @@ const Task = require('../models/Task');
 const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
-const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
+const { normalizeTonAddress } = require('../utils/tonNativeDepositVerify');
+const { usdtToBaseUnits, findUsdtTransfer } = require('../utils/tonUsdt');
 const { bot, notifyUser, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers, buildBroadcastButtonsReplyMarkup, sanitizeTelegramHtml } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { postWithdrawalPaid } = require('../utils/payoutChannel');
@@ -200,7 +201,7 @@ router.post('/telegram-reconfigure', async (req, res) => {
     const info = await bot.getWebhookInfo();
     return res.json({
       success: true,
-      message: 'Webhook دوباره روی تنظیمات فعلی GramUp قرار گرفت.',
+      message: 'Webhook دوباره روی تنظیمات فعلی UsdtUp قرار گرفت.',
       webhook: {
         url: info.url || '',
         urlMatchesExpected: Boolean(info.url && info.url.replace(/\/$/, '') === url),
@@ -433,13 +434,13 @@ router.post('/tasks', async (req, res) => {
     finalMaxCompletions = sp.maxCompletions;
     const settings = await Settings.getGlobal();
     const margin = marginInfo({
-      reward: taskReward, rate: settings.rate, gramUsdPrice: settings.gramUsdPrice,
+      reward: taskReward, rate: settings.rate, usdtUsdPrice: settings.usdtUsdPrice,
       priceUsd: sp.sponsorPriceUsd, budgetUsd: sp.sponsorBudgetUsd
     });
     if (!margin.canCompute && !force) {
       return res.status(400).json({
         success: false, code: 'COST_UNKNOWN',
-        message: 'قیمت دلاری GRAM در تنظیمات وارد نشده، پس سود/زیان این تسک قابل محاسبه نیست.'
+        message: 'قیمت دلاری USDT در تنظیمات وارد نشده، پس سود/زیان این تسک قابل محاسبه نیست.'
       });
     }
     if (margin.isLoss && !force) {
@@ -602,7 +603,7 @@ router.put('/tasks/:id', async (req, res) => {
       const rewardNow = update.reward !== undefined ? Number(update.reward) : current.reward;
       const settings = await Settings.getGlobal();
       const margin = marginInfo({
-        reward: rewardNow, rate: settings.rate, gramUsdPrice: settings.gramUsdPrice,
+        reward: rewardNow, rate: settings.rate, usdtUsdPrice: settings.usdtUsdPrice,
         priceUsd: sp.sponsorPriceUsd, budgetUsd: sp.sponsorBudgetUsd
       });
       if (margin.isLoss && !body.force) {
@@ -936,7 +937,7 @@ router.post('/weekly-leaderboard/:selectedWeekKey/pay', async (req, res) => {
 router.get('/financial-audit', async (req, res) => {
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
   const [users, sums] = await Promise.all([
-    User.find({}).select('telegramId firstName username points gramBalance').limit(10000).lean(),
+    User.find({}).select('telegramId firstName username points usdtBalance').limit(10000).lean(),
     PointsLedger.aggregate([
       { $group: { _id: { user: '$user', currency: '$currency' }, total: { $sum: '$amount' } } },
       { $group: { _id: '$_id.user', values: { $push: { currency: '$_id.currency', total: '$total' } } } }
@@ -955,7 +956,7 @@ router.get('/liability-summary', async (req, res) => {
       _id: null,
       users: { $sum: 1 },
       currentPoints: { $sum: { $ifNull: ['$points', 0] } },
-      currentGram: { $sum: { $ifNull: ['$gramBalance', 0] } }
+      currentUsdt: { $sum: { $ifNull: ['$usdtBalance', 0] } }
     } }]),
     PointsLedger.aggregate([{ $group: {
       _id: { currency: '$currency', direction: { $cond: [{ $gt: ['$amount', 0] }, 'positive', 'negative'] } },
@@ -994,18 +995,18 @@ router.get('/liability-summary', async (req, res) => {
       ledgerNegative: Number(ledger.points?.negative) || 0,
       ledgerTransactions: Number(ledger.points?.transactions) || 0
     },
-    gram: {
-      currentUserLiability: Number(balances.currentGram) || 0,
-      ledgerPositive: Number(ledger.gram?.positive) || 0,
-      ledgerNegative: Number(ledger.gram?.negative) || 0,
-      ledgerTransactions: Number(ledger.gram?.transactions) || 0
+    usdt: {
+      currentUserLiability: Number(balances.currentUsdt) || 0,
+      ledgerPositive: Number(ledger.usdt?.positive) || 0,
+      ledgerNegative: Number(ledger.usdt?.negative) || 0,
+      ledgerTransactions: Number(ledger.usdt?.transactions) || 0
     },
     withdrawals,
     deposits,
     reserve: {
       configured: false,
       amount: null,
-      currency: 'GRAM',
+      currency: 'USDT',
       note: 'ذخیره واقعی در تنظیمات پروژه ثبت نشده است؛ برای جلوگیری از گزارش ساختگی نمایش داده نمی‌شود.'
     }
   });
@@ -1061,7 +1062,7 @@ router.get('/deposits', async (req, res) => {
     return res.status(400).json({ success: false, message: 'وضعیت Deposit نامعتبر است.' });
   }
   const search = String(req.query.search || '').trim();
-  const filter = { assetType: 'native_gram', ...(status ? { status } : {}) };
+  const filter = { assetType: 'jetton_usdt', ...(status ? { status } : {}) };
   if (search) {
     const regex = new RegExp(escapeRegex(search), 'i');
     const matchingUsers = await User.find({ $or: [{ walletAddress: regex }, { 'connectedWallet.address': regex }, { 'connectedWallet.canonicalAddress': regex }, { telegramId: regex }, { username: regex }] }).select('_id').lean();
@@ -1072,7 +1073,7 @@ router.get('/deposits', async (req, res) => {
     Deposit.find(filter).populate('user', 'telegramId username firstName walletAddress connectedWallet').sort({ createdAt: -1 }).skip(skip).limit(limit),
     Deposit.countDocuments(filter),
     Deposit.aggregate([
-      { $match: { assetType: 'native_gram' } },
+      { $match: { assetType: 'jetton_usdt' } },
       { $group: { _id: '$status', amount: { $sum: { $ifNull: ['$amount', 0] } }, count: { $sum: 1 } } }
     ])
   ]);
@@ -1093,22 +1094,27 @@ router.get('/deposits', async (req, res) => {
 
 router.post('/deposits/:id/approve', async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ success: false, message: 'Deposit پیدا نشد.' });
-  const deposit = await Deposit.findOne({ _id: req.params.id, assetType: 'native_gram' });
+  const deposit = await Deposit.findOne({ _id: req.params.id, assetType: 'jetton_usdt' });
   if (!deposit) return res.status(404).json({ success: false, message: 'Deposit پیدا نشد.' });
   if (deposit.status !== 'pending') return res.status(409).json({ success: false, code: 'DEPOSIT_NOT_PENDING', message: 'این Deposit دیگر در انتظار تأیید نیست.' });
   const submittedHash = normalizeTonTxHash(req.body?.txHash);
   let verification;
   try {
-    verification = submittedHash
-      ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
-      : await findIncomingNativeGramTransferByReference({ depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference });
+    verification = await findUsdtTransfer({
+      txHash: submittedHash,
+      ownerAddress: deposit.depositAddressSnapshot,
+      destinationAddress: deposit.depositAddressSnapshot,
+      sourceAddress: deposit.walletAddressSnapshot,
+      amountRaw: deposit.requestedAmountRaw,
+      reference: deposit.reference
+    });
   } catch {
     return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'بررسی TON Center فعلاً در دسترس نیست؛ موجودی تغییر نکرد.' });
   }
   if (verification.status !== 'verified') {
     return res.status(400).json({ success: false, code: verification.code || 'DEPOSIT_NOT_VERIFIED', message: 'تراکنش واقعی و نهایی برای این Reference پیدا نشد؛ Deposit تأیید نشد.' });
   }
-  const minimumRaw = amountToNanoGram(deposit.minimumDepositSnapshot);
+  const minimumRaw = usdtToBaseUnits(String(deposit.minimumDepositSnapshot));
   if (minimumRaw == null || BigInt(verification.amountRaw) < minimumRaw) {
     return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: 'مبلغ تراکنش از حداقل Deposit کمتر است.' });
   }
@@ -1177,7 +1183,7 @@ router.get('/withdrawals', async (req, res) => {
  * POST /api/admin/withdrawals/:id/approve
  * تأیید یک درخواست برداشت به‌شرط ورود Transaction Hash و بررسی موفق آن روی زنجیره.
  * body: { txHash, note?, forceManualConfirm? }
- * forceManualConfirm فقط وقتی لازم است که توکن Jetton باشد (مثل GRAM) — چون مبلغ/مقصد دقیق
+ * forceManualConfirm فقط وقتی لازم است که توکن Jetton باشد (مثل USDT) — چون مبلغ/مقصد دقیق
  * داخل payload رمزنگاری‌شده است و سیستم نمی‌تواند به‌تنهایی آن را کامل تایید کند؛ در این حالت
  * ادمین باید جزئیات خام تراکنش (raw) را که در پاسخ خطا برگردانده می‌شود ببیند و صریحاً تایید کند.
  */
@@ -1303,7 +1309,7 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
 
   res.json({ success: true, withdrawal });
 
-  // اطلاع‌رسانی رد شدن درخواست به کاربر (GRAM قبلاً در بالا برگردانده شده)
+  // اطلاع‌رسانی رد شدن درخواست به کاربر (USDT قبلاً در بالا برگردانده شده)
   const requesterUser = await User.findById(withdrawal.user, 'telegramId language');
   if (requesterUser) {
     notifyUser(
@@ -1315,7 +1321,7 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
 
 /**
  * POST /api/admin/withdrawals/:id/status — تغییر وضعیت «فقط نمایشی» (approved/processing/cancelled)
- * برخلاف approve/reject بالا، این مسیر پولی جابه‌جا نمی‌کند مگر برای cancelled (بازگشت GRAM،
+ * برخلاف approve/reject بالا، این مسیر پولی جابه‌جا نمی‌کند مگر برای cancelled (بازگشت USDT،
  * دقیقاً مثل reject). برای پرداخت نهایی همچنان باید از /approve با txHash استفاده کرد.
  */
 router.post('/withdrawals/:id/status', async (req, res) => {
@@ -1406,7 +1412,7 @@ router.get('/users', async (req, res) => {
   res.json({ success: true, users: users.map(publicAdminUser), pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
 });
 
-function balanceField(currency) { return currency === 'gram' ? 'gramBalance' : 'points'; }
+function balanceField(currency) { return currency === 'usdt' ? 'usdtBalance' : 'points'; }
 function referralTransactionSummary(user) {
   return {
     referralLevel: user.referralLevel || null,
@@ -1421,9 +1427,9 @@ router.get('/users/:id/account', async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, message: 'شناسه کاربر نامعتبر است.' });
   const user = await User.findById(req.params.id).select('-__v -signupIpHash -referralRiskFlags').lean();
   if (!user) return res.status(404).json({ success: false, message: 'کاربر پیدا نشد.' });
-  const [earned, gramTotal, withdrawals, referralCount, history, audits] = await Promise.all([
+  const [earned, usdtTotal, withdrawals, referralCount, history, audits] = await Promise.all([
     PointsLedger.aggregate([{ $match: { user: user._id, currency: 'points', amount: { $gt: 0 }, type: { $nin: ['exchange_in', 'admin_adjust', 'vip_principal_return'] } } }, { $group: { _id: null, total: { $sum: '$amount' } } }]),
-    PointsLedger.aggregate([{ $match: { user: user._id, currency: 'gram', amount: { $gt: 0 } } }, { $group: { _id: null, total: { $sum: '$amount' } } }]),
+    PointsLedger.aggregate([{ $match: { user: user._id, currency: 'usdt', amount: { $gt: 0 } } }, { $group: { _id: null, total: { $sum: '$amount' } } }]),
     Withdrawal.aggregate([{ $match: { user: user._id, status: 'paid' } }, { $group: { _id: null, total: { $sum: '$cryptoAmount' } } }]),
     User.countDocuments({ referredBy: user._id }),
     PointsLedger.find({ user: user._id }).sort({ createdAt: -1 }).limit(100).lean(),
@@ -1435,9 +1441,9 @@ router.get('/users/:id/account', async (req, res) => {
     balances: {
       totalEarnedPoints: earned[0]?.total || 0,
       currentPoints: Number(user.points) || 0,
-      totalGramCredited: gramTotal[0]?.total || 0,
-      currentGram: Number(user.gramBalance) || 0,
-      totalWithdrawnGram: withdrawals[0]?.total || 0,
+      totalUsdtCredited: usdtTotal[0]?.total || 0,
+      currentUsdt: Number(user.usdtBalance) || 0,
+      totalWithdrawnUsdt: withdrawals[0]?.total || 0,
       referralCount,
       activeReferralCount: Number(user.activeInvitedCount) || 0
     },
@@ -1451,13 +1457,13 @@ router.post('/users/:id/balance', async (req, res) => {
   const actionId = String(req.body?.actionId || '').trim();
   const cleanReason = String(reason || '').trim();
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, message: 'شناسه کاربر نامعتبر است.' });
-  if (!['points', 'gram'].includes(currency) || !['add', 'subtract', 'set', 'zero'].includes(action)) return res.status(400).json({ success: false, message: 'نوع موجودی یا عملیات نامعتبر است.' });
+  if (!['points', 'usdt'].includes(currency) || !['add', 'subtract', 'set', 'zero'].includes(action)) return res.status(400).json({ success: false, message: 'نوع موجودی یا عملیات نامعتبر است.' });
   if (actionId.length < 8 || actionId.length > 150) return res.status(400).json({ success: false, message: 'Action ID معتبر و یکتا لازم است.' });
   if (!cleanReason || cleanReason.length > 500) return res.status(400).json({ success: false, message: 'دلیل الزامی است و حداکثر ۵۰۰ نویسه می‌تواند باشد.' });
   if (action === 'zero' && req.body?.confirmText !== 'ZERO') return res.status(400).json({ success: false, message: 'برای صفرکردن موجودی، تأیید صریح لازم است.' });
   const amount = Number(req.body?.amount);
   if (action !== 'zero' && (!Number.isFinite(amount) || (['add', 'subtract'].includes(action) ? amount <= 0 : amount < 0) || (action === 'set' && amount === 0) || (currency === 'points' && !Number.isInteger(amount)))) return res.status(400).json({ success: false, message: 'مقدار واردشده نامعتبر است؛ صفرکردن فقط با عملیات zero و تایید جداگانه ممکن است.' });
-  const roundedAmount = currency === 'gram' && action !== 'zero' ? Math.round(amount * 1e6) / 1e6 : amount;
+  const roundedAmount = currency === 'usdt' && action !== 'zero' ? Math.round(amount * 1e6) / 1e6 : amount;
   const outcome = await withMongoTransaction(async session => {
     const previousAction = await BalanceAudit.findOne({ actionId }).session(session);
     if (previousAction) return { duplicate: true, audit: previousAction };
@@ -1508,14 +1514,14 @@ router.post('/users/bulk-balance', async (req, res) => {
   const batchId = String(req.body?.actionId || '').trim();
   const cleanReason = String(reason || '').trim();
   const userIds = Array.isArray(req.body?.userIds) ? [...new Set(req.body.userIds.map(String))] : [];
-  if (!['points', 'gram'].includes(currency) || !['add', 'zero'].includes(action)) return res.status(400).json({ success: false, message: 'عملیات گروهی فقط برای افزودن یا صفرکردن UP/GRAM است.' });
+  if (!['points', 'usdt'].includes(currency) || !['add', 'zero'].includes(action)) return res.status(400).json({ success: false, message: 'عملیات گروهی فقط برای افزودن یا صفرکردن UP/USDT است.' });
   if (batchId.length < 8 || batchId.length > 120) return res.status(400).json({ success: false, message: 'Batch Action ID معتبر و یکتا لازم است.' });
   if (!cleanReason || cleanReason.length > 500) return res.status(400).json({ success: false, message: 'دلیل الزامی است و حداکثر ۵۰۰ نویسه می‌تواند باشد.' });
   if (!userIds.length || userIds.length > 100 || userIds.some(id => !mongoose.Types.ObjectId.isValid(id))) return res.status(400).json({ success: false, message: '۱ تا ۱۰۰ شناسه کاربر معتبر انتخاب کنید.' });
   if (action === 'zero' && req.body?.confirmText !== 'ZERO') return res.status(400).json({ success: false, message: 'برای صفرکردن گروهی، تأیید صریح لازم است.' });
   const amount = Number(req.body?.amount);
   if (action === 'add' && (!Number.isFinite(amount) || amount <= 0 || (currency === 'points' && !Number.isInteger(amount)))) return res.status(400).json({ success: false, message: 'مقدار مثبت و معتبر لازم است.' });
-  const value = currency === 'gram' && action === 'add' ? Math.round(amount * 1e6) / 1e6 : amount;
+  const value = currency === 'usdt' && action === 'add' ? Math.round(amount * 1e6) / 1e6 : amount;
   const outcome = await withMongoTransaction(async session => {
     const results = [];
     for (const id of userIds) {
@@ -2148,7 +2154,7 @@ router.get('/vip/plans', async (req, res) => {
       rate,
       plans: plans.map(plan => ({
         ...plan,
-        pricing: Number(plan.planNumber) === 0 ? { planNumber: 0, grams: 0, pricePoints: 0 } : pricingForVipPlan(plan.planNumber),
+        pricing: Number(plan.planNumber) === 0 ? { planNumber: 0, usdts: 0, pricePoints: 0 } : pricingForVipPlan(plan.planNumber),
         priceMatchesPolicy: Number(plan.planNumber) === 0
           ? Number(plan.pricePoints) === 0
           : Number(plan.pricePoints) === pricePointsForVipPlan(plan.planNumber)
@@ -2218,9 +2224,9 @@ router.put('/vip/plans', async (req, res) => {
       || (enabled && (pricePoints < 1 || monthlyRewardPercent <= 0))) {
       const pricing = pricingForVipPlan(planNumber, rate);
       const message = submittedPricePoints !== expectedPricePoints
-        ? `قیمت پلن ${planNumber || '?'} باید ${expectedPricePoints || 0} Points معادل ${pricing?.grams || '?'} GRAM باشد.`
+        ? `قیمت پلن ${planNumber || '?'} باید ${expectedPricePoints || 0} Points معادل ${pricing?.usdts || '?'} USDT باشد.`
         : `مقادیر پلن شماره ${planNumber || '?'} معتبر نیست؛ پلن‌های سیاست جدید باید ۱۰۰ روزه باشند.`;
-      return res.status(400).json({ success: false, code: 'VIP_PLAN_INVALID', message, expectedPricePoints, expectedGrams: pricing?.grams || null, rate });
+      return res.status(400).json({ success: false, code: 'VIP_PLAN_INVALID', message, expectedPricePoints, expectedUsdts: pricing?.usdts || null, rate });
     }
     if (enabled) {
       const vipPolicy = newVipPolicyForPlan(planNumber);
@@ -2499,7 +2505,7 @@ router.put('/settings', async (req, res) => {
     minWithdrawPoints: v => v >= 0,
     dailyCheckInPoints: v => v >= 0,
     streakBonusPoints: v => v >= 0,
-    gramUsdPrice: v => v >= 0,
+    usdtUsdPrice: v => v >= 0,
     adBasePriceUsdPerUser: v => v >= 0,
     adChannelSurchargeUsdPerUser: v => v >= 0,
     adLanguageSurchargeUsdPerUser: v => v >= 0,
@@ -2626,26 +2632,26 @@ router.put('/settings', async (req, res) => {
     }
     changes[key] = value;
   }
-  if (Object.prototype.hasOwnProperty.call(body, 'minimumDepositGram')) {
-    const minimum = Number(body.minimumDepositGram);
-    if (amountToNanoGram(minimum) == null) {
-      return res.status(400).json({ success: false, message: 'حداقل Deposit باید مثبت و تا حداکثر ۹ رقم اعشار قابل نمایش در Native GRAM باشد.' });
+  if (Object.prototype.hasOwnProperty.call(body, 'minimumDepositUsdt')) {
+    const minimum = Number(body.minimumDepositUsdt);
+    if (usdtToBaseUnits(String(body.minimumDepositUsdt)) == null) {
+      return res.status(400).json({ success: false, message: 'حداقل Deposit باید مثبت و تا حداکثر ۶ رقم اعشار قابل نمایش در USDT باشد.' });
     }
-    changes.minimumDepositGram = minimum;
+    changes.minimumDepositUsdt = minimum;
   }
 
   const settings = await Settings.getGlobal();
 
   const finalDepositEnabled = changes.depositEnabled !== undefined ? changes.depositEnabled : settings.depositEnabled;
   const finalDepositWallet = changes.depositWalletAddress !== undefined ? changes.depositWalletAddress : settings.depositWalletAddress;
-  const finalMinimumDeposit = changes.minimumDepositGram !== undefined ? changes.minimumDepositGram : settings.minimumDepositGram;
+  const finalMinimumDeposit = changes.minimumDepositUsdt !== undefined ? changes.minimumDepositUsdt : settings.minimumDepositUsdt;
   const finalDepositNetwork = changes.depositNetwork !== undefined ? changes.depositNetwork : (settings.depositNetwork || 'TON_MAINNET');
   if (finalDepositEnabled) {
-    if (!normalizeTonAddress(finalDepositWallet) || amountToNanoGram(finalMinimumDeposit) == null
+    if (!normalizeTonAddress(finalDepositWallet) || usdtToBaseUnits(String(finalMinimumDeposit)) == null
       || finalDepositNetwork !== 'TON_MAINNET') {
       return res.status(400).json({
         success: false,
-        message: 'برای فعال‌سازی Deposit Native GRAM، آدرس TON Mainnet تحت کنترل پروژه و حداقل مبلغ معتبر را تنظیم کنید.'
+        message: 'برای فعال‌سازی Deposit USDT، آدرس TON Mainnet تحت کنترل پروژه و حداقل مبلغ معتبر را تنظیم کنید.'
       });
     }
   }

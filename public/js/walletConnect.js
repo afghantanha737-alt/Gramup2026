@@ -1,4 +1,4 @@
-/* GramUp Wallet — TON Connect UI, server-verified ton_proof, and wallet actions. */
+/* UsdtUp Wallet — TON Connect UI, server-verified ton_proof, and wallet actions. */
 (function () {
   'use strict';
 
@@ -489,16 +489,16 @@
     return apiClient()(`/api/points/deposits/${encodeURIComponent(depositId)}/verify`, { method: 'POST', body: { boc: proof?.boc || '', txHash: proof?.txHash || '' } });
   }
 
-  async function requestWithdrawal(gram, idempotencyKey) {
+  async function requestWithdrawal(usdt, idempotencyKey) {
     assertVerifiedWallet();
-    const amount = Number(gram);
+    const amount = Number(usdt);
     if (!Number.isFinite(amount) || amount <= 0) throw Object.assign(new Error('Invalid withdrawal amount.'), { code: 'INVALID_AMOUNT' });
     setOperation('withdrawal', 'submitting');
     try {
       const result = await apiClient()('/api/points/withdraw', {
         method: 'POST',
         headers: { 'Idempotency-Key': String(idempotencyKey || '') },
-        body: { gram: amount, address: state.address }
+        body: { usdt: amount, address: state.address }
       });
       setOperation('withdrawal', 'pending');
       return result;
@@ -508,14 +508,14 @@
     }
   }
 
-  async function swapGramToPoints(amount) {
+  async function swapUsdtToPoints(amount) {
     assertVerifiedWallet();
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) throw Object.assign(new Error('Invalid swap amount.'), { code: 'INVALID_AMOUNT' });
     setOperation('swap', 'submitting');
     try {
       const api = apiClient();
-      const created = await api('/api/points/swap/gram-to-points/intents', { method: 'POST', body: { amount: value } });
+      const created = await api('/api/points/swap/usdt-to-points/intents', { method: 'POST', body: { amount: value } });
       const intent = created?.intent;
       if (!intent?._id || !created.transaction?.messages?.length) throw new Error('Swap intent could not be created.');
       if (!isCurrentProof()) throw Object.assign(new Error(labels().proofRequired), { code: 'WALLET_PROOF_REQUIRED' });
@@ -524,7 +524,7 @@
       setOperation('swap', 'pending');
       for (let attempt = 0; attempt < 12; attempt += 1) {
         await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 3000 : 5000));
-        const verified = await api(`/api/points/swap/gram-to-points/intents/${encodeURIComponent(intent._id)}/verify`, { method: 'POST', body: {} });
+        const verified = await api(`/api/points/swap/usdt-to-points/intents/${encodeURIComponent(intent._id)}/verify`, { method: 'POST', body: {} });
         if (verified?.status === 'confirmed') {
           setOperation('swap', 'confirmed');
           return verified;
@@ -571,7 +571,7 @@
     try {
       const options = { manifestUrl };
       // In Telegram Mini Apps, an explicit TWA return target keeps the user
-      // inside the same GramUp flow after Tonkeeper approval. The endpoint
+      // inside the same UsdtUp flow after Tonkeeper approval. The endpoint
       // returns only the public bot link and never exposes credentials.
       if (window.Telegram?.WebApp?.initData) {
         try {
@@ -609,7 +609,7 @@
     requestDeposit,
     verifyDeposit,
     requestWithdrawal,
-    swapGramToPoints,
+    swapUsdtToPoints,
     sendTonTransaction,
     getStatusHtml,
     getAddress: () => state.address,

@@ -51,7 +51,7 @@ async function handleAdminStats(chatId) {
       { $group: { _id: '$token', total: { $sum: '$cryptoAmount' } } }
     ])
   ]);
-  const pendingSum = pendingAgg.map(row => `${row.total} ${row._id || 'GRAM'}`).join(' + ') || '0';
+  const pendingSum = pendingAgg.map(row => `${row.total} ${row._id || 'USDT'}`).join(' + ') || '0';
   await sendMessage(
     chatId,
     `📊 آمار سریع

@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const root = path.resolve(__dirname, '..');
 const clone = value => JSON.parse(JSON.stringify(value));
-let state = { withdrawal: { _id: 'w1', user: 'u1', status: 'pending', cryptoAmount: 2 }, user: { _id: 'u1', gramBalance: 3 }, ledger: [] };
+let state = { withdrawal: { _id: 'w1', user: 'u1', status: 'pending', cryptoAmount: 2 }, user: { _id: 'u1', usdtBalance: 3 }, ledger: [] };
 let failLedger = false;
 const cached = new Map();
 function mock(relative, exports) {
@@ -21,7 +21,7 @@ mock('models/Withdrawal', {
   }
 });
 mock('models/User', { findByIdAndUpdate: async (id, update) => {
-  state.user.gramBalance += update.$inc.gramBalance;
+  state.user.usdtBalance += update.$inc.usdtBalance;
   return clone(state.user);
 } });
 mock('utils/ledger', { recordLedgerRequired: async entry => {
@@ -41,18 +41,18 @@ const { transitionWithdrawalWithRefund } = require('../utils/withdrawalFinance')
 (async () => {
   const args = { withdrawalId: 'w1', targetStatus: 'cancelled', allowedStatuses: ['pending'] };
   await transitionWithdrawalWithRefund(args);
-  assert.strictEqual(state.user.gramBalance, 5);
+  assert.strictEqual(state.user.usdtBalance, 5);
   assert.strictEqual(state.ledger.length, 1);
   await assert.rejects(transitionWithdrawalWithRefund(args), error => error.code === 'WITHDRAWAL_NOT_REFUNDABLE');
-  assert.strictEqual(state.user.gramBalance, 5);
+  assert.strictEqual(state.user.usdtBalance, 5);
   state.withdrawal.status = 'pending'; // Simulates an orphan ledger against a legacy/stale status.
   await assert.rejects(transitionWithdrawalWithRefund(args), error => error.code === 'WITHDRAWAL_REFUND_DUPLICATE');
-  assert.strictEqual(state.user.gramBalance, 5, 'duplicate ledger must roll back the additional balance increment');
+  assert.strictEqual(state.user.usdtBalance, 5, 'duplicate ledger must roll back the additional balance increment');
   assert.strictEqual(state.withdrawal.status, 'pending');
   state.ledger = [];
   failLedger = true;
   await assert.rejects(transitionWithdrawalWithRefund(args), /ledger offline/);
-  assert.strictEqual(state.user.gramBalance, 5);
+  assert.strictEqual(state.user.usdtBalance, 5);
   assert.strictEqual(state.withdrawal.status, 'pending');
   const admin = fs.readFileSync(path.join(root, 'routes/admin.js'), 'utf8');
   const catalog = admin.slice(admin.indexOf("router.put('/vip/plans'"), admin.indexOf("router.get('/vip/reserve'"));

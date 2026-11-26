@@ -7,7 +7,7 @@ const { recordAdminLogRequired } = require('./adminLog');
 const { withMongoTransaction } = require('./mongoTransaction');
 
 /**
- * Credits one already provider-verified native GRAM deposit exactly once.
+ * Credits one already provider-verified TON USDT Jetton deposit exactly once.
  * The caller must validate the chain transfer, source wallet and amount before
  * entering this helper. Deposit state, user balance, Ledger and admin audit
  * are committed together.
@@ -30,7 +30,7 @@ async function creditVerifiedDeposit({ depositId, verification, submittedHash = 
         txHash: verification.txHash,
         txHashNormalized: verification.txHash,
         sourceAddress: verification.sourceAddress || '',
-        verificationNote: note || 'confirmed_native_gram_by_admin_after_toncenter_verification',
+        verificationNote: note || 'confirmed_jetton_usdt_by_admin_after_toncenter_verification',
         verifiedAt: verification.confirmedAt || new Date(),
         creditedAt: new Date()
       } },
@@ -47,7 +47,7 @@ async function creditVerifiedDeposit({ depositId, verification, submittedHash = 
 
     const updatedUser = await User.findByIdAndUpdate(
       claimed.user,
-      { $inc: { gramBalance: verification.amount } },
+      { $inc: { usdtBalance: verification.amount } },
       { new: true, session }
     );
     if (!updatedUser) {
@@ -59,10 +59,10 @@ async function creditVerifiedDeposit({ depositId, verification, submittedHash = 
     const ledger = await recordLedgerRequired({
       user: updatedUser._id,
       type: 'deposit',
-      currency: 'gram',
+      currency: 'usdt',
       amount: verification.amount,
-      description: 'Deposit — Native GRAM on TON Mainnet (Admin verified)',
-      balanceAfter: updatedUser.gramBalance,
+      description: 'Deposit — TON USDT Jetton on TON Mainnet (Admin verified)',
+      balanceAfter: updatedUser.usdtBalance,
       sourceId: `deposit:${verification.txHash}`,
       transactionId: verification.txHash,
       session
@@ -78,7 +78,7 @@ async function creditVerifiedDeposit({ depositId, verification, submittedHash = 
       action: 'deposit_approve',
       targetType: 'deposit',
       targetId: claimed._id,
-      details: `${verification.amount} GRAM — ${verification.txHash}`
+      details: `${verification.amount} USDT — ${verification.txHash}`
     }, session);
 
     return { alreadyConfirmed: false, deposit: claimed, user: updatedUser };

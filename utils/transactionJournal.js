@@ -75,7 +75,7 @@ async function appendTransaction(options = {}) {
     session = null
   } = options;
 
-  if (!user || !type || !['points', 'gram'].includes(currency)) {
+  if (!user || !type || !['points', 'usdt'].includes(currency)) {
     const error = new Error('Transaction journal identity is incomplete.');
     error.code = 'TRANSACTION_JOURNAL_INVALID';
     throw error;
