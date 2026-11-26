@@ -7,6 +7,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const pointsRoute = fs.readFileSync(path.join(root, 'routes/points.js'), 'utf8');
 const proofPage = fs.readFileSync(path.join(root, 'public/proof.html'), 'utf8');
+const rewardsPage = fs.readFileSync(path.join(root, 'public/rewards.html'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
 const styleCss = fs.readFileSync(path.join(root, 'public/css/style.css'), 'utf8');
 
@@ -24,6 +25,14 @@ assert.match(publicHistoryRoute, /total: \{ \$sum: \{ \$ifNull: \['\$cryptoAmoun
 assert.match(publicHistoryRoute, /totalByToken/);
 assert.match(proofPage, /data\.totalByToken/);
 assert.match(proofPage, /history\.map\(item =>/);
+assert.match(proofPage, /ps: \{/);
+assert.match(proofPage, /onChainConfirmed: "پر بلاک‌چېن تایید شوې"/);
+assert.match(proofPage, /supportedLanguages = \["fa", "ps", "en"\]/);
+assert.match(proofPage, /lang === "fa" \|\| lang === "ps" \? "rtl"/);
+assert.match(appJs, /function publicProofUrl\(\)/);
+assert.match(appJs, /url\.searchParams\.set\("lang", language\)/);
+assert.match(rewardsPage, /If a screenshot is rejected, read the review note, correct the image, and submit it again using the app\./);
+assert.doesNotMatch(rewardsPage, /Manual proof submission is not currently enabled/);
 assert.match(proofPage, /All verified payments/);
 assert.match(proofPage, /proofUser/);
 assert.match(proofPage, /formatExactDate/);

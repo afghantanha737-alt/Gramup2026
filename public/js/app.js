@@ -1793,6 +1793,13 @@ function openTaskLinkOnly(url) {
   if (tg?.openLink) tg.openLink(safeUrl);
   else window.open(safeUrl, "_blank", "noopener,noreferrer");
 }
+
+function publicProofUrl() {
+  const language = ["fa", "ps", "en"].includes(state.language) ? state.language : "fa";
+  const url = new URL("/proof.html", location.origin);
+  url.searchParams.set("lang", language);
+  return url.toString();
+}
 window.openTaskLinkOnly = openTaskLinkOnly;
 
 document.addEventListener("click", event => {
@@ -2004,7 +2011,7 @@ window.submitScreenshotTask = submitScreenshotTask;
 // صفحه‌ی عمومی «تاریخچه‌ی پرداخت‌ها» — بدون نیاز به لاگین، لینک‌های Tonviewer، برای اثبات پرداخت واقعی
 function openProofPage() {
   haptic("selection");
-  openTaskLinkOnly(`${location.origin}/proof.html`);
+  openTaskLinkOnly(publicProofUrl());
 }
 window.openProofPage = openProofPage;
 
@@ -3366,7 +3373,7 @@ function openHistory() {
 window.openHistory = openHistory;
 
 function openPublicPayments() {
-  window.location.assign(`${location.origin}/proof.html`);
+  window.location.assign(publicProofUrl());
 }
 window.openPublicPayments = openPublicPayments;
 
