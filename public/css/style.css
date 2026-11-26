@@ -2406,6 +2406,9 @@ html[data-theme="light"] .profileLeaderboardView .weeklyCompetitionDescription {
 .bottomNav button.active::before { transform: translateX(-50%) scaleX(1); }
 .tabIcon { width: 24px; height: 24px; flex: 0 0 24px; }
 .tabSvg { width: 21px; height: 21px; }
+.tabSvg--miner { color: #8792a2; transition: color .2s ease, filter .2s ease; }
+.bottomNav button.active .tabSvg--miner { color: var(--aurora-brand-secondary); filter: drop-shadow(0 0 3px rgba(0,210,255,.44)); }
+html[data-theme="light"] .bottomNav button.active .tabSvg--miner { color: #0891b2; filter: drop-shadow(0 0 3px rgba(8,145,178,.28)); }
 .tabLabel {
   max-width: 100%;
   overflow: hidden;
