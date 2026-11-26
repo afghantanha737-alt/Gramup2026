@@ -15,6 +15,8 @@
     "verify:production": "node scripts/verify-production.js"
   },
   "dependencies": {
+    "@ston-fi/api": "^0.33.0",
+    "@ston-fi/sdk": "^2.7.0",
     "@ton/ton": "^16.3.0",
     "body-parser": "1.20.9",
     "cors": "^2.8.5",

@@ -148,6 +148,12 @@ const TRANSLATIONS = {
 
     exchange_result_label_points: "معادل UP دریافتی",
     exchange_submit: "تبدیل کن",
+    ston_price_gram: "قیمت GRAM",
+    ston_price_usdt: "قیمت USDT",
+    ston_direct_rate: "نرخ مستقیم",
+    ston_quote_live: "Quote زنده",
+    ston_quote_expires: "اعتبار Quote تا",
+    ston_swap_submitted: "تراکنش سواپ در Wallet ارسال شد؛ تغییر موجودی پس از تأیید شبکه انجام می‌شود.",
     deposit_asset_selection_title: "یک دارایی را برای واریز انتخاب کنید",
     deposit_asset_selection_hint: "توکنی را که می‌خواهید ارسال کنید انتخاب کنید.",
     deposit_gram_name: "توکن GRAM", deposit_usdt_name: "USDT روی TON",
@@ -623,6 +629,12 @@ const TRANSLATIONS = {
 
     exchange_result_label_points: "معادل UP",
     exchange_submit: "بدله کړئ",
+    ston_price_gram: "د GRAM بیه",
+    ston_price_usdt: "د USDT بیه",
+    ston_direct_rate: "مستقیم نرخ",
+    ston_quote_live: "ژوندی Quote",
+    ston_quote_expires: "Quote تر دې وخته اعتبار لري",
+    ston_swap_submitted: "د سواپ معامله Wallet ته ولېږل شوه؛ د شبکې له تایید وروسته بیلانس بدلېږي.",
     deposit_asset_selection_title: "د زیرمې لپاره یوه شتمني وټاکئ",
     deposit_asset_selection_hint: "هغه ټوکن وټاکئ چې لېږل یې غواړئ.",
     deposit_gram_name: "GRAM ټوکن", deposit_usdt_name: "USDT پر TON",
@@ -1098,6 +1110,12 @@ const TRANSLATIONS = {
 
     exchange_result_label_points: "UP you'll receive",
     exchange_submit: "Exchange",
+    ston_price_gram: "GRAM price",
+    ston_price_usdt: "USDT price",
+    ston_direct_rate: "Direct rate",
+    ston_quote_live: "Live quote",
+    ston_quote_expires: "Quote valid until",
+    ston_swap_submitted: "Swap transaction sent to your wallet; balances update after network confirmation.",
     deposit_asset_selection_title: "Select an asset to deposit",
     deposit_asset_selection_hint: "Choose the token you want to send.",
     deposit_gram_name: "GRAM token", deposit_usdt_name: "USDT on TON",
@@ -1456,7 +1474,12 @@ const ERROR_CODE_MAP = {
   VIP0_CONFIG_INVALID: { fa: "تنظیمات پلن رایگان Bronze Miner معتبر نیست؛ با مدیریت تماس بگیرید.", ps: "د وړیا Bronze Miner پلان تنظیمات سم نه دي؛ له ادارې سره اړیکه ونیسئ.", en: "Bronze Miner settings are invalid. Please contact an administrator." },
   IDEMPOTENCY_KEY_REQUIRED: { fa: "درخواست امن کامل نشد؛ دوباره تلاش کنید.", ps: "خوندي غوښتنه بشپړه نه شوه؛ بیا هڅه وکړئ.", en: "The safe request could not be completed. Please retry." },
   IDEMPOTENCY_KEY_REUSED: { fa: "این درخواست با کلید قبلی متفاوت است؛ صفحه را تازه کنید.", ps: "دا غوښتنه له پخوانۍ کلیمې سره توپیر لري؛ پاڼه تازه کړئ.", en: "This request differs from the earlier one. Refresh and try again." },
-  IDEMPOTENCY_DUPLICATE: { fa: "درخواست هنوز در حال پردازش است؛ کمی بعد بررسی کنید.", ps: "غوښتنه لا پروسس کېږي؛ لږ وروسته بیا وګورئ.", en: "The request is still processing. Please check again shortly." }
+  IDEMPOTENCY_DUPLICATE: { fa: "درخواست هنوز در حال پردازش است؛ کمی بعد بررسی کنید.", ps: "غوښتنه لا پروسس کېږي؛ لږ وروسته بیا وګورئ.", en: "The request is still processing. Please check again shortly." },
+  STON_RATES_UNAVAILABLE: { fa: "نرخ زنده STON.fi فعلاً در دسترس نیست.", ps: "د STON.fi ژوندی نرخ اوس نشته.", en: "Live STON.fi rates are temporarily unavailable." },
+  STON_QUOTE_UNAVAILABLE: { fa: "برای این مقدار، quote تازه دریافت نشد.", ps: "د دې مقدار لپاره تازه Quote ترلاسه نه شو.", en: "A fresh quote could not be obtained for this amount." },
+  STON_QUOTE_EXPIRED: { fa: "Quote منقضی شده است؛ دوباره نرخ بگیرید.", ps: "Quote پای ته رسېدلی؛ بیا نرخ واخلئ.", en: "The quote expired; request a new one." },
+  STON_TRANSACTION_UNAVAILABLE: { fa: "تراکنش STON.fi آماده نشد؛ نقدینگی یا Wallet را بررسی کنید.", ps: "د STON.fi معامله چمتو نه شوه؛ نقدیني یا Wallet وګورئ.", en: "The STON.fi transaction could not be prepared; check liquidity or wallet." },
+  STON_UNSUPPORTED_PAIR: { fa: "فقط سواپ مستقیم GRAM و USDT با STON.fi فعال است.", ps: "یوازې د GRAM او USDT مستقیم سواپ د STON.fi له لارې فعال دی.", en: "Only direct GRAM and USDT swaps use STON.fi." }
 };
 
 function t(key, vars) {

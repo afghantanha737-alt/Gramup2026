@@ -2510,6 +2510,41 @@ let exchangeFromAsset = "UP";
 let exchangeToAsset = "USDT";
 const UP_PER_USDT = 10000;
 const EXCHANGE_ASSETS = ["UP", "GRAM", "USDT"];
+let stonRates = null;
+let stonQuote = null;
+let stonQuoteTimer = null;
+let stonRatesPromise = null;
+function isStonPair() { return (exchangeFromAsset === "GRAM" && exchangeToAsset === "USDT") || (exchangeFromAsset === "USDT" && exchangeToAsset === "GRAM"); }
+function renderStonMarket() {
+  const panel = $("#stonMarketPanel");
+  if (!panel) return;
+  panel.style.display = isStonPair() ? "block" : "none";
+  if (!stonRates || !isStonPair()) return;
+  const gram = Number(stonRates.assets?.GRAM?.priceUsd) || 0;
+  const usdt = Number(stonRates.assets?.USDT?.priceUsd) || 0;
+  $("#stonMarketPrices").textContent = `${t("ston_price_gram")}: $${gram.toFixed(6)} · ${t("ston_price_usdt")}: $${usdt.toFixed(6)}`;
+  const direct = exchangeFromAsset === "GRAM" ? stonRates.gramUsdt : stonRates.usdtGram;
+  $("#stonDirectRate").textContent = `${t("ston_direct_rate")}: 1 ${exchangeFromAsset} ≈ ${Number(direct || 0).toFixed(exchangeFromAsset === "GRAM" ? 6 : 4)} ${exchangeToAsset}`;
+}
+async function refreshStonRates() {
+  if (stonRatesPromise) return stonRatesPromise;
+  stonRatesPromise = api("/api/ston/rates", { cache: "no-store" }).then(result => { stonRates = result; renderStonMarket(); return result; }).catch(error => { const status = $("#stonQuoteStatus"); if (status) status.textContent = translateServerMessage(error.code, error.message); throw error; }).finally(() => { stonRatesPromise = null; });
+  return stonRatesPromise;
+}
+async function refreshStonQuote() {
+  if (!isStonPair()) { stonQuote = null; $("#stonQuoteStatus") && ($("#stonQuoteStatus").textContent = ""); $("#exchangeQuoteExpiry") && ($("#exchangeQuoteExpiry").textContent = ""); return; }
+  const amount = parseLocalizedExchangeAmount($("#exchangePoints")?.value);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > getExchangeAvailableBalance()) { stonQuote = null; return; }
+  try {
+    const quote = await api("/api/ston/quote", { method: "POST", body: { from: exchangeFromAsset, to: exchangeToAsset, amount: normalizeLocalizedExchangeAmount($("#exchangePoints").value) } });
+    stonQuote = quote;
+    const expiry = new Date(quote.expiresAt).toLocaleTimeString(state.language === "en" ? "en-US" : "fa-IR");
+    $("#stonQuoteStatus").textContent = `${t("ston_quote_live")}: ${formatNumber(Number(quote.receivedAmount), exchangeToAsset === "GRAM" ? 9 : 6)} ${exchangeToAsset}`;
+    $("#exchangeQuoteExpiry").textContent = `${t("ston_quote_expires")}: ${expiry}`;
+    $("#exchangePreview").textContent = `${t(exchangeToAsset === "GRAM" ? "exchange_result_label_gram" : "exchange_result_label")}: ${formatNumber(Number(quote.receivedAmount), exchangeToAsset === "GRAM" ? 9 : 6)} ${exchangeToAsset}`;
+  } catch (error) { stonQuote = null; const status = $("#stonQuoteStatus"); if (status) status.textContent = translateServerMessage(error.code, error.message); }
+}
+function scheduleStonQuote() { clearTimeout(stonQuoteTimer); stonQuoteTimer = setTimeout(() => void refreshStonQuote(), 350); }
 function normalizeExchangeAssetClient(value) {
   const asset = String(value || "").toUpperCase();
   return EXCHANGE_ASSETS.includes(asset) ? asset : null;
@@ -2557,7 +2592,9 @@ function setExchangePair(from, to, { reset = true } = {}) {
   const error = $("#exchangeError");
   if (error) error.textContent = "";
   updateExchangeQuickButtons();
+  renderStonMarket();
   updateExchangePreview();
+  if (isStonPair()) { void refreshStonRates().then(() => refreshStonQuote()).catch(() => {}); }
 }
 function showExchange() {
   if (!readModelActionAllowed()) return;
@@ -2571,6 +2608,7 @@ function showExchange() {
   if (input) input.value = "";
   if (error) error.textContent = "";
   setExchangePair("UP", "USDT", { reset: false });
+  void refreshStonRates().catch(() => {});
   if (overlay) overlay.style.display = "flex";
 }
 window.showExchange = showExchange;
@@ -2626,6 +2664,7 @@ function updateExchangePreview() {
   else if (!Number.isFinite(parsedAmount) || amount <= 0) { if (error) error.textContent = translateServerMessage("INVALID_AMOUNT"); }
   else if (amount > getExchangeAvailableBalance()) { if (error) error.textContent = translateServerMessage("EXCHANGE_INSUFFICIENT_BALANCE"); }
   else if (error) error.textContent = "";
+  if (isStonPair()) { renderStonMarket(); scheduleStonQuote(); return; }
   const upAmount = exchangeAmountToUpClient(amount, exchangeFromAsset);
   const received = exchangeAmountFromUpClient(upAmount, exchangeToAsset);
   const decimals = exchangeToAsset === "UP" ? 0 : exchangeToAsset === "GRAM" ? 9 : 6;
@@ -2642,16 +2681,21 @@ async function submitExchange() {
   if (amount > getExchangeAvailableBalance() || !isExchangeAmountValid(amount)) { if (error) error.textContent = translateServerMessage("EXCHANGE_INSUFFICIENT_BALANCE"); return; }
   if (button) button.disabled = true;
   const useInternalUsdtBalance = exchangeFromAsset === "USDT" && exchangeToAsset === "UP" && amount <= state.usdtBalance;
+  const useSton = isStonPair();
   const idempotencyScope = `exchange_${exchangeFromAsset.toLowerCase()}_to_${exchangeToAsset.toLowerCase()}`;
   try {
-    const result = exchangeFromAsset === "USDT" && exchangeToAsset === "UP" && !useInternalUsdtBalance
+    const result = useSton
+      ? (typeof window.gramupWallet?.swapSton === "function" ? await window.gramupWallet.swapSton(exchangeFromAsset, exchangeToAsset, normalizedAmount) : Promise.reject(Object.assign(new Error(t("wallet_connection_unavailable")), { code: "WALLET_PROOF_REQUIRED" })))
+      : exchangeFromAsset === "USDT" && exchangeToAsset === "UP" && !useInternalUsdtBalance
       ? (typeof window.gramupWallet?.swapUsdtToPoints === "function" ? await window.gramupWallet.swapUsdtToPoints(amount) : Promise.reject(Object.assign(new Error(t("wallet_connection_unavailable")), { code: "WALLET_PROOF_REQUIRED" })))
       : await api("/api/points/exchange", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) }, body: { from: exchangeFromAsset, to: exchangeToAsset, amount: normalizedAmount } });
     clearPendingIdempotencyKey(idempotencyScope);
-    state.points = upBalanceFromResponse(result);
-    if (result.usdtBalance != null) state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
-    if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
-    haptic("success"); toast(result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) }), "success"); hideExchange(); updateHeader(); renderWallet();
+    if (!useSton) {
+      state.points = upBalanceFromResponse(result);
+      if (result.usdtBalance != null) state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
+      if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
+    }
+    haptic("success"); toast(useSton ? t("ston_swap_submitted") : (result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) })), "success"); hideExchange(); updateHeader(); renderWallet();
   } catch (err) { clearDefinitiveIdempotencyFailure(idempotencyScope, err); if (error) error.textContent = translateServerMessage(err.code, err.message); haptic("error"); }
   finally { if (button) button.disabled = false; }
 }

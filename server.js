@@ -146,6 +146,7 @@ app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/ad-orders', require('./routes/adOrders'));
 app.use('/api/ton-proof', require('./routes/tonProof'));
 app.use('/api/points', require('./routes/points'));
+app.use('/api/ston', require('./routes/stonFi').router);
 app.use('/api/referral', require('./routes/referral'));
 app.use('/api/squads', require('./routes/squads'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));

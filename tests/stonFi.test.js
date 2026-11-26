@@ -1,0 +1,21 @@
+'use strict';
+const assert = require('assert');
+const { constants, parseDecimalUnits, unitsToDecimal, directionFor, toTonConnectTransaction } = require('../routes/stonFi');
+
+assert.strictEqual(parseDecimalUnits('1', 9), '1000000000');
+assert.strictEqual(parseDecimalUnits('0.000000001', 9), '1');
+assert.strictEqual(parseDecimalUnits('1.234567', 6), '1234567');
+assert.strictEqual(parseDecimalUnits('1.0000001', 6), null);
+assert.strictEqual(parseDecimalUnits('0', 9), null);
+assert.strictEqual(unitsToDecimal('961393', 6), '0.961393');
+assert.strictEqual(unitsToDecimal('1000000000', 9), '1');
+assert.deepStrictEqual(directionFor('GRAM', 'USDT'), { offerAddress: constants.GRAM_ADDRESS, askAddress: constants.USDT_ADDRESS, nativeOffer: true });
+assert.deepStrictEqual(directionFor('USDT', 'GRAM'), { offerAddress: constants.USDT_ADDRESS, askAddress: constants.GRAM_ADDRESS, nativeOffer: false });
+assert.strictEqual(directionFor('UP', 'USDT'), null);
+assert.strictEqual(directionFor('GRAM', 'GRAM'), null);
+const transaction = toTonConnectTransaction({ to: { toString: () => constants.USDT_ADDRESS }, value: 1185000000n, body: { toBoc: () => Buffer.from('ston-fi') } });
+assert.strictEqual(transaction.network, '-239');
+assert.strictEqual(transaction.messages[0].address, constants.USDT_ADDRESS);
+assert.strictEqual(transaction.messages[0].amount, '1185000000');
+assert.strictEqual(transaction.messages[0].payload, Buffer.from('ston-fi').toString('base64'));
+console.log('stonFi.test.js passed');
