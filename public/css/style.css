@@ -2652,6 +2652,22 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 .leaderPrize .upAmountWithLogo { font-size: 8px; }
 .rf-level-foot .upAmountWithLogo { font-size: 10px; }
 .usdtTokenIcon { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; object-position: center; background: transparent; vertical-align: -3px; }
+.historyAmountWithIcon { display: inline-flex; align-items: center; gap: 6px; direction: ltr; }
+.historyAmountWithIcon .usdtTokenIcon, .historyAmountWithIcon .gramTokenIcon { width: 20px; height: 20px; flex: 0 0 20px; }
+.depositAssetSelection { padding: 8px 0 14px; }
+.depositSelectionTitle { margin: 0; color: var(--text); font-size: 16px; }
+.depositSelectionHint { margin: 5px 0 14px; }
+.depositAssetOptions { display: grid; gap: 10px; }
+.depositAssetOption { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 14px; border: 1px solid var(--line-strong); border-radius: 15px; background: var(--surface-3); color: var(--text); text-align: start; cursor: pointer; }
+.depositAssetOption:active, .depositAssetOption:hover { border-color: var(--primary); background: var(--surface-2); }
+.depositAssetLogo { width: 38px; height: 38px; flex: 0 0 38px; object-fit: contain; border-radius: 50%; }
+.depositAssetOption > span:nth-child(2) { display: grid; gap: 3px; }
+.depositAssetOption strong { font-size: 14px; }
+.depositAssetOption small { color: var(--text-muted); font-size: 11px; }
+.depositAssetArrow { margin-inline-start: auto; color: var(--text-muted); font-size: 24px; line-height: 1; }
+.depositBackButton { margin-bottom: 12px; padding: 0; border: 0; background: transparent; color: var(--primary-2); font-size: 12px; font-weight: 800; cursor: pointer; }
+.depositSelectedAsset { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.depositSelectedAsset strong { font-size: 15px; }
 .usdtBalanceUnit { display: inline-flex; align-items: center; gap: 6px; direction: ltr; font-variant-numeric: tabular-nums; }
 .usdtAmountUnit { display: inline-flex; align-items: center; gap: 4px; }
 .usdtAmountUnit .usdtTokenIcon { width: 13px; height: 13px; }

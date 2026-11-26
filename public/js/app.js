@@ -2748,9 +2748,9 @@ function renderDepositHistory(deposits) {
     ${list.map(item => {
       const statusKey = item.status === "confirmed" ? "deposit_status_confirmed" : item.status === "rejected" || item.status === "cancelled" ? "deposit_status_rejected" : item.status === "verifying" ? "deposit_status_verifying" : "deposit_status_pending";
       const token = String(item.token || item.asset || "USDT").toUpperCase();
-      const amount = item.amount == null ? t("deposit_pending_amount") : `${formatNumber(item.amount, 9)} ${token}`;
+      const amount = item.amount == null ? t("deposit_pending_amount") : `${formatNumber(item.amount, token === "GRAM" ? 9 : 6)} ${token}`;
       return `<div style="padding:8px 0;border-top:1px solid var(--line);font-size:12px">
-        <div style="display:flex;justify-content:space-between;gap:8px"><b>${escapeHTML(amount)}</b><span>${escapeHTML(t(statusKey))}</span></div>
+        <div style="display:flex;justify-content:space-between;gap:8px"><b class="historyAmountWithIcon">${assetTokenIconMarkup(token)}<span>${escapeHTML(amount)}</span></b><span>${escapeHTML(t(statusKey))}</span></div>
         ${item.txHash ? `<div dir="ltr" style="text-align:start;opacity:.75;margin-top:3px">${escapeHTML(truncateMiddle(item.txHash, 8, 8))}</div>` : ""}
         <div style="opacity:.65;margin-top:3px">${escapeHTML(timeAgo(item.verifiedAt || item.createdAt))}</div>
       </div>`;
@@ -2782,6 +2782,8 @@ function showDeposit() {
   const message = $("#depositMessage");
   if (overlay) { overlay.style.display = "flex"; overlay.setAttribute("aria-busy", "true"); }
   if (panel) panel.style.display = "none";
+  const selection = $("#depositAssetSelection");
+  if (selection) selection.style.display = "none";
   if (disabled) disabled.style.display = "block";
   if (message) message.textContent = t("history_loading");
   const submitButton = $("#depositVerifyButton");
@@ -2791,19 +2793,59 @@ function showDeposit() {
 }
 window.showDeposit = showDeposit;
 
-function selectDepositAsset(asset) {
-  state.selectedDepositAsset = String(asset || "GRAM").toUpperCase() === "USDT" ? "USDT" : "GRAM";
+let depositConfig = null;
+function depositMinimumForAsset(asset, deposit = currentDeposit) {
+  const token = String(asset || "GRAM").toUpperCase() === "USDT" ? "USDT" : "GRAM";
+  const value = deposit?.token === token && deposit?.minimumDeposit != null
+    ? deposit.minimumDeposit
+    : token === "GRAM" ? depositConfig?.minimumDepositGram ?? 0.1 : depositConfig?.minimumDepositUsdt ?? 0;
+  return { token, value: Number(value) || 0 };
+}
+
+function updateDepositAssetUI() {
   document.querySelectorAll("[data-deposit-asset]").forEach(button => button.classList.toggle("active", button.dataset.depositAsset === state.selectedDepositAsset));
   const label = $("[for=depositAmount]");
-  if (label) label.textContent = `مقدار ${state.selectedDepositAsset} برای واریز`;
+  if (label) label.textContent = t("deposit_amount_label", { token: state.selectedDepositAsset });
+  const selectedLabel = $("#depositSelectedAssetLabel");
+  if (selectedLabel) selectedLabel.textContent = state.selectedDepositAsset;
+  const minimum = $("#depositMinimumText");
+  if (minimum) {
+    const { token, value } = depositMinimumForAsset(state.selectedDepositAsset);
+    minimum.textContent = t("deposit_minimum", { amount: formatNumber(value, token === "GRAM" ? 9 : 6), token });
+  }
+}
+
+function selectDepositAsset(asset) {
+  state.selectedDepositAsset = String(asset || "GRAM").toUpperCase() === "USDT" ? "USDT" : "GRAM";
+  updateDepositAssetUI();
 }
 window.selectDepositAsset = selectDepositAsset;
+
+function showDepositAssetSelection() {
+  const selection = $("#depositAssetSelection");
+  const panel = $("#depositPanel");
+  if (selection) selection.style.display = "block";
+  if (panel) panel.style.display = "none";
+  setDepositActionMessage("");
+}
+window.showDepositAssetSelection = showDepositAssetSelection;
+
+function openDepositAsset(asset) {
+  if (!depositConfig?.enabled) return;
+  selectDepositAsset(asset);
+  const selection = $("#depositAssetSelection");
+  const panel = $("#depositPanel");
+  if (selection) selection.style.display = "none";
+  if (panel) panel.style.display = "block";
+}
+window.openDepositAsset = openDepositAsset;
 
 async function loadDepositPanel() {
   if (depositPanelLoading) return;
   depositPanelLoading = true;
   const overlay = $("#depositOverlay");
   const panel = $("#depositPanel");
+  const selection = $("#depositAssetSelection");
   const disabled = $("#depositDisabledMessage");
   const message = $("#depositMessage");
   const button = $("#depositVerifyButton");
@@ -2815,12 +2857,15 @@ async function loadDepositPanel() {
 
     if (!configData?.enabled) {
       if (panel) panel.style.display = "none";
+      if (selection) selection.style.display = "none";
       if (disabled) disabled.style.display = "block";
       if (message) message.textContent = t("deposit_coming_soon");
       return;
     }
 
-    if (panel) panel.style.display = "block";
+    depositConfig = configData;
+    if (panel) panel.style.display = "none";
+    if (selection) selection.style.display = "block";
     if (disabled) disabled.style.display = "none";
     const address = $("#depositWalletAddress");
     const reference = $("#depositReference");
@@ -2829,7 +2874,7 @@ async function loadDepositPanel() {
     if (address) address.value = configData?.depositWalletAddress || "";
     if (reference) reference.textContent = t("deposit_reference_auto");
     selectDepositAsset(state.selectedDepositAsset);
-    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(state.selectedDepositAsset === "GRAM" ? configData?.minimumDepositGram ?? 0.1 : configData?.minimumDepositUsdt ?? 0, 9) });
+    if (minimum) updateDepositAssetUI();
     if (button) button.disabled = true;
 
     // The form is visible now; finish optional history lookup and restore an
@@ -2841,7 +2886,7 @@ async function loadDepositPanel() {
     if (reference) reference.textContent = currentDeposit?.reference || t("deposit_reference_auto");
     if (amount && currentDeposit?.requestedAmount != null) amount.value = currentDeposit.requestedAmount;
     if (currentDeposit?.token) selectDepositAsset(currentDeposit.token);
-    if (minimum) minimum.textContent = t("deposit_minimum", { amount: formatNumber(currentDeposit?.minimumDeposit ?? (state.selectedDepositAsset === "GRAM" ? configData?.minimumDepositGram ?? 0.1 : configData?.minimumDepositUsdt ?? 0), 9) });
+    if (minimum) updateDepositAssetUI();
     if (button) button.disabled = currentDeposit?.status === "confirmed" || currentDeposit?.status === "verifying";
   } catch (error) {
     if (panel) panel.style.display = "none";
@@ -2859,8 +2904,9 @@ async function submitUsdtDeposit() {
   const input = $("#depositAmount");
   const amount = Number(input?.value || 0);
   if (depositSubmissionBusy) return;
-  if (!Number.isFinite(amount) || amount <= 0) {
-    setDepositActionMessage(t("deposit_invalid_amount_message"), "error");
+  const { token, value: minimum } = depositMinimumForAsset(state.selectedDepositAsset);
+  if (!Number.isFinite(amount) || amount < minimum) {
+    setDepositActionMessage(t("deposit_invalid_amount_message", { amount: formatNumber(minimum, token === "GRAM" ? 9 : 6), token }), "error");
     return;
   }
   depositSubmissionBusy = true;
@@ -2893,8 +2939,10 @@ async function submitUsdtDeposit() {
         if ((result.token || state.selectedDepositAsset) === "GRAM") state.gramBalance = balance;
         else state.usdtBalance = balance;
       }
-      setDepositActionMessage(t("deposit_confirmed_message", { amount: formatNumber(result.amount, 9) }), "success");
-      toast(t("deposit_confirmed_message", { amount: formatNumber(result.amount, 9) }), "success");
+      const confirmedToken = result.token || state.selectedDepositAsset;
+      const confirmedMessage = t("deposit_confirmed_message", { amount: formatNumber(result.amount, confirmedToken === "GRAM" ? 9 : 6), token: confirmedToken });
+      setDepositActionMessage(confirmedMessage, "success");
+      toast(confirmedMessage, "success");
       haptic("success");
       updateHeader();
       if (state.activeTab === "wallet") renderWallet();
@@ -2996,7 +3044,7 @@ function renderWalletHistoryList() {
     return `
       <button type="button" class="historyItem historyItemBtn" data-withdrawal-id="${escapeHTML(item._id)}">
         <div>
-          <div class="historyAmount">${formatNumber(item.cryptoAmount, 6)} ${escapeHTML(item.token || "USDT")}</div>
+          <div class="historyAmount historyAmountWithIcon">${assetTokenIconMarkup(item.token)}<span>${formatNumber(item.cryptoAmount, String(item.token || "USDT").toUpperCase() === "GRAM" ? 9 : 6)} ${escapeHTML(item.token || "USDT")}</span></div>
           <div class="historyMeta">${transactionTimeLabel(item.createdAt)}</div>
           ${item.status === "paid" && item.txHash ? `
             <div class="historyTxRow">
@@ -3034,7 +3082,7 @@ function renderPublicHistoryList() {
           <div class="publicTxUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(walletHistoryText("history_received"))}</em></strong></div>
           <div class="publicTxMeta" dir="ltr"><time class="publicTxDate" dir="${state.language === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(transactionTimeLabel(item.date))}</time> <span class="publicTxStatus" dir="${state.language === "en" ? "ltr" : "rtl"}">${escapeHTML(walletHistoryText("transaction_status_on_chain"))}</span></div>
         </div>
-        <div class="publicTxPayment"><div class="publicTxAmount">${usdtTokenIconMarkup()}<strong>${formatNumber(item.amount, 6)}</strong><span>${escapeHTML(item.token || "USDT")}</span></div>${explorer}</div>
+        <div class="publicTxPayment"><div class="publicTxAmount">${assetTokenIconMarkup(item.token)}<strong>${formatNumber(item.amount, String(item.token || "USDT").toUpperCase() === "GRAM" ? 9 : 6)}</strong><span>${escapeHTML(item.token || "USDT")}</span></div>${explorer}</div>
       </article>`;
   }).join("");
 }
@@ -3215,7 +3263,7 @@ async function openWithdrawalDetail(id) {
         </div>
         <div class="withdrawBody">
           <div class="flexBetween" style="margin-bottom:12px">
-            <span class="historyAmount" style="font-size:20px">${formatNumber(w.cryptoAmount, 6)} ${escapeHTML(w.token || "USDT")}</span>
+            <span class="historyAmount historyAmountWithIcon" style="font-size:20px">${assetTokenIconMarkup(w.token)}<span>${formatNumber(w.cryptoAmount, String(w.token || "USDT").toUpperCase() === "GRAM" ? 9 : 6)} ${escapeHTML(w.token || "USDT")}</span></span>
             <span class="badge ${statusInfo.cls}">${t(`withdraw_status_${w.status}`)}</span>
           </div>
           <div class="publicTxRow"><span>${t("history_to_label")}</span><span>${escapeHTML(w.address)}</span></div>
@@ -3389,6 +3437,9 @@ function usdtTokenIconMarkup() {
 
 function gramTokenIconMarkup() {
   return '<img class="gramTokenIcon" src="img/gram-token-logo.png" alt="" aria-hidden="true">';
+}
+function assetTokenIconMarkup(asset) {
+  return String(asset || "USDT").toUpperCase() === "GRAM" ? gramTokenIconMarkup() : usdtTokenIconMarkup();
 }
 function upRewardMarkup(value, showSign = true) {
   const amount = `${showSign ? "+" : ""}${formatPoints(value)} UP`;

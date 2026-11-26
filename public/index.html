@@ -301,12 +301,12 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
   </div>
 </div>
 
-<!-- TON MAINNET USDT DEPOSIT -->
+<!-- TON MAINNET TOKEN DEPOSIT: GRAM and USDT JETTON are supported assets. -->
 <div id="depositOverlay" class="overlay" style="display:none">
   <div class="modalBox withdrawBox" role="dialog" aria-modal="true" aria-labelledby="depositTitle" style="text-align:center;max-height:92vh;overflow-y:auto">
     <div class="modalHeader">
       <div>
-        <span class="modalEyebrow" data-i18n="deposit_eyebrow">TON MAINNET · USDT JETTON</span>
+        <span class="modalEyebrow" data-i18n="deposit_eyebrow">TON MAINNET · TOKEN DEPOSIT</span>
         <h3 id="depositTitle" data-i18n="deposit_modal_title">واریز</h3>
       </div>
       <button class="closeBtn" type="button" onclick="hideDeposit()" data-i18n-aria="common_close" aria-label="بستن">×</button>
@@ -317,11 +317,24 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
       <p id="depositMessage" style="font-size:13px;color:var(--text-soft)" data-i18n="deposit_coming_soon">واریز USDT در حال حاضر فعال نیست.</p>
     </div>
 
+    <div id="depositAssetSelection" class="depositAssetSelection" style="display:none;text-align:start" aria-labelledby="depositAssetSelectionTitle">
+      <h4 id="depositAssetSelectionTitle" class="depositSelectionTitle" data-i18n="deposit_asset_selection_title">Select an asset to deposit</h4>
+      <p class="small depositSelectionHint" data-i18n="deposit_asset_selection_hint">Choose the token you want to send.</p>
+      <div class="depositAssetOptions">
+        <button type="button" class="depositAssetOption" data-deposit-asset="GRAM" onclick="openDepositAsset('GRAM')">
+          <img class="depositAssetLogo" src="img/gram-token-logo.png" alt="" aria-hidden="true"><span><strong>GRAM</strong><small data-i18n="deposit_gram_name">GRAM token</small></span><span class="depositAssetArrow" aria-hidden="true">›</span>
+        </button>
+        <button type="button" class="depositAssetOption" data-deposit-asset="USDT" onclick="openDepositAsset('USDT')">
+          <img class="depositAssetLogo" src="img/ton-usdt-logo.png" alt="" aria-hidden="true"><span><strong>USDT</strong><small data-i18n="deposit_usdt_name">USDT on TON</small></span><span class="depositAssetArrow" aria-hidden="true">›</span>
+        </button>
+      </div>
+    </div>
+
     <div id="depositPanel" style="display:none;text-align:start">
-      <div class="row" style="gap:8px;margin-bottom:10px"><button type="button" class="secondaryBtn assetChoice active" data-deposit-asset="GRAM" onclick="selectDepositAsset('GRAM')">واریز گرام</button><button type="button" class="secondaryBtn assetChoice" data-deposit-asset="USDT" onclick="selectDepositAsset('USDT')">واریز یو اس دیتی</button></div>
-      <div class="tbPill tbPillGreen" style="margin:0 auto 12px;display:table" data-i18n="deposit_network_ton_mainnet">TON Mainnet</div>
-      <p style="font-size:13px;color:var(--danger);font-weight:700" data-i18n="deposit_mainnet_warning">فقط USDT Jetton رسمی روی TON Mainnet ارسال کنید.</p>
-      <label for="depositAmount" data-i18n="deposit_amount_label">مقدار USDT برای واریز</label>
+      <button type="button" class="depositBackButton" onclick="showDepositAssetSelection()" data-i18n="deposit_back_to_assets">‹ Choose another asset</button>
+      <div class="depositSelectedAsset"><span class="tbPill tbPillGreen" data-i18n="deposit_network_ton_mainnet">TON Mainnet</span><strong id="depositSelectedAssetLabel">GRAM</strong></div>
+      <p style="font-size:13px;color:var(--danger);font-weight:700" data-i18n="deposit_mainnet_warning">Only send the selected token on TON Mainnet.</p>
+      <label for="depositAmount" data-i18n="deposit_amount_label">Deposit amount (GRAM)</label>
       <input id="depositAmount" type="number" inputmode="decimal" step="0.000000001" min="0" placeholder="مثلاً 1" data-i18n-ph="deposit_amount_ph">
       <p id="depositMinimumText" class="small" style="margin:8px 0 12px"></p>
       <p class="small depositAutoSendHint" data-i18n="deposit_auto_send_hint">با Wallet متصل‌شده، آدرس و کد مرجع خودکار به تراکنش اضافه می‌شوند.</p>
@@ -332,7 +345,7 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
       <details class="depositManualDetails">
         <summary data-i18n="deposit_manual_details">اطلاعات واریز دستی (اختیاری)</summary>
         <div class="depositManualBody">
-          <label for="depositWalletAddress" data-i18n="deposit_address_label">آدرس دریافت USDT</label>
+          <label for="depositWalletAddress" data-i18n="deposit_address_label">Deposit address</label>
           <div class="depositCopyRow">
             <input id="depositWalletAddress" type="text" readonly dir="ltr" style="margin:0;min-width:0;font-size:12px">
             <button type="button" class="secondaryBtn" data-copy-target="depositWalletAddress" data-i18n="deposit_copy">کپی</button>
