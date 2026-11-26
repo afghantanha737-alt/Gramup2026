@@ -9,11 +9,13 @@ const {
   normalizeExchangeAsset,
   normalizeLocalizedNumericString,
   parseExchangeAmount,
+  floorExchangeAmount,
   exchangeAmountFromUp,
   exchangeAmountToUp,
   exchangeRateSnapshot,
   upToGramRate,
-  exchangeUpToGram
+  exchangeUpToGram,
+  exchangeGramToUp
 } = require('../utils/exchangeAmounts');
 
 const root = path.join(__dirname, '..');
@@ -25,16 +27,21 @@ const helperEnd = appSource.indexOf('\nfunction setExchangePair(', helperStart);
 assert.notStrictEqual(helperStart, -1, 'frontend localized amount helper exists');
 assert.ok(helperEnd > helperStart, 'frontend localized amount helper block is bounded');
 const browserHelpers = { UP_PER_USDT: 10000 };
-vm.runInNewContext(`${appSource.slice(helperStart, helperEnd)}\nglobalThis.testHelpers = { normalizeLocalizedExchangeAmount, parseLocalizedExchangeAmount, calculateUpToGramClient };`, browserHelpers);
+vm.runInNewContext(`${appSource.slice(helperStart, helperEnd)}\nglobalThis.testHelpers = { normalizeLocalizedExchangeAmount, parseLocalizedExchangeAmount, calculateUpToGramClient, calculateGramToUpClient };`, browserHelpers);
 
 const normalizeClient = browserHelpers.testHelpers.normalizeLocalizedExchangeAmount;
 const parseClient = browserHelpers.testHelpers.parseLocalizedExchangeAmount;
 const upToGramClient = browserHelpers.testHelpers.calculateUpToGramClient;
+const gramToUpClient = browserHelpers.testHelpers.calculateGramToUpClient;
 assert.strictEqual(normalizeClient('۲٫۰۳۲۱۲۵۰۰۰'), '2.032125000');
 assert.strictEqual(parseClient('۲٫۰۳۲۱۲۵۰۰۰'), 2.032125);
 assert.strictEqual(upToGramRate(0.02), 0.005);
 assert.strictEqual(exchangeUpToGram(1000, 0.02), 5);
 assert.strictEqual(upToGramClient(1000, 0.02), 5, 'the UI preview uses the same fixed-UP/USD and live-GRAM/USD calculation');
+assert.strictEqual(exchangeGramToUp(1, 0.959424), 9594);
+assert.strictEqual(gramToUpClient(1, 0.959424), 9594, 'the UI uses the live inverse rate, not the legacy 10000-UP setting');
+assert.strictEqual(exchangeUpToGram(10000, 0.959424), 1.042292041);
+assert.strictEqual(floorExchangeAmount(1.23456789, 'USDT'), 1.234567, 'live swap output is floored to avoid over-crediting');
 assert.strictEqual(normalizeClient('۲,۰۳۲۱۲۵'), '2.032125');
 assert.strictEqual(normalizeClient('٢٬٠٣٢٫١٢'), '2032.12');
 assert.strictEqual(normalizeClient('2,032.12'), '2032.12');
@@ -144,16 +151,17 @@ let originalGetLiveRates;
 (async () => {
   const stonFi = require('../routes/stonFi');
   originalGetLiveRates = stonFi.getLiveRates;
-  let liveGramUsd = 0.02;
+  let liveGramUsd = 0.959424;
+  let liveUsdtUsd = 0.999053;
   let failLiveRates = false;
   stonFi.getLiveRates = async () => {
     if (failLiveRates) throw new Error('STON.fi unavailable');
     return {
-      source: 'STON.fi market API', updatedAt: '2026-11-26T00:00:00.000Z', gramUsdt: liveGramUsd,
-      usdtGram: 1 / liveGramUsd,
+      source: 'STON.fi market API', updatedAt: '2026-11-26T00:00:00.000Z', gramUsdt: liveGramUsd / liveUsdtUsd,
+      usdtGram: liveUsdtUsd / liveGramUsd,
       assets: {
         GRAM: { address: 'native-gram-test-asset', symbol: 'GRAM', decimals: 9, priceUsd: liveGramUsd },
-        USDT: { address: 'usdt-test-asset', symbol: 'USDT', decimals: 6, priceUsd: 1 }
+        USDT: { address: 'usdt-test-asset', symbol: 'USDT', decimals: 6, priceUsd: liveUsdtUsd }
       }
     };
   };
@@ -166,37 +174,77 @@ let originalGetLiveRates;
   assert.strictEqual(response.status, 200);
   assert.strictEqual(response.body.from, 'GRAM');
   assert.strictEqual(response.body.to, 'UP');
-  assert.strictEqual(response.body.upAmount, 20321);
-  assert.strictEqual(response.body.receivedAmount, 20321);
-  assert.strictEqual(account.points, 20321);
-  assert.ok(Math.abs(account.gramBalance - 0.9679) < 1e-12);
+  const expectedLiveUp = exchangeGramToUp(2.032125, liveGramUsd);
+  assert.strictEqual(response.body.upAmount, expectedLiveUp);
+  assert.strictEqual(response.body.receivedAmount, expectedLiveUp);
+  assert.strictEqual(response.body.rates.upUsd, 0.0001);
+  assert.strictEqual(response.body.rates.gramUsd, liveGramUsd);
+  assert.strictEqual(account.points, expectedLiveUp);
+  assert.strictEqual(account.gramBalance, 3 - 2.032125, 'the full requested GRAM is debited, with only whole UP output rounded down');
   assert.deepStrictEqual(ledgerRows.map(row => [row.asset, row.currency, row.amount]), [
-    ['GRAM', 'gram', -2.0321], ['UP', 'points', 20321]
+    ['GRAM', 'gram', -2.032125], ['UP', 'points', expectedLiveUp]
   ]);
+  assert.strictEqual(exchangeGramToUp(1, liveGramUsd), 9594, '1 GRAM at $0.959424 yields 9594 whole UP, not 10000');
+
+  account = { _id: 'swap-user', points: 0, gramBalance: 1, usdtBalance: 0 };
+  ledgerRows = [];
+  response = await request(exchange, { from: 'GRAM', to: 'UP', amount: '1' });
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(response.body.receivedAmount, 9594, 'the live route reproduces the exact one-GRAM screenshot case');
+  assert.strictEqual(account.gramBalance, 0);
+  assert.strictEqual(account.points, 9594);
 
   account = { _id: 'swap-user', points: 0, gramBalance: 2, usdtBalance: 0 };
   ledgerRows = [];
   response = await request(exchange, { from: 'GRAM', to: 'USDT', amount: '۰٫۵' });
   assert.strictEqual(response.status, 200);
-  const expectedLiveUsdt = Number((0.5 * response.body.rates.gramUsdt).toFixed(6));
+  const expectedLiveUsdt = floorExchangeAmount(0.5 * response.body.rates.gramUsdt, 'USDT');
   assert.strictEqual(response.body.receivedAmount, expectedLiveUsdt);
   assert.strictEqual(account.gramBalance, 1.5);
   assert.strictEqual(account.usdtBalance, expectedLiveUsdt);
   assert.deepStrictEqual(ledgerRows.map(row => [row.asset, row.currency]), [['GRAM', 'gram'], ['USDT', 'usdt']]);
 
+  account = { _id: 'swap-user', points: 0, gramBalance: 0, usdtBalance: 2 };
+  ledgerRows = [];
+  response = await request(exchange, { from: 'USDT', to: 'GRAM', amount: '1' });
+  assert.strictEqual(response.status, 200);
+  const expectedGramFromUsdt = floorExchangeAmount(liveUsdtUsd / liveGramUsd, 'GRAM');
+  assert.strictEqual(response.body.receivedAmount, expectedGramFromUsdt);
+  assert.strictEqual(account.usdtBalance, 1);
+  assert.strictEqual(account.gramBalance, expectedGramFromUsdt);
+  assert.strictEqual(response.body.rates.source, 'STON.fi market API');
+
   account = { _id: 'swap-user', points: 20000, gramBalance: 0, usdtBalance: 0 };
   ledgerRows = [];
   response = await request(exchange, { from: 'UP', to: 'GRAM', amount: '10000' });
   assert.strictEqual(response.status, 200);
-  assert.strictEqual(response.body.receivedAmount, 50, '10000 UP is $1.00 and buys 50 GRAM at $0.02 each');
+  assert.strictEqual(response.body.receivedAmount, 1.042292041, '10000 UP is $1.00 and buys GRAM at the live $0.959424 price');
   assert.strictEqual(response.body.rates.upUsd, 0.0001);
-  assert.strictEqual(response.body.rates.gramUsd, 0.02);
-  assert.strictEqual(response.body.rates.upToGram, 0.005);
+  assert.strictEqual(response.body.rates.gramUsd, liveGramUsd);
+  assert.ok(Math.abs(response.body.rates.upToGram - (0.0001 / liveGramUsd)) < 1e-15);
   assert.strictEqual(account.points, 10000);
-  assert.strictEqual(account.gramBalance, 50);
+  assert.strictEqual(account.gramBalance, 1.042292041);
   assert.deepStrictEqual(ledgerRows.map(row => [row.asset, row.currency, row.amount]), [
-    ['UP', 'points', -10000], ['GRAM', 'gram', 50]
+    ['UP', 'points', -10000], ['GRAM', 'gram', 1.042292041]
   ]);
+
+  account = { _id: 'swap-user', points: 0, gramBalance: 0, usdtBalance: 2 };
+  ledgerRows = [];
+  response = await request(exchange, { from: 'USDT', to: 'UP', amount: '1' });
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(response.body.receivedAmount, 10000);
+  assert.strictEqual(response.body.rates.upUsd, 0.0001);
+  assert.strictEqual(account.usdtBalance, 1);
+  assert.strictEqual(account.points, 10000);
+
+  account = { _id: 'swap-user', points: 20000, gramBalance: 0, usdtBalance: 0 };
+  ledgerRows = [];
+  response = await request(exchange, { from: 'UP', to: 'USDT', amount: '10000' });
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(response.body.receivedAmount, 1);
+  assert.strictEqual(response.body.rates.upToUsdt, 0.0001);
+  assert.strictEqual(account.points, 10000);
+  assert.strictEqual(account.usdtBalance, 1);
 
   account = { _id: 'swap-user', points: 10000, gramBalance: 0, usdtBalance: 0 };
   ledgerRows = [];
@@ -207,6 +255,17 @@ let originalGetLiveRates;
   assert.strictEqual(response.body.code, 'STON_RATES_UNAVAILABLE');
   assert.strictEqual(account.points, 10000);
   assert.strictEqual(account.gramBalance, 0);
+  assert.strictEqual(ledgerRows.length, 0);
+
+  account = { _id: 'swap-user', points: 0, gramBalance: 1, usdtBalance: 0 };
+  ledgerRows = [];
+  failLiveRates = true;
+  response = await request(exchange, { from: 'GRAM', to: 'UP', amount: '1' });
+  failLiveRates = false;
+  assert.strictEqual(response.status, 503, 'GRAM-to-UP also rejects the legacy rate when STON.fi is unavailable');
+  assert.strictEqual(response.body.code, 'STON_RATES_UNAVAILABLE');
+  assert.strictEqual(account.gramBalance, 1);
+  assert.strictEqual(account.points, 0);
   assert.strictEqual(ledgerRows.length, 0);
 
   account = { _id: 'swap-user', points: 0, gramBalance: 0.1, usdtBalance: 0 };
@@ -235,10 +294,11 @@ let originalGetLiveRates;
 
   transactionsUnavailable = false;
   failSettings = true;
-  response = await request(exchange, { from: 'GRAM', to: 'UP', amount: '0.5' });
+  account = { _id: 'swap-user', points: 10000, gramBalance: 0, usdtBalance: 0 };
+  response = await request(exchange, { from: 'UP', to: 'USDT', amount: '1000' });
   failSettings = false;
-  assert.strictEqual(response.status, 503);
-  assert.strictEqual(response.body.code, 'EXCHANGE_TEMPORARILY_UNAVAILABLE');
+  assert.strictEqual(response.status, 200, 'fixed UP/USDT valuation does not depend on the obsolete settings.rate');
+  assert.strictEqual(response.body.receivedAmount, 0.1);
 
   for (const currency of ['gram', 'points', 'usdt']) {
     assert.ok(PointsLedger.schema.path('currency').enumValues.includes(currency), `PointsLedger accepts ${currency}`);
@@ -248,7 +308,7 @@ let originalGetLiveRates;
     assert.ok(PointsLedger.schema.path('asset').enumValues.includes(asset), `PointsLedger accepts asset ${asset}`);
     assert.ok(Transaction.schema.path('asset').enumValues.includes(asset), `Transaction journal accepts asset ${asset}`);
   }
-  console.log('PASS — localized Swap amounts, GRAM→UP/USDT balance and ledger paths, and precise atomic-error responses');
+  console.log('PASS — all six swap directions use live GRAM pricing or fixed UP/USDT parity, including reciprocal math, ledger debits, and fail-closed rates');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => {
   if (originalGetLiveRates) require('../routes/stonFi').getLiveRates = originalGetLiveRates;
   idempotency.executeIdempotently = originals.executeIdempotently;

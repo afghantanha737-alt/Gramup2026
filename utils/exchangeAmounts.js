@@ -49,6 +49,16 @@ function roundExchangeAmount(value, asset) {
     : Number(numeric.toFixed(EXCHANGE_ASSETS[asset].decimals));
 }
 
+function floorExchangeAmount(value, asset) {
+  if (!EXCHANGE_ASSETS[asset] || !Number.isFinite(Number(value))) return NaN;
+  const numeric = Number(value);
+  if (asset === 'UP') return Math.floor(numeric);
+  const factor = 10 ** EXCHANGE_ASSETS[asset].decimals;
+  const scaled = numeric * factor;
+  if (!Number.isFinite(scaled)) return NaN;
+  return Math.floor(scaled) / factor;
+}
+
 function upToGramRate(gramPriceUsd) {
   const price = Number(gramPriceUsd);
   if (!Number.isFinite(price) || price <= 0) return null;
@@ -61,6 +71,15 @@ function exchangeUpToGram(upAmount, gramPriceUsd) {
   const rate = upToGramRate(gramPriceUsd);
   if (!Number.isSafeInteger(amount) || amount <= 0 || rate == null) return 0;
   return Math.floor(amount * rate * 1e9) / 1e9;
+}
+
+function exchangeGramToUp(gramAmount, gramPriceUsd) {
+  const amount = Number(gramAmount);
+  const price = Number(gramPriceUsd);
+  if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(price) || price <= 0) return 0;
+  const upAmount = amount * price * UP_PER_USDT;
+  if (!Number.isFinite(upAmount) || upAmount <= 0) return 0;
+  return Math.floor(upAmount);
 }
 
 function exchangeAmountFromUp(upAmount, asset, gramPerUp) {
@@ -94,8 +113,10 @@ module.exports = {
   normalizeLocalizedNumericString,
   parseExchangeAmount,
   roundExchangeAmount,
+  floorExchangeAmount,
   upToGramRate,
   exchangeUpToGram,
+  exchangeGramToUp,
   exchangeAmountFromUp,
   exchangeAmountToUp,
   exchangeRateSnapshot

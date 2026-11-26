@@ -22,10 +22,12 @@ const {
   EXCHANGE_ASSETS,
   normalizeExchangeAsset,
   parseExchangeAmount,
+  floorExchangeAmount,
   exchangeAmountFromUp,
   exchangeAmountToUp,
   upToGramRate,
   exchangeUpToGram,
+  exchangeGramToUp,
   exchangeRateSnapshot
 } = require('../utils/exchangeAmounts');
 const { utcDayKey, wasUtcYesterday } = require('../utils/utcDay');
@@ -484,21 +486,14 @@ const round6 = n => Number(Number(n).toFixed(6));
 /**
  * POST /api/points/exchange — atomic swaps between UP, GRAM, and USDT.
  *
- * Legacy conversion rates remain expressed through UP. UP→GRAM is valued
- * using the fixed UP/USD price and the live GRAM/USD price from STON.fi.
+ * UP↔GRAM is valued using the fixed UP/USD price and live GRAM/USD from
+ * STON.fi. GRAM↔USDT uses live STON.fi prices; UP↔USDT stays fixed.
  *
  * New body: { from: 'UP'|'GRAM'|'USDT', to: 'UP'|'GRAM'|'USDT', amount }
  * Legacy directions remain accepted for existing clients.
  */
 router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) => {
   const u = req.dbUser;
-  let settings;
-  try {
-    settings = await Settings.getGlobal();
-  } catch (error) {
-    console.error('Exchange rate settings could not be loaded:', error.message || error);
-    return res.status(503).json({ success: false, code: 'EXCHANGE_TEMPORARILY_UNAVAILABLE', message: 'نرخ تبدیل فعلاً در دسترس نیست؛ موجودی حساب تغییر نکرد.' });
-  }
   const body = req.body || {};
   const legacyDirection = body.direction === 'points_to_usdt' ? ['UP', 'USDT']
     : body.direction === 'usdt_to_points' ? ['USDT', 'UP']
@@ -509,23 +504,20 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
   if (!from || !to || from === to) {
     return res.status(400).json({ success: false, code: 'INVALID_DIRECTION', message: 'جهت تبدیل معتبر نیست.' });
   }
-  const liveUpToGramPair = from === 'UP' && to === 'GRAM';
+  const liveUpGramPair = (from === 'UP' && to === 'GRAM') || (from === 'GRAM' && to === 'UP');
   const liveMarketPair = (from === 'GRAM' && to === 'USDT') || (from === 'USDT' && to === 'GRAM');
-  const requiresLiveStonRates = liveUpToGramPair || liveMarketPair;
+  const requiresLiveStonRates = liveUpGramPair || liveMarketPair;
   let marketRates = null;
-  let gramPerUp = Number(settings.rate);
+  let gramPerUp = null;
   if (requiresLiveStonRates) {
     try { marketRates = await getLiveRates(); }
     catch (error) {
       console.error('Live STON.fi market rates could not be loaded:', error.message || error);
       return res.status(503).json({ success: false, code: 'STON_RATES_UNAVAILABLE', message: 'نرخ لحظه‌ای برای تبدیل داخلی فعلاً در دسترس نیست؛ موجودی تغییر نکرد.' });
     }
-    if (liveUpToGramPair) gramPerUp = upToGramRate(marketRates.assets?.GRAM?.priceUsd);
+    if (liveUpGramPair) gramPerUp = upToGramRate(marketRates.assets?.GRAM?.priceUsd);
   }
-  if (!requiresLiveStonRates && (!Number.isFinite(gramPerUp) || gramPerUp <= 0)) {
-    return res.status(400).json({ success: false, code: 'INVALID_RATE', message: 'نرخ تبدیل معتبر نیست.' });
-  }
-  if (liveUpToGramPair && (!Number.isFinite(gramPerUp) || gramPerUp <= 0)) {
+  if (liveUpGramPair && (!Number.isFinite(gramPerUp) || gramPerUp <= 0)) {
     return res.status(503).json({ success: false, code: 'STON_RATES_UNAVAILABLE', message: 'قیمت زنده GRAM از STON.fi معتبر نیست؛ موجودی تغییر نکرد.' });
   }
   const rawAmount = body.amount != null ? body.amount : body.points;
@@ -536,15 +528,17 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
   if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: `مقدار ${from} نامعتبر است.` });
   }
-  const upAmount = liveMarketPair ? null : exchangeAmountToUp(requestedAmount, from, gramPerUp);
+  const upAmount = liveMarketPair ? null
+    : liveUpGramPair && from === 'GRAM' ? exchangeGramToUp(requestedAmount, marketRates.assets.GRAM.priceUsd)
+      : exchangeAmountToUp(requestedAmount, from, gramPerUp);
   if (!liveMarketPair && (!Number.isSafeInteger(upAmount) || upAmount <= 0)) {
     return res.status(400).json({ success: false, code: 'EXCHANGE_AMOUNT_TOO_SMALL', message: `مقدار ${from} برای تبدیل بسیار کم است.` });
   }
-  const spentAmount = liveMarketPair ? requestedAmount : exchangeAmountFromUp(upAmount, from, gramPerUp);
+  const spentAmount = liveMarketPair || liveUpGramPair ? requestedAmount : exchangeAmountFromUp(upAmount, from, gramPerUp);
   const receivedAmount = liveMarketPair
-    ? Number((requestedAmount * (from === 'GRAM' ? marketRates.gramUsdt : marketRates.usdtGram)).toFixed(to === 'GRAM' ? 9 : 6))
-    : liveUpToGramPair
-      ? exchangeUpToGram(upAmount, marketRates.assets.GRAM.priceUsd)
+    ? floorExchangeAmount(requestedAmount * (from === 'GRAM' ? marketRates.gramUsdt : marketRates.usdtGram), to)
+    : liveUpGramPair
+      ? from === 'UP' ? exchangeUpToGram(upAmount, marketRates.assets.GRAM.priceUsd) : upAmount
     : exchangeAmountFromUp(upAmount, to, gramPerUp);
   if (!Number.isFinite(spentAmount) || spentAmount <= 0 || !Number.isFinite(receivedAmount) || receivedAmount <= 0) {
     return res.status(400).json({ success: false, code: 'EXCHANGE_AMOUNT_TOO_SMALL', message: 'مقدار تبدیل بسیار کم است.' });
@@ -591,7 +585,7 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
             gramUsdt: marketRates.gramUsdt,
             usdtGram: marketRates.usdtGram,
             assets: marketRates.assets
-          } : liveUpToGramPair ? {
+          } : liveUpGramPair ? {
             ...exchangeRateSnapshot(gramPerUp),
             source: marketRates.source,
             execution: 'internal',
@@ -599,7 +593,14 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
             upUsd: 1 / UP_PER_USDT,
             gramUsd: marketRates.assets.GRAM.priceUsd,
             assets: { UP: { symbol: 'UP', priceUsd: 1 / UP_PER_USDT }, GRAM: marketRates.assets.GRAM }
-          } : exchangeRateSnapshot(gramPerUp),
+          } : {
+            source: 'fixed UP/USDT rate',
+            execution: 'internal',
+            upUsd: 1 / UP_PER_USDT,
+            usdtUsd: 1,
+            upToUsdt: 1 / UP_PER_USDT,
+            usdtToUp: UP_PER_USDT
+          },
           message: `${spentAmount} ${from} به ${receivedAmount} ${to} تبدیل شد.`
         };
         bodyResult[`${to.toLowerCase()}Gained`] = receivedAmount;

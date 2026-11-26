@@ -2517,8 +2517,9 @@ let stonRatesPromise = null;
 let stonRatesFetchedAt = 0;
 const STON_MARKET_RATE_TTL_MS = 15000;
 function isStonPair() { return (exchangeFromAsset === "GRAM" && exchangeToAsset === "USDT") || (exchangeFromAsset === "USDT" && exchangeToAsset === "GRAM"); }
+function isUpGramPair() { return (exchangeFromAsset === "UP" && exchangeToAsset === "GRAM") || (exchangeFromAsset === "GRAM" && exchangeToAsset === "UP"); }
 function isUpToGramPair() { return exchangeFromAsset === "UP" && exchangeToAsset === "GRAM"; }
-function usesStonRates() { return isStonPair() || isUpToGramPair(); }
+function usesStonRates() { return isStonPair() || isUpGramPair(); }
 function renderStonMarket() {
   const panel = $("#stonMarketPanel");
   if (!panel) return;
@@ -2527,17 +2528,17 @@ function renderStonMarket() {
   const gram = Number(stonRates.assets?.GRAM?.priceUsd) || 0;
   const usdt = Number(stonRates.assets?.USDT?.priceUsd) || 0;
   const upUsd = 1 / UP_PER_USDT;
-  $("#stonMarketPrices").textContent = isUpToGramPair()
+  $("#stonMarketPrices").textContent = isUpGramPair()
     ? `${t("ston_price_gram")}: $${gram.toFixed(6)} · ${t("ston_price_up")}: $${upUsd.toFixed(4)}`
     : `${t("ston_price_gram")}: $${gram.toFixed(6)} · ${t("ston_price_usdt")}: $${usdt.toFixed(6)}`;
-  const direct = isUpToGramPair() ? upUsd / gram
+  const direct = isUpGramPair() ? (exchangeFromAsset === "UP" ? upUsd / gram : gram / upUsd)
     : exchangeFromAsset === "GRAM" ? stonRates.gramUsdt : stonRates.usdtGram;
-  const sourceAsset = isUpToGramPair() ? "UP" : exchangeFromAsset;
-  $("#stonDirectRate").textContent = `${t("ston_direct_rate")}: 1 ${sourceAsset} ≈ ${Number(direct || 0).toFixed(isUpToGramPair() ? 9 : exchangeFromAsset === "GRAM" ? 6 : 4)} ${exchangeToAsset}`;
+  const precision = isUpGramPair() ? (exchangeFromAsset === "UP" ? 9 : 2) : exchangeFromAsset === "GRAM" ? 6 : 4;
+  $("#stonDirectRate").textContent = `${t("ston_direct_rate")}: 1 ${exchangeFromAsset} ≈ ${Number(direct || 0).toFixed(precision)} ${exchangeToAsset}`;
 }
 async function refreshStonRates() {
   if (stonRatesPromise) return stonRatesPromise;
-  stonRatesPromise = api("/api/ston/rates", { cache: "no-store" }).then(result => { stonRates = result; stonRatesFetchedAt = Date.now(); renderStonMarket(); if (isUpToGramPair()) updateExchangePreview(); return result; }).catch(error => { stonRates = null; stonRatesFetchedAt = 0; renderStonMarket(); if (isUpToGramPair()) updateExchangePreview(); const status = $("#stonQuoteStatus"); if (status) status.textContent = translateServerMessage(error.code, error.message); throw error; }).finally(() => { stonRatesPromise = null; });
+  stonRatesPromise = api("/api/ston/rates", { cache: "no-store" }).then(result => { stonRates = result; stonRatesFetchedAt = Date.now(); renderStonMarket(); if (isUpGramPair()) updateExchangePreview(); return result; }).catch(error => { stonRates = null; stonRatesFetchedAt = 0; renderStonMarket(); if (isUpGramPair()) updateExchangePreview(); const status = $("#stonQuoteStatus"); if (status) status.textContent = translateServerMessage(error.code, error.message); throw error; }).finally(() => { stonRatesPromise = null; });
   return stonRatesPromise;
 }
 async function refreshStonQuote() {
@@ -2579,6 +2580,13 @@ function calculateUpToGramClient(upAmount, gramPriceUsd) {
   if (!Number.isSafeInteger(amount) || amount <= 0 || !Number.isFinite(price) || price <= 0) return 0;
   return Math.floor(amount * (1 / UP_PER_USDT) / price * 1e9) / 1e9;
 }
+function calculateGramToUpClient(gramAmount, gramPriceUsd) {
+  const amount = Number(gramAmount);
+  const price = Number(gramPriceUsd);
+  if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(price) || price <= 0) return 0;
+  const upAmount = amount * price * UP_PER_USDT;
+  return Number.isFinite(upAmount) && upAmount > 0 ? Math.floor(upAmount) : 0;
+}
 function setExchangePair(from, to, { reset = true } = {}) {
   const nextFrom = normalizeExchangeAssetClient(from) || "UP";
   const nextTo = normalizeExchangeAssetClient(to) || (nextFrom === "UP" ? "USDT" : "UP");
@@ -2609,7 +2617,7 @@ function setExchangePair(from, to, { reset = true } = {}) {
   updateExchangeQuickButtons();
   renderStonMarket();
   updateExchangePreview();
-  if (usesStonRates()) { void refreshStonRates().then(() => { if (isStonPair()) void refreshStonQuote(); else if (isUpToGramPair()) updateExchangePreview(); }).catch(() => {}); }
+  if (usesStonRates()) { void refreshStonRates().then(() => { if (isStonPair()) void refreshStonQuote(); else if (isUpGramPair()) updateExchangePreview(); }).catch(() => {}); }
 }
 function showExchange() {
   if (!readModelActionAllowed()) return;
@@ -2680,7 +2688,7 @@ function updateExchangePreview() {
   else if (amount > getExchangeAvailableBalance()) { if (error) error.textContent = translateServerMessage("EXCHANGE_INSUFFICIENT_BALANCE"); }
   else if (error) error.textContent = "";
   if (isStonPair()) { renderStonMarket(); scheduleStonQuote(); return; }
-  if (isUpToGramPair()) {
+  if (isUpGramPair()) {
     renderStonMarket();
     const gramPriceUsd = Number(stonRates?.assets?.GRAM?.priceUsd) || 0;
     if (!(gramPriceUsd > 0) || Date.now() - stonRatesFetchedAt > STON_MARKET_RATE_TTL_MS) {
@@ -2688,8 +2696,11 @@ function updateExchangePreview() {
       if (!stonRatesPromise) void refreshStonRates().then(updateExchangePreview).catch(() => {});
       return;
     }
-    const received = calculateUpToGramClient(amount, gramPriceUsd);
-    preview.textContent = `${t("exchange_result_label_gram")}: ${formatNumber(received, 9)} GRAM`;
+    const receiveUp = exchangeFromAsset === "GRAM";
+    const received = receiveUp ? calculateGramToUpClient(amount, gramPriceUsd) : calculateUpToGramClient(amount, gramPriceUsd);
+    const targetAsset = receiveUp ? "UP" : "GRAM";
+    const labelKey = receiveUp ? "exchange_result_label_points" : "exchange_result_label_gram";
+    preview.textContent = `${t(labelKey)}: ${formatNumber(received, receiveUp ? 0 : 9)} ${targetAsset}`;
     return;
   }
   const upAmount = exchangeAmountToUpClient(amount, exchangeFromAsset);
