@@ -2668,6 +2668,10 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 .depositBackButton { margin-bottom: 12px; padding: 0; border: 0; background: transparent; color: var(--primary-2); font-size: 12px; font-weight: 800; cursor: pointer; }
 .depositSelectedAsset { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .depositSelectedAsset strong { font-size: 15px; }
+.exchangePairSelectors { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 9px; margin-bottom: 12px; }
+.exchangePairSelectors select { margin-bottom: 0; min-height: 44px; font-weight: 800; }
+.exchangePairArrow { padding-bottom: 13px; color: var(--primary-2); font-size: 18px; font-weight: 900; }
+.exchangeLegacyDirections { display: none; }
 .usdtBalanceUnit { display: inline-flex; align-items: center; gap: 6px; direction: ltr; font-variant-numeric: tabular-nums; }
 .usdtAmountUnit { display: inline-flex; align-items: center; gap: 4px; }
 .usdtAmountUnit .usdtTokenIcon { width: 13px; height: 13px; }

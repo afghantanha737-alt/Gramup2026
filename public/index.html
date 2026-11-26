@@ -271,7 +271,7 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
   </div>
 </div>
 
-<!-- EXCHANGE MODAL (UP -> USDT) -->
+<!-- SWAP MODAL (GRAM / UP / USDT) -->
 <div id="exchangeOverlay" class="overlay" style="display:none">
   <div class="modalBox withdrawBox" role="dialog" aria-modal="true" aria-labelledby="exchangeTitle">
     <div class="modalHeader">
@@ -282,7 +282,12 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
       <button class="closeBtn" type="button" onclick="hideExchange()" data-i18n-aria="common_close" aria-label="بستن">×</button>
     </div>
     <div class="withdrawBody">
-      <div class="exchangeDirectionToggle">
+      <div class="exchangePairSelectors">
+        <div><label class="fieldLabel" for="exchangeFromAsset" data-i18n="exchange_from_label">From</label><select id="exchangeFromAsset" onchange="setExchangePairFromUI()"><option value="UP">UP</option><option value="GRAM">GRAM</option><option value="USDT">USDT</option></select></div>
+        <span class="exchangePairArrow" aria-hidden="true">→</span>
+        <div><label class="fieldLabel" for="exchangeToAsset" data-i18n="exchange_to_label">To</label><select id="exchangeToAsset" onchange="setExchangePairFromUI()"><option value="USDT">USDT</option><option value="UP">UP</option><option value="GRAM">GRAM</option></select></div>
+      </div>
+      <div class="exchangeDirectionToggle exchangeLegacyDirections" aria-hidden="true">
         <button type="button" class="exchangeDirectionBtn active" id="exchangeDirPTG" onclick="setExchangeDirection('points_to_usdt')" data-i18n="exchange_direction_points_to_usdt">UP → USDT</button>
         <button type="button" class="exchangeDirectionBtn" id="exchangeDirGTP" onclick="setExchangeDirection('usdt_to_points')" data-i18n="exchange_direction_usdt_to_points">USDT → UP</button>
       </div>

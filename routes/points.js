@@ -427,6 +427,8 @@ router.get('/me', auth, async (req, res) => {
     gramBalance: Number(u.gramBalance) || 0,
     balances: publicBalances(u),
     rate: fixedRate,
+    gramRate: Number(settings.rate) || 0,
+    rates: exchangeRateSnapshot(Number(settings.rate) || 0.0001),
     streak: u.streak,
     canCheckIn,
     dailyCheckinCycleDay,
@@ -469,117 +471,116 @@ router.post('/checkin', auth, sensitiveRateLimit('claim'), async (req, res) => {
 const round6 = n => Number(Number(n).toFixed(6));
 
 /**
- * POST /api/points/exchange — تبدیل دوطرفه UP <-> موجودی USDT
- * (بر اساس نرخ فعلی؛ این مبلغ بعداً از طریق «برداشت» قابل خارج شدن است)
- * body: { direction: 'points_to_usdt' | 'usdt_to_points', amount }
- * برای سازگاری با نسخه‌ی قبلی، body.points هم به‌عنوان amount برای points_to_usdt پذیرفته می‌شود.
+ * POST /api/points/exchange — atomic swaps between UP, GRAM, and USDT.
+ *
+ * Rates are expressed through UP so every pair is consistent:
+ *   - settings.rate GRAM per UP (the configured GRAM rate)
+ *   - 1 UP = 1 / UP_PER_USDT USDT
+ *
+ * New body: { from: 'UP'|'GRAM'|'USDT', to: 'UP'|'GRAM'|'USDT', amount }
+ * Legacy directions remain accepted for existing clients.
  */
+const EXCHANGE_ASSETS = Object.freeze({
+  UP: { balanceField: 'points', currency: 'points', decimals: 0 },
+  GRAM: { balanceField: 'gramBalance', currency: 'gram', decimals: 9 },
+  USDT: { balanceField: 'usdtBalance', currency: 'usdt', decimals: 6 }
+});
+function normalizeExchangeAsset(value) {
+  const asset = String(value || '').trim().toUpperCase();
+  return Object.prototype.hasOwnProperty.call(EXCHANGE_ASSETS, asset) ? asset : null;
+}
+function roundExchangeAmount(value, asset) {
+  const decimals = EXCHANGE_ASSETS[asset]?.decimals ?? 6;
+  return asset === 'UP' ? Math.floor(Number(value) || 0) : Number((Number(value) || 0).toFixed(decimals));
+}
+function exchangeAmountFromUp(upAmount, asset, gramPerUp) {
+  if (asset === 'UP') return Math.floor(upAmount);
+  if (asset === 'GRAM') return roundExchangeAmount(upAmount * gramPerUp, 'GRAM');
+  return roundExchangeAmount(upAmount / UP_PER_USDT, 'USDT');
+}
+function exchangeAmountToUp(amount, asset, gramPerUp) {
+  if (asset === 'UP') return Math.floor(amount);
+  if (asset === 'GRAM') return Math.floor(amount / gramPerUp);
+  return usdtToUp(String(amount));
+}
+function exchangeRateSnapshot(gramPerUp) {
+  return { upToGram: gramPerUp, gramToUp: 1 / gramPerUp, upToUsdt: 1 / UP_PER_USDT, usdtToUp: UP_PER_USDT, gramToUsdt: gramPerUp / (1 / UP_PER_USDT), usdtToGram: (1 / UP_PER_USDT) / gramPerUp };
+}
+
 router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) => {
   const u = req.dbUser;
   const settings = await Settings.getGlobal();
   const body = req.body || {};
-  if (body.direction != null && !['points_to_usdt', 'usdt_to_points'].includes(body.direction)) {
+  const legacyDirection = body.direction === 'points_to_usdt' ? ['UP', 'USDT']
+    : body.direction === 'usdt_to_points' ? ['USDT', 'UP']
+      : body.direction === 'points_to_gram' ? ['UP', 'GRAM']
+        : body.direction === 'gram_to_points' ? ['GRAM', 'UP'] : null;
+  const from = normalizeExchangeAsset(body.from || legacyDirection?.[0]);
+  const to = normalizeExchangeAsset(body.to || legacyDirection?.[1]);
+  if (!from || !to || from === to) {
     return res.status(400).json({ success: false, code: 'INVALID_DIRECTION', message: 'جهت تبدیل معتبر نیست.' });
   }
+  const gramPerUp = Number(settings.rate);
+  if (!Number.isFinite(gramPerUp) || gramPerUp <= 0) {
+    return res.status(400).json({ success: false, code: 'INVALID_RATE', message: 'نرخ تبدیل معتبر نیست.' });
+  }
   const rawAmount = body.amount != null ? body.amount : body.points;
-  if (!['number', 'string'].includes(typeof rawAmount)) {
+  if (!['number', 'string'].includes(typeof rawAmount) || String(rawAmount).trim() === '') {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار تبدیل نامعتبر است.' });
   }
-  const direction = body.direction === 'usdt_to_points' ? 'usdt_to_points' : 'points_to_usdt';
-
-  if (direction === 'points_to_usdt') {
-    const points = Math.floor(Number(body.amount != null ? body.amount : body.points) || 0);
-
-    if (!Number.isSafeInteger(points) || points <= 0) {
-      return res.status(400).json({ success: false, message: 'مقدار UP نامعتبر است.', code: 'INVALID_AMOUNT' });
-    }
-
-    const usdtGained = round6(points / UP_PER_USDT);
-    let operation;
-    const operationKey = String(req.get('Idempotency-Key') || '').trim();
-    try {
-      operation = await executeIdempotently({
-        userId: u._id,
-        scope: 'exchange_points_to_usdt',
-        key: operationKey,
-        body: { direction, points },
-        execute: async session => {
-        const result = await User.findOneAndUpdate(
-          { _id: u._id, points: { $gte: points } },
-          { $inc: { points: -points, usdtBalance: usdtGained } },
-          { new: true, session }
-        );
-        if (!result) {
-          const error = new Error('موجودی UP کافی نیست.');
-          error.code = 'INSUFFICIENT_BALANCE';
-          throw error;
-        }
-        await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'points', amount: -points, description: 'تبدیل UP به USDT', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_usdt', key: operationKey, leg: 'out' }), session });
-        await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'usdt', amount: usdtGained, description: 'تبدیل UP به USDT', balanceAfter: result.usdtBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_points_to_usdt', key: operationKey, leg: 'in' }), session });
-        return { body: {
-          success: true,
-          direction,
-          message: `${points} UP به ${usdtGained} USDT تبدیل شد.`,
-          points: result.points,
-          upBalance: Number(result.points) || 0,
-          usdtBalance: result.usdtBalance,
-          usdtGained
-        } };
-        }
-      });
-    } catch (error) {
-      if (error.code === 'INSUFFICIENT_BALANCE') return res.status(400).json({ success: false, message: error.message, code: error.code });
-      if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message, code: error.code });
-      throw error;
-    }
-    return res.status(operation.status).json(operation.body);
+  const requestedAmount = roundExchangeAmount(rawAmount, from);
+  if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: `مقدار ${from} نامعتبر است.` });
   }
-
-  // direction === 'usdt_to_points'
-  const usdt = round6(body.amount || 0);
-
-  if (!Number.isFinite(usdt) || usdt <= 0) {
-    return res.status(400).json({ success: false, message: 'مقدار USDT نامعتبر است.', code: 'INVALID_AMOUNT' });
+  const upAmount = exchangeAmountToUp(requestedAmount, from, gramPerUp);
+  if (!Number.isSafeInteger(upAmount) || upAmount <= 0) {
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: `مقدار ${from} برای تبدیل بسیار کم است.` });
   }
-
-  const pointsGained = usdtToUp(String(body.amount || ''));
-
-  if (!Number.isSafeInteger(pointsGained) || pointsGained <= 0) {
-    return res.status(400).json({ success: false, message: 'مقدار USDT برای تبدیل بسیار کم است.', code: 'INVALID_AMOUNT' });
+  const spentAmount = exchangeAmountFromUp(upAmount, from, gramPerUp);
+  const receivedAmount = exchangeAmountFromUp(upAmount, to, gramPerUp);
+  if (!Number.isFinite(spentAmount) || spentAmount <= 0 || !Number.isFinite(receivedAmount) || receivedAmount <= 0) {
+    return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: 'مقدار تبدیل بسیار کم است.' });
   }
-
-  const usdtSpent = round6(pointsGained / UP_PER_USDT);
-
-  let operation;
+  const source = EXCHANGE_ASSETS[from];
+  const target = EXCHANGE_ASSETS[to];
   const operationKey = String(req.get('Idempotency-Key') || '').trim();
+  const legacyScopes = {
+    points_to_usdt: 'exchange_points_to_usdt',
+    usdt_to_points: 'exchange_usdt_to_points',
+    points_to_gram: 'exchange_points_to_gram',
+    gram_to_points: 'exchange_gram_to_points'
+  };
+  const scope = legacyScopes[body.direction] || `exchange_${from.toLowerCase()}_to_${to.toLowerCase()}`;
+  let operation;
   try {
     operation = await executeIdempotently({
       userId: u._id,
-      scope: 'exchange_usdt_to_points',
+      scope,
       key: operationKey,
-      body: { direction, usdt },
+      body: { from, to, amount: requestedAmount },
       execute: async session => {
-      const result = await User.findOneAndUpdate(
-        { _id: u._id, usdtBalance: { $gte: usdtSpent } },
-        { $inc: { usdtBalance: -usdtSpent, points: pointsGained } },
-        { new: true, session }
-      );
-      if (!result) {
-        const error = new Error('موجودی USDT کافی نیست.');
-        error.code = 'INSUFFICIENT_BALANCE';
-        throw error;
-      }
-      await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: 'usdt', amount: -usdtSpent, description: 'تبدیل USDT به UP', balanceAfter: result.usdtBalance, sourceId: `exchange:${u._id}:${direction}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_usdt_to_points', key: operationKey, leg: 'out' }), session });
-      await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: 'points', amount: pointsGained, description: 'تبدیل USDT به UP', balanceAfter: result.points, sourceId: `exchange:${u._id}:${direction}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope: 'exchange_usdt_to_points', key: operationKey, leg: 'in' }), session });
-      return { body: {
-        success: true,
-        direction,
-        message: `${usdtSpent} USDT به ${pointsGained} UP تبدیل شد.`,
-        points: result.points,
-        upBalance: Number(result.points) || 0,
-        usdtBalance: result.usdtBalance,
-        pointsGained
-      } };
+        const result = await User.findOneAndUpdate(
+          { _id: u._id, [source.balanceField]: { $gte: spentAmount } },
+          { $inc: { [source.balanceField]: -spentAmount, [target.balanceField]: receivedAmount } },
+          { new: true, session }
+        );
+        if (!result) {
+          const error = new Error(`موجودی ${from} کافی نیست.`);
+          error.code = 'INSUFFICIENT_BALANCE';
+          throw error;
+        }
+        await recordLedgerRequired({ user: u._id, type: 'exchange_out', currency: source.currency, asset: from, amount: -spentAmount, description: `تبدیل ${from} به ${to}`, balanceAfter: result[source.balanceField], sourceId: `exchange:${u._id}:${scope}:${operationKey}:out`, transactionId: idempotencyTransactionId({ userId: u._id, scope, key: operationKey, leg: 'out' }), session });
+        await recordLedgerRequired({ user: u._id, type: 'exchange_in', currency: target.currency, asset: to, amount: receivedAmount, description: `تبدیل ${from} به ${to}`, balanceAfter: result[target.balanceField], sourceId: `exchange:${u._id}:${scope}:${operationKey}:in`, transactionId: idempotencyTransactionId({ userId: u._id, scope, key: operationKey, leg: 'in' }), session });
+        const bodyResult = {
+          success: true, from, to, direction: `${from.toLowerCase()}_to_${to.toLowerCase()}`,
+          amount: spentAmount, spentAmount, receivedAmount, upAmount,
+          points: result.points, upBalance: Number(result.points) || 0,
+          gramBalance: Number(result.gramBalance) || 0, usdtBalance: result.usdtBalance,
+          rates: exchangeRateSnapshot(gramPerUp),
+          message: `${spentAmount} ${from} به ${receivedAmount} ${to} تبدیل شد.`
+        };
+        bodyResult[`${to.toLowerCase()}Gained`] = receivedAmount;
+        return { body: bodyResult };
       }
     });
   } catch (error) {
@@ -587,8 +588,7 @@ router.post('/exchange', auth, sensitiveRateLimit('general'), async (req, res) =
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message, code: error.code });
     throw error;
   }
-
-  res.status(operation.status).json(operation.body);
+  return res.status(operation.status).json(operation.body);
 });
 
 // POST /api/points/withdraw — TON withdrawal request for GRAM or USDT

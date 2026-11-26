@@ -12,7 +12,7 @@
   const KEY_PREFIX = "gramup:read-model:v1:";
   const ACTIVE_USER_KEY = `${KEY_PREFIX}active-user`;
   const PROFILE_KEYS = Object.freeze([
-    "points", "usdtBalance", "rate", "streak", "canCheckIn", "totalCheckins",
+    "points", "gramBalance", "usdtBalance", "rate", "gramRate", "streak", "canCheckIn", "totalCheckins",
     "minWithdrawUsdt", "nextResetAt", "totalEarnedPoints", "level",
     "withdrawalProgress", "withdrawalRemainingUsdt", "usdtUsdPrice", "firstName"
   ]);

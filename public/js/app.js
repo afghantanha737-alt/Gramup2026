@@ -56,6 +56,7 @@ const state = {
   selectedDepositAsset: "GRAM",
   chainUsdtBalance: 0,
   rate: 0,
+  gramRate: 0.0001,
   streak: 0,
   canCheckIn: false,
   dailyCheckinCycleDay: 1,
@@ -1218,6 +1219,7 @@ function applyCachedReadModel(entry) {
     state.usdtBalance = Number(profile.usdtBalance) || 0;
     state.gramBalance = Number(profile.gramBalance ?? profile.balances?.GRAM) || 0;
   state.rate = Number(profile.rate) || 0;
+  state.gramRate = Number(profile.gramRate ?? profile.rates?.upToGram) || 0.0001;
   state.streak = Number(profile.streak) || 0;
   state.canCheckIn = Boolean(profile.canCheckIn);
   state.dailyCheckinCycleDay = Math.min(7, Math.max(1, Number(profile.dailyCheckinCycleDay) || 1));
@@ -1259,7 +1261,7 @@ function persistReadModelCache() {
   if (!readModelCache || !state.verifiedSessionUserId) return;
   readModelCache.write(state.verifiedSessionUserId, {
     profile: {
-      upBalance: state.points, points: state.points, gramBalance: state.gramBalance, usdtBalance: state.usdtBalance, rate: state.rate, streak: state.streak,
+      upBalance: state.points, points: state.points, gramBalance: state.gramBalance, usdtBalance: state.usdtBalance, rate: state.rate, gramRate: state.gramRate, streak: state.streak,
       canCheckIn: state.canCheckIn, dailyCheckinCycleDay: state.dailyCheckinCycleDay,
       dailyCheckinReward: state.dailyCheckinReward, totalCheckins: state.totalCheckins, minWithdrawUsdt: state.minWithdrawUsdt,
       nextResetAt: state.nextResetAt, totalEarnedPoints: state.totalEarnedPoints, level: state.level,
@@ -1339,6 +1341,7 @@ async function loadUserData({ force = false } = {}) {
   state.usdtBalance = Number(data?.usdtBalance) || 0;
   state.gramBalance = Number(data?.gramBalance ?? data?.balances?.GRAM) || 0;
   state.rate = Number(data?.rate) || 0;
+  state.gramRate = Number(data?.gramRate ?? data?.rates?.upToGram) || 0.0001;
   state.streak = Number(data?.streak) || 0;
   state.canCheckIn = Boolean(data?.canCheckIn);
   state.dailyCheckinCycleDay = Math.min(7, Math.max(1, Number(data?.dailyCheckinCycleDay) || 1));
@@ -2494,13 +2497,49 @@ async function submitWithdraw() {
 }
 window.submitWithdraw = submitWithdraw;
 
-/* ---- Exchange: Points <-> USDT (bidirectional) ---- */
-let exchangeDirection = "points_to_usdt"; // "points_to_usdt" | "usdt_to_points"
+/* ---- Swap: GRAM <-> UP <-> USDT ---- */
+let exchangeDirection = "points_to_usdt"; // legacy direction name kept for compatibility
+let exchangeFromAsset = "UP";
+let exchangeToAsset = "USDT";
 const UP_PER_USDT = 10000;
-
+const EXCHANGE_ASSETS = ["UP", "GRAM", "USDT"];
+function normalizeExchangeAssetClient(value) {
+  const asset = String(value || "").toUpperCase();
+  return EXCHANGE_ASSETS.includes(asset) ? asset : null;
+}
+function setExchangePair(from, to, { reset = true } = {}) {
+  const nextFrom = normalizeExchangeAssetClient(from) || "UP";
+  const nextTo = normalizeExchangeAssetClient(to) || (nextFrom === "UP" ? "USDT" : "UP");
+  exchangeFromAsset = nextFrom;
+  exchangeToAsset = nextTo === nextFrom ? (nextFrom === "UP" ? "USDT" : "UP") : nextTo;
+  exchangeDirection = `${exchangeFromAsset === "UP" ? "points" : exchangeFromAsset.toLowerCase()}_to_${exchangeToAsset === "UP" ? "points" : exchangeToAsset.toLowerCase()}`;
+  const fromSelect = $("#exchangeFromAsset");
+  const toSelect = $("#exchangeToAsset");
+  if (fromSelect) fromSelect.value = exchangeFromAsset;
+  if (toSelect) toSelect.value = exchangeToAsset;
+  const btnPTG = $("#exchangeDirPTG");
+  const btnGTP = $("#exchangeDirGTP");
+  if (btnPTG) btnPTG.classList.toggle("active", exchangeFromAsset === "UP" && exchangeToAsset === "USDT");
+  if (btnGTP) btnGTP.classList.toggle("active", exchangeFromAsset === "USDT" && exchangeToAsset === "UP");
+  const label = $("#exchangeAmountLabel");
+  const input = $("#exchangePoints");
+  const title = $("#exchangeTitle");
+  const sourceKey = exchangeFromAsset === "UP" ? "exchange_points_label" : exchangeFromAsset === "GRAM" ? "exchange_gram_label" : "exchange_usdt_label";
+  const placeholderKey = exchangeFromAsset === "UP" ? "exchange_points_ph" : "withdraw_amount_ph";
+  const titleKey = exchangeFromAsset === "UP" && exchangeToAsset === "USDT" ? "exchange_modal_title"
+    : exchangeFromAsset === "USDT" && exchangeToAsset === "UP" ? "exchange_modal_title_reverse" : "exchange_modal_title_generic";
+  if (label) { label.dataset.i18n = sourceKey; label.textContent = t(sourceKey); }
+  if (input) { input.dataset.i18nPh = placeholderKey; input.setAttribute("placeholder", t(placeholderKey)); }
+  if (title) { title.dataset.i18n = titleKey; title.textContent = t(titleKey, { from: exchangeFromAsset, to: exchangeToAsset }); }
+  if (reset && input) input.value = "";
+  const error = $("#exchangeError");
+  if (error) error.textContent = "";
+  updateExchangeQuickButtons();
+  updateExchangePreview();
+}
 function showExchange() {
   if (!readModelActionAllowed()) return;
-  if (state.points <= 0 && state.usdtBalance <= 0) {
+  if (state.points <= 0 && state.gramBalance <= 0 && state.usdtBalance <= 0) {
     toast(t("error_generic"), "warning");
     return;
   }
@@ -2509,151 +2548,86 @@ function showExchange() {
   const error = $("#exchangeError");
   if (input) input.value = "";
   if (error) error.textContent = "";
-  setExchangeDirection("points_to_usdt");
+  setExchangePair("UP", "USDT", { reset: false });
   if (overlay) overlay.style.display = "flex";
 }
 window.showExchange = showExchange;
-
-function hideExchange() {
-  const overlay = $("#exchangeOverlay");
-  if (overlay) overlay.style.display = "none";
-}
+function hideExchange() { const overlay = $("#exchangeOverlay"); if (overlay) overlay.style.display = "none"; }
 window.hideExchange = hideExchange;
-
 function setExchangeDirection(direction) {
-  exchangeDirection = direction === "usdt_to_points" ? "usdt_to_points" : "points_to_usdt";
-
-  const btnPTG = $("#exchangeDirPTG");
-  const btnGTP = $("#exchangeDirGTP");
-  if (btnPTG) btnPTG.classList.toggle("active", exchangeDirection === "points_to_usdt");
-  if (btnGTP) btnGTP.classList.toggle("active", exchangeDirection === "usdt_to_points");
-
-  const label = $("#exchangeAmountLabel");
-  const input = $("#exchangePoints");
-  const title = $("#exchangeTitle");
-  if (exchangeDirection === "points_to_usdt") {
-    if (label) { label.dataset.i18n = "exchange_points_label"; label.textContent = t("exchange_points_label"); }
-    if (input) { input.dataset.i18nPh = "exchange_points_ph"; input.setAttribute("placeholder", t("exchange_points_ph")); }
-    if (title) { title.dataset.i18n = "exchange_modal_title"; title.textContent = t("exchange_modal_title"); }
-  } else {
-    if (label) { label.dataset.i18n = "exchange_usdt_label"; label.textContent = t("exchange_usdt_label"); }
-    if (input) { input.dataset.i18nPh = "withdraw_amount_ph"; input.setAttribute("placeholder", t("withdraw_amount_ph")); }
-    if (title) { title.dataset.i18n = "exchange_modal_title_reverse"; title.textContent = t("exchange_modal_title_reverse"); }
-  }
-
-  if (input) input.value = "";
-  const error = $("#exchangeError");
-  if (error) error.textContent = "";
-  updateExchangeQuickButtons();
-  updateExchangePreview();
+  const legacy = { points_to_usdt: ["UP", "USDT"], usdt_to_points: ["USDT", "UP"], points_to_gram: ["UP", "GRAM"], gram_to_points: ["GRAM", "UP"] };
+  const pair = legacy[direction] || String(direction || "").split("_to_");
+  setExchangePair(pair[0] === "points" ? "UP" : pair[0], pair[1] === "points" ? "UP" : pair[1]);
 }
 window.setExchangeDirection = setExchangeDirection;
-
+function setExchangePairFromUI() { setExchangePair($("#exchangeFromAsset")?.value, $("#exchangeToAsset")?.value); }
+window.setExchangePairFromUI = setExchangePairFromUI;
 function getExchangeAvailableBalance() {
-  if (exchangeDirection === "points_to_usdt") return Math.max(0, Number(state.points) || 0);
+  if (exchangeFromAsset === "UP") return Math.max(0, Number(state.points) || 0);
+  if (exchangeFromAsset === "GRAM") return Math.max(0, Number(state.gramBalance) || 0);
   const internalBalance = Math.max(0, Number(state.usdtBalance) || 0);
   const wallet = window.gramupWallet;
   let verifiedWallet = false;
   try { verifiedWallet = Boolean(wallet?.isConnected?.() && wallet?.isProofVerified?.()); } catch { verifiedWallet = false; }
   return verifiedWallet ? Math.max(internalBalance, Number(state.chainUsdtBalance) || 0) : internalBalance;
 }
-
-function isExchangeAmountValid(value) {
-  const amount = Number(value);
-  return Number.isFinite(amount) && amount > 0 && amount <= getExchangeAvailableBalance();
+function exchangeAmountToUpClient(amount, asset) {
+  if (asset === "UP") return Math.floor(amount);
+  if (asset === "GRAM") return Math.floor(amount / (Number(state.gramRate) || 0.0001));
+  return Math.floor(amount * UP_PER_USDT);
 }
-
+function exchangeAmountFromUpClient(upAmount, asset) {
+  if (asset === "UP") return Math.floor(upAmount);
+  if (asset === "GRAM") return Number((upAmount * (Number(state.gramRate) || 0.0001)).toFixed(9));
+  return Number((upAmount / UP_PER_USDT).toFixed(6));
+}
+function isExchangeAmountValid(value) { const amount = Number(value); return Number.isFinite(amount) && amount > 0 && amount <= getExchangeAvailableBalance(); }
 function updateExchangeQuickButtons() {
   const available = getExchangeAvailableBalance();
-  document.querySelectorAll("#exchangeQuickAmounts .exchangeQuickBtn").forEach(button => {
-    button.disabled = available <= 0;
-    button.setAttribute("aria-disabled", available <= 0 ? "true" : "false");
-  });
+  document.querySelectorAll("#exchangeQuickAmounts .exchangeQuickBtn").forEach(button => { button.disabled = available <= 0; button.setAttribute("aria-disabled", available <= 0 ? "true" : "false"); });
 }
-
 function setExchangeAmountPercent(percent) {
-  const input = $("#exchangePoints");
-  if (!input) return;
+  const input = $("#exchangePoints"); if (!input) return;
   const ratio = Math.min(100, Math.max(0, Number(percent) || 0)) / 100;
-  const precision = exchangeDirection === "points_to_usdt" ? 3 : 9;
+  const precision = exchangeFromAsset === "UP" ? 3 : 9;
   const factor = 10 ** precision;
   const amount = Math.floor(getExchangeAvailableBalance() * ratio * factor) / factor;
   input.value = amount.toFixed(precision);
-  const error = $("#exchangeError");
-  if (error) error.textContent = "";
+  const error = $("#exchangeError"); if (error) error.textContent = "";
   updateExchangePreview();
 }
 window.setExchangeAmountPercent = setExchangeAmountPercent;
-
 function updateExchangePreview() {
-  const input = $("#exchangePoints");
-  const preview = $("#exchangePreview");
-  if (!input || !preview) return;
-  const rawAmount = String(input.value ?? "").trim();
-  const amount = Number(rawAmount) || 0;
-  const error = $("#exchangeError");
-
-  if (!rawAmount || amount === 0) {
-    if (error) error.textContent = "";
-  } else if (!isExchangeAmountValid(amount)) {
-    if (error) error.textContent = t("error_generic");
-  } else if (error) {
-    error.textContent = "";
-  }
-
-  if (exchangeDirection === "points_to_usdt") {
-    const usdt = amount / UP_PER_USDT;
-    preview.textContent = `${t("exchange_result_label")}: ${formatNumber(usdt, 6)} USDT`;
-  } else {
-    const points = Math.floor(amount * UP_PER_USDT);
-    preview.textContent = `${t("exchange_result_label_points")}: ${formatPoints(points)} UP`;
-  }
+  const input = $("#exchangePoints"); const preview = $("#exchangePreview"); if (!input || !preview) return;
+  const rawAmount = String(input.value ?? "").trim(); const amount = Number(rawAmount) || 0; const error = $("#exchangeError");
+  if (!rawAmount || amount === 0) { if (error) error.textContent = ""; }
+  else if (!isExchangeAmountValid(amount)) { if (error) error.textContent = t("error_generic"); }
+  else if (error) error.textContent = "";
+  const upAmount = exchangeAmountToUpClient(amount, exchangeFromAsset);
+  const received = exchangeAmountFromUpClient(upAmount, exchangeToAsset);
+  const decimals = exchangeToAsset === "UP" ? 0 : exchangeToAsset === "GRAM" ? 9 : 6;
+  const labelKey = exchangeToAsset === "UP" ? "exchange_result_label_points" : exchangeToAsset === "GRAM" ? "exchange_result_label_gram" : "exchange_result_label";
+  preview.textContent = `${t(labelKey, { token: exchangeToAsset })}: ${formatNumber(received, decimals)} ${exchangeToAsset}`;
 }
 window.updateExchangePreview = updateExchangePreview;
-
 async function submitExchange() {
   if (!readModelActionAllowed()) return;
-  const input = $("#exchangePoints");
-  const error = $("#exchangeError");
-  const button = $("#submitExchange");
-
-  const amount = Number(input?.value);
-  if (!amount || amount <= 0) {
-    if (error) error.textContent = t("error_generic");
-    return;
-  }
-  if (!isExchangeAmountValid(amount)) {
-    if (error) error.textContent = t("error_generic");
-    return;
-  }
+  const input = $("#exchangePoints"); const error = $("#exchangeError"); const button = $("#submitExchange"); const amount = Number(input?.value);
+  if (!amount || amount <= 0 || !isExchangeAmountValid(amount)) { if (error) error.textContent = t("error_generic"); return; }
   if (button) button.disabled = true;
-  const useInternalUsdtBalance = exchangeDirection === "usdt_to_points" && amount <= state.usdtBalance;
-  const idempotencyScope = "exchange_points_to_usdt";
+  const useInternalUsdtBalance = exchangeFromAsset === "USDT" && exchangeToAsset === "UP" && amount <= state.usdtBalance;
+  const idempotencyScope = `exchange_${exchangeFromAsset.toLowerCase()}_to_${exchangeToAsset.toLowerCase()}`;
   try {
-    const result = exchangeDirection === "usdt_to_points" && !useInternalUsdtBalance
-      ? (typeof window.gramupWallet?.swapUsdtToPoints === "function"
-        ? await window.gramupWallet.swapUsdtToPoints(amount)
-        : Promise.reject(Object.assign(new Error(t("wallet_connection_unavailable")), { code: "WALLET_PROOF_REQUIRED" })))
-      : await api("/api/points/exchange", {
-        method: "POST",
-        headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) },
-        body: { direction: exchangeDirection, amount }
-      });
-    if (exchangeDirection === "points_to_usdt" || useInternalUsdtBalance) clearPendingIdempotencyKey(idempotencyScope);
+    const result = exchangeFromAsset === "USDT" && exchangeToAsset === "UP" && !useInternalUsdtBalance
+      ? (typeof window.gramupWallet?.swapUsdtToPoints === "function" ? await window.gramupWallet.swapUsdtToPoints(amount) : Promise.reject(Object.assign(new Error(t("wallet_connection_unavailable")), { code: "WALLET_PROOF_REQUIRED" })))
+      : await api("/api/points/exchange", { method: "POST", headers: { "Idempotency-Key": getPendingIdempotencyKey(idempotencyScope) }, body: { from: exchangeFromAsset, to: exchangeToAsset, amount } });
+    clearPendingIdempotencyKey(idempotencyScope);
     state.points = upBalanceFromResponse(result);
     if (result.usdtBalance != null) state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
-    haptic("success");
-    toast(result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) }), "success");
-    hideExchange();
-    updateHeader();
-    renderWallet();
-  } catch (err) {
-    if (exchangeDirection === "points_to_usdt" || useInternalUsdtBalance) clearDefinitiveIdempotencyFailure(idempotencyScope, err);
-    if (error) error.textContent = translateServerMessage(err.code, err.message);
-    haptic("error");
-  } finally {
-    if (button) button.disabled = false;
-  }
+    if (result.gramBalance != null) state.gramBalance = Number(result.gramBalance) ?? state.gramBalance;
+    haptic("success"); toast(result.message || t("wallet_exchange_success", { n: formatPoints(result.pointsGained || 0) }), "success"); hideExchange(); updateHeader(); renderWallet();
+  } catch (err) { clearDefinitiveIdempotencyFailure(idempotencyScope, err); if (error) error.textContent = translateServerMessage(err.code, err.message); haptic("error"); }
+  finally { if (button) button.disabled = false; }
 }
 window.submitExchange = submitExchange;
 
