@@ -2654,6 +2654,8 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 .usdtTokenIcon { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; object-position: center; background: transparent; vertical-align: -3px; }
 .historyAmountWithIcon { display: inline-flex; align-items: center; gap: 6px; direction: ltr; }
 .historyAmountWithIcon .usdtTokenIcon, .historyAmountWithIcon .gramTokenIcon { width: 20px; height: 20px; flex: 0 0 20px; }
+#withdrawHistoryList .historyAmountWithIcon { gap: 4px; line-height: 1.2; vertical-align: middle; }
+#withdrawHistoryList .historyAmountWithIcon .usdtTokenIcon, #withdrawHistoryList .historyAmountWithIcon .gramTokenIcon { width: 14px; height: 14px; flex: 0 0 14px; vertical-align: middle; }
 .depositAssetSelection { padding: 8px 0 14px; }
 .depositSelectionTitle { margin: 0; color: var(--text); font-size: 16px; }
 .depositSelectionHint { margin: 5px 0 14px; }
