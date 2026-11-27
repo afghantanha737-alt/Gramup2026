@@ -2452,7 +2452,7 @@ function showWithdraw() {
   if (addressInput) addressInput.value = "";
   if (error) error.textContent = "";
   const balanceLabel = document.querySelector("[data-withdraw-usdt-balance]");
-  if (balanceLabel) balanceLabel.textContent = t("withdraw_asset_balance", { n: formatNumber(state.usdtBalance, 6) });
+  if (balanceLabel) balanceLabel.textContent = t("withdraw_asset_balance", { n: formatNumber(state.usdtBalance, 6), asset: "USDT" });
   document.querySelectorAll("[data-withdraw-asset]").forEach(option => {
     option.classList.remove("is-selected");
     option.setAttribute("aria-pressed", "false");
