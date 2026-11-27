@@ -41,7 +41,7 @@ const settingsSchema = new mongoose.Schema(
     depositEnabled: { type: Boolean, default: false },
     depositNetwork: { type: String, enum: ['TON_MAINNET'], default: 'TON_MAINNET' },
     depositWalletAddress: { type: String, default: '' },
-    minimumDepositUsdt: { type: Number, default: 1, min: 0 },
+    minimumDepositUsdt: { type: Number, default: 0.1, min: 0 },
     // Fixed by the current referral policy; retained for backwards compatibility.
     referralInitialRewardPoints: { type: Number, default: DEFAULT_REFERRAL_INITIAL_REWARD_POINTS, min: 0, max: 1000000 },
     // A newly accepted invitee receives this one-time welcome credit; zero disables it.

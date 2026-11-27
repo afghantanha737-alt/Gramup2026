@@ -745,7 +745,7 @@
           <label>آدرس عمومی دریافت USDT (TON wallet owner)</label>
           <input id="setDepositWalletAddress" autocomplete="off" spellcheck="false" placeholder="آدرس معتبر TON">
           <label>Minimum Deposit (USDT)</label>
-          <input id="setMinimumDepositUsdt" type="number" min="0.000000001" step="0.000000001" value="1">
+          <input id="setMinimumDepositUsdt" type="number" min="0.000000001" step="0.000000001" value="0.1">
           <p class="small" style="margin-bottom:0">برای روشن‌کردن، آدرس معتبر TON Mainnet و حداقل مبلغ TON USDT Jetton لازم است. برنامه هیچ کلید یا عبارت بازیابی کیف‌پول را نگهداری نمی‌کند.</p>
         </div>
         <button onclick="saveSettings()">ذخیره تنظیمات</button>
@@ -2993,7 +2993,7 @@ async function loadSettings() {
     document.getElementById("setDepositEnabled").checked = !!s.depositEnabled;
     document.getElementById("setDepositNetwork").value = "TON Mainnet";
     document.getElementById("setDepositWalletAddress").value = s.depositWalletAddress || "";
-    document.getElementById("setMinimumDepositUsdt").value = s.minimumDepositUsdt ?? 1;
+    document.getElementById("setMinimumDepositUsdt").value = s.minimumDepositUsdt ?? 0.1;
   } catch (error) {
     showMsg(error.message, "error");
   }
