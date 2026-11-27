@@ -40,9 +40,9 @@ assert.match(index, /data-deposit-asset="USDT"[\s\S]*class="depositAssetLogo" sr
 assert.match(proof, /function tokenIconMarkup\(token\)/);
 assert.match(proof, /asset === "GRAM" \? "img\/gram-token-logo\.png" : "img\/ton-usdt-logo\.png"/);
 assert.match(proof, /asset === "GRAM" \? "img\/gram-token-logo\.png"/);
-assert.match(index, /style\.css\?v=token_logos_20261127_3/);
-assert.match(index, /app\.js\?v=token_logos_20261127_3/);
-assert.match(proof, /style\.css\?v=token_logos_20261127_3/);
+assert.match(index, /style\.css\?v=token_logos_20261127_4/);
+assert.match(index, /app\.js\?v=token_logos_20261127_4/);
+assert.match(proof, /style\.css\?v=token_logos_20261127_4/);
 assert.ok(!fs.existsSync('public/img/gramup-official-logo.jpg'), 'replaced legacy Gramup artwork must not remain');
 
 console.log('PASS — exact TON USDT logo is used for currency artwork while Gramup branding remains distinct');

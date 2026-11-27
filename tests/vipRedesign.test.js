@@ -53,7 +53,7 @@ assert.match(css, /vipPlanCard--spotlight-6/);
 assert.match(css, /vipPlanCard--spotlight-10/);
 assert.match(app, /vipPlanCard--spotlight-\$\{planNumber\}/);
 assert.match(app, /data-vip-plan="\$\{planNumber\}"/);
-assert.match(html, /app\.js\?v=token_logos_20261127_3/);
+assert.match(html, /app\.js\?v=token_logos_20261127_4/);
 assert.match(themeCss, /html\[data-theme="silver"\] \.vipMiningConsole/);
 assert.match(themeCss, /html\[data-theme="silver"\] \.vipPlanCard/);
 assert.match(themeCss, /html\[data-theme="silver"\] #content \.vipRedesign \.vipPlanCard/);

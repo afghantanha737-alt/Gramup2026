@@ -331,13 +331,23 @@ router.delete('/wallet/connection', auth, async (req, res) => {
 });
 
 function getDepositSettingsStatus(settings) {
-  const depositWalletAddress = String(settings?.depositWalletAddress || '').trim();
+  const depositWalletAddressUsdt = String(settings?.depositWalletAddressUsdt || settings?.depositWalletAddress || '').trim();
+  const depositWalletAddressGram = String(settings?.depositWalletAddressGram || settings?.depositWalletAddress || '').trim();
   const minimumDepositUsdt = Number(settings?.minimumDepositUsdt);
-  const ready = settings?.depositEnabled === true
-    && settings?.depositNetwork === 'TON_MAINNET'
-    && normalizeTonAddress(depositWalletAddress)
-    && usdtToBaseUnits(minimumDepositUsdt) != null;
-  return { ready: Boolean(ready), depositWalletAddress, minimumDepositUsdt, minimumDepositGram: 0.1 };
+  const minimumDepositGram = Number(settings?.minimumDepositGram ?? 0.1);
+  const networkReady = settings?.depositEnabled === true && settings?.depositNetwork === 'TON_MAINNET';
+  const readyUsdt = networkReady && normalizeTonAddress(depositWalletAddressUsdt) && usdtToBaseUnits(minimumDepositUsdt) != null;
+  const readyGram = networkReady && normalizeTonAddress(depositWalletAddressGram) && amountToNanoGram(minimumDepositGram) != null;
+  const byAsset = {
+    USDT: { ready: Boolean(readyUsdt), depositWalletAddress: depositWalletAddressUsdt, minimum: minimumDepositUsdt },
+    GRAM: { ready: Boolean(readyGram), depositWalletAddress: depositWalletAddressGram, minimum: minimumDepositGram }
+  };
+  return {
+    ready: Boolean(readyUsdt), readyUsdt: Boolean(readyUsdt), readyGram: Boolean(readyGram),
+    depositWalletAddress: depositWalletAddressUsdt, depositWalletAddressUsdt, depositWalletAddressGram,
+    minimumDepositUsdt, minimumDepositGram, byAsset,
+    forAsset(token) { return byAsset[String(token || 'USDT').toUpperCase()] || byAsset.USDT; }
+  };
 }
 function gramTransferTransaction({ senderAddress, recipientAddress, amount, reference }) {
   const amountRaw = amountToNanoGram(amount);
@@ -766,14 +776,16 @@ router.get('/deposit/config', auth, async (req, res) => {
   const config = getDepositSettingsStatus(settings);
   res.json({
     success: true,
-    enabled: config.ready,
+    enabled: config.readyUsdt || config.readyGram,
     network: 'TON_MAINNET',
     token: 'USDT',
     assets: [
-      { token: 'GRAM', network: 'TON_MAINNET', minimum: config.minimumDepositGram },
-      { token: 'USDT', network: 'TON_MAINNET', minimum: config.minimumDepositUsdt }
+      { token: 'GRAM', network: 'TON_MAINNET', minimum: config.minimumDepositGram, enabled: config.readyGram, depositWalletAddress: config.readyGram ? config.depositWalletAddressGram : '' },
+      { token: 'USDT', network: 'TON_MAINNET', minimum: config.minimumDepositUsdt, enabled: config.readyUsdt, depositWalletAddress: config.readyUsdt ? config.depositWalletAddressUsdt : '' }
     ],
-    depositWalletAddress: config.ready ? config.depositWalletAddress : '',
+    depositWalletAddress: config.readyUsdt ? config.depositWalletAddressUsdt : '',
+    depositWalletAddressUsdt: config.readyUsdt ? config.depositWalletAddressUsdt : '',
+    depositWalletAddressGram: config.readyGram ? config.depositWalletAddressGram : '',
     minimumDepositUsdt: config.minimumDepositUsdt > 0 ? config.minimumDepositUsdt : null,
     minimumDepositGram: config.minimumDepositGram
   });
@@ -815,7 +827,8 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
   const config = getDepositSettingsStatus(settings);
   const asset = assetConfig(req.body?.asset || req.body?.token || 'USDT');
   if (!asset) return res.status(400).json({ success: false, code: 'INVALID_ASSET', message: 'دارایی واریز باید GRAM یا USDT باشد.' });
-  if (!config.ready) {
+  const assetDeposit = config.forAsset(asset.token);
+  if (!assetDeposit.ready) {
     return res.status(503).json({ success: false, code: 'DEPOSIT_DISABLED', message: `واریز ${asset.token} روی TON Mainnet در حال حاضر فعال نیست.` });
   }
   if (!hasRecentWalletProof(req.dbUser)) {
@@ -830,9 +843,9 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
   if (requestedAmountRaw == null) {
     return res.status(400).json({ success: false, code: 'INVALID_AMOUNT', message: `مقدار ${asset.token} برای واریز معتبر نیست.` });
   }
-  const minimumRaw = asset.token === 'GRAM' ? amountToNanoGram(config.minimumDepositGram) : usdtToBaseUnits(String(config.minimumDepositUsdt));
+  const minimumRaw = asset.token === 'GRAM' ? amountToNanoGram(assetDeposit.minimum) : usdtToBaseUnits(String(assetDeposit.minimum));
   if (minimumRaw == null || requestedAmountRaw < minimumRaw) {
-    return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: `حداقل مبلغ واریز ${asset.token === 'GRAM' ? config.minimumDepositGram : config.minimumDepositUsdt} ${asset.token} است.` });
+    return res.status(400).json({ success: false, code: 'DEPOSIT_BELOW_MINIMUM', message: `حداقل مبلغ واریز ${assetDeposit.minimum} ${asset.token} است.` });
   }
 
   // Close any unverified invoice from the former Jetton-only implementation. It is
@@ -872,9 +885,9 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
       network: 'TON_MAINNET',
       token: asset.token,
       assetType: asset.assetType,
-      depositAddressSnapshot: config.depositWalletAddress,
+      depositAddressSnapshot: assetDeposit.depositWalletAddress,
       walletAddressSnapshot: req.dbUser.connectedWallet.address,
-      minimumDepositSnapshot: asset.token === 'GRAM' ? config.minimumDepositGram : config.minimumDepositUsdt,
+      minimumDepositSnapshot: assetDeposit.minimum,
       requestedAmount,
       requestedAmountRaw: requestedAmountRaw.toString(),
       status: 'pending'

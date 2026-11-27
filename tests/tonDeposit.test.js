@@ -199,7 +199,10 @@ async function run() {
   assert.ok(!model.includes('jettonMasterSnapshot'));
   assert.ok(settings.includes("depositEnabled: { type: Boolean, default: false }"), 'deposits default off');
   assert.ok(settings.includes("minimumDepositUsdt: { type: Number, default: 0.1, min: 0 }"), 'USDT minimum deposit defaults to 0.1');
-  assert.ok(route.includes('minimumDepositGram: 0.1'), 'GRAM minimum deposit is 0.1');
+  assert.ok(settings.includes("depositWalletAddressGram: { type: String, default: '' }") && settings.includes("minimumDepositGram: { type: Number, default: 0.1, min: 0 }"), 'GRAM deposit settings persist independently');
+  assert.ok(route.includes('readyGram') && route.includes('readyUsdt') && route.includes('forAsset'), 'deposit readiness is asset-specific');
+  assert.ok(adminRoute.includes('depositWalletAddressGram') && adminRoute.includes('minimumDepositGram'), 'admin settings accept GRAM deposit configuration');
+  assert.ok(adminUi.includes('setDepositWalletAddressGram') && adminUi.includes('setMinimumDepositGram'), 'admin UI exposes GRAM deposit configuration');
   assert.ok(!settings.includes('gramJettonMasterAddress'));
   assert.ok(adminRoute.includes("deposit.token === 'GRAM'") && adminRoute.includes('verifyNativeGramTransfer'));
   assert.ok(!adminUi.includes('setGramJettonMasterAddress'));

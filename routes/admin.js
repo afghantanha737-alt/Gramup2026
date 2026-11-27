@@ -9,7 +9,7 @@ const Task = require('../models/Task');
 const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
-const { normalizeTonAddress, verifyNativeGramTransfer } = require('../utils/tonNativeDepositVerify');
+const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer } = require('../utils/tonNativeDepositVerify');
 const { usdtToBaseUnits, findUsdtTransfer } = require('../utils/tonUsdt');
 const { bot, notifyUser, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers, buildBroadcastButtonsReplyMarkup, sanitizeTelegramHtml } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
@@ -2622,7 +2622,7 @@ router.put('/settings', async (req, res) => {
     }
     changes.depositNetwork = 'TON_MAINNET';
   }
-  for (const key of ['depositWalletAddress']) {
+  for (const key of ['depositWalletAddress', 'depositWalletAddressUsdt', 'depositWalletAddressGram']) {
     if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
     const value = String(body[key] || '').trim();
     if (value && !normalizeTonAddress(value)) {
@@ -2630,6 +2630,8 @@ router.put('/settings', async (req, res) => {
     }
     changes[key] = value;
   }
+  if (changes.depositWalletAddressUsdt !== undefined) changes.depositWalletAddress = changes.depositWalletAddressUsdt;
+  else if (changes.depositWalletAddress !== undefined) changes.depositWalletAddressUsdt = changes.depositWalletAddress;
   if (Object.prototype.hasOwnProperty.call(body, 'minimumDepositUsdt')) {
     const minimum = Number(body.minimumDepositUsdt);
     if (usdtToBaseUnits(String(body.minimumDepositUsdt)) == null) {
@@ -2637,19 +2639,29 @@ router.put('/settings', async (req, res) => {
     }
     changes.minimumDepositUsdt = minimum;
   }
+  if (Object.prototype.hasOwnProperty.call(body, 'minimumDepositGram')) {
+    const minimum = Number(body.minimumDepositGram);
+    if (amountToNanoGram(body.minimumDepositGram) == null) {
+      return res.status(400).json({ success: false, message: 'حداقل Deposit باید مثبت و تا حداکثر ۹ رقم اعشار قابل نمایش در GRAM باشد.' });
+    }
+    changes.minimumDepositGram = minimum;
+  }
 
   const settings = await Settings.getGlobal();
 
   const finalDepositEnabled = changes.depositEnabled !== undefined ? changes.depositEnabled : settings.depositEnabled;
-  const finalDepositWallet = changes.depositWalletAddress !== undefined ? changes.depositWalletAddress : settings.depositWalletAddress;
-  const finalMinimumDeposit = changes.minimumDepositUsdt !== undefined ? changes.minimumDepositUsdt : settings.minimumDepositUsdt;
+  const finalDepositWalletUsdt = changes.depositWalletAddressUsdt !== undefined ? changes.depositWalletAddressUsdt : (settings.depositWalletAddressUsdt || settings.depositWalletAddress);
+  const finalDepositWalletGram = changes.depositWalletAddressGram !== undefined ? changes.depositWalletAddressGram : (settings.depositWalletAddressGram || settings.depositWalletAddress);
+  const finalMinimumDepositUsdt = changes.minimumDepositUsdt !== undefined ? changes.minimumDepositUsdt : settings.minimumDepositUsdt;
+  const finalMinimumDepositGram = changes.minimumDepositGram !== undefined ? changes.minimumDepositGram : (settings.minimumDepositGram ?? 0.1);
   const finalDepositNetwork = changes.depositNetwork !== undefined ? changes.depositNetwork : (settings.depositNetwork || 'TON_MAINNET');
   if (finalDepositEnabled) {
-    if (!normalizeTonAddress(finalDepositWallet) || usdtToBaseUnits(String(finalMinimumDeposit)) == null
+    if (!normalizeTonAddress(finalDepositWalletUsdt) || !normalizeTonAddress(finalDepositWalletGram)
+      || usdtToBaseUnits(String(finalMinimumDepositUsdt)) == null || amountToNanoGram(finalMinimumDepositGram) == null
       || finalDepositNetwork !== 'TON_MAINNET') {
       return res.status(400).json({
         success: false,
-        message: 'برای فعال‌سازی Deposit USDT، آدرس TON Mainnet تحت کنترل پروژه و حداقل مبلغ معتبر را تنظیم کنید.'
+        message: 'برای فعال‌سازی Deposit، آدرس TON Mainnet و حداقل مبلغ معتبر را برای USDT و GRAM تنظیم کنید.'
       });
     }
   }

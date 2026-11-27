@@ -734,8 +734,8 @@
           <p class="small" id="adPricingPreview" style="margin-bottom:0"></p>
         </div>
         <div style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:14px 0;background:var(--surface2)">
-          <b>💎 USDT Jetton Deposit — TON Mainnet</b>
-          <p class="small">این Deposit فقط USDT Jetton رسمی شبکه TON را می‌پذیرد و Master رسمی USDT را اعتبارسنجی می‌کند. آدرس عمومی کیف‌پول پروژه را از منبع مورداعتماد وارد کنید؛ هر کاربر باید Reference اختصاصی را در comment انتقال USDT Jetton بنویسد. این برنامه seed یا private key نگهداری نمی‌کند. Deposit به‌صورت پیش‌فرض خاموش است.</p>
+          <b>💎 Deposit دارایی‌ها — TON Mainnet</b>
+          <p class="small">برای هر دارایی آدرس و حداقل مبلغ مستقل تنظیم کنید. USDT به‌صورت Jetton رسمی TON و GRAM به‌صورت Native اعتبارسنجی می‌شود؛ این برنامه seed یا private key نگهداری نمی‌کند.</p>
           <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
             <input type="checkbox" id="setDepositEnabled" style="width:auto">
             <span>Deposit فعال باشد</span>
@@ -743,10 +743,14 @@
           <label>Network</label>
           <input id="setDepositNetwork" value="TON Mainnet" readonly>
           <label>آدرس عمومی دریافت USDT (TON wallet owner)</label>
-          <input id="setDepositWalletAddress" autocomplete="off" spellcheck="false" placeholder="آدرس معتبر TON">
+          <input id="setDepositWalletAddressUsdt" autocomplete="off" spellcheck="false" placeholder="آدرس معتبر TON">
           <label>Minimum Deposit (USDT)</label>
           <input id="setMinimumDepositUsdt" type="number" min="0.000000001" step="0.000000001" value="0.1">
-          <p class="small" style="margin-bottom:0">برای روشن‌کردن، آدرس معتبر TON Mainnet و حداقل مبلغ TON USDT Jetton لازم است. برنامه هیچ کلید یا عبارت بازیابی کیف‌پول را نگهداری نمی‌کند.</p>
+          <label>آدرس عمومی دریافت GRAM (TON wallet owner)</label>
+          <input id="setDepositWalletAddressGram" autocomplete="off" spellcheck="false" placeholder="آدرس معتبر TON">
+          <label>Minimum Deposit (GRAM)</label>
+          <input id="setMinimumDepositGram" type="number" min="0.000000001" step="0.000000001" value="0.1">
+          <p class="small" style="margin-bottom:0">برای روشن‌کردن، هر دو آدرس معتبر TON Mainnet و حداقل مبلغ معتبر لازم است.</p>
         </div>
         <button onclick="saveSettings()">ذخیره تنظیمات</button>
       </div>
@@ -2992,8 +2996,10 @@ async function loadSettings() {
     updateAdPricingPreview();
     document.getElementById("setDepositEnabled").checked = !!s.depositEnabled;
     document.getElementById("setDepositNetwork").value = "TON Mainnet";
-    document.getElementById("setDepositWalletAddress").value = s.depositWalletAddress || "";
+    document.getElementById("setDepositWalletAddressUsdt").value = s.depositWalletAddressUsdt || s.depositWalletAddress || "";
     document.getElementById("setMinimumDepositUsdt").value = s.minimumDepositUsdt ?? 0.1;
+    document.getElementById("setDepositWalletAddressGram").value = s.depositWalletAddressGram || s.depositWalletAddress || "";
+    document.getElementById("setMinimumDepositGram").value = s.minimumDepositGram ?? 0.1;
   } catch (error) {
     showMsg(error.message, "error");
   }
@@ -3039,8 +3045,10 @@ async function saveSettings() {
     referralLevelRates: [10, 5, 3, 1, 1, 1, 1, 1, 1, 1],
     depositEnabled: document.getElementById("setDepositEnabled").checked,
     depositNetwork: "TON_MAINNET",
-    depositWalletAddress: document.getElementById("setDepositWalletAddress").value.trim(),
-    minimumDepositUsdt: Number(document.getElementById("setMinimumDepositUsdt").value)
+    depositWalletAddressUsdt: document.getElementById("setDepositWalletAddressUsdt").value.trim(),
+    depositWalletAddressGram: document.getElementById("setDepositWalletAddressGram").value.trim(),
+    minimumDepositUsdt: Number(document.getElementById("setMinimumDepositUsdt").value),
+    minimumDepositGram: Number(document.getElementById("setMinimumDepositGram").value)
   };
   try {
     const data = await api("/api/admin/settings", { method: "PUT", body: JSON.stringify(body) });

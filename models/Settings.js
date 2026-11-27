@@ -40,8 +40,12 @@ const settingsSchema = new mongoose.Schema(
     // TON USDT Jetton deposits stay disabled until an administrator supplies the project's TON Mainnet wallet.
     depositEnabled: { type: Boolean, default: false },
     depositNetwork: { type: String, enum: ['TON_MAINNET'], default: 'TON_MAINNET' },
+    // Legacy depositWalletAddress is retained as the USDT alias for existing deployments.
     depositWalletAddress: { type: String, default: '' },
+    depositWalletAddressUsdt: { type: String, default: '' },
+    depositWalletAddressGram: { type: String, default: '' },
     minimumDepositUsdt: { type: Number, default: 0.1, min: 0 },
+    minimumDepositGram: { type: Number, default: 0.1, min: 0 },
     // Fixed by the current referral policy; retained for backwards compatibility.
     referralInitialRewardPoints: { type: Number, default: DEFAULT_REFERRAL_INITIAL_REWARD_POINTS, min: 0, max: 1000000 },
     // A newly accepted invitee receives this one-time welcome credit; zero disables it.

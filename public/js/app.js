@@ -2965,6 +2965,11 @@ function depositMinimumForAsset(asset, deposit = currentDeposit) {
     : token === "GRAM" ? depositConfig?.minimumDepositGram ?? 0.1 : depositConfig?.minimumDepositUsdt ?? 0;
   return { token, value: Number(value) || 0 };
 }
+function depositAddressForAsset(asset, deposit = currentDeposit) {
+  const token = String(asset || "GRAM").toUpperCase() === "USDT" ? "USDT" : "GRAM";
+  if (deposit?.token === token && deposit?.depositWalletAddress) return deposit.depositWalletAddress;
+  return token === "USDT" ? (depositConfig?.depositWalletAddressUsdt || depositConfig?.depositWalletAddress || "") : (depositConfig?.depositWalletAddressGram || "");
+}
 
 function updateDepositAssetUI() {
   document.querySelectorAll("[data-deposit-asset]").forEach(button => button.classList.toggle("active", button.dataset.depositAsset === state.selectedDepositAsset));
@@ -2977,6 +2982,8 @@ function updateDepositAssetUI() {
     const { token, value } = depositMinimumForAsset(state.selectedDepositAsset);
     minimum.textContent = t("deposit_minimum", { amount: formatNumber(value, token === "GRAM" ? 9 : 6), token });
   }
+  const address = $("#depositWalletAddress");
+  if (address) address.value = depositAddressForAsset(state.selectedDepositAsset);
 }
 
 function selectDepositAsset(asset) {
@@ -2995,7 +3002,9 @@ function showDepositAssetSelection() {
 window.showDepositAssetSelection = showDepositAssetSelection;
 
 function openDepositAsset(asset) {
-  if (!depositConfig?.enabled) return;
+  const token = String(asset || "GRAM").toUpperCase() === "USDT" ? "USDT" : "GRAM";
+  const configured = depositConfig?.assets?.find(item => item.token === token);
+  if (!depositConfig?.enabled || configured?.enabled === false) return;
   selectDepositAsset(asset);
   const selection = $("#depositAssetSelection");
   const panel = $("#depositPanel");
@@ -3035,7 +3044,7 @@ async function loadDepositPanel() {
     const reference = $("#depositReference");
     const amount = $("#depositAmount");
     const minimum = $("#depositMinimumText");
-    if (address) address.value = configData?.depositWalletAddress || "";
+    if (address) address.value = depositAddressForAsset(state.selectedDepositAsset);
     if (reference) reference.textContent = t("deposit_reference_auto");
     selectDepositAsset(state.selectedDepositAsset);
     if (minimum) updateDepositAssetUI();
@@ -3046,7 +3055,7 @@ async function loadDepositPanel() {
     const deposits = await historyPromise;
     const pending = deposits?.find(item => item.status === "pending" || item.status === "verifying");
     currentDeposit = pending || null;
-    if (address) address.value = currentDeposit?.depositWalletAddress || configData?.depositWalletAddress || "";
+    if (address) address.value = depositAddressForAsset(state.selectedDepositAsset, currentDeposit);
     if (reference) reference.textContent = currentDeposit?.reference || t("deposit_reference_auto");
     if (amount && currentDeposit?.requestedAmount != null) amount.value = currentDeposit.requestedAmount;
     if (currentDeposit?.token) selectDepositAsset(currentDeposit.token);
