@@ -186,6 +186,8 @@ async function run() {
   assert.ok(route.includes('findUsdtTransfer'));
   assert.ok(route.includes('await findUsdtTransfer('));
   assert.ok(route.includes('findIncomingNativeGramTransferByReference') && route.includes('verifyNativeGramTransfer'), 'native GRAM deposits use on-chain verification');
+  assert.ok(route.includes("submittedHash\n        ? await verifyNativeGramTransfer") && route.includes("await findIncomingNativeGramTransferByReference({ depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })"), 'GRAM verification falls back to address/reference lookup when Wallet returns only a BOC');
+  assert.ok(route.includes("asset.token === 'GRAM' ? 'تراکنش Native GRAM' : 'تراکنش TON USDT Jetton'"), 'verification errors identify the selected asset');
   assert.ok(route.includes("comment(reference).toBoc().toString('base64')"), 'native GRAM transaction comments use TON Connect Base64 payloads');
   assert.ok(route.includes('await withMongoTransaction(async session =>'));
   assert.ok(route.includes('txHashNormalized: verification.txHash'), 'canonical receiving transaction hash is uniquely claimed');

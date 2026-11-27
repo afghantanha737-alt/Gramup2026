@@ -940,7 +940,9 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
   let verification;
   try {
     verification = asset.token === 'GRAM'
-      ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
+      ? submittedHash
+        ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
+        : await findIncomingNativeGramTransferByReference({ depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
       : await findUsdtTransfer({ txHash: submittedHash, ownerAddress: deposit.depositAddressSnapshot, destinationAddress: deposit.depositAddressSnapshot, sourceAddress: deposit.walletAddressSnapshot, amountRaw: deposit.requestedAmountRaw, reference: deposit.reference });
   } catch {
     return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'TON Center در دسترس نیست؛ موجودی تغییر نکرده است. دوباره تلاش کنید.' });
@@ -962,14 +964,14 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
     return res.status(400).json({
       success: false,
       code: verification.code || 'DEPOSIT_VERIFICATION_FAILED',
-      message: 'تراکنش TON USDT Jetton، آدرس دریافت، Reference یا وضعیت نهایی Mainnet مطابقت ندارد؛ موجودی تغییر نکرد.'
+      message: `${asset.token === 'GRAM' ? 'تراکنش Native GRAM' : 'تراکنش TON USDT Jetton'}، آدرس دریافت، Reference یا وضعیت نهایی Mainnet مطابقت ندارد؛ موجودی تغییر نکرد.`
     });
   }
 
   const minimumRaw = asset.token === 'GRAM' ? amountToNanoGram(deposit.minimumDepositSnapshot) : usdtToBaseUnits(String(deposit.minimumDepositSnapshot));
   const actualRaw = BigInt(verification.amountRaw);
   if (minimumRaw == null) {
-    return res.status(503).json({ success: false, code: 'INVALID_DEPOSIT_SETTINGS', message: 'تنظیم حداقل Deposit با دقت ۹ رقم اعشار TON USDT Jetton سازگار نیست؛ موجودی تغییر نکرد.' });
+    return res.status(503).json({ success: false, code: 'INVALID_DEPOSIT_SETTINGS', message: `تنظیم حداقل Deposit ${asset.token} معتبر نیست؛ موجودی تغییر نکرد.` });
   }
 
   if (deposit.walletAddressSnapshot) {
@@ -1011,7 +1013,7 @@ router.post('/deposits/:id/verify', auth, sensitiveRateLimit('general'), async (
         { $set: {
           status: 'confirmed', amount: verification.amount, amountRaw: verification.amountRaw,
           submittedTxHash: submittedHash || deposit.submittedTxHash, submittedBoc: submittedBoc || deposit.submittedBoc, txHash: verification.txHash, txHashNormalized: verification.txHash,
-          sourceAddress: verification.sourceAddress, verificationNote: 'confirmed_jetton_usdt_by_toncenter_v3_mainnet',
+          sourceAddress: verification.sourceAddress, verificationNote: asset.token === 'GRAM' ? 'confirmed_native_gram_by_toncenter_v3_mainnet' : 'confirmed_jetton_usdt_by_toncenter_v3_mainnet',
           verifiedAt: verification.confirmedAt, creditedAt: now
         } },
         { new: true, session }
