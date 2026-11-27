@@ -67,12 +67,12 @@ assert.match(css, /\.mineConsole\{display:grid;gap:14px;min-width:0;\}/,
 assert.match(css, /\.mineProgressFill\{[^}]*background:linear-gradient\(90deg,#14b8a6,#35d7c8 65%,#8be9df\)/,
   'Mine progress must use the current teal dashboard gradient');
 
-assert.ok(html.includes('css/style.css?v=payout_board_20261117_2'), 'style.css must use the current light contrast cache version');
+assert.ok(html.includes('css/style.css?v=wallet_allowlist_20261127'), 'style.css must use the wallet allowlist cache version');
 assert.ok(html.includes('css/theme-selector.css?v=payout_board_20261117_2'), 'theme-selector.css must use the current light contrast cache version');
 for (const [asset, version] of Object.entries({
   maintenanceGate: '20261006-maintenance',
   readModelCache: '20261030-read-model-1',
-  walletConnect: 'ad_ui_v3_20261109'
+  walletConnect: 'wallet_allowlist_20261127'
 })) {
   assert.ok(html.includes(`js/${asset}.js?v=${version}`), `${asset} must use its current cache version`);
 }

@@ -9,8 +9,15 @@ async function run() {
   let walletStatusListener;
   let transactionSent = null;
   let modalOpenCount = 0;
+  let singleWalletOpenCount = 0;
+  let selectedWalletApp = '';
   let requestedNetwork = null;
   let persistedVerifiedAddress = '';
+  const pickerRoots = [];
+  const mutationObservers = [];
+  const fallbackButtons = ['Choose Another Wallet', 'Выбрать другой кошелёк'].map(textContent => ({
+    textContent, hidden: false, disabled: false, attributes: {}, setAttribute(name, value) { this.attributes[name] = value; }
+  }));
   const walletAddress = 'EQExampleWalletAddressForTest';
   const wallet = {
     account: {
@@ -35,6 +42,7 @@ async function run() {
     setConnectRequestParameters(parameters) { this.connectParameters = parameters; }
     setConnectionNetwork(network) { requestedNetwork = network; }
     openModal() { modalOpenCount += 1; return Promise.resolve(); }
+    openSingleWalletModal(appName) { singleWalletOpenCount += 1; selectedWalletApp = appName; return Promise.resolve(); }
     async disconnect() {
       this.wallet = null;
       walletStatusListener?.(null);
@@ -68,10 +76,30 @@ async function run() {
       throw new Error(`Unexpected API call: ${url}`);
     }
   };
+  windowObject.MutationObserver = class MockMutationObserver {
+    constructor(callback) { this.callback = callback; mutationObservers.push(this); }
+    observe(root, options) { this.root = root; this.options = options; }
+  };
   class MockCustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } }
   const context = {
     window: windowObject,
-    document: { getElementById: () => null },
+    document: {
+      getElementById: () => null,
+      createElement: () => {
+        const listeners = {};
+        return {
+          listeners,
+          setAttribute() {},
+          addEventListener(name, listener) { listeners[name] = listener; },
+          querySelector() { return { focus() {} }; },
+          remove() { this.removed = true; }
+        };
+      },
+      body: {
+        appendChild(root) { pickerRoots.push(root); },
+        querySelectorAll(selector) { assert.strictEqual(selector, '[data-tc-button="true"]'); return fallbackButtons; }
+      }
+    },
     CustomEvent: MockCustomEvent,
     console,
     setTimeout,
@@ -82,14 +110,42 @@ async function run() {
   vm.runInNewContext(source, context, { filename: 'walletConnect.js' });
   const walletApi = windowObject.gramupWallet;
   assert(walletApi, 'wallet API is installed');
+  async function selectWallet(appName) {
+    const picker = pickerRoots.at(-1);
+    assert(picker && !picker.removed, 'wallet selection dialog is shown');
+    const button = { getAttribute: name => name === 'data-wallet-app' ? appName : null };
+    picker.listeners.click({ target: { closest: selector => selector === '[data-wallet-app]' ? button : null } });
+    await new Promise(resolve => setImmediate(resolve));
+  }
 
   await walletApi.init();
   assert.strictEqual(walletApi.state.phase, 'disconnected');
+  assert.strictEqual(mutationObservers.length, 1, 'TonConnect modal buttons are monitored for later fallback rendering');
+  for (const button of fallbackButtons) {
+    assert.strictEqual(button.hidden, true, 'choose another wallet is hidden');
+    assert.strictEqual(button.disabled, true, 'choose another wallet is disabled');
+    assert.strictEqual(button.attributes['aria-hidden'], 'true', 'the hidden fallback is inaccessible');
+  }
+  const lateFallback = { textContent: 'Choose Another Wallet', hidden: false, disabled: false, attributes: {}, setAttribute(name, value) { this.attributes[name] = value; } };
+  fallbackButtons.push(lateFallback);
+  mutationObservers[0].callback();
+  assert.strictEqual(lateFallback.hidden, true, 'the observer hides the fallback if TonConnect renders it later');
   assert.strictEqual(requestedNetwork, '-239', 'fresh wallet connections are pinned to TON Mainnet');
   assert(calls.some(call => call.url === '/api/ton-proof/payload'), 'proof challenge is prefetched');
   walletApi.connect();
   assert.strictEqual(walletApi.state.phase, 'connecting');
   assert.strictEqual(walletApi.state.ui.connectParameters.state, 'ready');
+  const pickerMarkup = pickerRoots.at(-1).innerHTML;
+  for (const appName of ['tonkeeper', 'telegram', 'mytonwallet', 'gramwallet']) assert(pickerMarkup.includes(`data-wallet-app="${appName}"`), `${appName} is in the allowlist`);
+  assert(!pickerMarkup.includes('All wallets'), 'the unrestricted all-wallets option is not displayed');
+  assert.strictEqual((pickerMarkup.match(/data-wallet-app=/g) || []).length, 4, 'only four wallet choices are rendered');
+  pickerRoots.at(-1).listeners.keydown({ key: 'Escape' });
+  assert.strictEqual(walletApi.state.phase, 'disconnected', 'dismissing the picker does not leave the connect state busy');
+  walletApi.connect();
+  await selectWallet('tonkeeper');
+  assert.strictEqual(singleWalletOpenCount, 1);
+  assert.strictEqual(selectedWalletApp, 'tonkeeper');
+  assert.strictEqual(modalOpenCount, 0, 'the unrestricted SDK wallet picker is never opened');
 
   // A wallet without a signed proof must not be accepted for financial actions.
   walletStatusListener({ account: wallet.account, device: wallet.device });
@@ -98,15 +154,18 @@ async function run() {
   await assert.rejects(() => walletApi.requestWithdrawal(1, 'key-test'), error => error.code === 'WALLET_PROOF_REQUIRED');
 
   // Verify on an old proof-less session must disconnect; the next tap creates a fresh ConnectRequest.
-  const firstModalOpenCount = modalOpenCount;
+  const firstSingleWalletOpenCount = singleWalletOpenCount;
   await walletApi.connect();
   assert.strictEqual(walletApi.state.connected, false);
   assert.strictEqual(walletApi.state.phase, 'disconnected');
-  assert.strictEqual(modalOpenCount, firstModalOpenCount, 'disconnect and opening the wallet picker require separate taps');
+  assert.strictEqual(singleWalletOpenCount, firstSingleWalletOpenCount, 'disconnect and opening the wallet picker require separate taps');
   assert(walletApi.state.error.includes('tap Connect wallet again'));
   await new Promise(resolve => setImmediate(resolve));
   walletApi.connect();
-  assert.strictEqual(modalOpenCount, firstModalOpenCount + 1, 'second tap opens the wallet picker');
+  await selectWallet('gramwallet');
+  assert.strictEqual(singleWalletOpenCount, firstSingleWalletOpenCount + 1, 'the chosen wallet opens its own TonConnect modal');
+  assert.strictEqual(selectedWalletApp, 'gramwallet');
+  assert.strictEqual(modalOpenCount, 0, 'reconnect does not fall back to the unrestricted wallet picker');
 
   // Signed proof is submitted to the server, and successful verification is bound to this address.
   walletStatusListener(wallet);

@@ -3,6 +3,12 @@
   'use strict';
 
   const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
+  const allowedWallets = [
+    { appName: 'tonkeeper', name: 'Tonkeeper' },
+    { appName: 'telegram', name: 'Telegram Wallet' },
+    { appName: 'mytonwallet', name: 'My Wallet' },
+    { appName: 'gramwallet', name: 'Gram Wallet' }
+  ];
   const state = {
     ready: false,
     phase: 'initializing',
@@ -25,6 +31,8 @@
   let proofVerificationInFlight = '';
   let clearServerInFlight = null;
   let sdkLoadPromise = null;
+  let walletPickerRoot = null;
+  let walletModalObserver = null;
 
   function ensureTonConnectSdk() {
     if (window.TON_CONNECT_UI?.TonConnectUI) return Promise.resolve();
@@ -58,6 +66,7 @@
     const lang = window.state?.language || 'fa';
     if (lang === 'en') return {
       title: 'TON wallet', connect: 'Connect wallet', reconnect: 'Verify wallet', disconnect: 'Disconnect',
+      walletPickerTitle: 'Choose a wallet', walletPickerHint: 'Select one of the supported TON wallets.', walletPickerClose: 'Close wallet selection',
       loading: 'Preparing secure wallet connection…', disconnected: 'No wallet connected.',
       connecting: 'Waiting for wallet approval…', connected: 'Wallet connected', verifying: 'Verifying wallet ownership…',
       verified: 'Wallet verified', disconnecting: 'Disconnecting wallet…', unavailable: 'TON Connect UI is unavailable.',
@@ -67,6 +76,7 @@
     };
     if (lang === 'ps') return {
       title: 'TON والټ', connect: 'والټ وصل کړئ', reconnect: 'والټ تایید کړئ', disconnect: 'جلا کول',
+      walletPickerTitle: 'خپل والټ وټاکئ', walletPickerHint: 'له ملاتړ شوو TON والټونو څخه یو وټاکئ.', walletPickerClose: 'د والټونو د ټاکلو کړکۍ وتړئ',
       loading: 'د خوندي والټ اتصال چمتو کېږي…', disconnected: 'هیڅ والټ نه دی نښلول شوی.',
       connecting: 'د والټ تایید ته انتظار…', connected: 'والټ وصل شو', verifying: 'د والټ مالکیت تاییدېږي…',
       verified: 'والټ تایید شو', disconnecting: 'والټ جلا کېږي…', unavailable: 'TON Connect UI نشته.',
@@ -76,6 +86,7 @@
     };
     return {
       title: 'TON Wallet', connect: 'وصل کردن Wallet', reconnect: 'تأیید Wallet', disconnect: 'قطع اتصال',
+      walletPickerTitle: 'کیف‌پول را انتخاب کنید', walletPickerHint: 'یکی از کیف‌پول‌های پشتیبانی‌شدهٔ TON را انتخاب کنید.', walletPickerClose: 'بستن انتخاب کیف‌پول',
       loading: 'در حال آماده‌سازی اتصال امن Wallet…', disconnected: 'هیچ Wallet متصل نیست.',
       connecting: 'در انتظار تأیید Wallet…', connected: 'Wallet متصل است', verifying: 'در حال تأیید مالکیت Wallet…',
       verified: 'مالکیت Wallet تأیید شد', disconnecting: 'در حال قطع اتصال Wallet…', unavailable: 'TON Connect UI در دسترس نیست.',
@@ -89,6 +100,78 @@
     return String(value ?? '').replace(/[&<>"']/g, character => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     })[character]);
+  }
+
+  function closeWalletPicker() {
+    walletPickerRoot?.remove();
+    walletPickerRoot = null;
+  }
+
+  function dismissWalletPicker() {
+    closeWalletPicker();
+    if (state.phase === 'connecting' && !state.connected) {
+      state.phase = 'disconnected';
+      notify();
+    }
+  }
+
+  function showWalletPicker() {
+    closeWalletPicker();
+    const text = labels();
+    const root = document.createElement('div');
+    root.className = 'gramupWalletPickerBackdrop';
+    root.setAttribute('role', 'presentation');
+    root.innerHTML = `<section class="gramupWalletPicker" role="dialog" aria-modal="true" aria-labelledby="gramupWalletPickerTitle" aria-describedby="gramupWalletPickerHint" tabindex="-1" dir="auto">
+      <header class="gramupWalletPickerHeader"><div><h2 id="gramupWalletPickerTitle">${escapeHtml(text.walletPickerTitle)}</h2><p id="gramupWalletPickerHint">${escapeHtml(text.walletPickerHint)}</p></div><button type="button" class="gramupWalletPickerClose" data-wallet-picker-close aria-label="${escapeHtml(text.walletPickerClose)}">×</button></header>
+      <div class="gramupWalletPickerOptions">${allowedWallets.map(wallet => `<button type="button" class="gramupWalletPickerOption" data-wallet-app="${escapeHtml(wallet.appName)}">${escapeHtml(wallet.name)}</button>`).join('')}</div>
+    </section>`;
+    root.addEventListener('click', event => {
+      if (event.target === root || event.target?.closest?.('[data-wallet-picker-close]')) {
+        dismissWalletPicker();
+        return;
+      }
+      const button = event.target?.closest?.('[data-wallet-app]');
+      const appName = button?.getAttribute('data-wallet-app');
+      if (!allowedWallets.some(wallet => wallet.appName === appName)) return;
+      closeWalletPicker();
+      try {
+        if (typeof state.ui?.openSingleWalletModal !== 'function') throw new Error('Wallet selection is unavailable.');
+        const opened = state.ui.openSingleWalletModal(appName);
+        Promise.resolve(opened).then(() => {
+          if (state.phase === 'connecting' && !state.connected) {
+            state.phase = 'disconnected';
+            notify();
+          }
+        }).catch(handleConnectionError);
+      } catch (error) {
+        handleConnectionError(error);
+      }
+    });
+    root.addEventListener('keydown', event => {
+      if (event.key === 'Escape') dismissWalletPicker();
+    });
+    document.body.appendChild(root);
+    root.querySelector('.gramupWalletPicker')?.focus();
+    walletPickerRoot = root;
+  }
+
+  function restrictTonConnectModal() {
+    const root = document.getElementById('tc-widget-root') || document.body;
+    const hideAlternateWalletAction = () => {
+      const buttons = root.querySelectorAll?.('[data-tc-button="true"]') || [];
+      buttons.forEach(button => {
+        const label = String(button.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        if (label === 'choose another wallet' || label === 'выбрать другой кошелёк') {
+          button.hidden = true;
+          button.disabled = true;
+          button.setAttribute('aria-hidden', 'true');
+        }
+      });
+    };
+    hideAlternateWalletAction();
+    if (walletModalObserver || typeof window.MutationObserver !== 'function') return;
+    walletModalObserver = new window.MutationObserver(hideAlternateWalletAction);
+    walletModalObserver.observe(root, { childList: true, subtree: true, characterData: true });
   }
 
   function shortAddress(value) {
@@ -396,7 +479,7 @@
     state.phase = 'connecting';
     notify();
     try {
-      // Keep openModal in the click call stack for Telegram mobile WebView user activation.
+      // Keep wallet selection in a user gesture and avoid the unrestricted SDK picker.
       if (!state.proofPayload) {
         state.error = 'Wallet security challenge is still loading. Please tap Connect again.';
         state.phase = state.connected ? 'connected' : 'disconnected';
@@ -405,22 +488,7 @@
         return;
       }
       state.ui.setConnectRequestParameters({ state: 'ready', value: { tonProof: state.proofPayload } });
-      const opened = state.ui.openModal();
-      if (opened && typeof opened.then === 'function') {
-        opened.then(() => {
-          if (state.phase === 'connecting' && !state.connected) {
-            state.phase = 'disconnected';
-            notify();
-          }
-        }).catch(handleConnectionError);
-      } else {
-        setTimeout(() => {
-          if (state.phase === 'connecting' && !state.connected) {
-            state.phase = 'disconnected';
-            notify();
-          }
-        }, 5000);
-      }
+      showWalletPicker();
     } catch (error) {
       state.phase = state.connected ? (isCurrentProof() ? 'verified' : 'connected') : 'disconnected';
       state.error = error?.message || 'Wallet connection was cancelled.';
@@ -583,6 +651,7 @@
         } catch { /* browser fallback: TON Connect uses its default return flow */ }
       }
       state.ui = new window.TON_CONNECT_UI.TonConnectUI(options);
+      restrictTonConnectModal();
       // Pin fresh connections to the same Mainnet accepted by the proof and financial APIs.
       if (!state.ui.connected && typeof state.ui.setConnectionNetwork === 'function') {
         state.ui.setConnectionNetwork('-239');
