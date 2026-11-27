@@ -642,7 +642,9 @@ html[data-theme="light"] .progressTrack { background: rgba(20,22,28,.08); }
 .gramupWalletPickerHeader p { margin: 6px 0 0; color: var(--text-soft); font-size: 12px; line-height: 1.6; }
 .gramupWalletPickerClose { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; background: var(--surface-3); color: var(--text-muted); font-size: 20px; }
 .gramupWalletPickerOptions { display: grid; gap: 9px; }
-.gramupWalletPickerOption { min-height: 48px; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: 13px; background: var(--surface); color: var(--text); text-align: start; font-size: 13px; font-weight: 800; transition: border-color .15s ease, background .15s ease; }
+.gramupWalletPickerOption { min-height: 56px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--line-strong); border-radius: 13px; background: var(--surface); color: var(--text); text-align: start; font-size: 13px; font-weight: 800; transition: border-color .15s ease, background .15s ease; }
+.gramupWalletPickerOption img { display: block; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 9px; object-fit: cover; }
+.gramupWalletPickerOption span { min-width: 0; }
 .gramupWalletPickerOption:hover, .gramupWalletPickerOption:focus-visible { border-color: var(--primary); background: var(--surface-3); outline: none; }
 
 /* ONBOARDING */

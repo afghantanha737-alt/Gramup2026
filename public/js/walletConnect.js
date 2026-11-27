@@ -3,11 +3,12 @@
   'use strict';
 
   const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
+  const walletSessionMigrationKey = 'gramup.wallet-session-disconnect.v1';
   const allowedWallets = [
-    { appName: 'tonkeeper', name: 'Tonkeeper' },
-    { appName: 'telegram', name: 'Telegram Wallet' },
-    { appName: 'mytonwallet', name: 'My Wallet' },
-    { appName: 'gramwallet', name: 'Gram Wallet' }
+    { appName: 'tonkeeper', name: 'Tonkeeper', icon: 'tonkeeper.png' },
+    { appName: 'telegram', name: 'Telegram Wallet', icon: 'telegram.png' },
+    { appName: 'mytonwallet', name: 'My Wallet', icon: 'mywallet.png' },
+    { appName: 'gramwallet', name: 'Gram Wallet', icon: 'gramwallet.png' }
   ];
   const state = {
     ready: false,
@@ -33,6 +34,40 @@
   let sdkLoadPromise = null;
   let walletPickerRoot = null;
   let walletModalObserver = null;
+  let walletSessionMigrationPromise = null;
+  let walletSessionMigrationPending = false;
+
+  function getWalletSessionMigrationStorageKey() {
+    const userId = window.state?.user?.id || window.state?.user?.telegramId || window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 'anonymous';
+    return `${walletSessionMigrationKey}:${String(userId)}`;
+  }
+
+  function hasCompletedWalletSessionMigration() {
+    try {
+      return window.localStorage.getItem(getWalletSessionMigrationStorageKey()) === 'complete';
+    } catch {
+      return false;
+    }
+  }
+
+  async function disconnectPreviousWalletSession(ui) {
+    if (hasCompletedWalletSessionMigration()) return false;
+    if (walletSessionMigrationPromise) return walletSessionMigrationPromise;
+    walletSessionMigrationPromise = (async () => {
+      // TonConnect fires onStatusChange before this promise resolves, so the
+      // restored legacy session is cleared before it can be accepted in-app.
+      const restored = await Promise.resolve(ui.connectionRestored);
+      if (restored || ui.connected || ui.wallet?.account?.address) await ui.disconnect();
+      await clearServer();
+      window.localStorage.setItem(getWalletSessionMigrationStorageKey(), 'complete');
+      return true;
+    })();
+    try {
+      return await walletSessionMigrationPromise;
+    } finally {
+      walletSessionMigrationPromise = null;
+    }
+  }
 
   function ensureTonConnectSdk() {
     if (window.TON_CONNECT_UI?.TonConnectUI) return Promise.resolve();
@@ -123,7 +158,7 @@
     root.setAttribute('role', 'presentation');
     root.innerHTML = `<section class="gramupWalletPicker" role="dialog" aria-modal="true" aria-labelledby="gramupWalletPickerTitle" aria-describedby="gramupWalletPickerHint" tabindex="-1" dir="auto">
       <header class="gramupWalletPickerHeader"><div><h2 id="gramupWalletPickerTitle">${escapeHtml(text.walletPickerTitle)}</h2><p id="gramupWalletPickerHint">${escapeHtml(text.walletPickerHint)}</p></div><button type="button" class="gramupWalletPickerClose" data-wallet-picker-close aria-label="${escapeHtml(text.walletPickerClose)}">×</button></header>
-      <div class="gramupWalletPickerOptions">${allowedWallets.map(wallet => `<button type="button" class="gramupWalletPickerOption" data-wallet-app="${escapeHtml(wallet.appName)}">${escapeHtml(wallet.name)}</button>`).join('')}</div>
+      <div class="gramupWalletPickerOptions">${allowedWallets.map(wallet => `<button type="button" class="gramupWalletPickerOption" data-wallet-app="${escapeHtml(wallet.appName)}"><img src="/img/wallet-icons/${escapeHtml(wallet.icon)}" width="32" height="32" alt="" aria-hidden="true" decoding="async"><span>${escapeHtml(wallet.name)}</span></button>`).join('')}</div>
     </section>`;
     root.addEventListener('click', event => {
       if (event.target === root || event.target?.closest?.('[data-wallet-picker-close]')) {
@@ -448,10 +483,10 @@
   }
 
   async function connect() {
-    if (!state.ui) {
+    if (!state.ui || (!state.ready && state.phase === 'error')) {
       await init();
-      if (!state.ui) return;
     }
+    if (!state.ui || !state.ready || walletSessionMigrationPending) return;
     if (state.phase === 'connecting' || state.phase === 'disconnecting') return;
 
     // tonProof is attached to a new ConnectRequest. Re-selecting a wallet in
@@ -650,13 +685,20 @@
           }
         } catch { /* browser fallback: TON Connect uses its default return flow */ }
       }
+      walletSessionMigrationPending = !hasCompletedWalletSessionMigration();
+      state.unsubscribe?.();
+      state.unsubscribe = null;
       state.ui = new window.TON_CONNECT_UI.TonConnectUI(options);
       restrictTonConnectModal();
+      state.unsubscribe = state.ui.onStatusChange(wallet => {
+        if (!walletSessionMigrationPending) applyWallet(wallet);
+      }, handleConnectionError);
+      if (walletSessionMigrationPending) await disconnectPreviousWalletSession(state.ui);
+      walletSessionMigrationPending = false;
       // Pin fresh connections to the same Mainnet accepted by the proof and financial APIs.
       if (!state.ui.connected && typeof state.ui.setConnectionNetwork === 'function') {
         state.ui.setConnectionNetwork('-239');
       }
-      state.unsubscribe = state.ui.onStatusChange(wallet => applyWallet(wallet), handleConnectionError);
       state.ready = true;
       state.phase = 'disconnected';
       applyWallet(state.ui.wallet || null);

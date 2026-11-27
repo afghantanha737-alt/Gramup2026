@@ -45,7 +45,7 @@ assert.equal((i18n.match(/vip_expired_plans_title:/g) || []).length, 3, 'expired
 assert.equal((i18n.match(/vip_mining_duration:/g) || []).length, 3, 'miner duration exists in all supported locales');
 assert.match(css, /\.vipExpiredPlans\s*\{/);
 assert.doesNotMatch(html, /data-tab="mine"/);
-assert.match(html, /style\.css\?v=wallet_allowlist_20261127/);
+assert.match(html, /style\.css\?v=wallet_icons_reconnect_20261127_1/);
 assert.match(html, /theme-selector\.css\?v=payout_board_20261117_2/);
 assert.match(html, /i18n\.js\?v=i18n_20261126_3/);
 assert.match(html, /app\.js\?v=swap_20261126_3/);

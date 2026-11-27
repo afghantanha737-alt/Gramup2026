@@ -13,6 +13,10 @@ async function run() {
   let selectedWalletApp = '';
   let requestedNetwork = null;
   let persistedVerifiedAddress = '';
+  let startupWallet = null;
+  let restorePreviousSession = false;
+  let sdkDisconnectCount = 0;
+  const localStorageValues = new Map();
   const pickerRoots = [];
   const mutationObservers = [];
   const fallbackButtons = ['Choose Another Wallet', 'Выбрать другой кошелёк'].map(textContent => ({
@@ -29,14 +33,20 @@ async function run() {
     device: { appName: 'MockWallet' },
     connectItems: { tonProof: { proof: { payload: 'challenge-1', signature: 'mock-signature' } } }
   };
+  startupWallet = { account: wallet.account, device: { appName: 'LegacyWallet' } };
+  restorePreviousSession = true;
+  persistedVerifiedAddress = 'EQPreviouslyBoundWallet';
 
   class MockTonConnectUI {
     constructor(options) {
       this.options = options;
-      this.wallet = null;
+      this.wallet = startupWallet;
+      this.connected = Boolean(startupWallet);
+      this.connectionRestored = Promise.resolve(restorePreviousSession);
     }
     onStatusChange(listener) {
       walletStatusListener = listener;
+      if (this.wallet) Promise.resolve().then(() => listener(this.wallet));
       return () => {};
     }
     setConnectRequestParameters(parameters) { this.connectParameters = parameters; }
@@ -44,7 +54,9 @@ async function run() {
     openModal() { modalOpenCount += 1; return Promise.resolve(); }
     openSingleWalletModal(appName) { singleWalletOpenCount += 1; selectedWalletApp = appName; return Promise.resolve(); }
     async disconnect() {
+      sdkDisconnectCount += 1;
       this.wallet = null;
+      this.connected = false;
       walletStatusListener?.(null);
     }
     async sendTransaction(transaction) { transactionSent = transaction; return { boc: 'mock-boc' }; }
@@ -52,7 +64,11 @@ async function run() {
 
   const windowObject = {
     location: { origin: 'https://gramup.example' },
-    state: { language: 'en' },
+    localStorage: {
+      getItem(key) { return localStorageValues.get(key) ?? null; },
+      setItem(key, value) { localStorageValues.set(key, String(value)); }
+    },
+    state: { language: 'en', user: { id: 'test-telegram-user' } },
     TON_CONNECT_UI: { TonConnectUI: MockTonConnectUI },
     dispatchEvent() {},
     async gramupApi(url, options = {}) {
@@ -120,6 +136,11 @@ async function run() {
 
   await walletApi.init();
   assert.strictEqual(walletApi.state.phase, 'disconnected');
+  assert.strictEqual(sdkDisconnectCount, 1, 'a previously restored TonConnect wallet is disconnected after the upgrade');
+  assert.strictEqual(persistedVerifiedAddress, '', 'the migration clears the previous server-side wallet association');
+  assert.strictEqual(localStorageValues.get('gramup.wallet-session-disconnect.v1:test-telegram-user'), 'complete', 'the migration is marked per user only after cleanup succeeds');
+  await walletApi.init();
+  assert.strictEqual(sdkDisconnectCount, 1, 'the one-time migration does not disconnect again during the same app session');
   assert.strictEqual(mutationObservers.length, 1, 'TonConnect modal buttons are monitored for later fallback rendering');
   for (const button of fallbackButtons) {
     assert.strictEqual(button.hidden, true, 'choose another wallet is hidden');
@@ -136,7 +157,10 @@ async function run() {
   assert.strictEqual(walletApi.state.phase, 'connecting');
   assert.strictEqual(walletApi.state.ui.connectParameters.state, 'ready');
   const pickerMarkup = pickerRoots.at(-1).innerHTML;
-  for (const appName of ['tonkeeper', 'telegram', 'mytonwallet', 'gramwallet']) assert(pickerMarkup.includes(`data-wallet-app="${appName}"`), `${appName} is in the allowlist`);
+  for (const [appName, icon] of [['tonkeeper', 'tonkeeper.png'], ['telegram', 'telegram.png'], ['mytonwallet', 'mywallet.png'], ['gramwallet', 'gramwallet.png']]) {
+    assert(pickerMarkup.includes(`data-wallet-app="${appName}"`), `${appName} is in the allowlist`);
+    assert(pickerMarkup.includes(`src="/img/wallet-icons/${icon}" width="32" height="32"`), `${appName} displays its official 32×32 wallet icon`);
+  }
   assert(!pickerMarkup.includes('All wallets'), 'the unrestricted all-wallets option is not displayed');
   assert.strictEqual((pickerMarkup.match(/data-wallet-app=/g) || []).length, 4, 'only four wallet choices are rendered');
   pickerRoots.at(-1).listeners.keydown({ key: 'Escape' });

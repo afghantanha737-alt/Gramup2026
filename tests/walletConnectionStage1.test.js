@@ -7,6 +7,7 @@ const user = fs.readFileSync('models/User.js', 'utf8');
 const app = fs.readFileSync('public/js/app.js', 'utf8');
 const wallet = fs.readFileSync('public/js/walletConnect.js', 'utf8');
 const index = fs.readFileSync('public/index.html', 'utf8');
+const css = fs.readFileSync('public/css/style.css', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('public/tonconnect-manifest.json', 'utf8'));
 
 assert(points.includes("router.post('/wallet/connection'"));
@@ -34,12 +35,22 @@ assert(wallet.includes('aria-busy='));
 assert(wallet.includes('state.ui.openSingleWalletModal(appName)'), 'wallet choices open only their own TonConnect modal');
 for (const walletApp of ["appName: 'tonkeeper'", "appName: 'telegram'", "appName: 'mytonwallet'", "appName: 'gramwallet'"]) assert(wallet.includes(walletApp), `${walletApp} is allowlisted`);
 assert(wallet.includes('data-wallet-app='));
+assert(wallet.includes('walletSessionMigrationKey'), 'wallet-session cleanup uses a versioned one-time migration key');
+assert(wallet.includes('ui.connectionRestored'), 'the previous TonConnect session is disconnected only after restore completes');
+assert(wallet.includes('window.localStorage.setItem(getWalletSessionMigrationStorageKey(), \'complete\')'), 'successful session cleanup is recorded per user for later app visits');
+assert(wallet.includes('await clearServer()'), 'the old server-side wallet association is cleared during migration');
+for (const icon of ['tonkeeper.png', 'telegram.png', 'mywallet.png', 'gramwallet.png']) {
+  assert(fs.existsSync(`public/img/wallet-icons/${icon}`), `${icon} is bundled locally`);
+  assert(wallet.includes(`icon: '${icon}'`), `${icon} is assigned to its wallet option`);
+}
+assert(wallet.includes('/img/wallet-icons/${escapeHtml(wallet.icon)}'), 'wallet options use the local icon asset directory');
+assert.match(css, /\.gramupWalletPickerOption img\s*\{[^}]*width:\s*32px;[^}]*height:\s*32px;/, 'picker icons render at exactly 32×32 CSS pixels');
 assert(wallet.includes("label === 'choose another wallet'"));
 assert(wallet.includes('button.hidden = true;'));
 assert(wallet.includes('button.disabled = true;'));
 assert(!wallet.includes('state.ui.openModal()'), 'the unrestricted all-wallets TonConnect modal is not used');
 assert(wallet.includes('state.connected = false; state.proofVerified = false'));
-assert(wallet.includes('onStatusChange(wallet => applyWallet(wallet), handleConnectionError)'));
+assert(wallet.includes('state.ui.onStatusChange(wallet => {') && wallet.includes('if (!walletSessionMigrationPending) applyWallet(wallet);'), 'legacy restore events are withheld until migration is complete');
 assert(wallet.includes('state.proofAddress === state.address'), 'proof must match the currently connected address');
 assert(wallet.includes("fetch('/api/app-info'"), 'Telegram Mini App resolves a public TWA return URL');
 assert(wallet.includes('twaReturnUrl: info.botLink'), 'Tonkeeper returns to the public GramUp Mini App');
