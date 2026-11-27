@@ -38,7 +38,7 @@
     } catch (_) { /* theme preference is optional */ }
   })();
 </script>
-<link rel="stylesheet" href="css/style.css?v=token_logos_20261127_2">
+<link rel="stylesheet" href="css/style.css?v=token_logos_20261127_3">
 <link rel="stylesheet" href="css/theme-selector.css?v=payout_board_20261117_2">
 
 </head>
@@ -219,9 +219,14 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
     <div id="withdrawAssetStep" class="withdrawBody withdrawStep">
       <h4 class="withdrawStepTitle" data-i18n="withdraw_asset_title">دارایی برداشت را انتخاب کنید</h4>
       <p class="withdrawStepSubtitle" data-i18n="withdraw_asset_subtitle">دارایی مورد نظر برای برداشت را انتخاب کنید.</p>
+      <button type="button" class="withdrawAssetOption" data-withdraw-asset="gram" onclick="selectWithdrawalAsset('gram')" aria-pressed="false">
+        <span class="withdrawAssetIcon"><img class="gramTokenIcon" src="img/gram-token-logo.png" alt="" aria-hidden="true"></span>
+        <span class="withdrawAssetCopy"><strong>GRAM</strong><small data-i18n="withdraw_asset_balance" data-withdraw-balance="gram">موجودی: 0 GRAM</small></span>
+        <span class="withdrawAssetCheck" aria-hidden="true">✓</span>
+      </button>
       <button type="button" class="withdrawAssetOption" data-withdraw-asset="usdt" onclick="selectWithdrawalAsset('usdt')" aria-pressed="false">
         <span class="withdrawAssetIcon"><img class="usdtTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true"></span>
-        <span class="withdrawAssetCopy"><strong>USDT</strong><small data-i18n="withdraw_asset_balance" data-withdraw-usdt-balance>موجودی: 0 USDT</small></span>
+        <span class="withdrawAssetCopy"><strong>USDT</strong><small data-i18n="withdraw_asset_balance" data-withdraw-balance="usdt">موجودی: 0 USDT</small></span>
         <span class="withdrawAssetCheck" aria-hidden="true">✓</span>
       </button>
       <p id="withdrawAssetError" class="captchaErr" role="alert"></p>
@@ -229,8 +234,8 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
     </div>
     <div id="withdrawFormStep" class="withdrawBody withdrawStep" style="display:none">
       <button type="button" class="withdrawBackButton" onclick="backToWithdrawalAssetSelection()" data-i18n="withdraw_back">بازگشت به انتخاب دارایی</button>
-      <p class="withdrawSelectedAsset" data-i18n="withdraw_selected_asset">دارایی انتخاب‌شده: USDT</p>
-      <label class="fieldLabel" data-i18n="withdraw_amount_label">مقدار USDT</label>
+      <p id="withdrawSelectedAsset" class="withdrawSelectedAsset" data-i18n="withdraw_selected_asset">دارایی انتخاب‌شده: USDT</p>
+      <label id="withdrawAmountLabel" class="fieldLabel" data-i18n="withdraw_amount_label">مقدار USDT</label>
       <input id="withdrawPoints" type="number" inputmode="decimal" step="0.000001" placeholder="مثلاً 0.5" data-i18n-ph="withdraw_amount_ph">
       <label class="fieldLabel" data-i18n="withdraw_address_label">آدرس کیف پول</label>
       <input id="withdrawAddress" type="text" placeholder="ابتدا Wallet خود را متصل کنید" data-i18n-ph="withdraw_address_ph" readonly aria-readonly="true">
@@ -393,7 +398,7 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
 <script defer src="js/maintenanceGate.js?v=20261006-maintenance"></script>
 <script defer src="js/i18n.js?v=i18n_20261126_3"></script>
 <script defer src="js/readModelCache.js?v=20261030-read-model-1"></script>
-<script defer src="js/app.js?v=token_logos_20261127_2"></script>
+<script defer src="js/app.js?v=token_logos_20261127_3"></script>
 
 <script defer src="js/walletConnect.js?v=wallet_icons_reconnect_20261127_1"></script>
 </body>

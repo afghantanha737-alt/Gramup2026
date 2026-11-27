@@ -755,6 +755,7 @@ function applyStaticTranslations() {
   $$("[data-i18n-html]").forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); }); // فقط رشته‌های داخلی خودمان (i18n.js)
   $$("[data-i18n-ph]").forEach(el => { el.setAttribute("placeholder", t(el.dataset.i18nPh)); });
   $$("[data-i18n-aria]").forEach(el => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
+  if (selectedWithdrawalAsset) updateWithdrawalAssetUI();
   const exchangeOverlay = $("#exchangeOverlay");
   if (exchangeOverlay && exchangeOverlay.style.display !== "none") updateExchangePreview();
   renderOnboardingStep();
@@ -2432,7 +2433,27 @@ window.retryTasks = retryTasks;
 
 /* ================= WALLET ================= */
 let selectedWithdrawalAsset = "";
-
+const WITHDRAWAL_ASSETS = Object.freeze({
+  gram: Object.freeze({ token: "GRAM", balanceField: "gramBalance", minimum: 0.1, decimals: 9 }),
+  usdt: Object.freeze({ token: "USDT", balanceField: "usdtBalance", minimum: 0.1, decimals: 6 })
+});
+function withdrawalAssetInfo(asset = selectedWithdrawalAsset) {
+  return WITHDRAWAL_ASSETS[String(asset || "").toLowerCase()] || null;
+}
+function withdrawalAssetBalance(info) {
+  const value = Number(state[info?.balanceField]);
+  return Number.isFinite(value) ? value : 0;
+}
+function updateWithdrawalAssetUI() {
+  const info = withdrawalAssetInfo();
+  if (!info) return;
+  const selectedLabel = $("#withdrawSelectedAsset");
+  const amountLabel = $("#withdrawAmountLabel");
+  const amountInput = $("#withdrawPoints");
+  if (selectedLabel) selectedLabel.textContent = t("withdraw_selected_asset", { asset: info.token });
+  if (amountLabel) amountLabel.textContent = t("withdraw_amount_label", { asset: info.token });
+  if (amountInput) amountInput.step = `0.${"0".repeat(Math.max(info.decimals - 1, 0))}1`;
+}
 function showWithdraw() {
   if (!readModelActionAllowed()) return;
   selectedWithdrawalAsset = "";
@@ -2451,8 +2472,10 @@ function showWithdraw() {
   if (amountInput) amountInput.value = "";
   if (addressInput) addressInput.value = "";
   if (error) error.textContent = "";
-  const balanceLabel = document.querySelector("[data-withdraw-usdt-balance]");
-  if (balanceLabel) balanceLabel.textContent = t("withdraw_asset_balance", { n: formatNumber(state.usdtBalance, 6), asset: "USDT" });
+  document.querySelectorAll("[data-withdraw-balance]").forEach(balanceLabel => {
+    const info = withdrawalAssetInfo(balanceLabel.dataset.withdrawBalance);
+    if (info) balanceLabel.textContent = t("withdraw_asset_balance", { n: formatNumber(withdrawalAssetBalance(info), info.decimals), asset: info.token });
+  });
   document.querySelectorAll("[data-withdraw-asset]").forEach(option => {
     option.classList.remove("is-selected");
     option.setAttribute("aria-pressed", "false");
@@ -2462,8 +2485,8 @@ function showWithdraw() {
 window.showWithdraw = showWithdraw;
 
 function selectWithdrawalAsset(asset) {
-  if (asset !== "usdt") return;
-  selectedWithdrawalAsset = asset;
+  if (!withdrawalAssetInfo(asset)) return;
+  selectedWithdrawalAsset = String(asset).toLowerCase();
   document.querySelectorAll("[data-withdraw-asset]").forEach(option => {
     const selected = option.dataset.withdrawAsset === asset;
     option.classList.toggle("is-selected", selected);
@@ -2473,18 +2496,23 @@ function selectWithdrawalAsset(asset) {
   if (continueButton) continueButton.disabled = false;
   const assetError = $("#withdrawAssetError");
   if (assetError) assetError.textContent = "";
+  updateWithdrawalAssetUI();
 }
 window.selectWithdrawalAsset = selectWithdrawalAsset;
 
 function continueWithdrawalToForm() {
   if (!readModelActionAllowed()) return;
   const assetError = $("#withdrawAssetError");
-  if (selectedWithdrawalAsset !== "usdt") {
+  const info = withdrawalAssetInfo();
+  if (!info) {
     if (assetError) assetError.textContent = t("error_generic");
     return;
   }
-  if (state.usdtBalance < state.minWithdrawUsdt) {
-    if (assetError) assetError.textContent = t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawUsdt, 6) });
+  const minimum = info.token === "USDT" && Number.isFinite(Number(state.minWithdrawUsdt)) && Number(state.minWithdrawUsdt) > 0
+    ? Number(state.minWithdrawUsdt)
+    : info.minimum;
+  if (withdrawalAssetBalance(info) < minimum) {
+    if (assetError) assetError.textContent = t("withdraw_min_note", { n: formatNumber(minimum, info.decimals), asset: info.token });
     return;
   }
   if (!window.gramupWallet?.isConnected()) {
@@ -2523,19 +2551,20 @@ window.hideWithdraw = hideWithdraw;
 
 async function submitWithdraw() {
   if (!readModelActionAllowed()) return;
-  if (selectedWithdrawalAsset !== "usdt") {
+  const info = withdrawalAssetInfo();
+  if (!info) {
     backToWithdrawalAssetSelection();
     return;
   }
-  const usdtInput = $("#withdrawPoints");
+  const amountInput = $("#withdrawPoints");
   const addressInput = $("#withdrawAddress");
   const error = $("#withdrawError");
   const button = $("#submitWithdraw");
 
-  const usdt = Number(usdtInput?.value);
+  const amount = Number(amountInput?.value);
   const address = String(window.gramupWallet?.getAddress?.() || addressInput?.value || "").trim();
 
-  if (!usdt || usdt <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0 || Number(amount.toFixed(info.decimals)) !== amount) {
     if (error) error.textContent = t("error_generic");
     return;
   }
@@ -2546,10 +2575,10 @@ async function submitWithdraw() {
 
   if (button) button.disabled = true;
   try {
-    const asset = "USDT";
-    const result = await window.gramupWallet.requestWithdrawal(usdt, getPendingIdempotencyKey("withdraw"), asset);
+    const result = await window.gramupWallet.requestWithdrawal(amount, getPendingIdempotencyKey("withdraw"), info.token);
     clearPendingIdempotencyKey("withdraw");
-    state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
+    const nextBalance = Number(result?.[info.balanceField]);
+    if (Number.isFinite(nextBalance)) state[info.balanceField] = nextBalance;
     haptic("success");
     toast(result.message, "success");
     hideWithdraw();

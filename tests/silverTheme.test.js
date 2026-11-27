@@ -35,6 +35,6 @@ assert.match(css, /--text: #0f172a/);
 assert.match(css, /background: linear-gradient\(145deg, rgba\(250,251,252/);
 assert.match(html, /theme-selector\.css\?v=payout_board_20261117_2/);
 assert.match(html, /i18n\.js\?v=i18n_20261126_3/);
-assert.match(html, /app\.js\?v=token_logos_20261127_2/);
+assert.match(html, /app\.js\?v=token_logos_20261127_3/);
 
 console.log('PASS — Silver Metallic theme is selectable, persisted across reloads, localized, and styled across key app sections');

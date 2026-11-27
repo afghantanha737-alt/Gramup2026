@@ -57,7 +57,7 @@ assert(wallet.includes('twaReturnUrl: info.botLink'), 'Tonkeeper returns to the 
 assert(wallet.includes("async function requestDeposit(amount, asset = 'USDT')"));
 assert(wallet.includes("async function verifyDeposit(depositId)"));
 assert(wallet.includes("async function requestWithdrawal(usdt, idempotencyKey, asset = 'USDT')"));
-assert(app.includes('window.gramupWallet.requestWithdrawal(usdt, getPendingIdempotencyKey("withdraw"), asset)'));
+assert(app.includes('window.gramupWallet.requestWithdrawal(amount, getPendingIdempotencyKey("withdraw"), info.token)'));
 assert(app.includes('window.gramupWallet.requestDeposit(amount, state.selectedDepositAsset || "GRAM")'));
 assert(app.includes('window.gramupWallet.verifyDeposit(currentDeposit._id)'));
 assert(!app.includes('api("/api/points/withdraw"'), 'withdrawal HTTP request is owned by wallet integration');
