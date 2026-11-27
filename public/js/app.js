@@ -3571,7 +3571,7 @@ function usdtTokenIconMarkup() {
 }
 
 function gramTokenIconMarkup() {
-  return '<img class="gramTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true">';
+  return '<img class="gramTokenIcon" src="img/gram-token-logo.png" alt="" aria-hidden="true">';
 }
 function assetTokenIconMarkup(asset) {
   return String(asset || "USDT").toUpperCase() === "GRAM" ? gramTokenIconMarkup() : usdtTokenIconMarkup();

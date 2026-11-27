@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=token_logos_20261127_2">
 <style>
   /* این صفحه مستقل است و خارج از اپ اصلی باز می‌شود؛ فونت پیش‌فرض لاتین است و برای فارسی جداگانه ست می‌شود */
   body { font-family: "Plus Jakarta Sans", "Inter", sans-serif; }
@@ -171,6 +171,12 @@ function formatAmount(amount, token) {
   const text = n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 6 });
   return `${text} ${escapeHTML(token || "")}`;
 }
+function tokenIconMarkup(token) {
+  const asset = String(token || "USDT").toUpperCase();
+  const src = asset === "GRAM" ? "img/gram-token-logo.png" : "img/ton-usdt-logo.png";
+  const className = asset === "GRAM" ? "gramTokenIcon" : "usdtTokenIcon";
+  return `<img class="${className}" src="${src}" alt="" aria-hidden="true">`;
+}
 
 function formatExactDate(dateStr) {
   const date = new Date(dateStr);
@@ -220,7 +226,7 @@ function renderList(history) {
           <div class="proofUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(dict.receivedPayout)}</em></strong></div>
           <div class="proofMeta" dir="ltr"><time class="proofDate" dir="${lang === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(timeAgo(item.date))}</time> <span class="proofBadgeOk" dir="${lang === "en" ? "ltr" : "rtl"}">${escapeHTML(dict.onChainConfirmed)}</span></div>
         </div>
-        <div class="proofPayment"><div class="proofAmount"><img class="usdtTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "USDT")}</span></div>${explorerLink}</div>
+        <div class="proofPayment"><div class="proofAmount">${tokenIconMarkup(item.token)}<strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "USDT")}</span></div>${explorerLink}</div>
       </div>`;
   }).join("");
 }

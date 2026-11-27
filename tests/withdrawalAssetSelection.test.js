@@ -18,7 +18,7 @@ assert.match(app, /async function submitWithdraw\(\)[\s\S]*selectedWithdrawalAss
 assert.match(app, /ton-usdt-logo\.png/);
 assert.match(index, /ton-usdt-logo\.png/);
 assert.match(proof, /ton-usdt-logo\.png/);
-assert.match(app, /function gramTokenIconMarkup\(\)[\s\S]*?src="img\/ton-usdt-logo\.png"/);
+assert.match(app, /function gramTokenIconMarkup\(\)[\s\S]*?src="img\/gram-token-logo\.png"/);
 assert.match(app, /historyAmountWithIcon\">\$\{assetTokenIconMarkup\(item\.token\)\}/);
 assert.match(app, /assetTokenIconMarkup\(w\.token\)/);
 assert.match(index, /data-i18n="withdraw_amount_label"/);
