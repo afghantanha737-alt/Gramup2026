@@ -352,10 +352,11 @@ function getDepositSettingsStatus(settings) {
 function gramTransferTransaction({ senderAddress, recipientAddress, amount, reference }) {
   const amountRaw = amountToNanoGram(amount);
   if (!amountRaw) throw new Error('مقدار GRAM نامعتبر است.');
+  const payload = comment(reference).toBoc().toString('base64');
   return {
     validUntil: Math.floor(Date.now() / 1000) + 600,
     network: '-239',
-    messages: [{ address: recipientAddress, amount: amountRaw.toString(), payload: comment(reference) }]
+    messages: [{ address: recipientAddress, amount: amountRaw.toString(), payload }]
   };
 }
 
