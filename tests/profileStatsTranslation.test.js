@@ -127,9 +127,9 @@ assert.strictEqual(fs.readFileSync(logoPath).subarray(0, 4).toString('hex'), '89
     assert.ok(indexHtml.includes(`js/${asset}.js?v=${version}`), `${asset} must keep its current cache identifier`);
   }
 assert.ok(indexHtml.includes('js/i18n.js?v=i18n_20261126_3'), 'i18n.js must use the current locale cache-busting version');
-  assert.ok(indexHtml.includes('js/app.js?v=swap_20261126_3'), 'app.js must use the current UI cache-busting version');
+  assert.ok(indexHtml.includes('js/app.js?v=token_logos_20261127_1'), 'app.js must use the current UI cache-busting version');
   assert.doesNotMatch(indexHtml, /spinCelebration|luckySpinPage|spinWheel/i, 'Lucky Spin must not be loaded before its feature is built');
-  assert.ok(indexHtml.includes('css/style.css?v=wallet_icons_reconnect_20261127_1'), 'main CSS must use the wallet icon and session migration cache-busting version');
+  assert.ok(indexHtml.includes('css/style.css?v=token_logos_20261127_1'), 'main CSS must use the wallet icon and session migration cache-busting version');
   assert.ok(indexHtml.includes('css/theme-selector.css?v=payout_board_20261117_2'), 'theme CSS must use the current cache-busting version');
 
   const referralRoute = fs.readFileSync(path.join(root, 'routes/referral.js'), 'utf8');

@@ -3210,12 +3210,12 @@ function renderWallet() {
 
     <div class="tbWalletGrid">
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconOrange"><img class="upTokenMark upTokenMarkWallet" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div>
+        <div class="tbWalletIcon tbTokenLogoSurface"><img class="upTokenMark upTokenMarkWallet" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true"></div>
         <div class="tbStatLabel tbColOrange">${t("wallet_points_card_title")}</div>
         <div class="tbWalletValue">${formatPoints(state.points)}</div>
       </div>
       <div class="tbWalletCard">
-        <div class="tbWalletIcon tbIconBlue">${usdtTokenIconMarkup()}</div>
+        <div class="tbWalletIcon tbTokenLogoSurface">${usdtTokenIconMarkup()}</div>
         <div class="tbStatLabel tbColBlue">${t("wallet_usdt_card_title")}</div>
         <div class="tbWalletValue usdtBalanceUnit">${formatNumber(state.usdtBalance, 6)} USDT</div>
       </div>
@@ -3506,7 +3506,7 @@ function tokenIconMarkup() {
   return '<img class="upTokenIcon" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
 }
 function usdtTokenIconMarkup() {
-  return '<img class="usdtTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true">';
+  return '<img class="usdtTokenIcon" src="img/tether-logo-circle.svg" alt="" aria-hidden="true">';
 }
 
 function gramTokenIconMarkup() {

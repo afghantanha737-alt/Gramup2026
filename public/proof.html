@@ -220,7 +220,7 @@ function renderList(history) {
           <div class="proofUser"><span class="publicTxFlow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18 18 6M9 6h9v9"/></svg></span><strong>${escapeHTML(item.userName || "User***")} <em>${escapeHTML(dict.receivedPayout)}</em></strong></div>
           <div class="proofMeta" dir="ltr"><time class="proofDate" dir="${lang === "en" ? "ltr" : "rtl"}" datetime="${escapeHTML(item.date || "")}">${escapeHTML(timeAgo(item.date))}</time> <span class="proofBadgeOk" dir="${lang === "en" ? "ltr" : "rtl"}">${escapeHTML(dict.onChainConfirmed)}</span></div>
         </div>
-        <div class="proofPayment"><div class="proofAmount"><img class="usdtTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "USDT")}</span></div>${explorerLink}</div>
+        <div class="proofPayment"><div class="proofAmount"><img class="usdtTokenIcon" src="img/tether-logo-circle.svg" alt="" aria-hidden="true"><strong>${formatAmount(item.amount, item.token).replace(/\s+[^\s]+$/, "")}</strong><span>${escapeHTML(item.token || "USDT")}</span></div>${explorerLink}</div>
       </div>`;
   }).join("");
 }

@@ -992,6 +992,8 @@ html[data-theme="dark"] .streakFire { background: rgba(255, 255, 255, .08); }
 .tbWalletGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .tbWalletCard { padding: 18px 12px 16px; border-radius: 24px; text-align: center; background: var(--tb-card); box-shadow: var(--tb-card-shadow); }
 .tbWalletIcon { width: 46px; height: 46px; margin: 0 auto 10px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+.tbWalletIcon.tbTokenLogoSurface { padding: 0; border: 0; overflow: hidden; color: inherit; background: transparent; box-shadow: none; }
+.tbWalletIcon.tbTokenLogoSurface img { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; }
 .tbWalletIcon svg { width: 24px; height: 24px; }
 .tbWalletIcon.tbIconBlue svg { width: 100%; height: 100%; }
 .tbWalletValue { margin: 4px 0 6px; font-size: 24px; line-height: 1.1; font-weight: 800; letter-spacing: -.6px; color: var(--text); word-break: break-all; direction: ltr; }
@@ -2527,11 +2529,10 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 }
 
 
-/* Gramup Mining console and official cube token mark. */
-.upTokenMark { display: block; object-fit: contain; padding: 2px; color: transparent; background: #07131e; border-color: rgba(53,215,200,.28); }
-.upTokenMarkSm { padding: 1px; }
-.upTokenMarkWallet { padding: 3px; }
-.upTokenIcon { display: inline-block; width: 17px; height: 17px; flex: 0 0 auto; object-fit: contain; padding: 1px; border-radius: 50%; background: #07131e; vertical-align: -3px; }
+/* Gramup cube logo: preserve its transparent source and use the same circular crop as GRAM. */
+.upTokenMark { display: block; object-fit: contain; padding: 0; color: transparent; background: transparent; border: 0; border-radius: 50%; box-shadow: none; }
+.upTokenMarkSm, .upTokenMarkWallet { padding: 0; border-radius: 50%; }
+.upTokenIcon { display: inline-block; width: 17px; height: 17px; flex: 0 0 auto; object-fit: contain; padding: 0; border: 0; border-radius: 50%; background: transparent; box-shadow: none; vertical-align: -3px; }
 .upAmountWithLogo { display: inline-flex; align-items: center; gap: 4px; color: inherit; direction: ltr; white-space: nowrap; }
 .upAmountWithLogo .upTokenIcon { width: 14px; height: 14px; }
 .ledgerUnit { display: inline-flex; align-items: center; gap: 3px; margin-inline-start: 4px; font-size: .88em; }
@@ -2662,7 +2663,7 @@ html[data-theme="light"] .upTokenMark { border-color: rgba(30, 64, 175, .18); }
 .leaderPointUnit .upTokenIcon { width: 11px; height: 11px; }
 .leaderPrize .upAmountWithLogo { font-size: 8px; }
 .rf-level-foot .upAmountWithLogo { font-size: 10px; }
-.usdtTokenIcon { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; object-position: center; background: transparent; vertical-align: -3px; }
+.usdtTokenIcon { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; object-position: center; border-radius: 50%; background: transparent; vertical-align: -3px; }
 .historyAmountWithIcon { display: inline-flex; align-items: center; gap: 6px; direction: ltr; }
 .historyAmountWithIcon .usdtTokenIcon, .historyAmountWithIcon .gramTokenIcon { width: 20px; height: 20px; flex: 0 0 20px; }
 #withdrawHistoryList .historyAmountWithIcon { gap: 4px; line-height: 1.2; vertical-align: middle; }
