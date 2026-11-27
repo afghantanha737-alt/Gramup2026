@@ -216,11 +216,23 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
       </div>
       <button class="closeBtn" type="button" onclick="hideWithdraw()" data-i18n-aria="common_close" aria-label="بستن">×</button>
     </div>
-    <div class="withdrawBody">
-      <div class="row" style="gap:8px;margin-bottom:10px"><button type="button" class="secondaryBtn assetChoice active" data-withdraw-asset="GRAM" onclick="selectWithdrawAsset('GRAM')">برداشت GRAM روی شبکه TON</button><button type="button" class="secondaryBtn assetChoice" data-withdraw-asset="USDT" onclick="selectWithdrawAsset('USDT')">برداشت USDT روی شبکه TON</button></div>
-      <label class="fieldLabel" id="withdrawAmountLabel" data-i18n="exchange_usdt_label">مقدار GRAM</label>
+    <div id="withdrawAssetStep" class="withdrawBody withdrawStep">
+      <h4 class="withdrawStepTitle" data-i18n="withdraw_asset_title">دارایی برداشت را انتخاب کنید</h4>
+      <p class="withdrawStepSubtitle" data-i18n="withdraw_asset_subtitle">دارایی مورد نظر برای برداشت را انتخاب کنید.</p>
+      <button type="button" class="withdrawAssetOption" data-withdraw-asset="usdt" onclick="selectWithdrawalAsset('usdt')" aria-pressed="false">
+        <span class="withdrawAssetIcon"><img class="usdtTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true"></span>
+        <span class="withdrawAssetCopy"><strong>USDT</strong><small data-i18n="withdraw_asset_balance" data-withdraw-usdt-balance>موجودی: 0 USDT</small></span>
+        <span class="withdrawAssetCheck" aria-hidden="true">✓</span>
+      </button>
+      <p id="withdrawAssetError" class="captchaErr" role="alert"></p>
+      <button type="button" class="primaryBtn" id="continueWithdraw" onclick="continueWithdrawalToForm()" data-i18n="withdraw_continue" disabled>ادامه</button>
+    </div>
+    <div id="withdrawFormStep" class="withdrawBody withdrawStep" style="display:none">
+      <button type="button" class="withdrawBackButton" onclick="backToWithdrawalAssetSelection()" data-i18n="withdraw_back">بازگشت به انتخاب دارایی</button>
+      <p class="withdrawSelectedAsset" data-i18n="withdraw_selected_asset">دارایی انتخاب‌شده: USDT</p>
+      <label class="fieldLabel" data-i18n="exchange_usdt_label">مقدار USDT</label>
       <input id="withdrawPoints" type="number" inputmode="decimal" step="0.000001" placeholder="مثلاً 0.5" data-i18n-ph="withdraw_amount_ph">
-      <label class="fieldLabel" data-i18n="withdraw_address_label">Wallet متصل‌شده</label>
+      <label class="fieldLabel" data-i18n="withdraw_address_label">آدرس کیف پول</label>
       <input id="withdrawAddress" type="text" placeholder="ابتدا Wallet خود را متصل کنید" data-i18n-ph="withdraw_address_ph" readonly aria-readonly="true">
       <p class="walletConnectHint" style="margin:8px 0 0" data-i18n="wallet_connected_withdraw_hint">برداشت فقط به Wallet متصل‌شده ارسال می‌شود.</p>
       <p id="withdrawError" class="captchaErr" role="alert"></p>
@@ -333,10 +345,10 @@ UP‌ها از طریق تسک‌ها، دعوت دوستان و پاداش رو
       <p class="small depositSelectionHint" data-i18n="deposit_asset_selection_hint">Choose the token you want to send.</p>
       <div class="depositAssetOptions">
         <button type="button" class="depositAssetOption" data-deposit-asset="GRAM" onclick="openDepositAsset('GRAM')">
-          <img class="depositAssetLogo" src="img/gram-token-logo.png" alt="" aria-hidden="true"><span><strong>GRAM</strong><small data-i18n="deposit_gram_name">GRAM token</small></span><span class="depositAssetArrow" aria-hidden="true">›</span>
+          <img class="depositAssetLogo" src="img/ton-usdt-logo.png" alt="" aria-hidden="true"><span><strong>GRAM</strong><small data-i18n="deposit_gram_name">GRAM token</small></span><span class="depositAssetArrow" aria-hidden="true">›</span>
         </button>
         <button type="button" class="depositAssetOption" data-deposit-asset="USDT" onclick="openDepositAsset('USDT')">
-          <img class="depositAssetLogo" src="img/tether-logo-circle.svg" alt="" aria-hidden="true"><span><strong>USDT</strong><small data-i18n="deposit_usdt_name">USDT on TON</small></span><span class="depositAssetArrow" aria-hidden="true">›</span>
+          <img class="depositAssetLogo" src="img/ton-usdt-logo.png" alt="" aria-hidden="true"><span><strong>USDT</strong><small data-i18n="deposit_usdt_name">USDT on TON</small></span><span class="depositAssetArrow" aria-hidden="true">›</span>
         </button>
       </div>
     </div>

@@ -2431,47 +2431,108 @@ async function retryTasks() { await loadTasks({ force: true }); if (state.active
 window.retryTasks = retryTasks;
 
 /* ================= WALLET ================= */
+let selectedWithdrawalAsset = "";
+
 function showWithdraw() {
   if (!readModelActionAllowed()) return;
-  if (!window.gramupWallet?.isConnected()) {
-    toast(t("wallet_connect_required"), "warning");
-    void window.gramupWallet?.connect();
-    return;
-  }
+  selectedWithdrawalAsset = "";
   const overlay = $("#withdrawOverlay");
-  const pointsInput = $("#withdrawPoints");
+  const assetStep = $("#withdrawAssetStep");
+  const formStep = $("#withdrawFormStep");
+  const continueButton = $("#continueWithdraw");
+  const assetError = $("#withdrawAssetError");
+  const amountInput = $("#withdrawPoints");
   const addressInput = $("#withdrawAddress");
   const error = $("#withdrawError");
-  if (pointsInput) pointsInput.value = "";
-  if (addressInput) addressInput.value = window.gramupWallet.getAddress();
+  if (assetStep) assetStep.style.display = "";
+  if (formStep) formStep.style.display = "none";
+  if (continueButton) continueButton.disabled = true;
+  if (assetError) assetError.textContent = "";
+  if (amountInput) amountInput.value = "";
+  if (addressInput) addressInput.value = "";
   if (error) error.textContent = "";
+  const balanceLabel = document.querySelector("[data-withdraw-usdt-balance]");
+  if (balanceLabel) balanceLabel.textContent = t("withdraw_asset_balance", { n: formatNumber(state.usdtBalance, 6) });
+  document.querySelectorAll("[data-withdraw-asset]").forEach(option => {
+    option.classList.remove("is-selected");
+    option.setAttribute("aria-pressed", "false");
+  });
   if (overlay) overlay.style.display = "flex";
 }
 window.showWithdraw = showWithdraw;
 
-function selectWithdrawAsset(asset) {
-  state.selectedWithdrawAsset = String(asset || "GRAM").toUpperCase() === "USDT" ? "USDT" : "GRAM";
-  document.querySelectorAll("[data-withdraw-asset]").forEach(button => button.classList.toggle("active", button.dataset.withdrawAsset === state.selectedWithdrawAsset));
-  const label = $("#withdrawAmountLabel");
-  if (label) label.textContent = `مقدار ${state.selectedWithdrawAsset}`;
+function selectWithdrawalAsset(asset) {
+  if (asset !== "usdt") return;
+  selectedWithdrawalAsset = asset;
+  document.querySelectorAll("[data-withdraw-asset]").forEach(option => {
+    const selected = option.dataset.withdrawAsset === asset;
+    option.classList.toggle("is-selected", selected);
+    option.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+  const continueButton = $("#continueWithdraw");
+  if (continueButton) continueButton.disabled = false;
+  const assetError = $("#withdrawAssetError");
+  if (assetError) assetError.textContent = "";
 }
-window.selectWithdrawAsset = selectWithdrawAsset;
+window.selectWithdrawalAsset = selectWithdrawalAsset;
+
+function continueWithdrawalToForm() {
+  if (!readModelActionAllowed()) return;
+  const assetError = $("#withdrawAssetError");
+  if (selectedWithdrawalAsset !== "usdt") {
+    if (assetError) assetError.textContent = t("error_generic");
+    return;
+  }
+  if (state.usdtBalance < state.minWithdrawUsdt) {
+    if (assetError) assetError.textContent = t("wallet_min_withdraw_note", { n: formatNumber(state.minWithdrawUsdt, 6) });
+    return;
+  }
+  if (!window.gramupWallet?.isConnected()) {
+    if (assetError) assetError.textContent = t("wallet_connect_required");
+    void window.gramupWallet?.connect();
+    return;
+  }
+  const assetStep = $("#withdrawAssetStep");
+  const formStep = $("#withdrawFormStep");
+  const addressInput = $("#withdrawAddress");
+  const error = $("#withdrawError");
+  if (assetStep) assetStep.style.display = "none";
+  if (formStep) formStep.style.display = "";
+  if (addressInput) addressInput.value = window.gramupWallet.getAddress();
+  if (error) error.textContent = "";
+  $("#withdrawPoints")?.focus();
+}
+window.continueWithdrawalToForm = continueWithdrawalToForm;
+
+function backToWithdrawalAssetSelection() {
+  const assetStep = $("#withdrawAssetStep");
+  const formStep = $("#withdrawFormStep");
+  if (assetStep) assetStep.style.display = "";
+  if (formStep) formStep.style.display = "none";
+  const error = $("#withdrawError");
+  if (error) error.textContent = "";
+}
+window.backToWithdrawalAssetSelection = backToWithdrawalAssetSelection;
 
 function hideWithdraw() {
   const overlay = $("#withdrawOverlay");
   if (overlay) overlay.style.display = "none";
+  selectedWithdrawalAsset = "";
 }
 window.hideWithdraw = hideWithdraw;
 
 async function submitWithdraw() {
   if (!readModelActionAllowed()) return;
+  if (selectedWithdrawalAsset !== "usdt") {
+    backToWithdrawalAssetSelection();
+    return;
+  }
   const usdtInput = $("#withdrawPoints");
   const addressInput = $("#withdrawAddress");
   const error = $("#withdrawError");
   const button = $("#submitWithdraw");
 
   const usdt = Number(usdtInput?.value);
-  const asset = state.selectedWithdrawAsset || "GRAM";
   const address = String(window.gramupWallet?.getAddress?.() || addressInput?.value || "").trim();
 
   if (!usdt || usdt <= 0) {
@@ -2485,10 +2546,10 @@ async function submitWithdraw() {
 
   if (button) button.disabled = true;
   try {
+    const asset = "USDT";
     const result = await window.gramupWallet.requestWithdrawal(usdt, getPendingIdempotencyKey("withdraw"), asset);
     clearPendingIdempotencyKey("withdraw");
-    if (asset === "GRAM") state.gramBalance = Number(result.gramBalance ?? result.balance) || state.gramBalance;
-    else state.usdtBalance = Number(result.usdtBalance ?? result.balance) || state.usdtBalance;
+    state.usdtBalance = Number(result.usdtBalance) ?? state.usdtBalance;
     haptic("success");
     toast(result.message, "success");
     hideWithdraw();
@@ -3506,11 +3567,11 @@ function tokenIconMarkup() {
   return '<img class="upTokenIcon" src="img/gramup-logo-cube-transparent.png" alt="" aria-hidden="true">';
 }
 function usdtTokenIconMarkup() {
-  return '<img class="usdtTokenIcon" src="img/tether-logo-circle.svg" alt="" aria-hidden="true">';
+  return '<img class="usdtTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true">';
 }
 
 function gramTokenIconMarkup() {
-  return '<img class="gramTokenIcon" src="img/gram-token-logo.png" alt="" aria-hidden="true">';
+  return '<img class="gramTokenIcon" src="img/ton-usdt-logo.png" alt="" aria-hidden="true">';
 }
 function assetTokenIconMarkup(asset) {
   return String(asset || "USDT").toUpperCase() === "GRAM" ? gramTokenIconMarkup() : usdtTokenIconMarkup();
