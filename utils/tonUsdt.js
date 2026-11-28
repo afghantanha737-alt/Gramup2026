@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { beginCell, Address } = require('@ton/core');
 const {
   TONCENTER_BASE,
+  TONAPI_BASE,
   normalizeTonAddress,
   normalizeTonTxHash,
   collectTextValues
@@ -71,7 +72,24 @@ async function tonCenterGet(path, params = {}, { fetchImpl = globalThis.fetch, a
   const timer = setTimeout(() => controller.abort(), TONCENTER_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetchImpl(url, { headers: { accept: 'application/json', ...(apiKey ? { 'X-API-Key': apiKey } : {}) }, signal: controller.signal });
-    if (!response.ok) throw new Error('TON_PROVIDER_UNAVAILABLE');
+    if (!response.ok) {
+      if (path === '/jetton/wallets' && params?.owner_address && [401, 403, 429].includes(response.status)) {
+        const fallbackUrl = new URL(`${TONAPI_BASE}/accounts/${encodeURIComponent(String(params.owner_address))}/jettons`);
+        const fallback = await fetchImpl(fallbackUrl, { headers: { accept: 'application/json' }, signal: controller.signal });
+        if (!fallback.ok) throw new Error('TON_PROVIDER_UNAVAILABLE');
+        const payload = await fallback.json();
+        if (!Array.isArray(payload?.balances)) throw new Error('TON_PROVIDER_UNAVAILABLE');
+        return {
+          jetton_wallets: payload.balances.map(item => ({
+            address: item?.wallet_address?.address || '',
+            owner: params.owner_address,
+            jetton: item?.jetton?.address || '',
+            balance: item?.balance
+          }))
+        };
+      }
+      throw new Error('TON_PROVIDER_UNAVAILABLE');
+    }
     return response.json();
   } catch (error) {
     if (error?.name === 'AbortError') throw new Error('TON_PROVIDER_TIMEOUT');
@@ -184,6 +202,7 @@ module.exports = {
   USDT_DECIMALS,
   USDT_BASE_UNIT,
   UP_PER_USDT,
+  TONAPI_BASE,
   TON_MAINNET_CHAIN,
   JETTON_TRANSFER_OPCODE,
   usdtToBaseUnits,

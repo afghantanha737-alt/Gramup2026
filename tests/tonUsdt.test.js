@@ -6,13 +6,16 @@ const {
   USDT_MASTER_ADDRESS,
   JETTON_TRANSFER_OPCODE,
   UP_PER_USDT,
+  TONAPI_BASE,
   usdtToBaseUnits,
   baseUnitsToUsdt,
   usdtToUp,
   upToUsdt,
   buildUsdtTransferBody,
+  getUsdtJettonWallet,
   findUsdtTransfer
 } = require('../utils/tonUsdt');
+const { normalizeTonAddress } = require('../utils/tonNativeDepositVerify');
 
 const owner = Address.parseRaw(`0:${'1'.repeat(64)}`).toString({ urlSafe: true, bounceable: true });
 const sender = Address.parseRaw(`0:${'2'.repeat(64)}`).toString({ urlSafe: true, bounceable: true });
@@ -77,6 +80,21 @@ function makeFetch({ master = USDT_MASTER_ADDRESS, destination = owner, source =
 }
 
 (async () => {
+  const fallbackWallet = await getUsdtJettonWallet(owner, {
+    apiKey: 'test-key',
+    fetchImpl: async (url) => {
+      const text = String(url);
+      if (text.includes('/api/v3/jetton/wallets')) return { ok: false, status: 403, json: async () => ({}) };
+      assert.ok(text.startsWith(`${TONAPI_BASE}/accounts/`), 'USDT wallet lookup falls back to TONAPI only after TON Center rejection');
+      return { ok: true, json: async () => ({ balances: [{
+        wallet_address: { address: jettonWallet },
+        jetton: { address: USDT_MASTER_ADDRESS },
+        balance: amountRaw
+      }] }) };
+    }
+  });
+  assert.equal(fallbackWallet, normalizeTonAddress(jettonWallet), 'official TON USDT Jetton wallet is resolved through fallback');
+
   const valid = await findUsdtTransfer({ txHash, ownerAddress: owner, sourceAddress: sender, destinationAddress: owner, amountRaw, reference }, { fetchImpl: makeFetch() });
   assert.equal(valid.status, 'verified');
   for (const [label, options] of [
