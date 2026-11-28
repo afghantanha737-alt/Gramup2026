@@ -1195,6 +1195,9 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
   if (!txHash) {
     return res.status(400).json({ success: false, message: 'وارد کردن Transaction Hash الزامی است.' });
   }
+  if (!txHashNormalized) {
+    return res.status(400).json({ success: false, message: 'فرمت Transaction Hash معتبر نیست.', code: 'INVALID_TX_HASH' });
+  }
 
   let withdrawal = await Withdrawal.findById(req.params.id);
   if (!withdrawal) return res.status(404).json({ success: false, message: 'رکورد پیدا نشد.' });
@@ -1245,7 +1248,7 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
         { _id: withdrawal._id, status: { $in: ['pending', 'approved', 'processing'] } },
         {
           $set: {
-            status: 'paid', txHash, txHashNormalized,
+            status: 'paid', txHash: txHashNormalized, txHashNormalized,
             verified: !verification.requiresManualAmountCheck,
             verificationNote: verification.reason, fromAddress: verification.fromAddress || '',
             paidAt: now, adminNote: (req.body && req.body.note) || withdrawal.adminNote
@@ -1254,7 +1257,7 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
         },
         { new: true, session }
       );
-      if (updated) await recordAdminLogRequired({ actor: req.adminActor, action: 'withdrawal_approve', targetType: 'withdrawal', targetId: updated._id, details: `${updated.cryptoAmount} ${updated.token} — TxID: ${txHash}` }, session);
+      if (updated) await recordAdminLogRequired({ actor: req.adminActor, action: 'withdrawal_approve', targetType: 'withdrawal', targetId: updated._id, details: `${updated.cryptoAmount} ${updated.token} — TxID: ${txHashNormalized}` }, session);
       return updated;
     });
   } catch (error) {

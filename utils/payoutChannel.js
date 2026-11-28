@@ -7,6 +7,7 @@ const path = require('path');
 const Withdrawal = require('../models/Withdrawal');
 const PayoutSequence = require('../models/PayoutSequence');
 const { bot } = require('./bot');
+const { normalizeTonTxHash } = require('./tonNativeDepositVerify');
 
 const PAYOUT_SEQUENCE_ID = 'completed-withdrawals';
 const PAYOUT_CLAIM_TTL_MS = 5 * 60 * 1000;
@@ -22,6 +23,13 @@ function maskName(user) {
 function maskAddress(addr) {
   const a = String(addr || '');
   return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+}
+
+function maskIdentifier(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'N/A';
+  if (raw.length <= 5) return `${raw.slice(0, 1)}***`;
+  return `${raw.slice(0, 3)}***${raw.slice(-2)}`;
 }
 
 function esc(s) {
@@ -81,11 +89,14 @@ function communityUrl() {
   );
 }
 
-function payoutKeyboard() {
-  const buttons = [
-    { text: '🚀 Start Gramup', url: gramAppUrl() },
-    { text: '🌐 Community', url: communityUrl() }
-  ].filter(button => button.url);
+function payoutKeyboard(txHash) {
+  const buttons = [];
+  const normalizedTxHash = normalizeTonTxHash(txHash);
+  if (normalizedTxHash) {
+    buttons.push({ text: '🔍 View Transaction', url: `https://tonviewer.com/transaction/${encodeURIComponent(normalizedTxHash)}` });
+  }
+  const appUrl = gramAppUrl();
+  if (appUrl) buttons.push({ text: 'Open Gramup', url: appUrl });
   return buttons.length ? { inline_keyboard: [buttons] } : undefined;
 }
 
@@ -130,14 +141,14 @@ function buildWithdrawalRequest(user, withdrawal) {
 }
 
 function buildPayoutReceipt({ payoutNumber, user, withdrawal, totalPaidOut }) {
-  const tx = String(withdrawal.txHash || '').trim();
+  const tx = normalizeTonTxHash(withdrawal.txHash);
   const txUrl = tx ? `https://tonviewer.com/transaction/${encodeURIComponent(tx)}` : '';
   const txLine = tx
     ? `✊ <a href="${txUrl}">Transaction on TON blockchain</a>`
     : '✊ Transaction on TON blockchain';
   const token = String(withdrawal.token || 'USDT').trim() || 'USDT';
   const address = String(withdrawal.address || '').trim() || 'N/A';
-  const telegramId = String(user?.telegramId || withdrawal.user || '').trim() || 'N/A';
+  const telegramId = maskIdentifier(user?.telegramId || withdrawal.user);
   return [
     '✅ Payout Complete',
     `💸 Payout #${esc(payoutNumber)}`,
@@ -146,6 +157,7 @@ function buildPayoutReceipt({ payoutNumber, user, withdrawal, totalPaidOut }) {
     `🆔 Telegram ID: <code>${esc(telegramId)}</code>`,
     '',
     `💰 Amount: ${esc(formatAmount(withdrawal.cryptoAmount))} ${esc(token)}`,
+    '🌐 Network: TON Mainnet',
     `👛 Wallet: <code>${esc(address)}</code>`,
     `🔖 TxID: <code>${esc(tx || 'N/A')}</code>`,
     '',
@@ -157,11 +169,11 @@ function buildPayoutReceipt({ payoutNumber, user, withdrawal, totalPaidOut }) {
   ].join('\n');
 }
 
-async function postPayoutReceiptPhoto(text) {
+async function postPayoutReceiptPhoto(text, txHash) {
   const chatId = process.env.PAYOUT_CHANNEL_ID || '@GramUpPayouts';
   if (!bot || !chatId) return false;
   try {
-    const reply_markup = payoutKeyboard();
+    const reply_markup = payoutKeyboard(txHash);
     const image = await fs.promises.readFile(WITHDRAWAL_SUCCESS_IMAGE_PATH);
     await bot.sendPhoto(chatId, image, {
       caption: text,
@@ -228,7 +240,7 @@ async function postWithdrawalPaid(user, withdrawal) {
     ]);
     const historicalBase = Number(process.env.PAYOUT_TOTAL_BASE_USDT || 0);
     const totalPaidOut = (Number(total[0]?.total) || 0) + (Number.isFinite(historicalBase) ? historicalBase : 0);
-    const sent = await postPayoutReceiptPhoto(buildPayoutReceipt({ payoutNumber, user, withdrawal: claimed, totalPaidOut }));
+    const sent = await postPayoutReceiptPhoto(buildPayoutReceipt({ payoutNumber, user, withdrawal: claimed, totalPaidOut }), claimed.txHash);
     if (sent) {
       await Withdrawal.updateOne(
         { _id: withdrawal._id, payoutNotificationSent: { $ne: true } },
@@ -254,5 +266,6 @@ module.exports = {
   formatAfghanistanDateTime,
   formatAmount,
   maskName,
+  maskIdentifier,
   payoutKeyboard
 };
