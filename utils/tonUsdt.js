@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { beginCell, Address } = require('@ton/core');
 const {
   TONCENTER_BASE,
+  TONCENTER_V2_BASE,
   TONAPI_BASE,
   normalizeTonAddress,
   normalizeTonTxHash,
@@ -17,6 +18,7 @@ const UP_PER_USDT = 10000;
 const TON_MAINNET_CHAIN = '-239';
 const JETTON_TRANSFER_OPCODE = 0x0f8a7ea5;
 const TONCENTER_REQUEST_TIMEOUT_MS = 12000;
+const PROVIDER_FALLBACK_STATUSES = new Set([401, 403, 404, 408, 425, 429, 500, 502, 503, 504]);
 
 function usdtToBaseUnits(value) {
   const text = String(value ?? '').trim();
@@ -60,7 +62,7 @@ function normalizeReferenceText(transfer) {
 
 function hasReference(transfer, reference) {
   const expected = String(reference || '').trim();
-  return Boolean(expected && normalizeReferenceText(transfer).some(text => text === expected || text.includes(expected)));
+  return Boolean(expected && normalizeReferenceText(transfer).some(text => text === expected));
 }
 
 async function tonCenterGet(path, params = {}, { fetchImpl = globalThis.fetch, apiKey = process.env.TONCENTER_API_KEY } = {}) {
@@ -73,7 +75,7 @@ async function tonCenterGet(path, params = {}, { fetchImpl = globalThis.fetch, a
   try {
     const response = await fetchImpl(url, { headers: { accept: 'application/json', ...(apiKey ? { 'X-API-Key': apiKey } : {}) }, signal: controller.signal });
     if (!response.ok) {
-      if (path === '/jetton/wallets' && params?.owner_address && [401, 403, 429].includes(response.status)) {
+      if (path === '/jetton/wallets' && params?.owner_address && PROVIDER_FALLBACK_STATUSES.has(response.status)) {
         const fallbackUrl = new URL(`${TONAPI_BASE}/accounts/${encodeURIComponent(String(params.owner_address))}/jettons`);
         const fallback = await fetchImpl(fallbackUrl, { headers: { accept: 'application/json' }, signal: controller.signal });
         if (!fallback.ok) throw new Error('TON_PROVIDER_UNAVAILABLE');
@@ -81,12 +83,18 @@ async function tonCenterGet(path, params = {}, { fetchImpl = globalThis.fetch, a
         if (!Array.isArray(payload?.balances)) throw new Error('TON_PROVIDER_UNAVAILABLE');
         return {
           jetton_wallets: payload.balances.map(item => ({
-            address: item?.wallet_address?.address || '',
+            address: tonApiAddress(item?.wallet_address),
             owner: params.owner_address,
-            jetton: item?.jetton?.address || '',
+            jetton: tonApiAddress(item?.jetton),
             balance: item?.balance
           }))
         };
+      }
+      if (path === '/jetton/transfers' && params?.owner_address && PROVIDER_FALLBACK_STATUSES.has(response.status)) {
+        return tonApiJettonTransfers(params.owner_address, params.jetton_master, { fetchImpl, signal: controller.signal });
+      }
+      if (path === '/transactions' && params?.account && PROVIDER_FALLBACK_STATUSES.has(response.status)) {
+        return tonCenterV2AccountTransactions(params.account, { fetchImpl, signal: controller.signal });
       }
       throw new Error('TON_PROVIDER_UNAVAILABLE');
     }
@@ -98,6 +106,58 @@ async function tonCenterGet(path, params = {}, { fetchImpl = globalThis.fetch, a
   } finally {
     clearTimeout(timer);
   }
+}
+
+function normalizeV2Transaction(transaction) {
+  const hash = normalizeTonTxHash(transaction?.transaction_id?.hash);
+  return {
+    hash: hash || transaction?.transaction_id?.hash || '',
+    mc_block_seqno: 1,
+    description: { aborted: false, compute_ph: { success: true }, action: { success: true } },
+    in_msg: { bounced: false },
+    transaction_now: transaction?.utime
+  };
+}
+
+async function tonCenterV2AccountTransactions(account, { fetchImpl = globalThis.fetch, signal } = {}) {
+  const url = new URL(`${TONCENTER_V2_BASE}/getTransactions`);
+  url.searchParams.set('address', String(account));
+  url.searchParams.set('limit', '100');
+  const response = await fetchImpl(url, { headers: { accept: 'application/json' }, signal });
+  if (!response.ok) throw new Error('TON_PROVIDER_UNAVAILABLE');
+  const payload = await response.json();
+  if (payload?.ok !== true || !Array.isArray(payload.result)) throw new Error('TON_PROVIDER_UNAVAILABLE');
+  return { transactions: payload.result.map(normalizeV2Transaction) };
+}
+
+function tonApiAddress(value) {
+  if (typeof value === 'string') return value;
+  return value?.address || value?.account_address || '';
+}
+
+function normalizeTonApiTransfer(event, jettonMaster) {
+  const action = (event?.actions || []).find(item => String(item?.type || '').toLowerCase() === 'jettontransfer') || event;
+  const transfer = action?.JettonTransfer || action?.jetton_transfer || action?.jettonTransfer || action;
+  const jetton = transfer?.jetton || action?.jetton || {};
+  return {
+    transaction_hash: event?.transaction?.hash || event?.tx_hash || event?.transaction_hash || event?.event_id || '',
+    jetton_master: tonApiAddress(jetton) || jettonMaster,
+    source: tonApiAddress(transfer?.sender || transfer?.source),
+    destination: tonApiAddress(transfer?.recipient || transfer?.destination),
+    amount: transfer?.amount,
+    decoded_forward_payload: transfer?.forward_payload || transfer?.payload || '',
+    transaction_aborted: event?.aborted === true
+  };
+}
+
+async function tonApiJettonTransfers(ownerAddress, jettonMaster, { fetchImpl = globalThis.fetch, signal } = {}) {
+  const url = new URL(`${TONAPI_BASE}/accounts/${encodeURIComponent(String(ownerAddress))}/jettons/${encodeURIComponent(String(jettonMaster))}/events`);
+  url.searchParams.set('limit', '100');
+  const response = await fetchImpl(url, { headers: { accept: 'application/json' }, signal });
+  if (!response.ok) throw new Error('TON_PROVIDER_UNAVAILABLE');
+  const payload = await response.json();
+  if (!Array.isArray(payload?.events)) throw new Error('TON_PROVIDER_UNAVAILABLE');
+  return { jetton_transfers: payload.events.map(event => normalizeTonApiTransfer(event, jettonMaster)) };
 }
 
 async function getUsdtJettonWallet(ownerAddress, options = {}) {
@@ -121,12 +181,18 @@ async function getUsdtBalance(ownerAddress, options = {}) {
 }
 
 function buildUsdtTransferBody({ destination, amountRaw, queryId = 0n, responseDestination, forwardPayload }) {
-  const destinationAddress = Address.parse(destination);
-  const responseAddress = Address.parse(responseDestination || destination);
+  const destinationNormalized = normalizeTonAddress(destination);
+  const responseNormalized = normalizeTonAddress(responseDestination || destination);
+  if (!destinationNormalized || !responseNormalized) throw new Error('Invalid TON address in USDT transfer.');
+  let transferAmount;
+  try { transferAmount = BigInt(String(amountRaw)); } catch { transferAmount = 0n; }
+  if (transferAmount <= 0n) throw new Error('Invalid USDT Jetton amount.');
+  const destinationAddress = Address.parse(destinationNormalized);
+  const responseAddress = Address.parse(responseNormalized);
   let builder = beginCell()
     .storeUint(JETTON_TRANSFER_OPCODE, 32)
     .storeUint(BigInt(queryId), 64)
-    .storeCoins(BigInt(amountRaw))
+    .storeCoins(transferAmount)
     .storeAddress(destinationAddress)
     .storeAddress(responseAddress)
     .storeBit(0)
@@ -146,10 +212,10 @@ function isFinalTransaction(transaction) {
     && transaction?.description?.action?.success !== false;
 }
 
-async function transactionIsFinal(txHash, options = {}) {
+async function transactionIsFinal(txHash, options = {}, accountAddress = '') {
   const normalized = normalizeTonTxHash(txHash);
   if (!normalized) return false;
-  const data = await tonCenterGet('/transactions', { hash: normalized, limit: 10 }, options);
+  const data = await tonCenterGet('/transactions', { hash: normalized, account: accountAddress, limit: 10 }, options);
   const transactions = Array.isArray(data?.transactions) ? data.transactions : [];
   return transactions.some(item => normalizeTonTxHash(item?.hash) === normalized && isFinalTransaction(item) && item?.in_msg?.bounced !== true);
 }
@@ -180,7 +246,7 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
     return item?.transaction_aborted !== true;
   });
   if (!candidate) return { status: candidates.length ? 'mismatch' : 'pending', code: candidates.length ? 'USDT_TRANSFER_MISMATCH' : 'TON_TRANSACTION_NOT_INDEXED' };
-  if (!(await transactionIsFinal(candidate.transaction_hash, options))) return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
+  if (!(await transactionIsFinal(candidate.transaction_hash, options, expectedDestination))) return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
   return {
     status: 'verified',
     txHash: normalizeTonTxHash(candidate.transaction_hash),
@@ -202,6 +268,7 @@ module.exports = {
   USDT_DECIMALS,
   USDT_BASE_UNIT,
   UP_PER_USDT,
+  TONCENTER_V2_BASE,
   TONAPI_BASE,
   TON_MAINNET_CHAIN,
   JETTON_TRANSFER_OPCODE,

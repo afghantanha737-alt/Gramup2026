@@ -8,6 +8,7 @@ const {
   USDT_MASTER_ADDRESS,
   JETTON_TRANSFER_OPCODE,
   UP_PER_USDT,
+  TONCENTER_V2_BASE,
   TONAPI_BASE,
   usdtToBaseUnits,
   baseUnitsToUsdt,
@@ -119,5 +120,30 @@ function makeFetch({ master = USDT_MASTER_ADDRESS, destination = owner, source =
   assert.equal(pending.status, 'pending', 'non-final transactions must remain pending');
   const bounced = await findUsdtTransfer({ txHash, ownerAddress: owner, sourceAddress: sender, destinationAddress: owner, amountRaw, reference }, { fetchImpl: makeFetch({ bounced: true }) });
   assert.equal(bounced.status, 'pending', 'bounced transactions must not verify');
+
+  const fallbackTransfer = await findUsdtTransfer({ txHash, ownerAddress: owner, sourceAddress: sender, destinationAddress: owner, amountRaw, reference }, {
+    fetchImpl: async url => {
+      const text = String(url);
+      if (text.includes('/api/v3/jetton/transfers')) return { ok: false, status: 403, json: async () => ({}) };
+      if (text.includes('/accounts/') && text.includes('/events')) return {
+        ok: true,
+        json: async () => ({ events: [{ event_id: txHash, actions: [{ type: 'JettonTransfer', JettonTransfer: { jetton: { address: USDT_MASTER_ADDRESS }, sender, recipient: owner, amount: amountRaw, forward_payload: reference } }] }] })
+      };
+      if (text.includes('/api/v3/transactions')) return { ok: true, json: async () => ({ transactions: [{ hash: txHash, mc_block_seqno: 100, description: { aborted: false, compute_ph: { success: true }, action: { success: true } }, in_msg: { bounced: false } }] }) };
+      throw new Error(`unexpected fallback path ${text}`);
+    }
+  });
+  assert.equal(fallbackTransfer.status, 'verified', 'TONAPI v2 Jetton events verify when TonCenter v3 is rate-limited');
+
+  const v2Finality = await findUsdtTransfer({ txHash, ownerAddress: owner, sourceAddress: sender, destinationAddress: owner, amountRaw, reference }, {
+    fetchImpl: async url => {
+      const text = String(url);
+      if (text.includes('/api/v3/jetton/transfers')) return { ok: true, json: async () => ({ jetton_transfers: [{ transaction_hash: txHash, jetton_master: USDT_MASTER_ADDRESS, source: sender, destination: owner, amount: amountRaw, decoded_forward_payload: reference, transaction_aborted: false }] }) };
+      if (text.includes('/api/v3/transactions')) return { ok: false, status: 403, json: async () => ({}) };
+      if (text.startsWith(`${TONCENTER_V2_BASE}/getTransactions`)) return { ok: true, json: async () => ({ ok: true, result: [{ transaction_id: { hash: txHash }, utime: 1700000000 }] }) };
+      throw new Error(`unexpected v2 finality path ${text}`);
+    }
+  });
+  assert.equal(v2Finality.status, 'verified', 'TonCenter v2 account history supplies finality when v3 hash lookup is limited');
   console.log('PASS — exact TON USDT conversions, Jetton payloads, strict validation, and finality checks');
 })().catch(error => { console.error(error); process.exitCode = 1; });

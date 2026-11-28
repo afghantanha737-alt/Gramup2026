@@ -409,6 +409,18 @@ async function publicDepositTransaction(deposit) {
   });
 }
 
+async function publicDepositTransactionOrError(deposit) {
+  try {
+    return await publicDepositTransaction(deposit);
+  } catch (error) {
+    if (deposit.assetType !== 'jetton_usdt') throw error;
+    const wrapped = new Error(error?.message || 'USDT Jetton transaction could not be prepared.');
+    wrapped.code = error?.code || 'USDT_TRANSACTION_PREPARATION_FAILED';
+    wrapped.statusCode = 503;
+    throw wrapped;
+  }
+}
+
 const { notifyUser } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
 const { postWithdrawalRequested } = require('../utils/payoutChannel');
@@ -884,7 +896,12 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
     if (existing.requestedAmountRaw && existing.requestedAmountRaw !== requestedAmountRaw.toString()) {
       return res.status(409).json({ success: false, code: 'DEPOSIT_ALREADY_PENDING', message: 'یک واریز قبلی هنوز در حال تأیید است.' });
     }
-    return res.json({ success: true, deposit: publicDepositRecord(existing), transaction: await publicDepositTransaction(existing) });
+    try {
+      return res.json({ success: true, deposit: publicDepositRecord(existing), transaction: await publicDepositTransactionOrError(existing) });
+    } catch (error) {
+      if (existing.assetType !== 'jetton_usdt') throw error;
+      return res.status(error.statusCode || 503).json({ success: false, code: error.code || 'DEPOSIT_TRANSACTION_UNAVAILABLE', message: 'کیف‌پول Jetton تتر یا تراکنش استاندارد USDT فعلاً در دسترس نیست؛ چند لحظه بعد دوباره تلاش کنید.' });
+    }
   }
 
   let deposit;
@@ -906,9 +923,19 @@ router.post('/deposits', auth, sensitiveRateLimit('general'), async (req, res) =
     if (error?.code !== 11000) throw error;
     deposit = await Deposit.findOne({ user: req.dbUser._id, assetType: asset.assetType, status: 'pending' }).sort({ createdAt: -1 });
     if (!deposit) throw error;
-    return res.json({ success: true, deposit: publicDepositRecord(deposit), transaction: await publicDepositTransaction(deposit) });
+    try {
+      return res.json({ success: true, deposit: publicDepositRecord(deposit), transaction: await publicDepositTransactionOrError(deposit) });
+    } catch (error) {
+      if (deposit.assetType !== 'jetton_usdt') throw error;
+      return res.status(error.statusCode || 503).json({ success: false, code: error.code || 'DEPOSIT_TRANSACTION_UNAVAILABLE', message: 'کیف‌پول Jetton تتر یا تراکنش استاندارد USDT فعلاً در دسترس نیست؛ چند لحظه بعد دوباره تلاش کنید.' });
+    }
   }
-  return res.status(201).json({ success: true, deposit: publicDepositRecord(deposit), transaction: await publicDepositTransaction(deposit) });
+  try {
+    return res.status(201).json({ success: true, deposit: publicDepositRecord(deposit), transaction: await publicDepositTransactionOrError(deposit) });
+  } catch (error) {
+    if (deposit.assetType !== 'jetton_usdt') throw error;
+    return res.status(error.statusCode || 503).json({ success: false, code: error.code || 'DEPOSIT_TRANSACTION_UNAVAILABLE', message: 'کیف‌پول Jetton تتر یا تراکنش استاندارد USDT فعلاً در دسترس نیست؛ چند لحظه بعد دوباره تلاش کنید.' });
+  }
 });
 
 router.post('/deposits/:id/cancel', auth, sensitiveRateLimit('general'), async (req, res) => {
