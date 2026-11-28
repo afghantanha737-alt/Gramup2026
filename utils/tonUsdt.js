@@ -174,6 +174,7 @@ function normalizeTonApiTransfer(event, jettonMaster) {
   const jetton = transfer?.jetton || action?.jetton || {};
   return {
     transaction_hash: event?.transaction?.hash || event?.tx_hash || event?.transaction_hash || event?.event_id || '',
+    trace_id: event?.trace_id || event?.traceId || event?.transaction?.trace_id || '',
     jetton_master: tonApiAddress(jetton) || jettonMaster,
     source: tonApiAddress(transfer?.sender || transfer?.source),
     destination: tonApiAddress(transfer?.recipient || transfer?.destination),
@@ -253,6 +254,16 @@ async function transactionIsFinal(txHash, options = {}, accountAddress = '') {
   return transactions.some(item => normalizeTonTxHash(item?.hash) === normalized && isFinalTransaction(item) && item?.in_msg?.bounced !== true);
 }
 
+async function traceIdsByTransactionOrMessageHash(txHash, options = {}) {
+  let data = await tonCenterGet('/traces', { tx_hash: txHash, limit: 10 }, options);
+  let traces = Array.isArray(data?.traces) ? data.traces : [];
+  if (!traces.length) {
+    data = await tonCenterGet('/traces', { msg_hash: txHash, limit: 10 }, options);
+    traces = Array.isArray(data?.traces) ? data.traces : [];
+  }
+  return new Set(traces.map(trace => normalizeTonTxHash(trace?.trace_id)).filter(Boolean));
+}
+
 async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinationAddress, amountRaw, reference }, options = {}) {
   const owner = normalizeTonAddress(ownerAddress);
   const expectedSource = sourceAddress ? normalizeTonAddress(sourceAddress) : null;
@@ -277,7 +288,7 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
     owner_address: owner,
     jetton_master: USDT_MASTER_ADDRESS,
     direction: 'in',
-    limit: 100,
+    limit: 1000,
     sort: 'desc'
   }, options);
   const transfers = Array.isArray(data?.jetton_transfers) ? data.jetton_transfers : [];
@@ -291,7 +302,16 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
       ? hashes.includes(hashQuery.value)
       : hashes.some(hash => hash.startsWith(hashQuery.value));
   });
-  const candidate = candidates.find(item => {
+
+  let scopedCandidates = candidates;
+  if (hashQuery?.kind === 'exact' && !candidates.length) {
+    const traceIds = await traceIdsByTransactionOrMessageHash(hashQuery.value, options);
+    if (traceIds.size) {
+      scopedCandidates = transfers.filter(item => traceIds.has(normalizeTonTxHash(item?.trace_id)));
+    }
+  }
+
+  const candidate = scopedCandidates.find(item => {
     if (normalizeTonAddress(transferMaster(item)) !== normalizeTonAddress(USDT_MASTER_ADDRESS)) return false;
     if (!expectedDestinations.has(normalizeTonAddress(transferDestination(item)))) return false;
     if (expectedSource && normalizeTonAddress(transferSource(item)) !== expectedSource) return false;
@@ -299,7 +319,7 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
     if (reference && !hasReference(item, reference)) return false;
     return item?.transaction_aborted !== true;
   });
-  if (!candidate) return { status: candidates.length ? 'mismatch' : 'pending', code: candidates.length ? 'USDT_TRANSFER_MISMATCH' : 'TON_TRANSACTION_NOT_INDEXED' };
+  if (!candidate) return { status: scopedCandidates.length ? 'mismatch' : 'pending', code: scopedCandidates.length ? 'USDT_TRANSFER_MISMATCH' : 'TON_TRANSACTION_NOT_INDEXED' };
   const canonicalHash = transferHash(candidate);
   if (!canonicalHash || !(await transactionIsFinal(canonicalHash, options, expectedDestinationOwner))) return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
   return {

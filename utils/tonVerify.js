@@ -36,11 +36,17 @@ async function verifyTonTransaction({ txHash, expectedAddress, expectedAmount, t
         amountRaw
       }, { fetchImpl });
       if (verification.status !== 'verified') {
-        return { ok: false, reason: verification.code === 'TON_TRANSACTION_NOT_FINAL' ? 'تراکنش USDT هنوز نهایی نشده است.' : 'تراکنش USDT با Master، مقصد یا مبلغ مورد انتظار مطابقت ندارد.', raw: verification };
+        const reasons = {
+          TON_TRANSACTION_NOT_FINAL: 'تراکنش USDT هنوز نهایی نشده است؛ بعد از نهایی‌شدن شبکه دوباره تلاش کنید.',
+          TON_TRANSACTION_NOT_INDEXED: 'این هش هنوز به انتقال USDT در نمایه TON وصل نشده است؛ کامل‌بودن هش و Mainnet بودن انتقال را بررسی کنید و کمی بعد دوباره تلاش کنید.',
+          USDT_TRANSFER_MISMATCH: 'تراکنش پیدا شد، اما Master رسمی USDT، کیف‌پول گیرنده یا مبلغ دقیق با درخواست برداشت مطابقت ندارد.',
+          INVALID_TX_HASH: 'فرمت هش تراکنش نامعتبر است.'
+        };
+        return { ok: false, reason: reasons[verification.code] || 'تراکنش USDT قابل تأیید نیست.', code: verification.code, raw: verification };
       }
-      return { ok: true, reason: 'تراکنش USDT روی TON با Master رسمی و مبلغ دقیق تایید شد.', fromAddress: verification.sourceAddress, raw: verification };
+      return { ok: true, reason: 'تراکنش USDT روی TON با Master رسمی، گیرنده و مبلغ دقیق تایید شد.', fromAddress: verification.sourceAddress, canonicalTxHash: verification.txHash, raw: verification };
     } catch (error) {
-      return { ok: false, reason: error?.message === 'TON_PROVIDER_TIMEOUT' ? 'اتصال به Explorer زمان زیادی طول کشید.' : 'اتصال به Explorer برقرار نشد.' };
+      return { ok: false, reason: error?.message === 'TON_PROVIDER_TIMEOUT' ? 'اتصال به TON Center زمان زیادی طول کشید؛ دوباره تلاش کنید.' : 'TON Center در دسترس نیست؛ دوباره تلاش کنید.', code: error?.message || 'TON_PROVIDER_UNAVAILABLE' };
     }
   }
 

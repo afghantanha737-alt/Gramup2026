@@ -1227,7 +1227,7 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
     return res.status(400).json({
       success: false,
       message: `تایید تراکنش روی زنجیره ناموفق بود: ${verification.reason}`,
-      code: 'VERIFICATION_FAILED'
+      code: verification.code || 'VERIFICATION_FAILED'
     });
   }
 
@@ -1235,9 +1235,12 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
   if (!verifiedTxHash) {
     return res.status(400).json({ success: false, message: 'هش کامل تراکنش USDT از provider دریافت نشد.', code: 'INVALID_VERIFIED_TX_HASH' });
   }
-  const canonicalDuplicate = !txHashNormalized ? await Withdrawal.findOne({
+  const canonicalDuplicate = verifiedTxHash !== txHashNormalized ? await Withdrawal.findOne({
     _id: { $ne: withdrawal._id },
-    txHashNormalized: verifiedTxHash
+    $or: [
+      { txHashNormalized: verifiedTxHash },
+      { txHash: legacyTonTxHashMatcher(verifiedTxHash) }
+    ]
   }).select('_id') : null;
   if (canonicalDuplicate) {
     return res.status(409).json({ success: false, message: 'این TxID قبلاً برای برداشت دیگری ثبت شده است.', code: 'DUPLICATE_TX' });
