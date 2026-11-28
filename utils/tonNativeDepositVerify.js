@@ -1,9 +1,11 @@
 'use strict';
 
 const crypto = require('crypto');
+const { Cell } = require('@ton/core');
 
-// TON Mainnet v3 only. Native GRAM is the chain's native coin, not a Jetton.
+// TON Mainnet only. Native GRAM is the chain's native coin, not a Jetton.
 const TONCENTER_BASE = 'https://toncenter.com/api/v3';
+const TONCENTER_V2_BASE = 'https://toncenter.com/api/v2';
 const NANO_GRAM = 1000000000n;
 const MAX_EXACT_GRAM_AMOUNT = Number.MAX_SAFE_INTEGER / 1e9;
 const REQUEST_TIMEOUT_MS = 12000;
@@ -139,6 +141,55 @@ async function withPublicRateLimit(work) {
   }
 }
 
+function decodeNativeTextComment(body) {
+  if (typeof body !== 'string' || !body) return '';
+  try {
+    const root = Cell.fromBoc(Buffer.from(body, 'base64'))[0];
+    const slice = root.beginParse();
+    if (slice.remainingBits < 32 || slice.loadUint(32) !== 0) return '';
+    return slice.loadStringTail().trim();
+  } catch {
+    return '';
+  }
+}
+
+function normalizeV2AccountTransaction(transaction) {
+  const inMessage = transaction?.in_msg || {};
+  const commentText = decodeNativeTextComment(inMessage?.msg_data?.body);
+  const hash = normalizeTonTxHash(transaction?.transaction_id?.hash);
+  return {
+    hash: hash || transaction?.transaction_id?.hash || '',
+    account: transaction?.account || '',
+    now: transaction?.utime,
+    // getTransactions returns transactions already committed by the v2 node;
+    // keep this provider finality signal separate from an MC sequence number.
+    finality: 1,
+    description: { aborted: false, compute_ph: { success: true }, action: { success: true } },
+    in_msg: {
+      source: inMessage.source || '',
+      destination: inMessage.destination || '',
+      value: inMessage.value,
+      bounced: false,
+      created_at: inMessage.created_at,
+      hash: inMessage.hash || '',
+      message_content: commentText ? { decoded: { comment: commentText } } : {}
+    }
+  };
+}
+
+async function tonCenterV2AccountTransactions(account, { fetchImpl, apiKey, signal } = {}) {
+  const url = new URL(`${TONCENTER_V2_BASE}/getTransactions`);
+  url.searchParams.set('address', account);
+  url.searchParams.set('limit', '100');
+  const headers = { accept: 'application/json' };
+  if (apiKey) headers['X-API-Key'] = apiKey;
+  const response = await fetchImpl(url.toString(), { method: 'GET', headers, signal });
+  if (!response.ok) throw new Error('TON_PROVIDER_UNAVAILABLE');
+  const payload = await response.json();
+  if (payload?.ok !== true || !Array.isArray(payload.result)) throw new Error('TON_PROVIDER_UNAVAILABLE');
+  return { transactions: payload.result.map(normalizeV2AccountTransaction) };
+}
+
 async function tonCenterGet(path, params, { fetchImpl = globalThis.fetch, apiKey = process.env.TONCENTER_API_KEY } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('TON_PROVIDER_UNAVAILABLE');
   const url = new URL(`${TONCENTER_BASE}${path}`);
@@ -152,7 +203,15 @@ async function tonCenterGet(path, params, { fetchImpl = globalThis.fetch, apiKey
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
       const response = await fetchImpl(url.toString(), { method: 'GET', headers, signal: controller.signal });
-      if (!response.ok) throw new Error('TON_PROVIDER_UNAVAILABLE');
+      if (!response.ok) {
+        // Some deployments reject anonymous v3 requests with 403 while the
+        // read-only v2 account endpoint remains available. This fallback is
+        // limited to account discovery; hash/message lookups stay v3-only.
+        if (path === '/transactions' && params?.account && [401, 403, 429].includes(response.status)) {
+          return await tonCenterV2AccountTransactions(String(params.account), { fetchImpl, apiKey, signal: controller.signal });
+        }
+        throw new Error('TON_PROVIDER_UNAVAILABLE');
+      }
       return await response.json();
     } catch (error) {
       if (error?.name === 'AbortError') throw new Error('TON_PROVIDER_TIMEOUT');
@@ -179,7 +238,7 @@ function isFailedTransaction(transaction) {
 
 function hasMasterchainFinality(transaction) {
   const seqno = Number(transaction?.mc_block_seqno);
-  return Number.isInteger(seqno) && seqno > 0;
+  return (Number.isInteger(seqno) && seqno > 0) || transaction?.finality === 1;
 }
 
 function isIncomingTo(transaction, normalizedDepositAddress) {
@@ -252,7 +311,7 @@ async function transactionsByMessageHash(messageHash, options) {
 }
 
 async function transactionsByAccount(account, options) {
-  const result = await tonCenterGet('/transactions', { account, limit: 50 }, options);
+  const result = await tonCenterGet('/transactions', { account, limit: 1000 }, options);
   return Array.isArray(result?.transactions) ? result.transactions : [];
 }
 
@@ -360,6 +419,7 @@ function createDepositReference() {
 
 module.exports = {
   TONCENTER_BASE,
+  TONCENTER_V2_BASE,
   NANO_GRAM,
   MAX_EXACT_GRAM_AMOUNT,
   normalizeTonAddress,
@@ -368,6 +428,7 @@ module.exports = {
   nanoGramToNumber,
   collectTextValues,
   hasExactReference,
+  decodeNativeTextComment,
   hasMasterchainFinality,
   verifyNativeGramTransfer,
   findIncomingNativeGramTransferByReference,

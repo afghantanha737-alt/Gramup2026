@@ -5,14 +5,17 @@ const fs = require('fs');
 const path = require('path');
 const {
   TONCENTER_BASE,
+  TONCENTER_V2_BASE,
   normalizeTonAddress,
   normalizeTonTxHash,
   amountToNanoGram,
   nanoGramToNumber,
   hasExactReference,
+  decodeNativeTextComment,
   findIncomingNativeGramTransferByReference,
   verifyNativeGramTransfer
 } = require('../utils/tonNativeDepositVerify');
+const { comment } = require('@ton/core');
 
 const mainnetFriendly = 'EQDKbjIcfM6ezt8KjKJJLshZJJSqX7XOA4ff-W72r5gqPrHF';
 const mainnetRaw = '0:ca6e321c7cce9ecedf0a8ca2492ec8592494aa5fb5ce0387dff96ef6af982a3e';
@@ -96,6 +99,28 @@ async function run() {
   assert.strictEqual(direct.sourceAddress, sender);
   assert.ok(direct.confirmedAt instanceof Date);
   assert.ok(!directRequests.some(item => item.url.toLowerCase().includes('jetton')));
+
+  const commentBoc = comment(reference).toBoc().toString('base64');
+  assert.strictEqual(decodeNativeTextComment(commentBoc), reference, 'native TON comment BOC decodes to the exact GRAMUP reference');
+  const fallbackRequests = [];
+  const fallback = await findIncomingNativeGramTransferByReference({ depositAddress: destination, reference }, {
+    apiKey: 'test-key',
+    fetchImpl: async (url) => {
+      fallbackRequests.push(String(url));
+      if (String(url).startsWith(`${TONCENTER_BASE}/transactions?`)) return { ok: false, status: 403, json: async () => ({}) };
+      assert.ok(String(url).startsWith(`${TONCENTER_V2_BASE}/getTransactions?`), 'v2 fallback is used only after v3 account lookup is rejected');
+      return mockResponse({ ok: true, result: [{
+        account: destination,
+        utime: now,
+        transaction_id: { hash: Buffer.from(hash, 'hex').toString('base64') },
+        in_msg: { source: sender, destination, value: '2500000000', created_at: String(now), msg_data: { body: commentBoc } }
+      }] });
+    }
+  });
+  assert.strictEqual(fallback.status, 'verified', 'v2 fallback verifies a committed native GRAM transfer');
+  assert.strictEqual(fallback.amountRaw, '2500000000');
+  assert.strictEqual(fallback.sourceAddress, sender);
+  assert.strictEqual(fallbackRequests.length, 2);
 
   const senderRequests = [];
   const senderTransaction = {
