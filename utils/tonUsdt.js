@@ -65,6 +65,28 @@ function hasReference(transfer, reference) {
   return Boolean(expected && normalizeReferenceText(transfer).some(text => text === expected));
 }
 
+function transferMaster(transfer) {
+  return transfer?.jetton_master || transfer?.jetton_master_address || transfer?.jetton?.address || transfer?.jetton?.master || '';
+}
+
+function transferSource(transfer) {
+  return transfer?.source || transfer?.source_address || transfer?.source_wallet || transfer?.sender || transfer?.sender_address || '';
+}
+
+function transferDestination(transfer) {
+  return transfer?.destination || transfer?.destination_address || transfer?.destination_wallet || transfer?.recipient || transfer?.recipient_address || '';
+}
+
+function transferAmount(transfer) {
+  return transfer?.amount ?? transfer?.jetton_amount ?? transfer?.amount_raw ?? 0;
+}
+
+function transferHashes(transfer) {
+  return [transfer?.transaction_hash, transfer?.source_transaction_hash, transfer?.destination_transaction_hash, transfer?.tx_hash, transfer?.event_id]
+    .map(normalizeTonTxHash)
+    .filter(Boolean);
+}
+
 async function tonCenterGet(path, params = {}, { fetchImpl = globalThis.fetch, apiKey = process.env.TONCENTER_API_KEY } = {}) {
   const url = new URL(`${TONCENTER_BASE}${path}`);
   for (const [key, value] of Object.entries(params)) {
@@ -249,17 +271,13 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
   }, options);
   const transfers = Array.isArray(data?.jetton_transfers) ? data.jetton_transfers : [];
   const normalizedHash = txHash ? normalizeTonTxHash(txHash) : null;
-  const transferHash = item => [item?.transaction_hash, item?.source_transaction_hash, item?.destination_transaction_hash, item?.tx_hash]
-    .map(normalizeTonTxHash)
-    .find(Boolean) || null;
-  const candidates = transfers.filter(item => !normalizedHash || [item?.transaction_hash, item?.source_transaction_hash, item?.destination_transaction_hash, item?.tx_hash]
-    .map(normalizeTonTxHash)
-    .includes(normalizedHash));
+  const transferHash = item => transferHashes(item)[0] || null;
+  const candidates = transfers.filter(item => !normalizedHash || transferHashes(item).includes(normalizedHash));
   const candidate = candidates.find(item => {
-    if (normalizeTonAddress(item?.jetton_master) !== normalizeTonAddress(USDT_MASTER_ADDRESS)) return false;
-    if (!expectedDestinations.has(normalizeTonAddress(item?.destination))) return false;
-    if (expectedSource && normalizeTonAddress(item?.source) !== expectedSource) return false;
-    if (BigInt(String(item?.amount || 0)) !== expectedAmount) return false;
+    if (normalizeTonAddress(transferMaster(item)) !== normalizeTonAddress(USDT_MASTER_ADDRESS)) return false;
+    if (!expectedDestinations.has(normalizeTonAddress(transferDestination(item)))) return false;
+    if (expectedSource && normalizeTonAddress(transferSource(item)) !== expectedSource) return false;
+    if (BigInt(String(transferAmount(item))) !== expectedAmount) return false;
     if (reference && !hasReference(item, reference)) return false;
     return item?.transaction_aborted !== true;
   });
@@ -269,11 +287,11 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
   return {
     status: 'verified',
     txHash: canonicalHash,
-    amountRaw: String(candidate.amount),
-    amount: baseUnitsToUsdt(candidate.amount),
-    sourceAddress: normalizeTonAddress(candidate.source) || '',
-    destinationAddress: normalizeTonAddress(candidate.destination) || '',
-    jettonMaster: normalizeTonAddress(candidate.jetton_master),
+    amountRaw: String(transferAmount(candidate)),
+    amount: baseUnitsToUsdt(transferAmount(candidate)),
+    sourceAddress: normalizeTonAddress(transferSource(candidate)) || '',
+    destinationAddress: normalizeTonAddress(transferDestination(candidate)) || '',
+    jettonMaster: normalizeTonAddress(transferMaster(candidate)),
     confirmedAt: new Date((Number(candidate.transaction_now) || Math.floor(Date.now() / 1000)) * 1000)
   };
 }
