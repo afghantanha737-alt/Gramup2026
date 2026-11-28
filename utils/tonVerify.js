@@ -28,7 +28,9 @@ async function verifyTonTransaction({ txHash, expectedAddress, expectedAmount, t
     if (amountRaw == null) return { ok: false, reason: 'مبلغ USDT مورد انتظار نامعتبر است.' };
     try {
       const verification = await findUsdtTransfer({
-        txHash: normalizeTonTxHash(hash),
+        // Preserve a shortened hexadecimal prefix; findUsdtTransfer resolves
+        // it against provider events and returns the canonical full hash.
+        txHash: hash,
         ownerAddress: expectedCanonicalAddress,
         destinationAddress: expectedCanonicalAddress,
         amountRaw

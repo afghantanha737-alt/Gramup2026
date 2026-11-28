@@ -87,6 +87,17 @@ function transferHashes(transfer) {
     .filter(Boolean);
 }
 
+function normalizeUsdtTxHashQuery(value) {
+  const text = String(value || '').trim().replace(/^0x/i, '').toLowerCase();
+  const fullHash = normalizeTonTxHash(text);
+  if (fullHash) return { kind: 'exact', value: fullHash };
+  // Wallet UIs sometimes copy a shortened hexadecimal transaction hash.
+  // A 40-character prefix is long enough to resolve uniquely while still
+  // allowing the provider response to supply and persist the canonical hash.
+  if (/^[a-f\d]{40,63}$/.test(text)) return { kind: 'prefix', value: text };
+  return null;
+}
+
 async function tonCenterGet(path, params = {}, { fetchImpl = globalThis.fetch, apiKey = process.env.TONCENTER_API_KEY } = {}) {
   const url = new URL(`${TONCENTER_BASE}${path}`);
   for (const [key, value] of Object.entries(params)) {
@@ -270,9 +281,16 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
     sort: 'desc'
   }, options);
   const transfers = Array.isArray(data?.jetton_transfers) ? data.jetton_transfers : [];
-  const normalizedHash = txHash ? normalizeTonTxHash(txHash) : null;
+  const hashQuery = txHash ? normalizeUsdtTxHashQuery(txHash) : null;
+  if (txHash && !hashQuery) return { status: 'mismatch', code: 'INVALID_TX_HASH' };
   const transferHash = item => transferHashes(item)[0] || null;
-  const candidates = transfers.filter(item => !normalizedHash || transferHashes(item).includes(normalizedHash));
+  const candidates = transfers.filter(item => {
+    if (!hashQuery) return true;
+    const hashes = transferHashes(item);
+    return hashQuery.kind === 'exact'
+      ? hashes.includes(hashQuery.value)
+      : hashes.some(hash => hash.startsWith(hashQuery.value));
+  });
   const candidate = candidates.find(item => {
     if (normalizeTonAddress(transferMaster(item)) !== normalizeTonAddress(USDT_MASTER_ADDRESS)) return false;
     if (!expectedDestinations.has(normalizeTonAddress(transferDestination(item)))) return false;

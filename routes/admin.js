@@ -1195,21 +1195,23 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
   if (!txHash) {
     return res.status(400).json({ success: false, message: 'وارد کردن Transaction Hash الزامی است.' });
   }
-  if (!txHashNormalized) {
-    return res.status(400).json({ success: false, message: 'فرمت Transaction Hash معتبر نیست.', code: 'INVALID_TX_HASH' });
-  }
-
   let withdrawal = await Withdrawal.findById(req.params.id);
   if (!withdrawal) return res.status(404).json({ success: false, message: 'رکورد پیدا نشد.' });
   if (!['pending', 'approved', 'processing'].includes(withdrawal.status)) {
     return res.status(400).json({ success: false, message: 'این درخواست قبلاً پردازش شده است.' });
   }
 
+  const isUsdtShortHash = String(withdrawal.token || '').toUpperCase() === 'USDT'
+    && /^[a-f\d]{40,63}$/i.test(txHash.replace(/^0x/i, ''));
+  if (!txHashNormalized && !isUsdtShortHash) {
+    return res.status(400).json({ success: false, message: 'فرمت Transaction Hash معتبر نیست. هش کامل ۶۴کاراکتری یا Base64 کامل را وارد کنید.', code: 'INVALID_TX_HASH' });
+  }
+
   // Early rejection; the unique index remains authoritative under concurrent approvals.
-  const duplicate = await Withdrawal.findOne({
+  const duplicate = txHashNormalized ? await Withdrawal.findOne({
     _id: { $ne: withdrawal._id },
     $or: [{ txHashNormalized }, { txHash: legacyTonTxHashMatcher(txHash) }]
-  }).select('_id');
+  }).select('_id') : null;
   if (duplicate) {
     return res.status(409).json({ success: false, message: 'این TxID قبلاً برای برداشت دیگری ثبت شده است.', code: 'DUPLICATE_TX' });
   }
@@ -1227,6 +1229,18 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
       message: `تایید تراکنش روی زنجیره ناموفق بود: ${verification.reason}`,
       code: 'VERIFICATION_FAILED'
     });
+  }
+
+  const verifiedTxHash = normalizeTonTxHash(verification.raw?.txHash || txHash);
+  if (!verifiedTxHash) {
+    return res.status(400).json({ success: false, message: 'هش کامل تراکنش USDT از provider دریافت نشد.', code: 'INVALID_VERIFIED_TX_HASH' });
+  }
+  const canonicalDuplicate = !txHashNormalized ? await Withdrawal.findOne({
+    _id: { $ne: withdrawal._id },
+    txHashNormalized: verifiedTxHash
+  }).select('_id') : null;
+  if (canonicalDuplicate) {
+    return res.status(409).json({ success: false, message: 'این TxID قبلاً برای برداشت دیگری ثبت شده است.', code: 'DUPLICATE_TX' });
   }
 
   if (verification.requiresManualAmountCheck && !forceManualConfirm) {
@@ -1248,7 +1262,7 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
         { _id: withdrawal._id, status: { $in: ['pending', 'approved', 'processing'] } },
         {
           $set: {
-            status: 'paid', txHash: txHashNormalized, txHashNormalized,
+            status: 'paid', txHash: verifiedTxHash, txHashNormalized: verifiedTxHash,
             verified: !verification.requiresManualAmountCheck,
             verificationNote: verification.reason, fromAddress: verification.fromAddress || '',
             paidAt: now, adminNote: (req.body && req.body.note) || withdrawal.adminNote
@@ -1257,7 +1271,7 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
         },
         { new: true, session }
       );
-      if (updated) await recordAdminLogRequired({ actor: req.adminActor, action: 'withdrawal_approve', targetType: 'withdrawal', targetId: updated._id, details: `${updated.cryptoAmount} ${updated.token} — TxID: ${txHashNormalized}` }, session);
+      if (updated) await recordAdminLogRequired({ actor: req.adminActor, action: 'withdrawal_approve', targetType: 'withdrawal', targetId: updated._id, details: `${updated.cryptoAmount} ${updated.token} — TxID: ${verifiedTxHash}` }, session);
       return updated;
     });
   } catch (error) {

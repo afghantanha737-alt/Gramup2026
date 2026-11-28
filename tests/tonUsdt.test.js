@@ -106,6 +106,9 @@ function makeFetch({ master = USDT_MASTER_ADDRESS, destination = owner, source =
 
   const valid = await findUsdtTransfer({ txHash, ownerAddress: owner, sourceAddress: sender, destinationAddress: owner, amountRaw, reference }, { fetchImpl: makeFetch() });
   assert.equal(valid.status, 'verified');
+  const abbreviated = await findUsdtTransfer({ txHash: txHash.slice(0, 40), ownerAddress: owner, sourceAddress: sender, destinationAddress: owner, amountRaw, reference }, { fetchImpl: makeFetch() });
+  assert.equal(abbreviated.status, 'verified', 'shortened 40-character USDT hash prefixes must resolve');
+  assert.equal(abbreviated.txHash, txHash, 'verification must return the canonical full hash');
   for (const [label, options] of [
     ['fake master', { master: Address.parseRaw(`0:${'4'.repeat(64)}`).toString({ urlSafe: true, bounceable: true }) }],
     ['wrong destination', { destination: sender }],
