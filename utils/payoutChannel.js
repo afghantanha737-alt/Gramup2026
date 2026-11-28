@@ -2,12 +2,17 @@
 
 // ارسال خودکار پست برداشت‌ها در کانال عمومی پرداخت‌ها
 // ENV: PAYOUT_CHANNEL_ID=@YourPayoutChannel (ربات باید ادمین کانال باشد)
+const fs = require('fs');
+const path = require('path');
 const Withdrawal = require('../models/Withdrawal');
 const PayoutSequence = require('../models/PayoutSequence');
 const { bot } = require('./bot');
 
 const PAYOUT_SEQUENCE_ID = 'completed-withdrawals';
 const PAYOUT_CLAIM_TTL_MS = 5 * 60 * 1000;
+const WITHDRAWAL_SUCCESS_IMAGE_PATH = path.resolve(
+  process.env.PAYOUT_WITHDRAWAL_IMAGE_PATH || path.join(__dirname, '..', 'public', 'img', 'withdraw-successfully.webp')
+);
 
 function maskName(user) {
   const raw = String((user && (user.username || user.firstName)) || 'User').trim();
@@ -130,20 +135,44 @@ function buildPayoutReceipt({ payoutNumber, user, withdrawal, totalPaidOut }) {
   const txLine = tx
     ? `✊ <a href="${txUrl}">Transaction on TON blockchain</a>`
     : '✊ Transaction on TON blockchain';
+  const token = String(withdrawal.token || 'USDT').trim() || 'USDT';
+  const address = String(withdrawal.address || '').trim() || 'N/A';
+  const telegramId = String(user?.telegramId || withdrawal.user || '').trim() || 'N/A';
   return [
     '✅ Payout Complete',
     `💸 Payout #${esc(payoutNumber)}`,
     '',
     `👤 User: ${esc(maskName(user))}`,
+    `🆔 Telegram ID: <code>${esc(telegramId)}</code>`,
     '',
-    `💰 Amount: ${esc(formatAmount(withdrawal.cryptoAmount))} Gram`,
+    `💰 Amount: ${esc(formatAmount(withdrawal.cryptoAmount))} ${esc(token)}`,
+    `👛 Wallet: <code>${esc(address)}</code>`,
+    `🔖 TxID: <code>${esc(tx || 'N/A')}</code>`,
     '',
     `🕒 Time: ${esc(formatAfghanistanDateTime(withdrawal.paidAt || Date.now()))}`,
     '',
-    `📊 Total Paid Out: ${esc(formatAmount(totalPaidOut))} Gram`,
+    `📊 Total Paid Out: ${esc(formatAmount(totalPaidOut))} ${esc(token)}`,
     '',
     txLine
   ].join('\n');
+}
+
+async function postPayoutReceiptPhoto(text) {
+  const chatId = process.env.PAYOUT_CHANNEL_ID || '@GramUpPayouts';
+  if (!bot || !chatId) return false;
+  try {
+    const reply_markup = payoutKeyboard();
+    const image = await fs.promises.readFile(WITHDRAWAL_SUCCESS_IMAGE_PATH);
+    await bot.sendPhoto(chatId, image, {
+      caption: text,
+      parse_mode: 'HTML',
+      ...(reply_markup ? { reply_markup } : {})
+    });
+    return true;
+  } catch (error) {
+    console.error('[payoutChannel] payout photo post failed:', error.message || error);
+    return false;
+  }
 }
 
 async function reservePayoutNumber(withdrawal) {
@@ -199,7 +228,7 @@ async function postWithdrawalPaid(user, withdrawal) {
     ]);
     const historicalBase = Number(process.env.PAYOUT_TOTAL_BASE_USDT || 0);
     const totalPaidOut = (Number(total[0]?.total) || 0) + (Number.isFinite(historicalBase) ? historicalBase : 0);
-    const sent = await post(buildPayoutReceipt({ payoutNumber, user, withdrawal: claimed, totalPaidOut }));
+    const sent = await postPayoutReceiptPhoto(buildPayoutReceipt({ payoutNumber, user, withdrawal: claimed, totalPaidOut }));
     if (sent) {
       await Withdrawal.updateOne(
         { _id: withdrawal._id, payoutNotificationSent: { $ne: true } },
@@ -221,6 +250,7 @@ module.exports = {
   buildWithdrawalRequest,
   postWithdrawalPaid,
   buildPayoutReceipt,
+  postPayoutReceiptPhoto,
   formatAfghanistanDateTime,
   formatAmount,
   maskName,
