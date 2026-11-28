@@ -223,9 +223,22 @@ async function transactionIsFinal(txHash, options = {}, accountAddress = '') {
 async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinationAddress, amountRaw, reference }, options = {}) {
   const owner = normalizeTonAddress(ownerAddress);
   const expectedSource = sourceAddress ? normalizeTonAddress(sourceAddress) : null;
-  const expectedDestination = destinationAddress ? normalizeTonAddress(destinationAddress) : owner;
+  const expectedDestinationOwner = destinationAddress ? normalizeTonAddress(destinationAddress) : owner;
   const expectedAmount = BigInt(String(amountRaw));
-  if (!owner || !expectedDestination || !Number.isInteger(Number(expectedAmount)) || expectedAmount <= 0n) return { status: 'mismatch', code: 'INVALID_USDT_DETAILS' };
+  if (!owner || !expectedDestinationOwner || !Number.isInteger(Number(expectedAmount)) || expectedAmount <= 0n) return { status: 'mismatch', code: 'INVALID_USDT_DETAILS' };
+
+  // A TEP-74 transfer targets the recipient's USDT Jetton Wallet contract,
+  // not necessarily the recipient's user-facing TON owner address. Keep the
+  // owner address as a compatibility candidate because some indexers expose
+  // the owner in their normalized transfer response.
+  const expectedDestinations = new Set([expectedDestinationOwner]);
+  try {
+    const destinationJettonWallet = await getUsdtJettonWallet(expectedDestinationOwner, options);
+    if (destinationJettonWallet) expectedDestinations.add(destinationJettonWallet);
+  } catch {
+    // The transfer endpoint remains authoritative; a provider outage is
+    // surfaced by the transfer/finality query rather than accepting a guess.
+  }
 
   const data = await tonCenterGet('/jetton/transfers', {
     owner_address: owner,
@@ -236,20 +249,26 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
   }, options);
   const transfers = Array.isArray(data?.jetton_transfers) ? data.jetton_transfers : [];
   const normalizedHash = txHash ? normalizeTonTxHash(txHash) : null;
-  const candidates = transfers.filter(item => !normalizedHash || normalizeTonTxHash(item?.transaction_hash) === normalizedHash);
+  const transferHash = item => [item?.transaction_hash, item?.source_transaction_hash, item?.destination_transaction_hash, item?.tx_hash]
+    .map(normalizeTonTxHash)
+    .find(Boolean) || null;
+  const candidates = transfers.filter(item => !normalizedHash || [item?.transaction_hash, item?.source_transaction_hash, item?.destination_transaction_hash, item?.tx_hash]
+    .map(normalizeTonTxHash)
+    .includes(normalizedHash));
   const candidate = candidates.find(item => {
     if (normalizeTonAddress(item?.jetton_master) !== normalizeTonAddress(USDT_MASTER_ADDRESS)) return false;
-    if (normalizeTonAddress(item?.destination) !== expectedDestination) return false;
+    if (!expectedDestinations.has(normalizeTonAddress(item?.destination))) return false;
     if (expectedSource && normalizeTonAddress(item?.source) !== expectedSource) return false;
     if (BigInt(String(item?.amount || 0)) !== expectedAmount) return false;
     if (reference && !hasReference(item, reference)) return false;
     return item?.transaction_aborted !== true;
   });
   if (!candidate) return { status: candidates.length ? 'mismatch' : 'pending', code: candidates.length ? 'USDT_TRANSFER_MISMATCH' : 'TON_TRANSACTION_NOT_INDEXED' };
-  if (!(await transactionIsFinal(candidate.transaction_hash, options, expectedDestination))) return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
+  const canonicalHash = transferHash(candidate);
+  if (!canonicalHash || !(await transactionIsFinal(canonicalHash, options, expectedDestinationOwner))) return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
   return {
     status: 'verified',
-    txHash: normalizeTonTxHash(candidate.transaction_hash),
+    txHash: canonicalHash,
     amountRaw: String(candidate.amount),
     amount: baseUnitsToUsdt(candidate.amount),
     sourceAddress: normalizeTonAddress(candidate.source) || '',
