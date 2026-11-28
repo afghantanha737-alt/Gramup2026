@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { Cell } = require('@ton/core');
+const { Cell, Address } = require('@ton/core');
 
 // TON Mainnet only. Native GRAM is the chain's native coin, not a Jetton.
 const TONCENTER_BASE = 'https://toncenter.com/api/v3';
@@ -48,6 +48,12 @@ function normalizeTonAddress(value) {
   const workchain = bytes.readInt8(1);
   if (workchain < -1 || workchain > 0) return null;
   return `${workchain}:${bytes.subarray(2, 34).toString('hex')}`;
+}
+
+function toTonConnectAddress(value) {
+  const normalized = normalizeTonAddress(value);
+  if (!normalized) return null;
+  return Address.parse(normalized).toString({ urlSafe: true, bounceable: true });
 }
 
 function normalizeTonTxHash(value) {
@@ -461,6 +467,7 @@ module.exports = {
   NANO_GRAM,
   MAX_EXACT_GRAM_AMOUNT,
   normalizeTonAddress,
+  toTonConnectAddress,
   normalizeTonTxHash,
   amountToNanoGram,
   nanoGramToNumber,

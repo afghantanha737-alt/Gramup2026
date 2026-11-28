@@ -46,6 +46,7 @@ const { getVipDisplayName } = require('../utils/vipDisplayNames');
 const { reserveForSubscription, pointsFromCents: reservePointsFromCents } = require('../utils/vipReserve');
 const {
   normalizeTonAddress,
+  toTonConnectAddress,
   normalizeTonTxHash,
   amountToNanoGram,
   verifyNativeGramTransfer,
@@ -352,11 +353,13 @@ function getDepositSettingsStatus(settings) {
 function gramTransferTransaction({ senderAddress, recipientAddress, amount, reference }) {
   const amountRaw = amountToNanoGram(amount);
   if (!amountRaw) throw new Error('مقدار GRAM نامعتبر است.');
+  const connectRecipient = toTonConnectAddress(recipientAddress);
+  if (!connectRecipient) throw new Error('آدرس مقصد GRAM نامعتبر است.');
   const payload = comment(reference).toBoc().toString('base64');
   return {
     validUntil: Math.floor(Date.now() / 1000) + 600,
     network: '-239',
-    messages: [{ address: recipientAddress, amount: amountRaw.toString(), payload }]
+    messages: [{ address: connectRecipient, amount: amountRaw.toString(), payload }]
   };
 }
 
@@ -367,11 +370,17 @@ async function usdtTransferTransaction({ senderAddress, recipientAddress, amount
     error.code = 'USDT_JETTON_WALLET_NOT_FOUND';
     throw error;
   }
+  const connectJettonWallet = toTonConnectAddress(senderJettonWallet);
+  if (!connectJettonWallet) {
+    const error = new Error('USDT Jetton wallet address is invalid for TON Connect.');
+    error.code = 'USDT_JETTON_WALLET_INVALID';
+    throw error;
+  }
   return {
     validUntil: Math.floor(Date.now() / 1000) + 600,
     network: '-239',
     messages: [{
-      address: senderJettonWallet,
+      address: connectJettonWallet,
       amount: '50000000',
       payload: buildUsdtTransferBody({
         destination: recipientAddress,

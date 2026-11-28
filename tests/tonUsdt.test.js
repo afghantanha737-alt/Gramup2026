@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { Cell, Address } = require('@ton/core');
 const {
   USDT_MASTER_ADDRESS,
@@ -44,6 +46,12 @@ assert.equal(body.loadUint(32), JETTON_TRANSFER_OPCODE);
 body.loadUintBig(64);
 assert.equal(body.loadCoins().toString(), amountRaw);
 assert.equal(body.loadAddress().toString({ urlSafe: true, bounceable: true }), owner);
+assert.equal(body.loadAddress().toString({ urlSafe: true, bounceable: true }), owner, 'response destination remains the connected wallet');
+
+const pointsRoute = fs.readFileSync(path.join(__dirname, '..', 'routes/points.js'), 'utf8');
+assert.ok(pointsRoute.includes('address: connectJettonWallet'), 'TON Connect message address uses canonical user-friendly Jetton wallet format');
+assert.ok(!pointsRoute.includes('address: senderJettonWallet'), 'raw Jetton wallet address is never exposed to TON Connect');
+assert.ok(pointsRoute.includes('toTonConnectAddress(senderJettonWallet)'), 'Jetton wallet is parsed and formatted before message construction');
 
 function beginComment(text) {
   const { beginCell } = require('@ton/core');

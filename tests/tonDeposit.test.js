@@ -8,6 +8,7 @@ const {
   TONCENTER_V2_BASE,
   TONAPI_BASE,
   normalizeTonAddress,
+  toTonConnectAddress,
   normalizeTonTxHash,
   amountToNanoGram,
   nanoGramToNumber,
@@ -67,6 +68,7 @@ async function run() {
   assert.strictEqual(normalizeTonAddress(mainnetFriendly.replace(/-/g, '+').replace(/_/g, '/')), mainnetRaw, 'standard Base64 friendly address is accepted');
   assert.strictEqual(normalizeTonAddress(testnetFriendly), null, 'testnet-only friendly address is rejected');
   assert.strictEqual(normalizeTonAddress(mainnetRaw.toUpperCase()), mainnetRaw, 'raw address is normalized');
+  assert.strictEqual(toTonConnectAddress(mainnetRaw), mainnetFriendly, 'raw Mainnet address is formatted for TON Connect messages');
   assert.strictEqual(normalizeTonAddress(`${mainnetFriendly.slice(0, -1)}A`), null, 'bad address checksum fails');
   assert.strictEqual(normalizeTonTxHash(`0x${hash.toUpperCase()}`), hash, 'hex transaction hash is normalized');
   assert.strictEqual(normalizeTonTxHash(Buffer.from(hash, 'hex').toString('base64url')), hash, 'Base64url transaction hash is normalized');
@@ -229,6 +231,7 @@ async function run() {
   assert.ok(route.includes('findUsdtTransfer'));
   assert.ok(route.includes('await findUsdtTransfer('));
   assert.ok(route.includes('findIncomingNativeGramTransferByReference') && route.includes('verifyNativeGramTransfer'), 'native GRAM deposits use on-chain verification');
+  assert.ok(route.includes('toTonConnectAddress(senderJettonWallet)') && route.includes('toTonConnectAddress(recipientAddress)'), 'Wallet transaction messages use TON Connect user-friendly addresses');
   assert.ok(route.includes("submittedHash\n        ? await verifyNativeGramTransfer") && route.includes("await findIncomingNativeGramTransferByReference({ depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })"), 'GRAM verification falls back to address/reference lookup when Wallet returns only a BOC');
   assert.ok(route.includes("asset.token === 'GRAM' ? 'تراکنش Native GRAM' : 'تراکنش TON USDT Jetton'"), 'verification errors identify the selected asset');
   assert.ok(route.includes("comment(reference).toBoc().toString('base64')"), 'native GRAM transaction comments use TON Connect Base64 payloads');
