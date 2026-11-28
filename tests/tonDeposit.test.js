@@ -6,6 +6,7 @@ const path = require('path');
 const {
   TONCENTER_BASE,
   TONCENTER_V2_BASE,
+  TONAPI_BASE,
   normalizeTonAddress,
   normalizeTonTxHash,
   amountToNanoGram,
@@ -121,6 +122,23 @@ async function run() {
   assert.strictEqual(fallback.amountRaw, '2500000000');
   assert.strictEqual(fallback.sourceAddress, sender);
   assert.strictEqual(fallbackRequests.length, 2);
+
+  const tonApiFallback = await findIncomingNativeGramTransferByReference({ depositAddress: destination, reference }, {
+    apiKey: 'test-key',
+    fetchImpl: async (url) => {
+      if (String(url).startsWith(`${TONCENTER_BASE}/transactions?`)) return { ok: false, status: 403, json: async () => ({}) };
+      if (String(url).startsWith(`${TONCENTER_V2_BASE}/getTransactions?`)) return { ok: false, status: 403, json: async () => ({}) };
+      assert.ok(String(url).startsWith(`${TONAPI_BASE}/blockchain/accounts/`), 'TONAPI is the final read-only account fallback');
+      return mockResponse({ transactions: [{
+        hash,
+        account: { address: destination },
+        utime: now,
+        aborted: false,
+        in_msg: { source: { address: sender }, destination: { address: destination }, value: 2500000000, bounced: false, raw_body: commentBoc }
+      }] });
+    }
+  });
+  assert.strictEqual(tonApiFallback.status, 'verified', 'TONAPI fallback verifies the same native GRAM comment transaction');
 
   const senderRequests = [];
   const senderTransaction = {
@@ -248,6 +266,7 @@ async function run() {
   assert.ok(app.includes('reference.textContent = currentDeposit?.reference || t("deposit_reference_auto")'));
   assert.ok(app.includes('window.gramupWallet.requestDeposit(amount, state.selectedDepositAsset || "GRAM")'));
   assert.ok(app.includes('window.gramupWallet.verifyDeposit(currentDeposit._id, { boc: created.boc })'));
+  assert.ok(app.includes('error.code === "TON_PROVIDER_UNAVAILABLE"') && app.includes('error.code === "TON_PROVIDER_TIMEOUT"'), 'provider outages remain retryable after a signed deposit');
   assert.ok(app.includes('deposit_status_verifying'));
   assert.ok(walletConnect.includes('sendTransaction(created.transaction)'));
   assert.ok(walletConnect.includes('/api/points/deposits/${encodeURIComponent(created.deposit._id)}/cancel'));

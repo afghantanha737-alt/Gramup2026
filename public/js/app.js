@@ -3102,7 +3102,12 @@ async function submitUsdtDeposit() {
           : await window.gramupWallet.verifyDeposit(currentDeposit._id);
         if (result?.status === "confirmed") break;
       } catch (error) {
-        if (error.code !== "TON_TRANSACTION_NOT_INDEXED" && error.status !== 202) throw error;
+        const retryableTonVerification = error.code === "TON_TRANSACTION_NOT_INDEXED"
+          || error.code === "TON_PROVIDER_UNAVAILABLE"
+          || error.code === "TON_PROVIDER_TIMEOUT"
+          || error.status === 202
+          || error.status === 503;
+        if (!retryableTonVerification) throw error;
       }
     }
     if (result?.status === "confirmed") {

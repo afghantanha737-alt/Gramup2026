@@ -6,6 +6,7 @@ const { Cell } = require('@ton/core');
 // TON Mainnet only. Native GRAM is the chain's native coin, not a Jetton.
 const TONCENTER_BASE = 'https://toncenter.com/api/v3';
 const TONCENTER_V2_BASE = 'https://toncenter.com/api/v2';
+const TONAPI_BASE = 'https://tonapi.io/v2';
 const NANO_GRAM = 1000000000n;
 const MAX_EXACT_GRAM_AMOUNT = Number.MAX_SAFE_INTEGER / 1e9;
 const REQUEST_TIMEOUT_MS = 12000;
@@ -182,12 +183,44 @@ async function tonCenterV2AccountTransactions(account, { fetchImpl, apiKey, sign
   url.searchParams.set('address', account);
   url.searchParams.set('limit', '100');
   const headers = { accept: 'application/json' };
-  if (apiKey) headers['X-API-Key'] = apiKey;
   const response = await fetchImpl(url.toString(), { method: 'GET', headers, signal });
   if (!response.ok) throw new Error('TON_PROVIDER_UNAVAILABLE');
   const payload = await response.json();
   if (payload?.ok !== true || !Array.isArray(payload.result)) throw new Error('TON_PROVIDER_UNAVAILABLE');
   return { transactions: payload.result.map(normalizeV2AccountTransaction) };
+}
+
+function normalizeTonApiAccountTransaction(transaction) {
+  const inMessage = transaction?.in_msg || {};
+  const destination = inMessage?.destination?.address || inMessage?.destination || '';
+  const source = inMessage?.source?.address || inMessage?.source || '';
+  const commentText = decodeNativeTextComment(inMessage?.raw_body);
+  return {
+    hash: transaction?.hash || '',
+    account: transaction?.account?.address || transaction?.account || '',
+    now: transaction?.utime,
+    finality: 1,
+    description: { aborted: transaction?.aborted === true, compute_ph: { success: transaction?.compute_phase?.success !== false }, action: { success: transaction?.action_phase?.success !== false } },
+    in_msg: {
+      source,
+      destination,
+      value: inMessage?.value,
+      bounced: inMessage?.bounced === true,
+      created_at: inMessage?.created_at,
+      hash: inMessage?.hash || '',
+      message_content: commentText ? { decoded: { comment: commentText } } : {}
+    }
+  };
+}
+
+async function tonApiAccountTransactions(account, { fetchImpl, signal } = {}) {
+  const url = new URL(`${TONAPI_BASE}/blockchain/accounts/${encodeURIComponent(account)}/transactions`);
+  url.searchParams.set('limit', '100');
+  const response = await fetchImpl(url.toString(), { method: 'GET', headers: { accept: 'application/json' }, signal });
+  if (!response.ok) throw new Error('TON_PROVIDER_UNAVAILABLE');
+  const payload = await response.json();
+  if (!Array.isArray(payload?.transactions)) throw new Error('TON_PROVIDER_UNAVAILABLE');
+  return { transactions: payload.transactions.map(normalizeTonApiAccountTransaction) };
 }
 
 async function tonCenterGet(path, params, { fetchImpl = globalThis.fetch, apiKey = process.env.TONCENTER_API_KEY } = {}) {
@@ -208,7 +241,11 @@ async function tonCenterGet(path, params, { fetchImpl = globalThis.fetch, apiKey
         // read-only v2 account endpoint remains available. This fallback is
         // limited to account discovery; hash/message lookups stay v3-only.
         if (path === '/transactions' && params?.account && [401, 403, 429].includes(response.status)) {
-          return await tonCenterV2AccountTransactions(String(params.account), { fetchImpl, apiKey, signal: controller.signal });
+          try {
+            return await tonCenterV2AccountTransactions(String(params.account), { fetchImpl, apiKey, signal: controller.signal });
+          } catch (v2Error) {
+            return await tonApiAccountTransactions(String(params.account), { fetchImpl, signal: controller.signal });
+          }
         }
         throw new Error('TON_PROVIDER_UNAVAILABLE');
       }
@@ -420,6 +457,7 @@ function createDepositReference() {
 module.exports = {
   TONCENTER_BASE,
   TONCENTER_V2_BASE,
+  TONAPI_BASE,
   NANO_GRAM,
   MAX_EXACT_GRAM_AMOUNT,
   normalizeTonAddress,
