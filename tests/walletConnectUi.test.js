@@ -13,6 +13,7 @@ async function run() {
   let selectedWalletApp = '';
   let requestedNetwork = null;
   let persistedVerifiedAddress = '';
+  let singleWalletModalListener = null;
   let startupWallet = null;
   let restorePreviousSession = false;
   let sdkDisconnectCount = 0;
@@ -53,6 +54,7 @@ async function run() {
     setConnectionNetwork(network) { requestedNetwork = network; }
     openModal() { modalOpenCount += 1; return Promise.resolve(); }
     openSingleWalletModal(appName) { singleWalletOpenCount += 1; selectedWalletApp = appName; return Promise.resolve(); }
+    onSingleWalletModalStateChange(listener) { singleWalletModalListener = listener; return () => { if (singleWalletModalListener === listener) singleWalletModalListener = null; }; }
     async disconnect() {
       sdkDisconnectCount += 1;
       this.wallet = null;
@@ -169,7 +171,10 @@ async function run() {
   await selectWallet('tonkeeper');
   assert.strictEqual(singleWalletOpenCount, 1);
   assert.strictEqual(selectedWalletApp, 'tonkeeper');
+  assert.strictEqual(walletApi.state.phase, 'connecting', 'opening the SDK modal does not cancel the pending approval');
   assert.strictEqual(modalOpenCount, 0, 'the unrestricted SDK wallet picker is never opened');
+  singleWalletModalListener?.({ status: 'closed', closeReason: 'action-cancelled' });
+  assert.strictEqual(walletApi.state.phase, 'disconnected', 'closing the SDK modal without approval cancels the connection cleanly');
 
   // A wallet without a signed proof must not be accepted for financial actions.
   walletStatusListener({ account: wallet.account, device: wallet.device });

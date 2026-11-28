@@ -171,13 +171,11 @@
       closeWalletPicker();
       try {
         if (typeof state.ui?.openSingleWalletModal !== 'function') throw new Error('Wallet selection is unavailable.');
-        const opened = state.ui.openSingleWalletModal(appName);
-        Promise.resolve(opened).then(() => {
-          if (state.phase === 'connecting' && !state.connected) {
-            state.phase = 'disconnected';
-            notify();
-          }
-        }).catch(handleConnectionError);
+        // TON Connect resolves this promise when its modal is opened, not when
+        // the user approves the connection. Keep `connecting` until the later
+        // onStatusChange event carries the approved wallet and proof.
+        watchWalletModalCancellation();
+        Promise.resolve(state.ui.openSingleWalletModal(appName)).catch(handleConnectionError);
       } catch (error) {
         handleConnectionError(error);
       }
@@ -480,6 +478,18 @@
     state.error = error?.message || 'Wallet connection was cancelled.';
     state.phase = state.connected ? (isCurrentProof() ? 'verified' : 'connected') : 'disconnected';
     notify();
+  }
+
+  function watchWalletModalCancellation() {
+    if (typeof state.ui?.onSingleWalletModalStateChange !== 'function') return;
+    let unsubscribe = null;
+    const onStateChange = modalState => {
+      if (modalState?.status !== 'closed') return;
+      unsubscribe?.();
+      unsubscribe = null;
+      if (state.phase === 'connecting' && !state.connected) handleConnectionError();
+    };
+    unsubscribe = state.ui.onSingleWalletModalStateChange(onStateChange);
   }
 
   async function connect() {
