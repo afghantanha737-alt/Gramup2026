@@ -9,7 +9,7 @@ const Task = require('../models/Task');
 const Withdrawal = require('../models/Withdrawal');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
-const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer } = require('../utils/tonNativeDepositVerify');
+const { normalizeTonAddress, amountToNanoGram, verifyNativeGramTransfer, findIncomingNativeGramTransferByReference } = require('../utils/tonNativeDepositVerify');
 const { usdtToBaseUnits, findUsdtTransfer } = require('../utils/tonUsdt');
 const { bot, notifyUser, activeTelegramUserFilter, filterActiveTelegramRecipients, broadcastToActiveUsers, buildBroadcastButtonsReplyMarkup, sanitizeTelegramHtml } = require('../utils/bot');
 const { botText } = require('../utils/botMessages');
@@ -1104,7 +1104,9 @@ router.post('/deposits/:id/approve', async (req, res) => {
   let verification;
   try {
     verification = deposit.token === 'GRAM'
-      ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
+      ? submittedHash
+        ? await verifyNativeGramTransfer({ txHash: submittedHash, depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
+        : await findIncomingNativeGramTransferByReference({ depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })
       : await findUsdtTransfer({ txHash: submittedHash, ownerAddress: deposit.depositAddressSnapshot, destinationAddress: deposit.depositAddressSnapshot, sourceAddress: deposit.walletAddressSnapshot, amountRaw: deposit.requestedAmountRaw, reference: deposit.reference });
   } catch {
     return res.status(503).json({ success: false, code: 'TON_PROVIDER_UNAVAILABLE', message: 'بررسی TON Center فعلاً در دسترس نیست؛ موجودی تغییر نکرد.' });

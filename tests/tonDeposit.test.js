@@ -208,6 +208,8 @@ async function run() {
   assert.ok(adminUi.includes('setDepositWalletAddressGram') && adminUi.includes('setMinimumDepositGram'), 'admin UI exposes GRAM deposit configuration');
   assert.ok(!settings.includes('gramJettonMasterAddress'));
   assert.ok(adminRoute.includes("deposit.token === 'GRAM'") && adminRoute.includes('verifyNativeGramTransfer'));
+  assert.ok(adminRoute.includes("submittedHash\n        ? await verifyNativeGramTransfer") && adminRoute.includes("await findIncomingNativeGramTransferByReference({ depositAddress: deposit.depositAddressSnapshot, reference: deposit.reference })"), 'admin GRAM approval finds the receiving native transaction by destination and Reference when no hash is supplied');
+  assert.ok(adminRoute.includes('findIncomingNativeGramTransferByReference'), 'admin GRAM approval uses the native verifier, not a Jetton verifier');
   assert.ok(!adminUi.includes('setGramJettonMasterAddress'));
   assert.ok(miniAppUi.includes('USDT JETTON'));
   assert.ok(app.includes('submitUsdtDeposit'));
