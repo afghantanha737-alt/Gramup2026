@@ -80,7 +80,7 @@ function makeFetch({ master = USDT_MASTER_ADDRESS, destination = owner, source =
       json: async () => ({ transactions: [{
         hash: txHash,
         mc_block_seqno: final ? 100 : 0,
-        description: { aborted: false, compute_ph: { success: true }, action: { success: true } },
+        description: { aborted, compute_ph: { success: true }, action: { success: true } },
         in_msg: { bounced }
       }] })
     };

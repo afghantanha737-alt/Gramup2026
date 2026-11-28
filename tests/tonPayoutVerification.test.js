@@ -14,6 +14,11 @@ const recipientTxHash = 'b'.repeat(64);
 const payoutTraceId = 'c'.repeat(64);
 const recipientJettonWallet = Address.parseRaw(`0:${'4'.repeat(64)}`).toString({ urlSafe: true, bounceable: true });
 const usdtAmount = '129900';
+const realPayoutHash = 'f'.repeat(64);
+const realRecipientOwner = `0:${'6'.repeat(64)}`;
+const realSenderOwner = `0:${'5'.repeat(64)}`;
+const realRecipientJettonWallet = `0:${'7'.repeat(64)}`;
+const realRecipientTransferHash = '9'.repeat(64);
 const makeFetch = destination => async () => ({
   ok: true,
   status: 200,
@@ -123,6 +128,61 @@ function makeTraceFetch(submittedHash, hashKind, { amount = usdtAmount, destinat
     fetchImpl: makeTraceFetch(walletMessageHash, 'message')
   });
   assert.strictEqual(messageHashPayout.ok, true, 'a wallet-submitted message hash resolves through the message trace lookup');
+
+  const realWorldPayout = await verifyTonTransaction({
+    txHash: realPayoutHash,
+    expectedAddress: realRecipientOwner,
+    expectedAmount: 0.1299,
+    token: 'USDT',
+    fetchImpl: async url => {
+      const parsed = new URL(url);
+      if (parsed.pathname.endsWith('/jetton/wallets')) return {
+        ok: true,
+        json: async () => ({ jetton_wallets: [{ address: realRecipientJettonWallet, owner: realRecipientOwner, jetton: USDT_MASTER_ADDRESS }] })
+      };
+      if (parsed.pathname.endsWith('/jetton/transfers')) return { ok: false, status: 403, json: async () => ({}) };
+      if (parsed.pathname.includes('/accounts/') && parsed.pathname.endsWith('/events')) return { ok: false, status: 503, json: async () => ({}) };
+      if (parsed.pathname.endsWith(`/events/${realPayoutHash}`)) return {
+        ok: true,
+        json: async () => ({
+          event_id: realPayoutHash,
+          in_progress: false,
+          is_scam: false,
+          actions: [{
+            type: 'JettonTransfer',
+            status: 'ok',
+            base_transactions: [realRecipientTransferHash],
+            JettonTransfer: {
+              sender: { address: realSenderOwner },
+              recipient: { address: realRecipientOwner },
+              senders_wallet: `0:${'8'.repeat(64)}`,
+              recipients_wallet: realRecipientJettonWallet,
+              amount: usdtAmount,
+              jetton: { address: '0:b113a994b5024a16719f69139328eb759596c38a25f59028b146fecdc3621dfe' }
+            }
+          }]
+        })
+      };
+      if (parsed.pathname.endsWith(`/blockchain/transactions/${realRecipientTransferHash}`)) return {
+        ok: true,
+        json: async () => ({
+          hash: realRecipientTransferHash,
+          account: { address: realRecipientJettonWallet },
+          utime: 1795846735,
+          success: true,
+          aborted: false,
+          in_msg: {
+            bounced: false,
+            decoded_op_name: 'jetton_internal_transfer',
+            decoded_body: { amount: usdtAmount, from: realSenderOwner }
+          }
+        })
+      };
+      throw new Error(`unexpected real payout path: ${parsed.pathname}`);
+    }
+  });
+  assert.strictEqual(realWorldPayout.ok, true, 'TonAPI confirms the exact official-USDT amount and successful recipient Jetton-wallet credit despite a mismatching trace-level provider row');
+  assert.strictEqual(realWorldPayout.canonicalTxHash, realRecipientTransferHash, 'the recipient Jetton-wallet receipt transaction is stored as the canonical hash');
 
   const wrongAmountTrace = await verifyTonTransaction({
     txHash: walletTxHash,

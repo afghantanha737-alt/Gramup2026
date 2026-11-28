@@ -264,6 +264,99 @@ async function traceIdsByTransactionOrMessageHash(txHash, options = {}) {
   return new Set(traces.map(trace => normalizeTonTxHash(trace?.trace_id)).filter(Boolean));
 }
 
+async function tonApiGetJson(path, { fetchImpl = globalThis.fetch } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TONCENTER_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetchImpl(`${TONAPI_BASE}${path}`, {
+      headers: { accept: 'application/json' },
+      signal: controller.signal
+    });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function findUsdtTransferByTonApiEvent({ txHash, ownerAddress, sourceAddress, destinationAddress, amountRaw, reference }, options = {}) {
+  const hashQuery = normalizeUsdtTxHashQuery(txHash);
+  if (!hashQuery || hashQuery.kind !== 'exact') return null;
+
+  const owner = normalizeTonAddress(ownerAddress);
+  const expectedDestinationOwner = destinationAddress ? normalizeTonAddress(destinationAddress) : owner;
+  const expectedSource = sourceAddress ? normalizeTonAddress(sourceAddress) : null;
+  const expectedAmount = BigInt(String(amountRaw));
+  const event = await tonApiGetJson(`/events/${encodeURIComponent(hashQuery.value)}`, options);
+  const eventHash = normalizeTonTxHash(event?.event_id);
+  const externalMessageHash = normalizeTonTxHash(event?.ext_msg_hash);
+  if (!event || (eventHash !== hashQuery.value && externalMessageHash !== hashQuery.value)) return null;
+
+  const actions = (Array.isArray(event.actions) ? event.actions : [])
+    .filter(action => String(action?.type || '').toLowerCase() === 'jettontransfer');
+  const match = actions.find(action => {
+    const transfer = action?.JettonTransfer || action?.jetton_transfer || action?.jettonTransfer || action;
+    const master = normalizeTonAddress(tonApiAddress(transfer?.jetton));
+    const recipient = normalizeTonAddress(tonApiAddress(transfer?.recipient || transfer?.destination));
+    const source = normalizeTonAddress(tonApiAddress(transfer?.sender || transfer?.source));
+    let amount;
+    try { amount = BigInt(String(transfer?.amount ?? '')); } catch { return false; }
+    const referenceMatches = !reference || hasReference(transfer, reference) || String(transfer?.comment || '').trim() === String(reference).trim();
+    return master === normalizeTonAddress(USDT_MASTER_ADDRESS)
+      && recipient === expectedDestinationOwner
+      && amount === expectedAmount
+      && (!expectedSource || source === expectedSource)
+      && referenceMatches;
+  });
+  if (!match) return { status: 'mismatch', code: 'USDT_TRANSFER_MISMATCH' };
+  if (event.is_scam === true || event.in_progress !== false || String(match.status || '').toLowerCase() !== 'ok') {
+    return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
+  }
+
+  const transfer = match.JettonTransfer || match.jetton_transfer || match.jettonTransfer || match;
+  const senderOwner = normalizeTonAddress(tonApiAddress(transfer?.sender || transfer?.source));
+  const recipientJettonWallet = normalizeTonAddress(tonApiAddress(transfer?.recipients_wallet || transfer?.recipient_jetton_wallet));
+  const baseTransactions = Array.isArray(match.base_transactions)
+    ? match.base_transactions
+    : Array.isArray(event.base_transactions) ? event.base_transactions : [];
+  if (!recipientJettonWallet || !baseTransactions.length) return { status: 'pending', code: 'TON_TRANSACTION_NOT_INDEXED' };
+
+  for (const rawHash of baseTransactions.slice(0, 20)) {
+    const baseHash = normalizeTonTxHash(rawHash);
+    if (!baseHash) continue;
+    const transaction = await tonApiGetJson(`/blockchain/transactions/${encodeURIComponent(baseHash)}`, options);
+    if (!transaction || normalizeTonAddress(tonApiAddress(transaction.account)) !== recipientJettonWallet) continue;
+
+    const inbound = transaction.in_msg || {};
+    const body = inbound.decoded_body || {};
+    let receiptAmount;
+    try { receiptAmount = BigInt(String(body.amount ?? '')); } catch { receiptAmount = null; }
+    if (transaction.success !== true || transaction.aborted === true || inbound.bounced === true) {
+      return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
+    }
+    if (String(inbound.decoded_op_name || '').toLowerCase() !== 'jetton_internal_transfer'
+      || receiptAmount !== expectedAmount
+      || normalizeTonAddress(body.from || body.sender) !== senderOwner) continue;
+
+    const canonicalHash = normalizeTonTxHash(transaction.hash || baseHash);
+    if (!canonicalHash) continue;
+    return {
+      status: 'verified',
+      txHash: canonicalHash,
+      amountRaw: String(receiptAmount),
+      amount: baseUnitsToUsdt(receiptAmount),
+      sourceAddress: senderOwner || '',
+      destinationAddress: expectedDestinationOwner,
+      destinationJettonWallet: recipientJettonWallet,
+      jettonMaster: normalizeTonAddress(USDT_MASTER_ADDRESS),
+      confirmedAt: new Date((Number(transaction.utime) || Math.floor(Date.now() / 1000)) * 1000)
+    };
+  }
+
+  return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
+}
+
 async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinationAddress, amountRaw, reference }, options = {}) {
   const owner = normalizeTonAddress(ownerAddress);
   const expectedSource = sourceAddress ? normalizeTonAddress(sourceAddress) : null;
@@ -276,21 +369,29 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
   // owner address as a compatibility candidate because some indexers expose
   // the owner in their normalized transfer response.
   const expectedDestinations = new Set([expectedDestinationOwner]);
+  let destinationJettonWallet = null;
   try {
-    const destinationJettonWallet = await getUsdtJettonWallet(expectedDestinationOwner, options);
+    destinationJettonWallet = await getUsdtJettonWallet(expectedDestinationOwner, options);
     if (destinationJettonWallet) expectedDestinations.add(destinationJettonWallet);
   } catch {
     // The transfer endpoint remains authoritative; a provider outage is
     // surfaced by the transfer/finality query rather than accepting a guess.
   }
 
-  const data = await tonCenterGet('/jetton/transfers', {
-    owner_address: owner,
-    jetton_master: USDT_MASTER_ADDRESS,
-    direction: 'in',
-    limit: 1000,
-    sort: 'desc'
-  }, options);
+  let data;
+  try {
+    data = await tonCenterGet('/jetton/transfers', {
+      owner_address: owner,
+      jetton_master: USDT_MASTER_ADDRESS,
+      direction: 'in',
+      limit: 1000,
+      sort: 'desc'
+    }, options);
+  } catch (error) {
+    const fallback = await findUsdtTransferByTonApiEvent({ txHash, ownerAddress: owner, sourceAddress: expectedSource, destinationAddress: expectedDestinationOwner, amountRaw, reference }, options);
+    if (fallback) return fallback;
+    throw error;
+  }
   const transfers = Array.isArray(data?.jetton_transfers) ? data.jetton_transfers : [];
   const hashQuery = txHash ? normalizeUsdtTxHashQuery(txHash) : null;
   if (txHash && !hashQuery) return { status: 'mismatch', code: 'INVALID_TX_HASH' };
@@ -305,7 +406,8 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
 
   let scopedCandidates = candidates;
   if (hashQuery?.kind === 'exact' && !candidates.length) {
-    const traceIds = await traceIdsByTransactionOrMessageHash(hashQuery.value, options);
+    let traceIds = new Set();
+    try { traceIds = await traceIdsByTransactionOrMessageHash(hashQuery.value, options); } catch { /* direct TonAPI event fallback follows */ }
     if (traceIds.size) {
       scopedCandidates = transfers.filter(item => traceIds.has(normalizeTonTxHash(item?.trace_id)));
     }
@@ -317,11 +419,27 @@ async function findUsdtTransfer({ txHash, ownerAddress, sourceAddress, destinati
     if (expectedSource && normalizeTonAddress(transferSource(item)) !== expectedSource) return false;
     if (BigInt(String(transferAmount(item))) !== expectedAmount) return false;
     if (reference && !hasReference(item, reference)) return false;
-    return item?.transaction_aborted !== true;
+    // Do not trust a trace-level aborted flag alone: a later wallet notification
+    // can abort after the recipient Jetton Wallet has already credited the tokens.
+    // The actual recipient-side transaction is checked for finality below.
+    return true;
   });
-  if (!candidate) return { status: scopedCandidates.length ? 'mismatch' : 'pending', code: scopedCandidates.length ? 'USDT_TRANSFER_MISMATCH' : 'TON_TRANSACTION_NOT_INDEXED' };
+  if (!candidate) {
+    const fallback = await findUsdtTransferByTonApiEvent({ txHash, ownerAddress: owner, sourceAddress: expectedSource, destinationAddress: expectedDestinationOwner, amountRaw, reference }, options);
+    if (fallback) return fallback;
+    return { status: scopedCandidates.length ? 'mismatch' : 'pending', code: scopedCandidates.length ? 'USDT_TRANSFER_MISMATCH' : 'TON_TRANSACTION_NOT_INDEXED' };
+  }
   const canonicalHash = transferHash(candidate);
-  if (!canonicalHash || !(await transactionIsFinal(canonicalHash, options, expectedDestinationOwner))) return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
+  const finalityAccount = destinationJettonWallet || normalizeTonAddress(transferDestination(candidate)) || expectedDestinationOwner;
+  let isFinal = false;
+  if (canonicalHash) {
+    try { isFinal = await transactionIsFinal(canonicalHash, options, finalityAccount); } catch { isFinal = false; }
+  }
+  if (!canonicalHash || !isFinal) {
+    const fallback = await findUsdtTransferByTonApiEvent({ txHash, ownerAddress: owner, sourceAddress: expectedSource, destinationAddress: expectedDestinationOwner, amountRaw, reference }, options);
+    if (fallback) return fallback;
+    return { status: 'pending', code: 'TON_TRANSACTION_NOT_FINAL' };
+  }
   return {
     status: 'verified',
     txHash: canonicalHash,
@@ -357,6 +475,7 @@ module.exports = {
   buildUsdtTransferBody,
   findUsdtTransfer,
   transactionIsFinal,
+  findUsdtTransferByTonApiEvent,
   createUsdtReference,
   hasReference
 };
