@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 require('../utils/asyncHandler').wrapRouter(router);
+const { getPublicChannelLinks } = require('../utils/publicChannelLinks');
 
 /**
  * GET /api/app-info — اطلاعات عمومی و بدون نیاز به احراز هویت، برای صفحات مستقل
@@ -20,6 +21,7 @@ router.get('/', (req, res) => {
   const payoutChannelUrl = payoutChannel.startsWith('http')
     ? payoutChannel
     : 'https://t.me/' + cleanUsername;
+  const publicChannelLinks = getPublicChannelLinks();
 
   res.set('Cache-Control', 'public, max-age=300');
   res.json({
@@ -28,6 +30,8 @@ router.get('/', (req, res) => {
     botLink,
     botConfigured: Boolean(botLink),
     payoutChannelUrl,
+    communityChannelUrl: publicChannelLinks.communityChannelUrl,
+    paymentChannelUrl: publicChannelLinks.paymentChannelUrl,
     payoutChannelUsername: '@' + cleanUsername
   });
 });

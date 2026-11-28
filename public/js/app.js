@@ -3717,6 +3717,35 @@ function renderProfileMenu() {
       </div>
     </div>
 
+    <section class="card profileCommunityPanel" aria-labelledby="profileCommunityTitle">
+      <div class="profileMenuLabel" id="profileCommunityTitle">Community</div>
+      <div class="profileCommunityRows">
+        <a class="profileCommunityRow" data-profile-channel="community" href="https://t.me/GramupOfficialChannel" target="_blank" rel="noopener noreferrer" aria-label="Community channel">
+          <span class="profileCommunityIcon profileCommunityIcon--megaphone" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 10v4h4l10 4V6L7 10H3Z" />
+              <path d="m7 14 2 5h3l-2-4" />
+              <path d="M20 9.5a3 3 0 0 1 0 5" />
+            </svg>
+          </span>
+          <span class="profileCommunityText">Community channel</span>
+          <span class="profileCommunityChevron" aria-hidden="true">›</span>
+        </a>
+        <a class="profileCommunityRow" data-profile-channel="payment" href="https://t.me/GramUpPayouts" target="_blank" rel="noopener noreferrer" aria-label="Payment channel">
+          <span class="profileCommunityIcon profileCommunityIcon--payment" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2.75" y="6.5" width="18.5" height="13" rx="3" />
+              <path d="M5.5 6.5V5A2.25 2.25 0 0 1 7.75 2.75h9" />
+              <path d="M21.25 10h-5.5a2.5 2.5 0 0 0 0 5h5.5" />
+              <path d="M17.25 12.5h.01" />
+            </svg>
+          </span>
+          <span class="profileCommunityText">Payment channel</span>
+          <span class="profileCommunityChevron" aria-hidden="true">›</span>
+        </a>
+      </div>
+    </section>
+
     <section class="card profileSettingsPanel profilePreferencesPanel" aria-labelledby="profilePreferencesTitle" dir="rtl">
       <div class="profileMenuLabel" id="profilePreferencesTitle">${t("appSettings")}</div>
       <div class="profileSettingGroup">
@@ -4942,7 +4971,57 @@ async function renderProfile() {
   } else {
     content.innerHTML = renderProfileMenu();
     updateProfileSettingsUI();
+    hydrateProfileCommunityLinks(content);
   }
+}
+
+const DEFAULT_PROFILE_CHANNEL_LINKS = Object.freeze({
+  communityChannelUrl: "https://t.me/GramupOfficialChannel",
+  paymentChannelUrl: "https://t.me/GramUpPayouts"
+});
+let profilePublicChannelLinks = null;
+let profilePublicChannelLinksRequest = null;
+
+function normalizeProfileExternalLink(value, fallback) {
+  try {
+    const url = new URL(String(value || ""));
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return fallback;
+    return url.toString();
+  } catch {
+    return fallback;
+  }
+}
+
+function loadProfilePublicChannelLinks() {
+  if (profilePublicChannelLinks) return Promise.resolve(profilePublicChannelLinks);
+  if (profilePublicChannelLinksRequest) return profilePublicChannelLinksRequest;
+
+  profilePublicChannelLinksRequest = fetch("/api/app-info", {
+    headers: { accept: "application/json" },
+    cache: "no-store"
+  }).then(async response => {
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data?.success) return null;
+    profilePublicChannelLinks = {
+      communityChannelUrl: normalizeProfileExternalLink(data.communityChannelUrl, DEFAULT_PROFILE_CHANNEL_LINKS.communityChannelUrl),
+      paymentChannelUrl: normalizeProfileExternalLink(data.paymentChannelUrl, DEFAULT_PROFILE_CHANNEL_LINKS.paymentChannelUrl)
+    };
+    return profilePublicChannelLinks;
+  }).catch(() => null).finally(() => {
+    profilePublicChannelLinksRequest = null;
+  });
+  return profilePublicChannelLinksRequest;
+}
+
+function hydrateProfileCommunityLinks(content) {
+  void loadProfilePublicChannelLinks().then(links => {
+    if (!links || !content?.isConnected) return;
+    const communityLink = content.querySelector('[data-profile-channel="community"]');
+    const paymentLink = content.querySelector('[data-profile-channel="payment"]');
+    if (communityLink) communityLink.href = links.communityChannelUrl;
+    if (paymentLink) paymentLink.href = links.paymentChannelUrl;
+  });
 }
 
 let miningStatusPromise = null;

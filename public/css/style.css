@@ -2301,6 +2301,70 @@ html[data-theme="light"] .appContent .vipRedesign > h3.sectionTitle { color: var
 .profileSettingsPanel .profileItem:nth-child(2) .profileIcon { color: #c4b5fd; background: rgba(196,181,253,.10); }
 .profileSettingsPanel .profileItem:nth-child(3) .profileIcon { color: #fda4af; background: rgba(253,164,175,.10); }
 .profileSettingsPanel .profileItem:nth-child(4) .profileIcon { color: #67e8f9; background: rgba(103,232,249,.10); }
+.profileCommunityPanel {
+  margin-top: 10px;
+  padding: 13px 14px 4px;
+  overflow: hidden;
+  border: 1px solid var(--product-border);
+  border-radius: 20px;
+  background: var(--product-surface);
+  box-shadow: 0 9px 23px rgba(0,0,0,.12);
+}
+.profileCommunityPanel .profileMenuLabel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 2px 7px;
+  padding-bottom: 8px;
+  direction: ltr;
+  text-align: left;
+}
+.profileCommunityPanel .profileMenuLabel::before {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: var(--product-cyan);
+  box-shadow: 0 0 0 4px rgba(103,232,249,.10);
+  content: "";
+}
+.profileCommunityRows { display: flex; flex-direction: column; }
+.profileCommunityRow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 56px;
+  padding: 9px 2px;
+  border-top: 1px solid var(--product-border);
+  color: var(--text);
+  direction: ltr;
+  text-align: left;
+  text-decoration: none;
+  transition: background .18s ease, transform .18s ease;
+}
+.profileCommunityRow:hover { background: rgba(103,232,249,.045); }
+.profileCommunityRow:active { transform: scale(.99); }
+.profileCommunityRow:focus-visible { outline: 2px solid var(--product-cyan); outline-offset: -2px; }
+.profileCommunityIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border-radius: 11px;
+}
+.profileCommunityIcon svg { width: 19px; height: 19px; }
+.profileCommunityIcon--megaphone { color: #f5c451; background: rgba(245,196,81,.12); }
+.profileCommunityIcon--payment { color: #67e8f9; background: rgba(103,232,249,.11); }
+.profileCommunityText { flex: 1; min-width: 0; color: var(--text); font-size: 12px; font-weight: 800; }
+.profileCommunityChevron { margin-left: auto; color: var(--product-cyan); font-size: 22px; line-height: 1; }
+html[data-theme="light"] .profileCommunityPanel {
+  border-color: rgba(17,24,39,.09);
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(17,24,39,.06);
+}
+html[data-theme="light"] .profileCommunityRow { border-top-color: rgba(17,24,39,.08); }
+html[data-theme="light"] .profileCommunityChevron { color: #0f766e; }
 .profilePreferencesPanel { padding: 15px; }
 .profilePreferencesPanel .profileMenuLabel { margin-bottom: 13px; padding-bottom: 0; }
 .profileSettingGroup + .profileSettingGroup { margin-top: 18px; }
