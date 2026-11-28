@@ -39,6 +39,8 @@ assert.match(profile, /data-profile-channel="payment"/);
 assert.match(profile, /target="_blank" rel="noopener noreferrer"/);
 assert.match(profile, /fetch\("\/api\/app-info"/);
 assert.match(styles, /\.profileCommunityPanel/);
+assert.match(styles, /\.profileCommunityRow\s*\{[^}]*min-height:\s*44px/s);
+assert.match(styles, /\.profileCommunityIcon\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px/s);
 assert.match(styles, /\.profileCommunityIcon--payment[^{]*\{[^}]*#67e8f9/s);
 
 console.log('public channel links and profile Community section tests passed');

@@ -2302,20 +2302,20 @@ html[data-theme="light"] .appContent .vipRedesign > h3.sectionTitle { color: var
 .profileSettingsPanel .profileItem:nth-child(3) .profileIcon { color: #fda4af; background: rgba(253,164,175,.10); }
 .profileSettingsPanel .profileItem:nth-child(4) .profileIcon { color: #67e8f9; background: rgba(103,232,249,.10); }
 .profileCommunityPanel {
-  margin-top: 10px;
-  padding: 13px 14px 4px;
+  margin-top: 8px;
+  padding: 8px 11px 2px;
   overflow: hidden;
   border: 1px solid var(--product-border);
-  border-radius: 20px;
+  border-radius: 16px;
   background: var(--product-surface);
-  box-shadow: 0 9px 23px rgba(0,0,0,.12);
+  box-shadow: 0 6px 16px rgba(0,0,0,.10);
 }
 .profileCommunityPanel .profileMenuLabel {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin: 0 2px 7px;
-  padding-bottom: 8px;
+  gap: 6px;
+  margin: 0 1px 4px;
+  padding-bottom: 5px;
   direction: ltr;
   text-align: left;
 }
@@ -2332,9 +2332,9 @@ html[data-theme="light"] .appContent .vipRedesign > h3.sectionTitle { color: var
 .profileCommunityRow {
   display: flex;
   align-items: center;
-  gap: 11px;
-  min-height: 56px;
-  padding: 9px 2px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 5px 1px;
   border-top: 1px solid var(--product-border);
   color: var(--text);
   direction: ltr;
@@ -2347,17 +2347,17 @@ html[data-theme="light"] .appContent .vipRedesign > h3.sectionTitle { color: var
 .profileCommunityRow:focus-visible { outline: 2px solid var(--product-cyan); outline-offset: -2px; }
 .profileCommunityIcon {
   display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   place-items: center;
-  border-radius: 11px;
+  border-radius: 9px;
 }
-.profileCommunityIcon svg { width: 19px; height: 19px; }
+.profileCommunityIcon svg { width: 16px; height: 16px; }
 .profileCommunityIcon--megaphone { color: #f5c451; background: rgba(245,196,81,.12); }
 .profileCommunityIcon--payment { color: #67e8f9; background: rgba(103,232,249,.11); }
-.profileCommunityText { flex: 1; min-width: 0; color: var(--text); font-size: 12px; font-weight: 800; }
-.profileCommunityChevron { margin-left: auto; color: var(--product-cyan); font-size: 22px; line-height: 1; }
+.profileCommunityText { flex: 1; min-width: 0; color: var(--text); font-size: 11px; font-weight: 800; }
+.profileCommunityChevron { margin-left: auto; color: var(--product-cyan); font-size: 18px; line-height: 1; }
 html[data-theme="light"] .profileCommunityPanel {
   border-color: rgba(17,24,39,.09);
   background: #fff;
